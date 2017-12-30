@@ -1,0 +1,8 @@
+# Ignore the build and lib dirs
+build/*
+lib/*
+3rd_party/*
+archive/*
+
+# Ignore any executables
+bin/*
