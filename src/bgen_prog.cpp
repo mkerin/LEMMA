@@ -14,6 +14,12 @@
 #include "genfile/bgen/bgen.hpp"
 #include "version.h"
 
+// TODO: filter bgen file by range
+// TODO: implement maf, info filters
+// TODO: read in covars
+// TODO: regress out covars
+
+// TODO: copy argument_sanity()
 
 // ProbSetter is a callback object appropriate for passing to bgen::read_genotype_data_block() or
 // the synonymous method of genfile::bgen::View. See the comment in bgen.hpp above
@@ -262,29 +268,33 @@ int main( int argc, char** argv ) {
 		std::vector< std::vector< double > > probs ;
 	
 		while( bgenParser.read_variant( &chromosome, &position, &rsid, &alleles )) {
-			std::cout << chromosome << '\t'
-				<< position << '\t'
-				<< rsid << '\t' ;
-			assert( alleles.size() > 0 ) ;
-			std::cout << alleles[0] << '\t' ;
-			for( std::size_t i = 1; i < alleles.size(); ++i ) {
-				std::cout << ( i > 1 ? "," : "" ) << alleles[i] ;
-			}
-			std::cout << "\t.\t.\t.\tGP" ;
-		
-			bgenParser.read_probs( &probs ) ;
-			for( std::size_t i = 0; i < probs.size(); ++i ) {
-				std::cout << '\t' ;
-				for( std::size_t j = 0; j < probs[i].size(); ++j ) {
-					std::cout << ( j > 0 ? "," : "" ) ;
-					if( probs[i][j] == -1 ) {
-						std::cout << "." ;
-					} else {
-						std::cout << probs[i][j] ;
+			if (p.range && (position < p.start || position > p.end)){
+				bgenParser.ignore_probs();
+			} else {
+				std::cout << chromosome << '\t'
+					<< position << '\t'
+					<< rsid << '\t' ;
+				assert( alleles.size() > 0 ) ;
+				std::cout << alleles[0] << '\t' ;
+				for( std::size_t i = 1; i < alleles.size(); ++i ) {
+					std::cout << ( i > 1 ? "," : "" ) << alleles[i] ;
+				}
+				std::cout << "\t.\t.\t.\tGP" ;
+			
+				bgenParser.read_probs( &probs ) ;
+				for( std::size_t i = 0; i < probs.size(); ++i ) {
+					std::cout << '\t' ;
+					for( std::size_t j = 0; j < probs[i].size(); ++j ) {
+						std::cout << ( j > 0 ? "," : "" ) ;
+						if( probs[i][j] == -1 ) {
+							std::cout << "." ;
+						} else {
+							std::cout << probs[i][j] ;
+						}
 					}
 				}
+				std::cout << "\n" ;
 			}
-			std::cout << "\n" ;
 		}
 		return 0 ;
 	}

@@ -7,9 +7,9 @@
 
 class parameters {
 	public :
-		std::string bgen_file;
+		std::string bgen_file, chr;
 		int chunk_size;
-		long int start, end;
+		uint32_t start, end;
 		bool range;
 	
 	// constructors/destructors	

@@ -74,6 +74,21 @@ void parse_arguments(parameters &p, int argc, char *argv[]) {
 				p.bgen_file = argv[i + 1]; // bgen file
 				i += 1;
 			}
+			
+			if(strcmp(in_str, "--range") == 0) {
+				static bool check = 0;
+				if (check == 1) {
+					std::cout << "ERROR: flag '" << in_str << "' can only be provided once." << std::endl;
+					exit(EXIT_FAILURE);
+				}
+				check = 1;
+				check_counts(in_str, i, 3, argc);
+				p.range = true;
+				p.chr = argv[i + 1];
+				p.start = atoi(argv[i + 2]);
+				p.end = atoi(argv[i + 3]);
+				i += 3;
+			}
 		}
 	}
 }
