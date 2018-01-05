@@ -244,9 +244,8 @@ int main( int argc, char** argv ) {
 	// 	std::cerr << "You must supply an argument, the name of the bgen file to process.\n" ;
 	// 	exit(-1) ;
 	// }
-	std::string const filename = argv[1] ;
 	try {
-		BgenParser bgenParser( filename ) ;
+		BgenParser bgenParser( p.bgen_file ) ;
 
 		bgenParser.summarise( std::cerr ) ;
 
