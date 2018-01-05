@@ -28,7 +28,10 @@ void parse_arguments(parameters &p, int argc, char *argv[]) {
 	std::set<std::string> option_list {
 		"--bgen",
 		"--chunk",
-		"--range"
+		"--range",
+		"--maf",
+		"--info",
+		"--out"
 	};
 
 	std::set<std::string>::iterator set_it;
@@ -72,6 +75,25 @@ void parse_arguments(parameters &p, int argc, char *argv[]) {
 			if(strcmp(in_str, "--bgen") == 0) {
 				check_counts(in_str, i, 1, argc);
 				p.bgen_file = argv[i + 1]; // bgen file
+				i += 1;
+			}
+
+			if(strcmp(in_str, "--maf") == 0) {
+				check_counts(in_str, i, 1, argc);
+				p.no_maf_lim = false;
+				p.min_maf = std::stod(argv[i + 1]); // bgen file
+				i += 1;
+			}
+
+			if(strcmp(in_str, "--out") == 0) {
+				static bool check = 0;
+				if (check == 1) {
+					std::cout << "ERROR: flag '" << in_str << "' can only be provided once." << std::endl;
+					exit(EXIT_FAILURE);
+				}
+				check = 1;
+				check_counts(in_str, i, 1, argc);
+				p.out_file = argv[i + 1];
 				i += 1;
 			}
 			

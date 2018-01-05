@@ -11,14 +11,13 @@
 #include <memory>
 #include "parse_arguments.hpp"
 #include "class.h"
+#include "data.hpp"
 #include "genfile/bgen/bgen.hpp"
 #include "version.h"
 
-// TODO: filter bgen file by range
 // TODO: implement maf, info filters
 // TODO: read in covars
 // TODO: regress out covars
-
 // TODO: copy argument_sanity()
 
 // ProbSetter is a callback object appropriate for passing to bgen::read_genotype_data_block() or
@@ -238,25 +237,25 @@ private:
 // and outputs it as a VCF file.
 int main( int argc, char** argv ) {
 	parameters p;
+	data Data;
+
 	parse_arguments(p, argc, argv);
 	
-	// if( argc != 2 ) {
-	// 	std::cerr << "You must supply an argument, the name of the bgen file to process.\n" ;
-	// 	exit(-1) ;
-	// }
 	try {
 		BgenParser bgenParser( p.bgen_file ) ;
-
 		bgenParser.summarise( std::cerr ) ;
 
+		Data.params = p;
+		Data.output_init();
+
 		// Output header
-		std::cout << "##fileformat=VCFv4.2\n"
+		Data.outf << "##fileformat=VCFv4.2\n"
 			<< "FORMAT=<ID=GP,Type=Float,Number=G,Description=\"Genotype call probabilities\">\n"
 			<< "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT" ;
 		bgenParser.get_sample_ids(
-			[]( std::string const& id ) { std::cout << "\t" << id ; }
+			[&Data]( std::string const& id ) { Data.outf << "\t" << id ; }
 		) ;
-		std::cout << "\n" ;
+		Data.outf << "\n" ;
 		
 		
 		// Output variants
@@ -270,29 +269,43 @@ int main( int argc, char** argv ) {
 			if (p.range && (position < p.start || position > p.end)){
 				bgenParser.ignore_probs();
 			} else {
-				std::cout << chromosome << '\t'
+				Data.outf << chromosome << '\t'
 					<< position << '\t'
 					<< rsid << '\t' ;
 				assert( alleles.size() > 0 ) ;
-				std::cout << alleles[0] << '\t' ;
+				Data.outf << alleles[0] << '\t' ;
 				for( std::size_t i = 1; i < alleles.size(); ++i ) {
-					std::cout << ( i > 1 ? "," : "" ) << alleles[i] ;
+					Data.outf << ( i > 1 ? "," : "" ) << alleles[i] ;
 				}
-				std::cout << "\t.\t.\t.\tGP" ;
+				Data.outf << "\t.\t.\t.\tGP" ;
 			
 				bgenParser.read_probs( &probs ) ;
+				double dosage, x, af, d1;
+
+				// maf + info filters here
+				d1 = 0.0;
 				for( std::size_t i = 0; i < probs.size(); ++i ) {
-					std::cout << '\t' ;
 					for( std::size_t j = 0; j < probs[i].size(); ++j ) {
-						std::cout << ( j > 0 ? "," : "" ) ;
-						if( probs[i][j] == -1 ) {
-							std::cout << "." ;
-						} else {
-							std::cout << probs[i][j] ;
-						}
+						x = probs[i][j];
+						d1 += x * j;
 					}
 				}
-				std::cout << "\n" ;
+				af = d1 / (2.0 * Data.n_samples);
+
+				// out put dosage if snp passes QC
+				if (p.no_maf_lim || af > p.min_maf) {
+				// ^ need to think a little about this. af < 1 - p.maf?
+					for( std::size_t i = 0; i < probs.size(); ++i ) {
+						Data.outf << '\t' ;
+						dosage = 0.0;
+						for( std::size_t j = 0; j < probs[i].size(); ++j ) {
+							x = probs[i][j];
+							dosage += x * j;
+						}
+						Data.outf << dosage;
+					}
+					Data.outf << "\n" ;
+				}
 			}
 		}
 		return 0 ;
