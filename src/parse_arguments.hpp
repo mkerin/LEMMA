@@ -80,7 +80,7 @@ void parse_arguments(parameters &p, int argc, char *argv[]) {
 
 			if(strcmp(in_str, "--maf") == 0) {
 				check_counts(in_str, i, 1, argc);
-				p.no_maf_lim = false;
+				p.maf_lim = true;
 				p.min_maf = std::stod(argv[i + 1]); // bgen file
 				i += 1;
 			}
