@@ -16,8 +16,8 @@
 #include "bgen_parser.hpp"
 #include "version.h"
 
-// TODO: implement maf, info filters
-// TODO: read in covars
+// TODO: implement info filter
+// TODO: tests for read_pheno, read_covar? Clarify if args for these are compulsory.
 // TODO: regress out covars
 // TODO: copy argument_sanity()
 
