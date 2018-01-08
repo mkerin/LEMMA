@@ -3,6 +3,7 @@
 #define DATA_H
 
 #include <iostream>
+#include <map>
 #include <vector>
 #include <string>
 #include "class.h"
@@ -33,10 +34,18 @@ class data
 	bool bgen_pass;
 	int G_ncol;
 
-	std::vector<double> info;
-	std::vector<double> maf;
+	std::vector< double > info;
+	std::vector< double > maf;
 
-	Eigen::MatrixXd G; // genotype matrix --
+	std::map<int, bool> missing_covars; // set of subjects missing >= 1 covariate
+	std::map<int, bool> missing_phenos; // set of subjects missing >= phenotype
+
+	std::vector< std::string > pheno_names;
+	std::vector< std::string > covar_names;
+
+	Eigen::MatrixXd G; // genotype matrix
+	Eigen::MatrixXd Y; // phenotype matrix
+	Eigen::MatrixXd W; // covariate matrix
 	BgenParser bgenParser; // hopefully initialised appropriately from
                            // initialisation list in Data constructor
 
@@ -142,6 +151,146 @@ class data
 		G_ncol = jj;
 
 		return true;
+	}
+
+	void read_txt_file( std::string filename,
+						Eigen::MatrixXd* M,
+						int* n_cols,
+						std::vector< std::string >* col_names,
+						std::map< int, bool >* incomplete_row ){
+		// pass top line of txt file filename to col_names, and body to M.
+		// TODO: Implement how to deal with missing values.
+
+		boost_io::filtering_istream fg;
+		fg.push(boost_io::file_source(filename.c_str()));
+		if (!fg) {
+			cout << "ERROR: " << infile << " not opened." << endl;
+			exit(-1);
+		}
+
+		// Reading column names
+		std::string line;
+		if (!getline(fg, line)) {
+			cout << "ERROR: " << infile << " not read." << endl;
+			exit(-1);
+		}
+		std::stringstream ss;
+		std::string s;
+		n_cols = 0;
+		ss.clear();
+		ss.str(line);
+		while (ss >> s) {
+			++n_cols;
+			col_names.push_back(s);
+		}
+		std::cout << " Detected " << n_cols << " columns from " << filename << std::endl;
+
+		// Write remainder of file to Eigen matrix M
+		incomplete_row.clear()
+		M.resize(n_samples, n_cols);
+		int i = 0;
+		double tmp_d;
+		try {
+			while (getline(fg, line)) {
+				if (i > n_samples) {
+					throw std::runtime_error("ERROR: could not convert txt file (too many lines).");
+				}
+				ss.clear();
+				ss.str(line);
+				for (int k = 0; k < n_cols; k++) {
+					string s;
+					ss >> s;
+					/// NA
+					if (s == "NA" || s == "NAN" || s == "NaN" || s == "nan") {
+						tmp_d = params.missing_code;
+					} else {
+						tmp_d = stod(s);
+					}
+
+					if(tmp_d != params.missing_code) {
+						M(i, k) = tmp_d;
+					} else {
+						M(i, k) = params.missing_code;
+						incomplete_row[i] = 1;
+					}
+				}
+				i++;
+			}
+			if (i < n_samples) {
+				throw std::runtime_error("ERROR: could not convert txt file (too few lines).");
+			}
+		} catch (const std::exception &exc) {
+			throw std::runtime_error("ERROR: could not convert txt file.");
+		}
+	}
+
+	void center_matrix( Eigen::MatrixXd* M,
+						int* n_cols,
+						std::map< int, bool > incomplete_row ){
+		// Center + scale eigen matrix passed by reference.
+
+		vector<size_t> keep;
+		for (int k = 0; k < n_cols; k++) {
+			double mu = 0.0;
+			double count = 0;
+			for (int i = 0; i < n_samples; i++) {
+				if (incomplete_row.count(i) == 0) {
+					mu += M(i, k);
+					count += 1;
+				}
+			}
+
+			mu = mu / count;
+			for (int i = 0; i < n_samples; i++) {
+				if (incomplete_row.count(i) == 0) {
+					M(i, k) -= mu;
+				} else {
+					M(i, k) = 0.0;
+				}
+			}
+
+			double sigma = 0.0;
+			for (int i = 0; i < n_samples; i++) {
+				if (incomplete_row.count(i) == 0) {
+					double val = M(i, k);
+					sigma += val * val;
+				}
+			}
+
+			sigma = sqrt(sigma/(count - 1));
+			if (sigma > 1e-12) {  
+				for (int i = 0; i < n_samples; i++) {
+					if (incomplete_row.count(i) == 0) {
+						M(i, k) = M(i, k) / sigma;
+					}
+				}
+				keep.push_back(k);
+			}
+		}
+
+		if (keep.size() != n_cols) {
+			std::cout << " Removing " << (n_cols - keep.size())  << " columns with zero variance." << std::endl;
+			M = getCols(M, keep);
+			n_cols = keep.size();
+		}
+	}
+
+	void read_pheno( ){
+		if ( params.pheno_file != "NULL" ) {
+			read_txt_file( params.pheno_file, &Y, &n_pheno, &pheno_names, &missing_pheno );
+			center_matrix( &Y, &n_pheno, missing_phenos );
+		}
+
+		if (n_pheno == 0) {
+			throw std::runtime_error("ERROR: No pheno's with nonzero variance");
+		}
+	}
+
+	void read_covar( ){
+		if ( params.covar_file != "NULL" ) {
+			read_txt_file( params.covar_file, &W, &n_covar, &covar_names, &missing_covar );
+			center_matrix( &W, &n_covar, missing_covars );
+		}
 	}
 };
 

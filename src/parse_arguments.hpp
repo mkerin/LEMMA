@@ -27,6 +27,8 @@ void parse_arguments(parameters &p, int argc, char *argv[]) {
 	int i;
 	std::set<std::string> option_list {
 		"--bgen",
+		"--pheno",
+		"--covar",
 		"--chunk",
 		"--range",
 		"--maf",
@@ -51,7 +53,7 @@ void parse_arguments(parameters &p, int argc, char *argv[]) {
 	// read in and check option flags
 	for (i = 0; i < argc; i++) {
 		in_str = argv[i];	
-		if (in_str == "--version" || in_str == "--help") {
+		if (strcmp(in_str, "--version") || strcmp(in_str, "--help")) {
 			std::cout << "ERROR: flag '" << in_str << "' cannot be used with any other flags." << std::endl;
 			exit(EXIT_FAILURE);
 		}
@@ -75,6 +77,18 @@ void parse_arguments(parameters &p, int argc, char *argv[]) {
 			if(strcmp(in_str, "--bgen") == 0) {
 				check_counts(in_str, i, 1, argc);
 				p.bgen_file = argv[i + 1]; // bgen file
+				i += 1;
+			}
+
+			if(strcmp(in_str, "--pheno") == 0) {
+				check_counts(in_str, i, 1, argc);
+				p.pheno_file = argv[i + 1]; // bgen file
+				i += 1;
+			}
+
+			if(strcmp(in_str, "--covar") == 0) {
+				check_counts(in_str, i, 1, argc);
+				p.covar_file = argv[i + 1]; // bgen file
 				i += 1;
 			}
 
