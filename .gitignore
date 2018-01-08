@@ -6,3 +6,6 @@ archive/*
 
 # Ignore any executables
 bin/*
+
+# garbage files
+*.gch
