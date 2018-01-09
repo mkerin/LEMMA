@@ -10,10 +10,10 @@ TEST_CASE( "Checking parse_arguments", "[io]" ) {
 	SECTION( "BGEN filepath correctly assigned" ) {
 		char* argv[] = { (char*) "bin/bgen_prog",
 						 (char*) "--bgen", 
-						 (char*) "data/raw/example.v11.bgen"};
+						 (char*) "data/example/example.v11.bgen"};
 		int argc = sizeof(argv)/sizeof(argv[0]);
 		parse_arguments(p, argc, argv);
-		REQUIRE(p.bgen_file == "data/raw/example.v11.bgen");
+		REQUIRE(p.bgen_file == "data/example/example.v11.bgen");
 	}
 	
 	// Annoyingly no death test functionality exists within the Catch2 framework

@@ -1,6 +1,6 @@
 TARGET := bin/bgen_prog
 SRCDIR := src
-FLAGS = -g -std=c++11 -Ibuild/genfile/include/ -I3rd_party/zstd-1.1.0/lib/ \
+FLAGS = -g3 -std=c++11 -Ibuild/genfile/include/ -I3rd_party/zstd-1.1.0/lib/ \
         -Ibuild/db/include/ -I3rd_party/sqlite3 -I3rd_party/boost_1_55_0  \
         -Lbuild/ -Lbuild/3rd_party/zstd-1.1.0 -Lbuild/db -Lbuild/3rd_party/sqlite3 \
         -Lbuild/3rd_party/boost_1_55_0 -Lbuild/ -lbgen  -ldb -lsqlite3 -lboost \
@@ -13,11 +13,11 @@ $(TARGET) : $(SRCDIR)/bgen_prog.cpp
 # Note: this uses the Catch library to Unit Test the cpp source code. If we want
 # to test input/output of the executable we do that directly with the Makefile
 # and `diff` command.
-UNITTESTS := tests-parse-arguments.cpp
+UNITTESTS := test-data.cpp tests-parse-arguments.cpp 
 UNITTESTS := $(addprefix test/,$(UNITTESTS))
 
 test/tests: test/tests-main.o $(UNITTESTS)
-	g++ $< $(UNITTESTS) -o $@  $(FLAGS) && ./$@ -r compact
+	g++ $< -o $@  $(FLAGS) && ./$@ -r compact
 
 test/tests-main.o: test/tests-main.cpp
 	g++ test/tests-main.cpp -c -o $@ $(FLAGS)
