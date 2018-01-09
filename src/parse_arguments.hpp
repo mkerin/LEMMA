@@ -53,7 +53,7 @@ void parse_arguments(parameters &p, int argc, char *argv[]) {
 	// read in and check option flags
 	for (i = 0; i < argc; i++) {
 		in_str = argv[i];	
-		if (strcmp(in_str, "--version") || strcmp(in_str, "--help")) {
+		if (strcmp(in_str, "--version") == 0 || strcmp(in_str, "--help") == 0) {
 			std::cout << "ERROR: flag '" << in_str << "' cannot be used with any other flags." << std::endl;
 			exit(EXIT_FAILURE);
 		}
