@@ -10,7 +10,7 @@ class parameters {
 		std::string bgen_file, chr, out_file, pheno_file, covar_file;
 		int chunk_size, missing_code;
 		uint32_t start, end;
-		bool range, maf_lim;
+		bool range, maf_lim, mode_vcf, mode_lm;
 		double min_maf;
 	
 	// constructors/destructors	
@@ -18,10 +18,13 @@ class parameters {
 		bgen_file = "NULL";
 		pheno_file = "NULL";
 		covar_file = "NULL";
+		out_file = "NULL";
 		chunk_size = 256;
 		missing_code = -999;
 		range = false;
 		maf_lim = false;
+		mode_lm = false;
+		mode_vcf = false;
 	}
 
 	~parameters() {

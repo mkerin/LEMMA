@@ -6,8 +6,11 @@ FLAGS = -g3 -std=c++11 -Ibuild/genfile/include/ -I3rd_party/zstd-1.1.0/lib/ \
         -Lbuild/3rd_party/boost_1_55_0 -Lbuild/ -lbgen  -ldb -lsqlite3 -lboost \
         -lz -ldl -lrt -lpthread -lzstd -Wno-deprecated
 
-$(TARGET) : $(SRCDIR)/bgen_prog.cpp
-	g++ -o $@ $(SRCDIR)/bgen_prog.cpp $(FLAGS)
+HEADERS := parse_arguments.hpp data.hpp class.h bgen_parser.hpp
+HEADERS := $(addprefix $(SRCDIR)/,$(HEADERS))
+
+$(TARGET) : $(SRCDIR)/bgen_prog.cpp $(HEADERS)
+	g++ -o $@ $< $(FLAGS)
 
 # UnitTests
 # Note: this uses the Catch library to Unit Test the cpp source code. If we want
@@ -33,7 +36,7 @@ testIO: data/io_test/example_range.out
 	@
 
 data/io_test/example_range.out: data/example/example.v11.bgen ./bin/bgen_prog
-	./bin/bgen_prog --bgen $< --range 01 1 3000 --out $@
+	./bin/bgen_prog --convert_to_vcf --bgen $< --range 01 1 3000 --out $@
 	diff data/out/example_range.out $@
 
 
