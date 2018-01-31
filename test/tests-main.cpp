@@ -74,6 +74,7 @@ TEST_CASE( "Checking data", "[data]" ) {
 			M_cent << -1, -1, -1, 0, 0, 0, 1, 1, 1;
 
 			Data.center_matrix( M_read, n_cols_ans, incomplete_row );
+			Data.scale_matrix( M_read, n_cols_ans, incomplete_row );
 			REQUIRE( M_read == M_cent );
 		}
 	}
