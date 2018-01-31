@@ -85,6 +85,17 @@ class data
 		ofile = params.out_file;
 		outf.push(boost_io::file_sink(ofile.c_str()));
 		// outf << "chr rsid pos a_0 a_1 af info";
+
+		if(params.mode_vcf){
+			// Output header for vcf file
+			outf << "##fileformat=VCFv4.2\n"
+				<< "FORMAT=<ID=GP,Type=Float,Number=G,Description=\"Genotype call probabilities\">\n"
+				<< "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT" ;
+			bgenParser.get_sample_ids(
+				[&]( std::string const& id ) { outf << "\t" << id ; }
+			) ;
+			outf << "\n" ;
+		}
 	}
 
 	bool read_bgen_chunk() {

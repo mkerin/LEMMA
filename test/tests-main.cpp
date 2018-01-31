@@ -10,13 +10,47 @@
 TEST_CASE( "Checking parse_arguments", "[io]" ) {
 	parameters p;
 	
-	SECTION( "BGEN filepath correctly assigned" ) {
+	SECTION( "--convert_to_vcf parsed correctly" ) {
 		char* argv[] = { (char*) "bin/bgen_prog",
+						 (char*) "--convert_to_vcf", 
 						 (char*) "--bgen", 
-						 (char*) "data/example/example.v11.bgen"};
+						 (char*) "data/example/example.v11.bgen",
+						 (char*) "--out", 
+						 (char*) "data/tmp.out"};
 		int argc = sizeof(argv)/sizeof(argv[0]);
 		parse_arguments(p, argc, argv);
 		REQUIRE(p.bgen_file == "data/example/example.v11.bgen");
+		REQUIRE(p.out_file == "data/tmp.out");
+		REQUIRE(p.mode_vcf == true);
+	}
+
+	SECTION( "--lm parsed correctly" ) {
+		char* argv[] = { (char*) "bin/bgen_prog",
+						 (char*) "--lm", 
+						 (char*) "--bgen", 
+						 (char*) "data/example/example.v11.bgen",
+						 (char*) "--out", 
+						 (char*) "data/tmp.out",
+						 (char*) "--pheno", 
+						 (char*) "data/tmp.pheno",
+						 (char*) "--covar", 
+						 (char*) "data/tmp.covar"};
+		int argc = sizeof(argv)/sizeof(argv[0]);
+		parse_arguments(p, argc, argv);
+		REQUIRE(p.bgen_file == "data/example/example.v11.bgen");
+		REQUIRE(p.out_file == "data/tmp.out");
+		REQUIRE(p.pheno_file == "data/tmp.pheno");
+		REQUIRE(p.covar_file == "data/tmp.covar");
+		REQUIRE(p.mode_lm == true);
+	}
+
+	SECTION( "chunk_size correctly assigned" ) {
+		char* argv[] = { (char*) "bin/bgen_prog",
+						 (char*) "--chunk", 
+						 (char*) "100"};
+		int argc = sizeof(argv)/sizeof(argv[0]);
+		parse_arguments(p, argc, argv);
+		REQUIRE(p.chunk_size == 100);
 	}
 	
 	// Annoyingly no death test functionality exists within the Catch2 framework
