@@ -111,5 +111,18 @@ TEST_CASE( "Checking data", "[data]" ) {
 			Data.scale_matrix( M_read, n_cols_ans, incomplete_row );
 			REQUIRE( M_read == M_cent );
 		}
+
+		SECTION( "reduce_to_complete_cases behaving sensibly" ) {
+			Eigen::MatrixXd M_reduc(2, 3);
+			int n_cols_ans = 3;
+			bool check = false;
+			std::map< int, bool > incomplete_cases;
+			M_reduc << 1, 2, 3, 7, 8, 9;
+			incomplete_cases[1] = 1;
+
+			Data.reduce_to_complete_cases(M_read, check, n_cols_ans, incomplete_cases);
+			// std::cout << "M_read is now " << M_read.rows() << "x" << M_read.cols() << std::endl;
+			REQUIRE( M_read == M_reduc );
+		}
 	}
 }

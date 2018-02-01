@@ -29,16 +29,25 @@ test/tests-main.o: test/tests-main.cpp
 # Files in data/out are regarded as 'true', and we check that the equivalent
 # file in data/io_test is identical after making changes to the executable.
 .PHONY: testIO
-IOfiles := example_range.out
-IOfiles := $(addprefix data/io_test/,$(IOfiles))
+IOfiles := t1_range t2_lm
+IOfiles := $(addprefix data/io_test/,$(addsuffix /attempt.out,$(IOfiles)))
 
-testIO: data/io_test/example_range.out
+testIO: $(IOfiles)
 	@
 
-data/io_test/example_range.out: data/example/example.v11.bgen ./bin/bgen_prog
+# Test of --range command
+data/io_test/t1_range/attempt.out: data/io_test/example.v11.bgen ./bin/bgen_prog
 	./bin/bgen_prog --convert_to_vcf --bgen $< --range 01 1 3000 --out $@
-	diff data/out/example_range.out $@
+	diff data/io_test/t1_range/answer.out $@
 
+# Small regression analysis; subset to complete cases, normalising, 1dof interaction model
+data/io_test/t2_lm/attempt.out: data/io_test/example.v11.bgen ./bin/bgen_prog
+	./bin/bgen_prog --lm \
+	    --bgen $< \
+	    --pheno data/io_test/t2_lm/t2.pheno \
+	    --covar data/io_test/t2_lm/t2.covar \
+	    --range 01 2000 2000 --out $@
+	diff data/io_test/t2_lm/answer.out $@
 
 # Clean dir
 cleanIO:

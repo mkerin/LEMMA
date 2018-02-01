@@ -7,6 +7,8 @@
 #include <map>
 #include <vector>
 #include <string>
+#include <string>
+#include <stdexcept>
 #include "class.h"
 #include "tools/eigen3.3/Dense"
 #include "tools/eigen3.3/Sparse"
@@ -14,6 +16,7 @@
 
 #include "bgen_parser.hpp"
 
+#include <boost/math/distributions/chi_squared.hpp>
 #include <boost/iostreams/filtering_stream.hpp>
 #include <boost/iostreams/device/file.hpp>
 
@@ -25,6 +28,7 @@ inline size_t numRows(const Eigen::MatrixXd &A);
 inline size_t numCols(const Eigen::MatrixXd &A);
 inline void setCol(Eigen::MatrixXd &A, const Eigen::VectorXd &v, size_t col);
 inline Eigen::VectorXd getCol(const Eigen::MatrixXd &A, size_t col);
+inline Eigen::MatrixXd solve(const Eigen::MatrixXd &A, const Eigen::MatrixXd &b);
 
 
 class data 
@@ -41,7 +45,7 @@ class data
 	int n_samples; // number of samples
 	long int n_snps; // number of snps
 	bool bgen_pass;
-	int G_ncol;
+	int n_var;
 
 	bool G_reduced;   // Variables to track whether we have already
 	bool Y_reduced;   // reduced to complete cases or not.
@@ -52,6 +56,7 @@ class data
 
 	std::map<int, bool> missing_covars; // set of subjects missing >= 1 covariate
 	std::map<int, bool> missing_phenos; // set of subjects missing >= phenotype
+	std::map<int, bool> placeholder_map; // To make it clear that we assume all genotypes present
 
 	std::vector< std::string > pheno_names;
 	std::vector< std::string > covar_names;
@@ -62,6 +67,7 @@ class data
 	Eigen::VectorXd Z; // interaction vector
 	BgenParser bgenParser; // hopefully initialised appropriately from
 						   // initialisation list in Data constructor
+	std::vector< double > beta, tau, neglogP;
 
 	boost_io::filtering_ostream outf;
 	
@@ -95,6 +101,11 @@ class data
 				[&]( std::string const& id ) { outf << "\t" << id ; }
 			) ;
 			outf << "\n" ;
+		}
+
+		if(params.mode_lm){
+			// Output header for vcf file
+			outf << "chr rsid pos a_0 a_1 af beta tau neglogP" << std::endl;
 		}
 	}
 
@@ -182,7 +193,8 @@ class data
 		assert( chromosome.size() == jj );
 		assert( position.size() == jj );
 		assert( alleles.size() == jj );
-		G_ncol = jj;
+		n_var = jj;
+		G_reduced = false;
 
 		return true;
 	}
@@ -199,14 +211,14 @@ class data
 		fg.push(boost_io::file_source(filename.c_str()));
 		if (!fg) {
 			std::cout << "ERROR: " << filename << " not opened." << std::endl;
-			exit(-1);
+			std::exit(EXIT_FAILURE);
 		}
 
 		// Reading column names
 		std::string line;
 		if (!getline(fg, line)) {
 			std::cout << "ERROR: " << filename << " not read." << std::endl;
-			exit(-1);
+			std::exit(EXIT_FAILURE);
 		}
 		std::stringstream ss;
 		std::string s;
@@ -275,6 +287,8 @@ class data
 			}
 
 			mu = mu / count;
+			std::cout << "#incomplete rows: " << incomplete_row.size() << std::endl;
+			std::cout << "Mean is " << mu << std::endl;
 			for (int i = 0; i < n_samples; i++) {
 				if (incomplete_row.count(i) == 0) {
 					M(i, k) -= mu;
@@ -282,6 +296,7 @@ class data
 					M(i, k) = 0.0;
 				}
 			}
+			// std::cout << "Mean centered matrix:" << std::endl << M << std::endl;
 		}
 	}
 
@@ -294,10 +309,12 @@ class data
 		std::vector<size_t> keep;
 		for (int k = 0; k < n_cols; k++) {
 			double sigma = 0.0;
+			double count = 0;
 			for (int i = 0; i < n_samples; i++) {
 				if (incomplete_row.count(i) == 0) {
 					double val = M(i, k);
 					sigma += val * val;
+					count += 1;
 				}
 			}
 
@@ -325,23 +342,25 @@ class data
 
 	void read_pheno( ){
 		// Read phenotypes to Eigen matrix Y
-		// Reduce phenos, covars, genotypes to the set of complete cases across covar/pheno?
-		// Center the columns (inc. set non-complete cases to 0?)
-		// Compute residual phenotypes after regressing out covariates
-		// Then scale columns.
 		if ( params.pheno_file != "NULL" ) {
 			read_txt_file( params.pheno_file, Y, n_pheno, pheno_names, missing_phenos );
-			// center_matrix( Y, n_pheno, missing_phenos );
+		} else {
+			throw std::invalid_argument( "Tried to read NULL pheno file." );
 		}
+		if(n_pheno != 1){
+			std::cout << "ERROR: Only expecting one phenotype at a time." << std::endl;
+		}
+		Y_reduced = false;
 	}
 
 	void read_covar( ){
-		// Read covariates to Eigen matrix W, then center and scale the columns
+		// Read covariates to Eigen matrix W
 		if ( params.covar_file != "NULL" ) {
 			read_txt_file( params.covar_file, W, n_covar, covar_names, missing_covars );
-			// center_matrix( W, n_covar, missing_covars );
-			// scale_matrix( W, n_covar, missing_covars );
+		} else {
+			throw std::invalid_argument( "Tried to read NULL covar file." );
 		}
+		W_reduced = false;
 	}
 
 	void reduce_to_complete_cases( Eigen::MatrixXd& M, 
@@ -357,16 +376,18 @@ class data
 
 		// Create temporary matrix of complete cases
 		n_incomplete = incomplete_cases.size();
-		M_tmp.resize(n_cols, n_samples - n_incomplete);
+		M_tmp.resize(n_samples - n_incomplete, n_cols);
 
 		// Fill M_tmp with non-missing entries of M
 		int ii_tmp = 0;
 		for (int ii = 0; ii < n_samples; ii++) {
-			if (incomplete_row.count(ii) == 0) {
+			if (incomplete_cases.count(ii) == 0) {
 				for (int kk = 0; kk < n_cols; kk++) {
 					M_tmp(ii_tmp, kk) = M(ii, kk);
 				}
 				ii_tmp++;
+			} else {
+				// std::cout << "Deleting row " << ii << std::endl;
 			}
 		}
 
@@ -377,80 +398,117 @@ class data
 
 	void regress_covars() {
 		Eigen::MatrixXd ww = W.rowwise() - W.colwise().mean(); //not needed probably
-		Eigen::MatrixXd bb = solve(ww.transpose() * ww, ww.transpose() * y);
+		Eigen::MatrixXd bb = solve(ww.transpose() * ww, ww.transpose() * Y);
 		Y = Y - ww * bb;
 	}
 
 	void calc_lrts() {
-		// Need to think a little about how to implement this.
-		double xtx_inv = 1.0 / (n_samples - 1.0);
+		// For-loop through variants and compute interaction models.
+		// Save to
+		// data.tau, data.beta
+		// Y is a matrix of dimension n_samples x 1
+		std::cout << "Entering calc_lrts()" << std::endl;
+		// Eigen::MatrixXd e_j, f_j, G_j, Z_j;
+		Eigen::VectorXd e_j, f_j;
+		double beta_j, tau_j, xtx_inv, loglik_null, loglik_alt, chi_stat;
+		long double pval;
+		boost::math::chi_squared chi_dist(1);
 
-		// Null model
-		// beta;         n_pheno x n_var
-		// G;            n_samples x n_var
-		// Y.tranpose(); n_pheno x n_samples
-		// ee;           n_samples x n_pheno <- Nope, thats not what we want.
-		// 
-		Eigen::MatrixXd beta, ee;
-		beta = xtx_inv * Y.transpose() * G;
-		ee = Y - G * beta.transpose();
-		loglik_null = - N * std::log( ee.transpose() * ee ) / 2.0;
+		Eigen::VectorXd vv(Eigen::Map<Eigen::VectorXd>(W.col(0).data(), n_samples));
+		Eigen::MatrixXd Z = G.array().colwise() * vv.array();
 
-		// 1 Dof interction model; niave implementation
-		// tbc
+		// Output stats
+		// std::cout << "W is " << W.rows() << "x" << W.cols() << std::endl;
+		// std::cout << "G is " << G.rows() << "x" << G.cols() << std::endl;
+		// std::cout << "Y\tG\tW\tZ" << std::endl;
+		// for (int ii = 0; ii < n_samples; ii++){
+		// 	std::cout << Y(ii,0) << "\t" << G(ii,0) << "\t" << W(ii,0) << "\t";
+		// 	std::cout << Z(ii,0) << "\t" << std::endl;
+		// }
 
-		// 1 Dof interaction model; 2 step regression version
-		// X_1dof;       n_samples x n_var
-		// beta_1dof;    n_pheno x n_var
-		// ee_1dof;      n_samples x n_pheno
-		// loglik_1dof;  n_pheno x n_var
-		Eigen::MatrixXd X_1dof, beta_1dof;
-		Z = W.col(1);
-		X_1dof = G.colwise() * Z;
-		center_matrix( X_1dof, n_samples, missing_covars ); // missing_covars should be empty
-		scale_matrix( X_1dof, n_samples, missing_covars );
-		beta_1dof = xtx_inv * ee.transpose() * G;
-		ee_1dof = Y - G * beta.transpose();
-		loglik_1dof = - N * std::log( ee_1dof.transpose() * ee_1dof ) / 2.0;
-		
-		
-		
+		beta.clear();
+		tau.clear();
+		neglogP.clear();
+		xtx_inv = 1.0 / (n_samples - 1.0);
+
+		for (int jj = 0; jj < n_var; jj++){
+			std::cout << "Computing lrts for variant: " << jj << std::endl;
+			// G_j = G.col(jj);
+			// Z_j = Z.col(jj);
+			Eigen::Map<Eigen::VectorXd> G_j(G.col(jj).data(), n_samples);
+			Eigen::Map<Eigen::VectorXd> Z_j(Z.col(jj).data(), n_samples);
+			
+			beta_j = xtx_inv * (G_j.transpose() * Y)(0,0);
+			e_j = Y - G_j * beta_j;
+			loglik_null = std::log(n_samples) - std::log(e_j.dot(e_j));
+			loglik_null *= n_samples/2.0;
+
+			tau_j = (Z_j.transpose() * e_j)(0,0) / (Z_j.transpose() * Z_j)(0,0);
+			f_j = e_j - Z_j * tau_j;
+			loglik_alt = std::log(n_samples) - std::log(f_j.dot(f_j));
+			loglik_alt *= n_samples/2.0;
+
+			std::cout << "Null loglik: " << loglik_null << std::endl;
+			std::cout << "Alt loglik: " << loglik_alt << std::endl;
+
+			chi_stat = 2*(loglik_alt - loglik_null);
+			std::cout << "Test statistic: " << chi_stat << std::endl;
+			pval = 1 - boost::math::cdf(chi_dist, chi_stat);
+			
+
+			// Saving variables
+			beta.push_back(beta_j);
+			tau.push_back(tau_j);
+			neglogP.push_back(-1 * std::log10(pval));
+		}
+	}
+
+	void output_lm() {
+		for (int s = 0; s < n_var; s++){
+			outf << chromosome[s] << " " << rsid[s] << " " << position[s] << " ";
+			outf << alleles[s][0] << " " << alleles[s][1] << " " << maf[s] << " ";
+			outf << beta[s] << " " << tau[s] << " " << neglogP[s] << std::endl;
+		}
 	}
 
 	void run() {
 		int ch = 0;
+		std::map< int, bool > incomplete_cases;
+
 		while (read_bgen_chunk()) {
 			if (ch == 0) {
 				read_covar();
 				read_pheno();
 
 				// Step 2; Reduce to complete cases
-				std::map< int, bool > incomplete_cases;
 				incomplete_cases.insert(missing_covars.begin(), missing_covars.end());
 				incomplete_cases.insert(missing_phenos.begin(), missing_phenos.end());
-				reduce_to_complete_cases( G, G_ncol, G_reduced, incomplete_cases ); 
-				reduce_to_complete_cases( Y, n_pheno, Y_reduced, incomplete_cases );
-				reduce_to_complete_cases( W, n_covar, W_reduced, incomplete_cases );
+				reduce_to_complete_cases( G, G_reduced, n_var, incomplete_cases ); 
+				reduce_to_complete_cases( Y, Y_reduced, n_pheno, incomplete_cases );
+				reduce_to_complete_cases( W, W_reduced, n_covar, incomplete_cases );
 				n_samples = n_samples - incomplete_cases.size();
 				missing_phenos.clear();
 				missing_covars.clear();
 
-				// Step 3; Center phenos, normalise covars
+				// Step 3; Center phenos, genotypes, normalise covars
 				center_matrix( Y, n_pheno, missing_phenos );
 				center_matrix( W, n_covar, missing_covars );
+				center_matrix( G, n_var, placeholder_map );
 				scale_matrix( W, n_covar, missing_covars );
+				scale_matrix( G, n_var, placeholder_map );
 
 				// Step 4; Regress covars out of phenos
 				regress_covars();
 
 				// Step 5; Scale phenos
-				scale_matrix( Y, n_pheno, missing_phenos );
+				// scale_matrix( Y, n_pheno, missing_phenos );
 			} else {
-				reduce_to_complete_cases( G, incomplete_cases );
+				reduce_to_complete_cases( G, G_reduced, n_var, incomplete_cases );
+				center_matrix( G, n_var, placeholder_map );
+				scale_matrix( G, n_var, placeholder_map );
 			}
 			calc_lrts();
-			output_pvals();
-
+			output_lm();
 			ch++;
 		}
 	}
@@ -501,6 +559,15 @@ inline Eigen::MatrixXd getCols(const Eigen::MatrixXd &X, const std::vector<size_
 	}
 
 	return result;
+}
+
+inline Eigen::MatrixXd solve(const Eigen::MatrixXd &A, const Eigen::MatrixXd &b) {
+	Eigen::MatrixXd x = A.colPivHouseholderQr().solve(b);
+	if (fabs((double)((A * x - b).norm()/b.norm())) > 1e-8) {
+		std::cout << "ERROR: could not solve covariate scatter matrix." << std::endl;
+		std::exit(EXIT_FAILURE);
+	}
+	return x;
 }
 
 #endif

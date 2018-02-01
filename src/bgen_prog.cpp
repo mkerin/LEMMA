@@ -16,8 +16,10 @@
 #include "bgen_parser.hpp"
 #include "version.h"
 
+// TODO: Sensible restructuring of interaction code
+// TODO: get --range to work off of .bgi files
 // TODO: --interacation option! Currently taking 1st column of covariates.
-// TODO: regress out covars
+// TODO: Use high precision double for pval
 // TODO: implement info filter
 // TODO: tests for read_pheno, read_covar? Clarify if args for these are compulsory.
 // TODO: copy argument_sanity()
@@ -28,6 +30,10 @@
 //    If so we could fill n_samples at start
 //    - read_covar() & read_pheno()
 //    - then edit query with incomplete cases before reading bgen
+
+// Notes:
+// - Assume that there are no missing data in BGEN files.
+//   -> If so we would have to update complete_cases for every chunk
 
 // This example program reads data from a bgen file specified as the first argument
 // and outputs it as a VCF file.
@@ -45,7 +51,7 @@ int main( int argc, char** argv ) {
 			// Reading in from bgen file
 			while (Data.read_bgen_chunk()) {
 				std::cout << "Top of the bgen chunk while-loop" << std::endl;
-				for (int jj = 0; jj < Data.G_ncol; jj++ ) {
+				for (int jj = 0; jj < Data.n_var; jj++ ) {
 					Data.outf << Data.chromosome[jj] << '\t'
 						<< Data.position[jj] << '\t'
 						<< Data.rsid[jj] << '\t' ;
@@ -66,7 +72,7 @@ int main( int argc, char** argv ) {
 
 		if(p.mode_lm){
 			// Start loading the good stuff
-			
+			Data.run();
 		}
 		return 0 ;
 	}
