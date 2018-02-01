@@ -56,7 +56,7 @@ class data
 
 	std::map<int, bool> missing_covars; // set of subjects missing >= 1 covariate
 	std::map<int, bool> missing_phenos; // set of subjects missing >= phenotype
-	std::map<int, bool> placeholder_map; // To make it clear that we assume all genotypes present
+	std::map< int, bool > incomplete_cases; // union of samples missing data
 
 	std::vector< std::string > pheno_names;
 	std::vector< std::string > covar_names;
@@ -78,6 +78,7 @@ class data
 
 	data( std::string filename ) : bgenParser( filename ){
 		bgen_pass = true;
+		n_samples = bgenParser.number_of_samples();
 	}
 	
 	~data() {
@@ -120,7 +121,7 @@ class data
 		if (!bgen_pass) return false;
 
 		// Update n_samples (only needed on 1st run, but not sure where to put this)
-		n_samples = bgenParser.number_of_samples();
+		// n_samples = bgenParser.number_of_samples(); // TODO: move this line.
 
 		// Temporary variables to store info from read_variant()
 		std::string my_chr ;
@@ -128,6 +129,7 @@ class data
 		std::string my_rsid ;
 		std::vector< std::string > my_alleles ;
 		std::vector< std::vector< double > > probs ;
+		std::map<int, bool> missing_genos;
 
 		double d1, af, x, dosage;
 
@@ -175,19 +177,58 @@ class data
 			alleles.push_back(my_alleles);
 			
 			bgenParser.read_probs( &probs ) ;
+			// Note that we skip entries for samples missing data in phenos/covars
+			int ii_obs = 0;
+			double check;
+			double mu = 0.0;
+			double count = 0;
+			missing_genos.clear();
 			for( std::size_t ii = 0; ii < probs.size(); ++ii ) {
-				dosage = 0.0;
-				for( std::size_t kk = 0; kk < probs[ii].size(); ++kk ) {
-					x = probs[ii][kk];
-					dosage += x * kk;
+				if (incomplete_cases.count(ii) == 0) {
+					dosage = 0.0;
+					check = 0.0;
+
+					for( std::size_t kk = 0; kk < probs[ii].size(); ++kk ) {
+						x = probs[ii][kk];
+						dosage += x * kk;
+						check += x;
+					}
+
+					if(check > 0.9999 && check < 1.0001){
+						G(ii_obs,jj) = dosage;
+						mu += dosage;
+						count += 1;
+					} else if(check > 0){
+						std::cout << "Unexpected sum of allele probs: ";
+	 					std::cout << check << " at sample=" << ii;
+	 					std::cout << ", variant=" << jj << std::endl;
+						throw std::logic_error("Allele probs expected to sum to 1 or 0");
+					} else {
+						missing_genos[ii_obs] = 1;
+					}
+
+					ii_obs++; // loop should end at ii_obs == n_samples
 				}
-				G(ii,jj) = dosage;
 			}
+
+			// Set missing entries to mean
+			// Could mean center here, but still want to write to VCF.
+			mu = mu / count;
+			for (int ii = 0; ii < n_samples; ii++) {
+				if (missing_genos.count(ii) != 0) {
+					G(ii, jj) = mu;
+				}
+			}
+
+			if (ii_obs < n_samples) {
+				throw std::logic_error("ERROR: Fewer non-missing genotypes than expected");
+			}
+
 			jj++;
 		}
 
-		// if while loop exits early due to EOF,
-		// we need to resize G whilst retaining existing coefficients.
+		// need to resize G whilst retaining existing coefficients if while
+		// loop exits early due to EOF.
 		G.conservativeResize(n_samples, jj);
 		assert( rsid.size() == jj );
 		assert( chromosome.size() == jj );
@@ -287,8 +328,6 @@ class data
 			}
 
 			mu = mu / count;
-			std::cout << "#incomplete rows: " << incomplete_row.size() << std::endl;
-			std::cout << "Mean is " << mu << std::endl;
 			for (int i = 0; i < n_samples; i++) {
 				if (incomplete_row.count(i) == 0) {
 					M(i, k) -= mu;
@@ -297,6 +336,66 @@ class data
 				}
 			}
 			// std::cout << "Mean centered matrix:" << std::endl << M << std::endl;
+		}
+	}
+
+	void center_matrix( Eigen::MatrixXd& M,
+						int& n_cols ){
+		// Center eigen matrix passed by reference.
+		// Only call on matrixes which have been reduced to complete cases,
+		// as no check for incomplete rows.
+
+		std::vector<size_t> keep;
+		for (int k = 0; k < n_cols; k++) {
+			double mu = 0.0;
+			double count = 0;
+			for (int i = 0; i < n_samples; i++) {
+				mu += M(i, k);
+				count += 1;
+			}
+
+			mu = mu / count;
+			for (int i = 0; i < n_samples; i++) {
+				M(i, k) -= mu;
+			}
+			// std::cout << "Mean centered matrix:" << std::endl << M << std::endl;
+		}
+	}
+
+	void scale_matrix( Eigen::MatrixXd& M,
+						int& n_cols ){
+		// Scale eigen matrix passed by reference.
+		// Removes columns with zero variance.
+		// Only call on matrixes which have been reduced to complete cases,
+		// as no check for incomplete rows.
+
+		std::vector<size_t> keep;
+		for (int k = 0; k < n_cols; k++) {
+			double sigma = 0.0;
+			double count = 0;
+			for (int i = 0; i < n_samples; i++) {
+				double val = M(i, k);
+				sigma += val * val;
+				count += 1;
+			}
+
+			sigma = sqrt(sigma/(count - 1));
+			if (sigma > 1e-12) {  
+				for (int i = 0; i < n_samples; i++) {
+					M(i, k) /= sigma;
+				}
+				keep.push_back(k);
+			}
+		}
+
+		if (keep.size() != n_cols) {
+			std::cout << " Removing " << (n_cols - keep.size())  << " columns with zero variance." << std::endl;
+			M = getCols(M, keep);
+			n_cols = keep.size();
+		}
+
+		if (n_cols == 0) {
+			throw std::runtime_error("ERROR: No columns left with nonzero variance after scale_matrix()");
 		}
 	}
 
@@ -473,7 +572,6 @@ class data
 
 	void run() {
 		int ch = 0;
-		std::map< int, bool > incomplete_cases;
 
 		while (read_bgen_chunk()) {
 			if (ch == 0) {
@@ -486,16 +584,16 @@ class data
 				reduce_to_complete_cases( G, G_reduced, n_var, incomplete_cases ); 
 				reduce_to_complete_cases( Y, Y_reduced, n_pheno, incomplete_cases );
 				reduce_to_complete_cases( W, W_reduced, n_covar, incomplete_cases );
-				n_samples = n_samples - incomplete_cases.size();
+				n_samples -= incomplete_cases.size();
 				missing_phenos.clear();
 				missing_covars.clear();
 
 				// Step 3; Center phenos, genotypes, normalise covars
-				center_matrix( Y, n_pheno, missing_phenos );
-				center_matrix( W, n_covar, missing_covars );
-				center_matrix( G, n_var, placeholder_map );
-				scale_matrix( W, n_covar, missing_covars );
-				scale_matrix( G, n_var, placeholder_map );
+				center_matrix( Y, n_pheno );
+				center_matrix( W, n_covar );
+				center_matrix( G, n_var );
+				scale_matrix( W, n_covar );
+				scale_matrix( G, n_var );
 
 				// Step 4; Regress covars out of phenos
 				regress_covars();
@@ -503,9 +601,9 @@ class data
 				// Step 5; Scale phenos
 				// scale_matrix( Y, n_pheno, missing_phenos );
 			} else {
-				reduce_to_complete_cases( G, G_reduced, n_var, incomplete_cases );
-				center_matrix( G, n_var, placeholder_map );
-				scale_matrix( G, n_var, placeholder_map );
+				// On subsequent runs we skip incomplete_cases in read_bgen
+				center_matrix( G, n_var );
+				scale_matrix( G, n_var );
 			}
 			calc_lrts();
 			output_lm();

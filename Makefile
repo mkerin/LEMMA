@@ -46,7 +46,7 @@ data/io_test/t2_lm/attempt.out: data/io_test/example.v11.bgen ./bin/bgen_prog
 	    --bgen $< \
 	    --pheno data/io_test/t2_lm/t2.pheno \
 	    --covar data/io_test/t2_lm/t2.covar \
-	    --range 01 2000 2000 --out $@
+	    --range 01 2000 2001 --out $@
 	diff data/io_test/t2_lm/answer.out $@
 
 # Clean dir

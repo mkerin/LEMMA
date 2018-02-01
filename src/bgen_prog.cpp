@@ -16,9 +16,9 @@
 #include "bgen_parser.hpp"
 #include "version.h"
 
-// TODO: Sensible restructuring of interaction code
 // TODO: get --range to work off of .bgi files
-// TODO: --interacation option! Currently taking 1st column of covariates.
+// TODO: Sensible restructuring of interaction code
+// TODO: --interaction option! Currently taking 1st column of covariates.
 // TODO: Use high precision double for pval
 // TODO: implement info filter
 // TODO: tests for read_pheno, read_covar? Clarify if args for these are compulsory.
@@ -32,8 +32,7 @@
 //    - then edit query with incomplete cases before reading bgen
 
 // Notes:
-// - Assume that there are no missing data in BGEN files.
-//   -> If so we would have to update complete_cases for every chunk
+// - Replace missing data in BGEN files with mean
 
 // This example program reads data from a bgen file specified as the first argument
 // and outputs it as a VCF file.
