@@ -8,11 +8,12 @@
 
 class parameters {
 	public :
-		std::string bgen_file, chr, out_file, pheno_file, covar_file, incl_sids_file;
+		std::string bgen_file, chr, out_file, pheno_file, covar_file;
+		std::string incl_sids_file, x_param_name;
 		int chunk_size, missing_code;
 		uint32_t start, end;
-		bool range, maf_lim, mode_vcf, mode_lm;
-		double min_maf;
+		bool range, maf_lim, info_lim, mode_vcf, mode_lm;
+		double min_maf, min_info;
 		std::vector < std::string > incl_sample_ids;
 	
 	// constructors/destructors	
@@ -22,10 +23,12 @@ class parameters {
 		covar_file = "NULL";
 		out_file = "NULL";
 		incl_sids_file = "NULL";
+		x_param_name = "NULL";
 		chunk_size = 256;
 		missing_code = -999;
 		range = false;
 		maf_lim = false;
+		info_lim = false;
 		mode_lm = false;
 		mode_vcf = false;
 	}

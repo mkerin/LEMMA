@@ -20,7 +20,7 @@
 // TODO: Sensible restructuring of interaction code
 // TODO: --interaction option! Currently taking 1st column of covariates.
 // TODO: Use high precision double for pval
-// TODO: implement info filter
+// TODO: implement tests for info filter
 // TODO: tests for read_pheno, read_covar? Clarify if args for these are compulsory.
 // TODO: copy argument_sanity()
 // TODO: function to check that files exist
@@ -50,6 +50,9 @@ int main( int argc, char** argv ) {
 		if(Data.params.incl_sids_file != "NULL"){
 			Data.read_incl_sids();
 		}
+
+		// Summary info
+		Data.bgenParser.summarise(std::cout);
 
 		if(p.mode_lm){
 			// Start loading the good stuff

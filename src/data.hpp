@@ -3,7 +3,9 @@
 #define DATA_H
 
 #include <iostream>
+#include <algorithm>
 #include <cmath>
+#include <cstddef> // for ptrdiff_t class
 #include <map>
 #include <vector>
 #include <string>
@@ -87,11 +89,9 @@ class data
 	void output_init() {
 		// open output file
 		std::string ofile, gz_str = ".gz";
-		std::cout << "Opening output files ..." << std::endl;
 
 		ofile = params.out_file;
 		outf.push(boost_io::file_sink(ofile.c_str()));
-		// outf << "chr rsid pos a_0 a_1 af info";
 
 		if(params.mode_vcf){
 			// Output header for vcf file
@@ -106,7 +106,7 @@ class data
 
 		if(params.mode_lm){
 			// Output header for vcf file
-			outf << "chr rsid pos a_0 a_1 af beta tau neglogP" << std::endl;
+			outf << "chr rsid pos a_0 a_1 af info beta tau neglogP" << std::endl;
 		}
 	}
 
@@ -116,7 +116,7 @@ class data
 		// Assumed that:
 		// - commandline args parsed and passed to params
 		// - bgenParser initialised with correct filename
-		std::cout << "Entering read_bgen_chunk()" << std::endl;
+
 		// Exit function if last call hit EOF.
 		if (!bgen_pass) return false;
 
@@ -124,17 +124,18 @@ class data
 		// n_samples = bgenParser.number_of_samples(); // TODO: move this line.
 
 		// Temporary variables to store info from read_variant()
-		std::string my_chr ;
-		uint32_t my_pos ;
-		std::string my_rsid ;
-		std::vector< std::string > my_alleles ;
+		std::string chr_j ;
+		uint32_t pos_j ;
+		std::string rsid_j ;
+		std::vector< std::string > alleles_j ;
 		std::vector< std::vector< double > > probs ;
 		std::map<int, bool> missing_genos;
 
-		double d1, af, x, dosage, check;
+		double d1, theta, x, dosage, check, info_j, f1, f2;
 
-		// Wipe variant info from last chunk
+		// Wipe variant context from last chunk
 		maf.clear();
+		info.clear();
 		rsid.clear();
 		chromosome.clear();
 		position.clear();
@@ -145,12 +146,12 @@ class data
 
 		std::size_t valid_count, jj = 0;
 		while ( jj < params.chunk_size && bgen_pass ) {
-			bgen_pass = bgenParser.read_variant( &my_chr, &my_pos, &my_rsid, &my_alleles );
+			bgen_pass = bgenParser.read_variant( &chr_j, &pos_j, &rsid_j, &alleles_j );
 			if (!bgen_pass) break;
-			assert( my_alleles.size() > 0 );
+			assert( alleles_j.size() > 0 );
 
 			// range filter
-			if (params.range && (my_pos < params.start || my_pos > params.end)){
+			if (params.range && (pos_j < params.start || pos_j > params.end)){
 				bgenParser.ignore_probs();
 				continue;
 			}
@@ -158,36 +159,45 @@ class data
 			// Read probs + check maf filter
 			bgenParser.read_probs( &probs );
 
-			// maf filter; computed on valid sample_ids & variants whose alleles
+			// maf + info filters; computed on valid sample_ids & variants whose alleles
 			// sum to 1
-			d1 = 0.0;
+			d1 = f2 = 0.0;
 			valid_count = 0;
 			for( std::size_t ii = 0; ii < probs.size(); ++ii ) {
 				if (incomplete_cases.count(ii) == 0) {
-					check = 0.0;
-					dosage = 0.0;
+					f1 = dosage = check = 0.0;
 					for( std::size_t kk = 0; kk < probs[ii].size(); ++kk ) {
 						x = probs[ii][kk];
 						dosage += x * kk;
+						f1 += x * kk * kk;
 						check += x;
 					}
 					if(check > 0.9999 && check < 1.0001){
 						d1 += dosage;
+						f2 += (f1 - dosage * dosage);
 						valid_count++;
 					}
 				}
 			}
-			af = d1 / (2.0 * valid_count);
-			if (params.maf_lim && af < params.min_maf) {
+			theta = d1 / (2.0 * valid_count);
+			info_j = 1.0;
+			if(theta > 1e-10 && theta < 0.9999999999){
+				info_j -= f2 / (2.0 * valid_count * theta * (1.0 - theta));
+			}
+			if (params.maf_lim && theta < params.min_maf) {
+				continue;
+			}
+			if (params.info_lim && theta < params.min_info) {
 				continue;
 			}
 
 			// filters passed; write contextual info
-			maf.push_back(af);
-			rsid.push_back(my_rsid);
-			chromosome.push_back(my_chr);
-			position.push_back(my_pos);
-			alleles.push_back(my_alleles);
+			maf.push_back(theta);
+			info.push_back(info_j);
+			rsid.push_back(rsid_j);
+			chromosome.push_back(chr_j);
+			position.push_back(pos_j);
+			alleles.push_back(alleles_j);
 			
 			// filters passed; write dosage to G
 			// Note that we only write dosage for valid sample ids
@@ -248,7 +258,6 @@ class data
 		assert( alleles.size() == jj );
 		n_var = jj;
 		G_reduced = false;
-		std::cout << "Chunk size: " << jj << std::endl;
 
 		if(jj == 0){
 			// Immediate EOF
@@ -531,7 +540,7 @@ class data
 		if ( params.covar_file != "NULL" ) {
 			read_txt_file( params.covar_file, W, n_covar, covar_names, missing_covars );
 		} else {
-			throw std::invalid_argument( "Tried to read NULL covar file." );
+			throw std::logic_error( "Tried to read NULL covar file." );
 		}
 		W_reduced = false;
 	}
@@ -570,6 +579,12 @@ class data
 	}
 
 	void regress_covars() {
+		std::cout << "Regressing out covars:" << std::endl;
+		for(int cc = 0; cc < n_covar; cc++){
+			std::cout << ( cc > 1 ? ", " : "" ) << covar_names[cc]; 
+		}
+		std::cout << std::endl;
+
 		Eigen::MatrixXd ww = W.rowwise() - W.colwise().mean(); //not needed probably
 		Eigen::MatrixXd bb = solve(ww.transpose() * ww, ww.transpose() * Y);
 		Y = Y - ww * bb;
@@ -580,14 +595,27 @@ class data
 		// Save to
 		// data.tau, data.beta
 		// Y is a matrix of dimension n_samples x 1
-		std::cout << "Entering calc_lrts()" << std::endl;
-		// Eigen::MatrixXd e_j, f_j, G_j, Z_j;
 		Eigen::VectorXd e_j, f_j;
 		double beta_j, tau_j, xtx_inv, loglik_null, loglik_alt, chi_stat;
 		long double pval;
 		boost::math::chi_squared chi_dist(1);
 
-		Eigen::VectorXd vv(Eigen::Map<Eigen::VectorXd>(W.col(0).data(), n_samples));
+		// Determine which covar to use in interaction
+		std::ptrdiff_t x_col;
+		if( params.x_param_name != "NULL"){
+			std::vector<std::string>::iterator it;
+			it = std::find(covar_names.begin(), covar_names.end(), params.x_param_name);
+			if (it == covar_names.end()){
+				throw std::invalid_argument("Can't locate --interaction parameter");
+			}
+			std::cout << "Interaction parameter " << *it << " found!" << std::endl;
+			x_col = it - covar_names.begin();
+		} else {
+			std::cout << "Choosing first covar to use as interaction term (default)" << std::endl;
+			x_col = 0;
+		}
+
+		Eigen::VectorXd vv(Eigen::Map<Eigen::VectorXd>(W.col(x_col).data(), n_samples));
 		Eigen::MatrixXd Z = G.array().colwise() * vv.array();
 
 		// Output stats
@@ -605,9 +633,6 @@ class data
 		xtx_inv = 1.0 / (n_samples - 1.0);
 
 		for (int jj = 0; jj < n_var; jj++){
-			std::cout << "Computing lrts for variant: " << jj << std::endl;
-			// G_j = G.col(jj);
-			// Z_j = Z.col(jj);
 			Eigen::Map<Eigen::VectorXd> G_j(G.col(jj).data(), n_samples);
 			Eigen::Map<Eigen::VectorXd> Z_j(Z.col(jj).data(), n_samples);
 			
@@ -621,11 +646,11 @@ class data
 			loglik_alt = std::log(n_samples) - std::log(f_j.dot(f_j));
 			loglik_alt *= n_samples/2.0;
 
-			std::cout << "Null loglik: " << loglik_null << std::endl;
-			std::cout << "Alt loglik: " << loglik_alt << std::endl;
+			// std::cout << "Null loglik: " << loglik_null << std::endl;
+			// std::cout << "Alt loglik: " << loglik_alt << std::endl;
 
 			chi_stat = 2*(loglik_alt - loglik_null);
-			std::cout << "Test statistic: " << chi_stat << std::endl;
+			// std::cout << "Test statistic: " << chi_stat << std::endl;
 			pval = 1 - boost::math::cdf(chi_dist, chi_stat);
 			
 
@@ -640,7 +665,8 @@ class data
 		for (int s = 0; s < n_var; s++){
 			outf << chromosome[s] << " " << rsid[s] << " " << position[s] << " ";
 			outf << alleles[s][0] << " " << alleles[s][1] << " " << maf[s] << " ";
-			outf << beta[s] << " " << tau[s] << " " << neglogP[s] << std::endl;
+			outf << info[s] << " " << beta[s] << " " << tau[s] << " ";
+ 			outf << neglogP[s] << std::endl;
 		}
 	}
 
@@ -679,21 +705,28 @@ class data
 		// Step 3; Center phenos, genotypes, normalise covars
 		center_matrix( Y, n_pheno );
 		center_matrix( W, n_covar );
+		int tmp = n_covar;
 		scale_matrix( W, n_covar );
+		if(tmp != n_covar){
+			std::cout << "WARNING; just removed a covar for having zero variance.";
+			std::cout << " But we don't track which one.." << std::endl;
+			std::cout << "Please remind me to correct this!" << std::endl;
+		}
+
 
 		// Step 4; Regress covars out of phenos
 		regress_covars();
 
 		while (read_bgen_chunk()) {
 			// Raw dosage read in to G
-			std::cout << "Raw G is " << G.rows() << "x" << G.cols() << std::endl;
-			std::cout << G << std::endl;
+			// std::cout << "Raw G is " << G.rows() << "x" << G.cols() << std::endl;
+			// std::cout << G << std::endl;
 
 			// Normalise genotypes
 			center_matrix( G, n_var );
 			scale_matrix( G, n_var );
-			std::cout << "Normalised G is " << G.rows() << "x" << G.cols() << std::endl;
-			std::cout << G << std::endl;
+			// std::cout << "Normalised G is " << G.rows() << "x" << G.cols() << std::endl;
+			// std::cout << G << std::endl;
 
 			// Actually compute models
 			calc_lrts();

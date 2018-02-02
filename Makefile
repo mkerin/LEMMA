@@ -31,7 +31,7 @@ test/tests-main.o: test/tests-main.cpp
 .PHONY: testIO
 IOfiles := t1_range t2_lm t3_lm_two_chunks
 IOfiles := $(addprefix data/io_test/,$(addsuffix /attempt.out,$(IOfiles)))
-IOfiles += $(addprefix data/io_test/t2_lm/attempt, $(addsuffix .out,B C))
+IOfiles += $(addprefix data/io_test/t2_lm/attempt, $(addsuffix .out,B C D))
 
 testIO: $(IOfiles)
 	@
@@ -67,6 +67,16 @@ data/io_test/t2_lm/attemptC.out: data/io_test/example.v11.bgen ./bin/bgen_prog
 	    --pheno data/io_test/t2_lm/t2.pheno \
 	    --covar data/io_test/t2_lm/t2.covar \
 	    --chunk 1 \
+	    --range 01 2000 2001 --out $@
+	diff data/io_test/t2_lm/answer.out $@
+
+# Same regression analysis as t2_lm but explicitly naming interaction column
+data/io_test/t2_lm/attemptD.out: data/io_test/example.v11.bgen ./bin/bgen_prog
+	./bin/bgen_prog --lm \
+	    --bgen $< \
+	    --pheno data/io_test/t2_lm/t2.pheno \
+	    --covar data/io_test/t2_lm/t2.covar \
+	    --interaction covar1 \
 	    --range 01 2000 2001 --out $@
 	diff data/io_test/t2_lm/answer.out $@
 

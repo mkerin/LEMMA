@@ -49,6 +49,7 @@ void parse_arguments(parameters &p, int argc, char *argv[]) {
 		"--out",
 		"--convert_to_vcf",
 		"--lm",
+		"--interaction",
 		"--incl_sample_ids"
 	};
 
@@ -143,6 +144,13 @@ void parse_arguments(parameters &p, int argc, char *argv[]) {
 				i += 1;
 			}
 
+			if(strcmp(in_str, "--info") == 0) {
+				check_counts(in_str, i, 1, argc);
+				p.info_lim = true;
+				p.min_info = std::stod(argv[i + 1]); // bgen file
+				i += 1;
+			}
+
 			if(strcmp(in_str, "--chunk") == 0) {
 				check_counts(in_str, i, 1, argc);
 				p.chunk_size = std::stoi(argv[i + 1]); // bgen file
@@ -168,6 +176,12 @@ void parse_arguments(parameters &p, int argc, char *argv[]) {
 				check_counts(in_str, i, 1, argc);
 				p.incl_sids_file = argv[i + 1]; // includ sample ids file
 				check_file_exists(p.incl_sids_file);
+				i += 1;
+			}
+
+			if(strcmp(in_str, "--interaction") == 0) {
+				check_counts(in_str, i, 1, argc);
+				p.x_param_name = argv[i + 1]; // includ sample ids file
 				i += 1;
 			}
 		}
