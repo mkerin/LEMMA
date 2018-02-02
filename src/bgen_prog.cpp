@@ -23,6 +23,7 @@
 // TODO: implement info filter
 // TODO: tests for read_pheno, read_covar? Clarify if args for these are compulsory.
 // TODO: copy argument_sanity()
+// TODO: function to check that files exist
 
 // Efficiency changes:
 // 1) Use --range to edit query before reading bgen file
@@ -45,6 +46,15 @@ int main( int argc, char** argv ) {
 		Data.params = p;
 		Data.output_init();
 		Data.n_samples = Data.bgenParser.number_of_samples();
+
+		if(Data.params.incl_sids_file != "NULL"){
+			Data.read_incl_sids();
+		}
+
+		if(p.mode_lm){
+			// Start loading the good stuff
+			Data.run();
+		}
 
 		if (p.mode_vcf){
 			// Reading in from bgen file
@@ -69,10 +79,6 @@ int main( int argc, char** argv ) {
 			}
 		}
 
-		if(p.mode_lm){
-			// Start loading the good stuff
-			Data.run();
-		}
 		return 0 ;
 	}
 	catch( genfile::bgen::BGenError const& e ) {

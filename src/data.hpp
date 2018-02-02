@@ -117,7 +117,7 @@ class data
 		// - commandline args parsed and passed to params
 		// - bgenParser initialised with correct filename
 		std::cout << "Entering read_bgen_chunk()" << std::endl;
-		// Exit function if last call ran out of variants to read in.
+		// Exit function if last call hit EOF.
 		if (!bgen_pass) return false;
 
 		// Update n_samples (only needed on 1st run, but not sure where to put this)
@@ -131,7 +131,7 @@ class data
 		std::vector< std::vector< double > > probs ;
 		std::map<int, bool> missing_genos;
 
-		double d1, af, x, dosage;
+		double d1, af, x, dosage, check;
 
 		// Wipe variant info from last chunk
 		maf.clear();
@@ -143,7 +143,7 @@ class data
 		// Resize genotype matrix
 		G.resize(n_samples, params.chunk_size);
 
-		int jj = 0;
+		std::size_t valid_count, jj = 0;
 		while ( jj < params.chunk_size && bgen_pass ) {
 			bgen_pass = bgenParser.read_variant( &my_chr, &my_pos, &my_rsid, &my_alleles );
 			if (!bgen_pass) break;
@@ -155,31 +155,43 @@ class data
 				continue;
 			}
 
-			// maf + info filters
+			// Read probs + check maf filter
+			bgenParser.read_probs( &probs );
+
+			// maf filter; computed on valid sample_ids & variants whose alleles
+			// sum to 1
 			d1 = 0.0;
-			for( std::size_t i = 0; i < probs.size(); ++i ) {
-				for( std::size_t j = 0; j < probs[i].size(); ++j ) {
-					x = probs[i][j];
-					d1 += x * j;
+			valid_count = 0;
+			for( std::size_t ii = 0; ii < probs.size(); ++ii ) {
+				if (incomplete_cases.count(ii) == 0) {
+					check = 0.0;
+					dosage = 0.0;
+					for( std::size_t kk = 0; kk < probs[ii].size(); ++kk ) {
+						x = probs[ii][kk];
+						dosage += x * kk;
+						check += x;
+					}
+					if(check > 0.9999 && check < 1.0001){
+						d1 += dosage;
+						valid_count++;
+					}
 				}
 			}
-			af = d1 / (2.0 * n_samples);
+			af = d1 / (2.0 * valid_count);
 			if (params.maf_lim && af < params.min_maf) {
-				bgenParser.ignore_probs();
 				continue;
 			}
 
-			// filters passed; write dosage to G
+			// filters passed; write contextual info
 			maf.push_back(af);
 			rsid.push_back(my_rsid);
 			chromosome.push_back(my_chr);
 			position.push_back(my_pos);
 			alleles.push_back(my_alleles);
 			
-			bgenParser.read_probs( &probs ) ;
-			// Note that we skip entries for samples missing data in phenos/covars
-			int ii_obs = 0;
-			double check;
+			// filters passed; write dosage to G
+			// Note that we only write dosage for valid sample ids
+			std::size_t ii_obs = 0;
 			double mu = 0.0;
 			double count = 0;
 			missing_genos.clear();
@@ -211,6 +223,10 @@ class data
 				}
 			}
 
+			if (ii_obs < n_samples) {
+				throw std::logic_error("ERROR: Fewer non-missing genotypes than expected");
+			}
+
 			// Set missing entries to mean
 			// Could mean center here, but still want to write to VCF.
 			mu = mu / count;
@@ -218,10 +234,6 @@ class data
 				if (missing_genos.count(ii) != 0) {
 					G(ii, jj) = mu;
 				}
-			}
-
-			if (ii_obs < n_samples) {
-				throw std::logic_error("ERROR: Fewer non-missing genotypes than expected");
 			}
 
 			jj++;
@@ -236,8 +248,70 @@ class data
 		assert( alleles.size() == jj );
 		n_var = jj;
 		G_reduced = false;
+		std::cout << "Chunk size: " << jj << std::endl;
 
-		return true;
+		if(jj == 0){
+			// Immediate EOF
+			return false;
+		} else {
+			return true;
+		}
+	}
+
+	void read_incl_sids(){
+		boost_io::filtering_istream fg;
+		fg.push(boost_io::file_source(params.incl_sids_file.c_str()));
+		if (!fg) {
+			std::cout << "ERROR: " << params.incl_sids_file << " not opened." << std::endl;
+			std::exit(EXIT_FAILURE);
+		}
+
+		std::vector<std::string> bgen_ids;
+		bgenParser.get_sample_ids(
+			[&]( std::string const& id ) { bgen_ids.push_back(id); }
+		);
+
+		// Want to read in a sid to be included, and skip along bgen_ids until
+		// we find it.
+		int ii = 0, bb = 0;
+		std::stringstream ss;
+		std::string line;
+		try {
+			while (getline(fg, line)) {
+				ss.clear();
+				ss.str(line);
+				std::string s;
+				ss >> s;
+				// TODO: This comparison is not yet working.
+				if (bb >= n_samples){
+					throw std::logic_error("ERROR: Either you have tried "
+					"to include an id not present in the BGEN file, or the "
+					"the provided ids are in the wrong order");
+				}
+				while(s.compare(bgen_ids[bb]) != 0) {
+					incomplete_cases[bb] = 1;
+					bb++;
+					if (bb >= n_samples){
+						std::cout << "Failed to find a match for sample_id:";
+						std::cout << s << std::endl;
+						throw std::logic_error("ERROR: Either you have tried "
+						"to include an id not present in the BGEN file, or the "
+						"the provided ids are in the wrong order");
+					}
+				}
+
+				// bgen_ids[bb] == s
+				bb++;
+				ii++;
+			}
+
+			for (int jj = bb; jj < n_samples; jj++){
+				incomplete_cases[bb] = 1;
+			}
+		} catch (const std::exception &exc) {
+			// throw std::runtime_error("ERROR: problem converting incl_sample_ids.");
+			throw;
+		}
 	}
 
 	void read_txt_file( std::string filename,
@@ -307,7 +381,7 @@ class data
 				throw std::runtime_error("ERROR: could not convert txt file (too few lines).");
 			}
 		} catch (const std::exception &exc) {
-			throw std::runtime_error("ERROR: could not convert txt file.");
+			throw;
 		}
 	}
 
@@ -462,7 +536,7 @@ class data
 		W_reduced = false;
 	}
 
-	void reduce_to_complete_cases( Eigen::MatrixXd& M, 
+	void reduce_mat_to_complete_cases( Eigen::MatrixXd& M, 
 								   bool& matrix_reduced,
 								   int n_cols,
 								   std::map< int, bool > incomplete_cases ) {
@@ -570,41 +644,58 @@ class data
 		}
 	}
 
+	void reduce_to_complete_cases() {
+		// Remove any samples with incomplete covariates or phenotypes from
+		// Y and W.
+		// Note; other functions (eg. read_incl_sids) may add to incomplete_cases
+		// Note; during unit testing sometimes only phenos or covars present.
+
+		incomplete_cases.insert(missing_covars.begin(), missing_covars.end());
+		incomplete_cases.insert(missing_phenos.begin(), missing_phenos.end());
+		if(params.pheno_file != "NULL"){
+			reduce_mat_to_complete_cases( Y, Y_reduced, n_pheno, incomplete_cases );
+		}
+		if(params.covar_file != "NULL"){
+			reduce_mat_to_complete_cases( W, W_reduced, n_covar, incomplete_cases );
+		}
+		n_samples -= incomplete_cases.size();
+		missing_phenos.clear();
+		missing_covars.clear();
+	}
+
 	void run() {
 		int ch = 0;
 
+		// Step 1; Read in raw covariates and phenotypes
+		// - also makes a record of missing values
+		read_covar();
+		read_pheno();
+
+		// Step 2; Reduce raw covariates and phenotypes to complete cases
+		// - may change value of n_samples
+		// - will also skip these cases when reading bgen later
+		reduce_to_complete_cases();
+
+		// Step 3; Center phenos, genotypes, normalise covars
+		center_matrix( Y, n_pheno );
+		center_matrix( W, n_covar );
+		scale_matrix( W, n_covar );
+
+		// Step 4; Regress covars out of phenos
+		regress_covars();
+
 		while (read_bgen_chunk()) {
-			if (ch == 0) {
-				read_covar();
-				read_pheno();
+			// Raw dosage read in to G
+			std::cout << "Raw G is " << G.rows() << "x" << G.cols() << std::endl;
+			std::cout << G << std::endl;
 
-				// Step 2; Reduce to complete cases
-				incomplete_cases.insert(missing_covars.begin(), missing_covars.end());
-				incomplete_cases.insert(missing_phenos.begin(), missing_phenos.end());
-				reduce_to_complete_cases( G, G_reduced, n_var, incomplete_cases ); 
-				reduce_to_complete_cases( Y, Y_reduced, n_pheno, incomplete_cases );
-				reduce_to_complete_cases( W, W_reduced, n_covar, incomplete_cases );
-				n_samples -= incomplete_cases.size();
-				missing_phenos.clear();
-				missing_covars.clear();
+			// Normalise genotypes
+			center_matrix( G, n_var );
+			scale_matrix( G, n_var );
+			std::cout << "Normalised G is " << G.rows() << "x" << G.cols() << std::endl;
+			std::cout << G << std::endl;
 
-				// Step 3; Center phenos, genotypes, normalise covars
-				center_matrix( Y, n_pheno );
-				center_matrix( W, n_covar );
-				center_matrix( G, n_var );
-				scale_matrix( W, n_covar );
-				scale_matrix( G, n_var );
-
-				// Step 4; Regress covars out of phenos
-				regress_covars();
-
-				// Step 5; Scale phenos
-				// scale_matrix( Y, n_pheno, missing_phenos );
-			} else {
-				// On subsequent runs we skip incomplete_cases in read_bgen
-				center_matrix( G, n_var );
-				scale_matrix( G, n_var );
-			}
+			// Actually compute models
 			calc_lrts();
 			output_lm();
 			ch++;

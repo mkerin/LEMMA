@@ -16,10 +16,10 @@ $(TARGET) : $(SRCDIR)/bgen_prog.cpp $(HEADERS)
 # Note: this uses the Catch library to Unit Test the cpp source code. If we want
 # to test input/output of the executable we do that directly with the Makefile
 # and `diff` command.
-UNITTESTS := test-data.cpp tests-parse-arguments.cpp 
-UNITTESTS := $(addprefix test/,$(UNITTESTS))
+# UNITTESTS := test-data.cpp tests-parse-arguments.cpp 
+# UNITTESTS := $(addprefix test/,$(UNITTESTS))
 
-test/tests: test/tests-main.o $(UNITTESTS)
+test/tests: test/tests-main.o
 	g++ $< -o $@  $(FLAGS) && ./$@ -r compact
 
 test/tests-main.o: test/tests-main.cpp
@@ -29,8 +29,9 @@ test/tests-main.o: test/tests-main.cpp
 # Files in data/out are regarded as 'true', and we check that the equivalent
 # file in data/io_test is identical after making changes to the executable.
 .PHONY: testIO
-IOfiles := t1_range t2_lm
+IOfiles := t1_range t2_lm t3_lm_two_chunks
 IOfiles := $(addprefix data/io_test/,$(addsuffix /attempt.out,$(IOfiles)))
+IOfiles += $(addprefix data/io_test/t2_lm/attempt, $(addsuffix .out,B C))
 
 testIO: $(IOfiles)
 	@
@@ -46,6 +47,26 @@ data/io_test/t2_lm/attempt.out: data/io_test/example.v11.bgen ./bin/bgen_prog
 	    --bgen $< \
 	    --pheno data/io_test/t2_lm/t2.pheno \
 	    --covar data/io_test/t2_lm/t2.covar \
+	    --range 01 2000 2001 --out $@
+	diff data/io_test/t2_lm/answer.out $@
+
+# Same regression analysis as t2_lm but with chunk exact right size
+data/io_test/t2_lm/attemptB.out: data/io_test/example.v11.bgen ./bin/bgen_prog
+	./bin/bgen_prog --lm \
+	    --bgen $< \
+	    --pheno data/io_test/t2_lm/t2.pheno \
+	    --covar data/io_test/t2_lm/t2.covar \
+	    --chunk 2 \
+	    --range 01 2000 2001 --out $@
+	diff data/io_test/t2_lm/answer.out $@
+
+# Same regression analysis as t2_lm but split into two chunks
+data/io_test/t2_lm/attemptC.out: data/io_test/example.v11.bgen ./bin/bgen_prog
+	./bin/bgen_prog --lm \
+	    --bgen $< \
+	    --pheno data/io_test/t2_lm/t2.pheno \
+	    --covar data/io_test/t2_lm/t2.covar \
+	    --chunk 1 \
 	    --range 01 2000 2001 --out $@
 	diff data/io_test/t2_lm/answer.out $@
 

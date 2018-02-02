@@ -32,15 +32,15 @@ TEST_CASE( "Checking parse_arguments", "[io]" ) {
 						 (char*) "--out", 
 						 (char*) "data/tmp.out",
 						 (char*) "--pheno", 
-						 (char*) "data/tmp.pheno",
+						 (char*) "data/test/empty.pheno",
 						 (char*) "--covar", 
-						 (char*) "data/tmp.covar"};
+						 (char*) "data/test/empty.covar"};
 		int argc = sizeof(argv)/sizeof(argv[0]);
 		parse_arguments(p, argc, argv);
 		REQUIRE(p.bgen_file == "data/example/example.v11.bgen");
 		REQUIRE(p.out_file == "data/tmp.out");
-		REQUIRE(p.pheno_file == "data/tmp.pheno");
-		REQUIRE(p.covar_file == "data/tmp.covar");
+		REQUIRE(p.pheno_file == "data/test/empty.pheno");
+		REQUIRE(p.covar_file == "data/test/empty.covar");
 		REQUIRE(p.mode_lm == true);
 	}
 
@@ -112,7 +112,7 @@ TEST_CASE( "Checking data", "[data]" ) {
 			REQUIRE( M_read == M_cent );
 		}
 
-		SECTION( "reduce_to_complete_cases behaving sensibly" ) {
+		SECTION( "reduce_mat_to_complete_cases behaving sensibly" ) {
 			Eigen::MatrixXd M_reduc(2, 3);
 			int n_cols_ans = 3;
 			bool check = false;
@@ -120,9 +120,90 @@ TEST_CASE( "Checking data", "[data]" ) {
 			M_reduc << 1, 2, 3, 7, 8, 9;
 			incomplete_cases[1] = 1;
 
-			Data.reduce_to_complete_cases(M_read, check, n_cols_ans, incomplete_cases);
+			Data.reduce_mat_to_complete_cases(M_read, check, n_cols_ans, incomplete_cases);
 			// std::cout << "M_read is now " << M_read.rows() << "x" << M_read.cols() << std::endl;
 			REQUIRE( M_read == M_reduc );
 		}
 	}
+}
+
+TEST_CASE( "Check incl_sample_ids", "[data]" ) {
+	parameters p;
+
+	SECTION( "Read in sids correctly and subset covar matrix" ) {
+		char* argv[] = { (char*) "bin/bgen_prog",
+						 (char*) "--bgen", 
+						 (char*) "data/test/example.v11.bgen",
+						 (char*) "--covar", 
+						 (char*) "data/test/t1_incl_sample_ids/valid_ids.covar",
+						 (char*) "--incl_sample_ids", 
+						 (char*) "data/test/t1_incl_sample_ids/valid_ids.txt"};
+		int argc = sizeof(argv)/sizeof(argv[0]);
+		parse_arguments(p, argc, argv);
+		data Data( p.bgen_file );
+		Data.params = p;
+		
+		REQUIRE(Data.params.incl_sids_file == "data/test/t1_incl_sample_ids/valid_ids.txt");
+		Data.read_incl_sids();
+		REQUIRE(Data.n_samples - Data.incomplete_cases.size() == 7);
+		Data.read_covar();
+		Data.reduce_to_complete_cases(); // Also edits n_samples
+		REQUIRE(Data.n_samples == 7);
+		Eigen::MatrixXd C(7,1);
+		C << 1, 3, 17, 21, 22, 25, 500;
+		REQUIRE(Data.W == C);
+	}
+
+	SECTION( "Empty incl_sample_ids file throws error" ) {
+		char* argv[] = { (char*) "bin/bgen_prog",
+						 (char*) "--bgen", 
+						 (char*) "data/test/example.v11.bgen",
+						 (char*) "--incl_sample_ids", 
+						 (char*) "data/test/t1_incl_sample_ids/empty.txt"};
+		int argc = sizeof(argv)/sizeof(argv[0]);
+		REQUIRE_THROWS_AS(parse_arguments(p, argc, argv), std::runtime_error);
+	}
+	
+	SECTION( "Unordered sids throw error" ) {
+		char* argv[] = { (char*) "bin/bgen_prog",
+						 (char*) "--bgen", 
+						 (char*) "data/test/example.v11.bgen",
+						 (char*) "--incl_sample_ids", 
+						 (char*) "data/test/t1_incl_sample_ids/invalid_ids1.txt"};
+		int argc = sizeof(argv)/sizeof(argv[0]);
+		parse_arguments(p, argc, argv);
+		data Data( p.bgen_file );
+		Data.params = p;
+		
+		REQUIRE_THROWS_AS(Data.read_incl_sids(), std::logic_error);
+	}
+
+	SECTION( "Absent sid throws error" ) {
+		char* argv[] = { (char*) "bin/bgen_prog",
+						 (char*) "--bgen", 
+						 (char*) "data/test/example.v11.bgen",
+						 (char*) "--incl_sample_ids", 
+						 (char*) "data/test/t1_incl_sample_ids/invalid_ids2.txt"};
+		int argc = sizeof(argv)/sizeof(argv[0]);
+		parse_arguments(p, argc, argv);
+		data Data( p.bgen_file );
+		Data.params = p;
+		
+		REQUIRE_THROWS_AS(Data.read_incl_sids(), std::logic_error);
+	}
+
+	SECTION( "Absent sid throws error including last sid" ) {
+		char* argv[] = { (char*) "bin/bgen_prog",
+						 (char*) "--bgen", 
+						 (char*) "data/test/example.v11.bgen",
+						 (char*) "--incl_sample_ids", 
+						 (char*) "data/test/t1_incl_sample_ids/invalid_ids3.txt"};
+		int argc = sizeof(argv)/sizeof(argv[0]);
+		parse_arguments(p, argc, argv);
+		data Data( p.bgen_file );
+		Data.params = p;
+		
+		REQUIRE_THROWS_AS(Data.read_incl_sids(), std::logic_error);
+	}
+
 }

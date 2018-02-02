@@ -5,11 +5,13 @@
 #include <iostream>
 #include <set>
 #include <cstring>
+#include <sys/stat.h>
 #include "class.h"
 #include "version.h"
 
 void check_counts(std::string in_str, int i, int num, int argc);
 void parse_arguments(parameters &p, int argc, char *argv[]);
+void check_file_exists(const std::string& filename);
 
 void check_counts(std::string in_str, int i, int num, int argc) {
 	// Stop overflow from argv
@@ -20,6 +22,16 @@ void check_counts(std::string in_str, int i, int num, int argc) {
 			std::cout << "ERROR: flag " << in_str << " seems to require " + std::to_string(num) + " arguments. No arguments of this type should be implemented yet.." << std::endl;
 		}
 		std::exit(EXIT_FAILURE);
+	}
+}
+
+void check_file_exists(const std::string& filename){
+	// Throw error if given file does not exist.
+	// NB: Doesn't check if file is empty etc.
+	struct stat buf;
+	if(stat(filename.c_str(), &buf) != 0){
+		std::cout << "File " << filename << " does not exist" << std::endl;
+		throw std::runtime_error("ERROR: file does not exist");
 	}
 }
 
@@ -36,7 +48,8 @@ void parse_arguments(parameters &p, int argc, char *argv[]) {
 		"--info",
 		"--out",
 		"--convert_to_vcf",
-		"--lm"
+		"--lm",
+		"--incl_sample_ids"
 	};
 
 	std::set<std::string>::iterator set_it;
@@ -94,18 +107,21 @@ void parse_arguments(parameters &p, int argc, char *argv[]) {
 			if(strcmp(in_str, "--bgen") == 0) {
 				check_counts(in_str, i, 1, argc);
 				p.bgen_file = argv[i + 1]; // bgen file
+				check_file_exists(p.bgen_file);
 				i += 1;
 			}
 
 			if(strcmp(in_str, "--pheno") == 0) {
 				check_counts(in_str, i, 1, argc);
-				p.pheno_file = argv[i + 1]; // bgen file
+				p.pheno_file = argv[i + 1]; // pheno file
+				check_file_exists(p.pheno_file);
 				i += 1;
 			}
 
 			if(strcmp(in_str, "--covar") == 0) {
 				check_counts(in_str, i, 1, argc);
-				p.covar_file = argv[i + 1]; // bgen file
+				p.covar_file = argv[i + 1]; // covar file
+				check_file_exists(p.covar_file);
 				i += 1;
 			}
 
@@ -146,6 +162,13 @@ void parse_arguments(parameters &p, int argc, char *argv[]) {
 				p.start = atoi(argv[i + 2]);
 				p.end = atoi(argv[i + 3]);
 				i += 3;
+			}
+
+			if(strcmp(in_str, "--incl_sample_ids") == 0) {
+				check_counts(in_str, i, 1, argc);
+				p.incl_sids_file = argv[i + 1]; // includ sample ids file
+				check_file_exists(p.incl_sids_file);
+				i += 1;
 			}
 		}
 	}
