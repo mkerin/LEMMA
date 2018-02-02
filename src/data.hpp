@@ -718,6 +718,8 @@ class data
 		regress_covars();
 
 		while (read_bgen_chunk()) {
+			std::cout << "Chunk " << ch+1 << " read (size " << n_var << ")";
+			std::cout << std::endl;
 			// Raw dosage read in to G
 			// std::cout << "Raw G is " << G.rows() << "x" << G.cols() << std::endl;
 			// std::cout << G << std::endl;
