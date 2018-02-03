@@ -321,6 +321,8 @@ class data
 			// throw std::runtime_error("ERROR: problem converting incl_sample_ids.");
 			throw;
 		}
+		std::cout << "Subsetted down to " << bb << " ids from --incl_sample_ids";
+		std::cout << std::endl;
 	}
 
 	void read_txt_file( std::string filename,
@@ -507,7 +509,6 @@ class data
 			throw std::runtime_error("ERROR: No columns left with nonzero variance after scale_matrix()");
 		}
 	}
-
 
 	void read_pheno( ){
 		// Read phenotypes to Eigen matrix Y
@@ -712,15 +713,15 @@ class data
 			// std::cout << G << std::endl;
 
 			// Normalise genotypes
-			std::cout << "Normalising genotypes" << std::endl;
 			center_matrix( G, n_var );
 			scale_matrix( G, n_var );
+			std::cout << "Genotypes normalised" << std::endl;
 			// std::cout << "Normalised G is " << G.rows() << "x" << G.cols() << std::endl;
 			// std::cout << G << std::endl;
 
 			// Actually compute models
-			std::cout << "Computing 1dof interaction test" << std::endl;
 			calc_lrts();
+			std::cout << "1dof interaction test computed" << std::endl;
 			output_lm();
 			ch++;
 		}
