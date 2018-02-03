@@ -124,6 +124,24 @@ TEST_CASE( "Checking data", "[data]" ) {
 			// std::cout << "M_read is now " << M_read.rows() << "x" << M_read.cols() << std::endl;
 			REQUIRE( M_read == M_reduc );
 		}
+
+		SECTION( "scale_matrix reports removal of zero variance cols" ) {
+			Eigen::MatrixXd W(4, 3);
+			std::vector<std::string> covar_names, red_covar_names;
+			
+			// init
+			W << 1, 0, 1, 1, 0, 1, -1, 0, -1, -1, 0, -1;
+			covar_names.push_back("c1").push_back("c2").push_back("c3");
+			red_covar_names.push_back("c1").push_back("c3");
+
+			// test
+			Data.W = W;
+			Data.covar_names = covar_names;
+			Data.n_col = 3;
+			Data.scale_matrix(Data.W, Data.n_col, Data.covar_names);
+			REQUIRE( Data.covar_names == red_covar_names );
+			REQUIRE( Data.n_col == 2 );
+		}
 	}
 }
 

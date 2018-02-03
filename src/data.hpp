@@ -374,7 +374,12 @@ class data
 					if (s == "NA" || s == "NAN" || s == "NaN" || s == "nan") {
 						tmp_d = params.missing_code;
 					} else {
-						tmp_d = stod(s);
+						try{
+							tmp_d = stod(s);
+						} catch (const std::invalid_argument &exc){
+							std::cout << s << " on line " << i << std::endl;
+							throw;
+						}
 					}
 
 					if(tmp_d != params.missing_code) {
@@ -391,34 +396,6 @@ class data
 			}
 		} catch (const std::exception &exc) {
 			throw;
-		}
-	}
-
-	void center_matrix( Eigen::MatrixXd& M,
-						int& n_cols,
-						std::map< int, bool > incomplete_row ){
-		// Center eigen matrix passed by reference.
-
-		std::vector<size_t> keep;
-		for (int k = 0; k < n_cols; k++) {
-			double mu = 0.0;
-			double count = 0;
-			for (int i = 0; i < n_samples; i++) {
-				if (incomplete_row.count(i) == 0) {
-					mu += M(i, k);
-					count += 1;
-				}
-			}
-
-			mu = mu / count;
-			for (int i = 0; i < n_samples; i++) {
-				if (incomplete_row.count(i) == 0) {
-					M(i, k) -= mu;
-				} else {
-					M(i, k) = 0.0;
-				}
-			}
-			// std::cout << "Mean centered matrix:" << std::endl << M << std::endl;
 		}
 	}
 
@@ -446,7 +423,55 @@ class data
 	}
 
 	void scale_matrix( Eigen::MatrixXd& M,
-						int& n_cols ){
+						int& n_cols,
+ 						std::vector< std::string >& col_names){
+		// Scale eigen matrix passed by reference.
+		// Removes columns with zero variance + updates col_names.
+		// Only call on matrixes which have been reduced to complete cases,
+		// as no check for incomplete rows.
+
+		std::vector<size_t> keep;
+		std::vector<std::string> keep_names;
+		std::vector<std::string> reject_names;
+		for (int k = 0; k < n_cols; k++) {
+			double sigma = 0.0;
+			double count = 0;
+			for (int i = 0; i < n_samples; i++) {
+				double val = M(i, k);
+				sigma += val * val;
+				count += 1;
+			}
+
+			sigma = sqrt(sigma/(count - 1));
+			if (sigma > 1e-12) {  
+				for (int i = 0; i < n_samples; i++) {
+					M(i, k) /= sigma;
+				}
+				keep.push_back(k);
+				keep_names.push_back(col_names[k]);
+			} else {
+				reject_names.push_back(col_names[k]);
+			}
+		}
+
+		if (keep.size() != n_cols) {
+			std::cout << " Removing " << (n_cols - keep.size())  << " columns with zero variance:" << std::endl;
+			for(int kk = 0; kk < (n_cols - keep.size()); kk++){
+				std::cout << reject_names[kk] << std::endl;
+			}
+			M = getCols(M, keep);
+			
+			n_cols = keep.size();
+			col_names = keep_names;
+		}
+
+		if (n_cols == 0) {
+			throw std::runtime_error("ERROR: No columns left with nonzero variance after scale_matrix()");
+		}
+	}
+
+	void scale_matrix( Eigen::MatrixXd& M,
+						int& n_cols){
 		// Scale eigen matrix passed by reference.
 		// Removes columns with zero variance.
 		// Only call on matrixes which have been reduced to complete cases,
@@ -474,6 +499,7 @@ class data
 		if (keep.size() != n_cols) {
 			std::cout << " Removing " << (n_cols - keep.size())  << " columns with zero variance." << std::endl;
 			M = getCols(M, keep);
+			
 			n_cols = keep.size();
 		}
 
@@ -482,45 +508,6 @@ class data
 		}
 	}
 
-	void scale_matrix( Eigen::MatrixXd& M,
-						int& n_cols,
-						std::map< int, bool > incomplete_row ){
-		// Scale eigen matrix passed by reference.
-		// Removes columns with zero variance.
-
-		std::vector<size_t> keep;
-		for (int k = 0; k < n_cols; k++) {
-			double sigma = 0.0;
-			double count = 0;
-			for (int i = 0; i < n_samples; i++) {
-				if (incomplete_row.count(i) == 0) {
-					double val = M(i, k);
-					sigma += val * val;
-					count += 1;
-				}
-			}
-
-			sigma = sqrt(sigma/(count - 1));
-			if (sigma > 1e-12) {  
-				for (int i = 0; i < n_samples; i++) {
-					if (incomplete_row.count(i) == 0) {
-						M(i, k) /= sigma;
-					}
-				}
-				keep.push_back(k);
-			}
-		}
-
-		if (keep.size() != n_cols) {
-			std::cout << " Removing " << (n_cols - keep.size())  << " columns with zero variance." << std::endl;
-			M = getCols(M, keep);
-			n_cols = keep.size();
-		}
-
-		if (n_cols == 0) {
-			throw std::runtime_error("ERROR: No columns left with nonzero variance after scale_matrix()");
-		}
-	}
 
 	void read_pheno( ){
 		// Read phenotypes to Eigen matrix Y
@@ -581,7 +568,7 @@ class data
 	void regress_covars() {
 		std::cout << "Regressing out covars:" << std::endl;
 		for(int cc = 0; cc < n_covar; cc++){
-			std::cout << ( cc > 1 ? ", " : "" ) << covar_names[cc]; 
+			std::cout << ( cc > 0 ? ", " : "" ) << covar_names[cc]; 
 		}
 		std::cout << std::endl;
 
@@ -706,12 +693,12 @@ class data
 		center_matrix( Y, n_pheno );
 		center_matrix( W, n_covar );
 		int tmp = n_covar;
-		scale_matrix( W, n_covar );
-		if(tmp != n_covar){
-			std::cout << "WARNING; just removed a covar for having zero variance.";
-			std::cout << " But we don't track which one.." << std::endl;
-			std::cout << "Please remind me to correct this!" << std::endl;
-		}
+		scale_matrix( W, n_covar, covar_names );
+		// if(tmp != n_covar){
+		// 	std::cout << "WARNING; just removed a covar for having zero variance.";
+		// 	std::cout << " But we don't track which one.." << std::endl;
+		// 	std::cout << "Please remind me to correct this!" << std::endl;
+		// }
 
 
 		// Step 4; Regress covars out of phenos
@@ -725,17 +712,87 @@ class data
 			// std::cout << G << std::endl;
 
 			// Normalise genotypes
+			std::cout << "Normalising genotypes" << std::endl;
 			center_matrix( G, n_var );
 			scale_matrix( G, n_var );
 			// std::cout << "Normalised G is " << G.rows() << "x" << G.cols() << std::endl;
 			// std::cout << G << std::endl;
 
 			// Actually compute models
+			std::cout << "Computing 1dof interaction test" << std::endl;
 			calc_lrts();
 			output_lm();
 			ch++;
 		}
 	}
+
+// 	void center_matrix( Eigen::MatrixXd& M,
+// 					int& n_cols,
+// 					std::map< int, bool > incomplete_row ){
+// 	// Center eigen matrix passed by reference.
+// 
+// 	std::vector<size_t> keep;
+// 	for (int k = 0; k < n_cols; k++) {
+// 		double mu = 0.0;
+// 		double count = 0;
+// 		for (int i = 0; i < n_samples; i++) {
+// 			if (incomplete_row.count(i) == 0) {
+// 				mu += M(i, k);
+// 				count += 1;
+// 			}
+// 		}
+// 
+// 		mu = mu / count;
+// 		for (int i = 0; i < n_samples; i++) {
+// 			if (incomplete_row.count(i) == 0) {
+// 				M(i, k) -= mu;
+// 			} else {
+// 				M(i, k) = 0.0;
+// 			}
+// 		}
+// 		// std::cout << "Mean centered matrix:" << std::endl << M << std::endl;
+// 	}
+// }
+
+	// void scale_matrix( Eigen::MatrixXd& M,
+	// 					int& n_cols,
+	// 					std::map< int, bool > incomplete_row ){
+	// 	// Scale eigen matrix passed by reference.
+	// 	// Removes columns with zero variance.
+	// 
+	// 	std::vector<size_t> keep;
+	// 	for (int k = 0; k < n_cols; k++) {
+	// 		double sigma = 0.0;
+	// 		double count = 0;
+	// 		for (int i = 0; i < n_samples; i++) {
+	// 			if (incomplete_row.count(i) == 0) {
+	// 				double val = M(i, k);
+	// 				sigma += val * val;
+	// 				count += 1;
+	// 			}
+	// 		}
+	// 
+	// 		sigma = sqrt(sigma/(count - 1));
+	// 		if (sigma > 1e-12) {  
+	// 			for (int i = 0; i < n_samples; i++) {
+	// 				if (incomplete_row.count(i) == 0) {
+	// 					M(i, k) /= sigma;
+	// 				}
+	// 			}
+	// 			keep.push_back(k);
+	// 		}
+	// 	}
+	// 
+	// 	if (keep.size() != n_cols) {
+	// 		std::cout << " Removing " << (n_cols - keep.size())  << " columns with zero variance." << std::endl;
+	// 		M = getCols(M, keep);
+	// 		n_cols = keep.size();
+	// 	}
+	// 
+	// 	if (n_cols == 0) {
+	// 		throw std::runtime_error("ERROR: No columns left with nonzero variance after scale_matrix()");
+	// 	}
+	// }
 };
 
 
