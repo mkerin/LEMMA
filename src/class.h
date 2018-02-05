@@ -12,7 +12,7 @@ class parameters {
 		std::string incl_sids_file, x_param_name;
 		int chunk_size, missing_code;
 		uint32_t start, end;
-		bool range, maf_lim, info_lim, mode_vcf, mode_lm;
+		bool range, maf_lim, info_lim, mode_vcf, mode_lm, test_2dof;
 		double min_maf, min_info;
 		std::vector < std::string > incl_sample_ids;
 	
@@ -31,6 +31,7 @@ class parameters {
 		info_lim = false;
 		mode_lm = false;
 		mode_vcf = false;
+		test_2dof = true;
 	}
 
 	~parameters() {

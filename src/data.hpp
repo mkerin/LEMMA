@@ -63,13 +63,14 @@ class data
 	std::vector< std::string > pheno_names;
 	std::vector< std::string > covar_names;
 
-	Eigen::MatrixXd G; // genotype matrix
+	Eigen::MatrixXd G; // probabilistic genotype matrix
+	Eigen::MatrixXi GG; // rounded genotype matrix
 	Eigen::MatrixXd Y; // phenotype matrix
 	Eigen::MatrixXd W; // covariate matrix
 	Eigen::VectorXd Z; // interaction vector
 	BgenParser bgenParser; // hopefully initialised appropriately from
 						   // initialisation list in Data constructor
-	std::vector< double > beta, tau, neglogP;
+	std::vector< double > beta, tau, neglogP, neglogP_2dof;
 
 	boost_io::filtering_ostream outf;
 	
@@ -245,7 +246,6 @@ class data
 					G(ii, jj) = mu;
 				}
 			}
-
 			jj++;
 		}
 
@@ -258,6 +258,14 @@ class data
 		assert( alleles.size() == jj );
 		n_var = jj;
 		G_reduced = false;
+
+		// keep integer copy of genotypes for 2 dof test
+		if(params.test_2dof){
+			Eigen::MatrixXd tmp;
+			tmp = (G.array() + 0.5).matrix();
+			GG = tmp.cast <int> ();
+			delete tmp;
+		}
 
 		if(jj == 0){
 			// Immediate EOF
@@ -583,10 +591,9 @@ class data
 		// Save to
 		// data.tau, data.beta
 		// Y is a matrix of dimension n_samples x 1
-		Eigen::VectorXd e_j, f_j;
+		Eigen::VectorXd e_j, f_j, g_j, gamma_j;
 		double beta_j, tau_j, xtx_inv, loglik_null, loglik_alt, chi_stat;
 		long double pval;
-		boost::math::chi_squared chi_dist(1);
 
 		// Determine which covar to use in interaction
 		std::ptrdiff_t x_col;
@@ -606,15 +613,6 @@ class data
 		Eigen::VectorXd vv(Eigen::Map<Eigen::VectorXd>(W.col(x_col).data(), n_samples));
 		Eigen::MatrixXd Z = G.array().colwise() * vv.array();
 
-		// Output stats
-		// std::cout << "W is " << W.rows() << "x" << W.cols() << std::endl;
-		// std::cout << "G is " << G.rows() << "x" << G.cols() << std::endl;
-		// std::cout << "Y\tG\tW\tZ" << std::endl;
-		// for (int ii = 0; ii < n_samples; ii++){
-		// 	std::cout << Y(ii,0) << "\t" << G(ii,0) << "\t" << W(ii,0) << "\t";
-		// 	std::cout << Z(ii,0) << "\t" << std::endl;
-		// }
-
 		beta.clear();
 		tau.clear();
 		neglogP.clear();
@@ -626,28 +624,75 @@ class data
 			
 			beta_j = xtx_inv * (G_j.transpose() * Y)(0,0);
 			e_j = Y - G_j * beta_j;
-			loglik_null = std::log(n_samples) - std::log(e_j.dot(e_j));
-			loglik_null *= n_samples/2.0;
+			// loglik_null = std::log(n_samples) - std::log(e_j.dot(e_j));
+			// loglik_null *= n_samples/2.0;
 
 			tau_j = (Z_j.transpose() * e_j)(0,0) / (Z_j.transpose() * Z_j)(0,0);
 			f_j = e_j - Z_j * tau_j;
-			loglik_alt = std::log(n_samples) - std::log(f_j.dot(f_j));
-			loglik_alt *= n_samples/2.0;
+			// loglik_alt = std::log(n_samples) - std::log(f_j.dot(f_j));
+			// loglik_alt *= n_samples/2.0;
 
 			// std::cout << "Null loglik: " << loglik_null << std::endl;
 			// std::cout << "Alt loglik: " << loglik_alt << std::endl;
 
-			chi_stat = 2*(loglik_alt - loglik_null);
+			// chi_stat = 2*(loglik_alt - loglik_null);
 			// std::cout << "Test statistic: " << chi_stat << std::endl;
-			pval = 1 - boost::math::cdf(chi_dist, chi_stat);
+			// pval = 1 - boost::math::cdf(chi_dist, chi_stat);
 			
 
 			// Saving variables
 			beta.push_back(beta_j);
 			tau.push_back(tau_j);
-			neglogP.push_back(-1 * std::log10(pval));
+			neglogP.push_back(lrt(e_j, f_j, 1));
+
+			// 2 dof stuff
+			Eigen::MatrixXd A = Eigen::MatrixXd::Zero(n_samples, 3);
+			Eigen::MatrixXd AA = Eigen::MatrixXd::Zero(n_samples, 2);
+			Eigen::DiagonalMatrix<double, 2> D;
+			std::vector<double> nn(3);
+			int kk;
+			for (int ii = 0; ii < n_samples; ii++){
+				kk = GG(ii,jj);
+				nn[kk] += 1.0;
+			}
+			for (int ii = 0; ii < n_samples; ii++){
+				kk = GG(ii,jj);
+				A(ii, kk) = vv(ii);
+				if(kk == 0){
+					AA(ii, 0) -= nn[1] * vv(ii) / nn[0];
+					AA(ii, 1) -= nn[2] * vv(ii) / nn[0];
+				} else {
+					AA(ii, kk-1) = vv(ii);
+				}
+			}
+
+			D = (AA.transpose() * AA).diagonal().asDiagonal();
+			gamma_j = (AA.tranpose() * Y) / D;
+			g_j = e_j - AA * gamma_j;
+			neglogP_2dof.push_back(lrt(e_j, g_j, 2));
 		}
 	}
+
+	double lrt(Eigen::VectorXd null, Eigen::VectorXd alt, int df){
+		// Logliks correct up to ignoreable constant
+		boost::math::chi_squared chi_dist_1(1), chi_dist_2(2);
+		double loglik_null, loglik_alt, chi_stat, neglogp;
+		long double pval
+
+		loglik_null = std::log(n_samples) - std::log(null.dot(null));
+		loglik_null *= n_samples/2.0;
+		loglik_alt = std::log(n_samples) - std::log(alt.dot(alt));
+		loglik_alt *= n_samples/2.0;
+
+		chi_stat = 2*(loglik_alt - loglik_null);
+		if (df == 2){
+			pval = 1.0 - boost::math::cdf(chi_dist_1, chi_stat);
+		} else {
+			pval = 1.0 - boost::math::cdf(chi_dist_2, chi_stat);
+		}
+		neglogp = -1 * std::log10(pval);
+		return neglogp;
+}
 
 	void output_lm() {
 		for (int s = 0; s < n_var; s++){
