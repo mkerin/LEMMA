@@ -1,16 +1,26 @@
 TARGET := bin/bgen_prog
 SRCDIR := src
-FLAGS = -g3 -std=c++11 -Ibuild/genfile/include/ -I3rd_party/zstd-1.1.0/lib/ \
-        -Ibuild/db/include/ -I3rd_party/sqlite3 -I3rd_party/boost_1_55_0  \
-        -Lbuild/ -Lbuild/3rd_party/zstd-1.1.0 -Lbuild/db -Lbuild/3rd_party/sqlite3 \
-        -Lbuild/3rd_party/boost_1_55_0 -Lbuild/ -lbgen  -ldb -lsqlite3 -lboost \
-        -lz -ldl -lrt -lpthread -lzstd -Wno-deprecated
+INCLUDES = -Ibuild/genfile/include/ -I3rd_party/zstd-1.1.0/lib/ \
+           -Ibuild/db/include/ -I3rd_party/sqlite3 -I3rd_party/boost_1_55_0
+LIBS =     -Lbuild/ -Lbuild/3rd_party/zstd-1.1.0 -Lbuild/db -Lbuild/3rd_party/sqlite3 \
+           -Lbuild/3rd_party/boost_1_55_0 -lbgen -ldb -lsqlite3 -lboost \
+           -lz -ldl -lrt -lpthread -lzstd
+FLAGS = -g3 -std=c++11 -Wno-deprecated $(LIBS) $(INCLUDES)
 
 HEADERS := parse_arguments.hpp data.hpp class.h bgen_parser.hpp
 HEADERS := $(addprefix $(SRCDIR)/,$(HEADERS))
 
+rescomp: CXX = /apps/well/gcc/7.2.0/bin/g++
+rescomp: $(TARGET)
+
+garganey: CXX = g++
+garganey: $(TARGET)
+
 $(TARGET) : $(SRCDIR)/bgen_prog.cpp $(HEADERS)
-	g++ -o $@ $< $(FLAGS)
+	$(info $$CXX is [${CXX}])
+	$(info $$CFLAGS is [${CFLAGS}])
+	$(info $$LDFLAGS is [${LDFLAGS}])
+	$(CXX) -o $@ $< $(FLAGS)
 
 # UnitTests
 # Note: this uses the Catch library to Unit Test the cpp source code. If we want
