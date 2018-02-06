@@ -666,7 +666,7 @@ class data
 			}
 
 			D = (AA.transpose() * AA).diagonal().asDiagonal();
-			gamma_j = (AA.transpose() * Y) / D;
+			gamma_j = D.inverse() * (AA.transpose() * Y);
 			g_j = e_j - AA * gamma_j;
 			neglogP_2dof.push_back(lrt(e_j, g_j, 2));
 		}
