@@ -264,7 +264,6 @@ class data
 			Eigen::MatrixXd tmp;
 			tmp = (G.array() + 0.5).matrix();
 			GG = tmp.cast <int> ();
-			delete tmp;
 		}
 
 		if(jj == 0){
@@ -667,7 +666,7 @@ class data
 			}
 
 			D = (AA.transpose() * AA).diagonal().asDiagonal();
-			gamma_j = (AA.tranpose() * Y) / D;
+			gamma_j = (AA.transpose() * Y) / D;
 			g_j = e_j - AA * gamma_j;
 			neglogP_2dof.push_back(lrt(e_j, g_j, 2));
 		}
@@ -677,7 +676,7 @@ class data
 		// Logliks correct up to ignoreable constant
 		boost::math::chi_squared chi_dist_1(1), chi_dist_2(2);
 		double loglik_null, loglik_alt, chi_stat, neglogp;
-		long double pval
+		long double pval;
 
 		loglik_null = std::log(n_samples) - std::log(null.dot(null));
 		loglik_null *= n_samples/2.0;
