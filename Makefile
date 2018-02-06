@@ -39,7 +39,7 @@ test/tests-main.o: test/tests-main.cpp
 # Files in data/out are regarded as 'true', and we check that the equivalent
 # file in data/io_test is identical after making changes to the executable.
 .PHONY: testIO
-IOfiles := t1_range t2_lm t3_lm_two_chunks
+IOfiles := t1_range t2_lm t3_lm_two_chunks tr_lm_2dof
 IOfiles := $(addprefix data/io_test/,$(addsuffix /attempt.out,$(IOfiles)))
 IOfiles += $(addprefix data/io_test/t2_lm/attempt, $(addsuffix .out,B C D))
 
@@ -55,40 +55,48 @@ data/io_test/t1_range/attempt.out: data/io_test/example.v11.bgen ./bin/bgen_prog
 data/io_test/t2_lm/attempt.out: data/io_test/example.v11.bgen ./bin/bgen_prog
 	./bin/bgen_prog --lm \
 	    --bgen $< \
-	    --pheno data/io_test/t2_lm/t2.pheno \
-	    --covar data/io_test/t2_lm/t2.covar \
+	    --pheno $(dir $@)t2.pheno \
+	    --covar $(dir $@)t2.covar \
 	    --range 01 2000 2001 --out $@
-	diff data/io_test/t2_lm/answer.out $@
+	diff $(dir $@)answer.out $@
 
 # Same regression analysis as t2_lm but with chunk exact right size
 data/io_test/t2_lm/attemptB.out: data/io_test/example.v11.bgen ./bin/bgen_prog
 	./bin/bgen_prog --lm \
 	    --bgen $< \
-	    --pheno data/io_test/t2_lm/t2.pheno \
-	    --covar data/io_test/t2_lm/t2.covar \
+	    --pheno $(dir $@)t2.pheno \
+	    --covar $(dir $@)t2.covar \
 	    --chunk 2 \
 	    --range 01 2000 2001 --out $@
-	diff data/io_test/t2_lm/answer.out $@
+	diff $(dir $@)answer.out $@
 
 # Same regression analysis as t2_lm but split into two chunks
 data/io_test/t2_lm/attemptC.out: data/io_test/example.v11.bgen ./bin/bgen_prog
 	./bin/bgen_prog --lm \
 	    --bgen $< \
-	    --pheno data/io_test/t2_lm/t2.pheno \
-	    --covar data/io_test/t2_lm/t2.covar \
+	    --pheno $(dir $@)t2.pheno \
+	    --covar $(dir $@)t2.covar \
 	    --chunk 1 \
 	    --range 01 2000 2001 --out $@
-	diff data/io_test/t2_lm/answer.out $@
+	diff $(dir $@)answer.out $@
 
 # Same regression analysis as t2_lm but explicitly naming interaction column
 data/io_test/t2_lm/attemptD.out: data/io_test/example.v11.bgen ./bin/bgen_prog
 	./bin/bgen_prog --lm \
 	    --bgen $< \
-	    --pheno data/io_test/t2_lm/t2.pheno \
-	    --covar data/io_test/t2_lm/t2.covar \
+	    --pheno $(dir $@)t2.pheno \
+	    --covar $(dir $@)t2.covar \
 	    --interaction covar1 \
 	    --range 01 2000 2001 --out $@
-	diff data/io_test/t2_lm/answer.out $@
+	diff $(dir $@)answer.out $@
+
+data/io_test/t4_lm_2dof/attempt.out: data/io_test/example.v11.bgen ./bin/bgen_prog
+	./bin/bgen_prog --lm \
+	    --bgen $< \
+	    --pheno $(dir $@)t4.pheno \
+	    --covar $(dir $@)t4.covar \
+	    --range 01 3000 3001 --out $@
+	diff $(dir $@)answer.out $@
 
 # Clean dir
 cleanIO:
