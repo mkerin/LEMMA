@@ -17,14 +17,11 @@
 #include "bgen_parser.hpp"
 #include "version.h"
 
-// TODO: get --range to work off of .bgi files
 // TODO: Sensible restructuring of interaction code
-// TODO: --interaction option! Currently taking 1st column of covariates.
 // TODO: Use high precision double for pval
 // TODO: implement tests for info filter
 // TODO: tests for read_pheno, read_covar? Clarify if args for these are compulsory.
 // TODO: copy argument_sanity()
-// TODO: function to check that files exist
 
 // Efficiency changes:
 // 1) Use --range to edit query before reading bgen file
@@ -47,18 +44,27 @@ int main( int argc, char** argv ) {
 		Data.params = p;
 		Data.output_init();
 
-		if(Data.params.incl_sids_file != "NULL"){
+		// incl sample ids filter
+		if(p.incl_sids_file != "NULL"){
 			Data.read_incl_sids();
 		}
 
 		// range filter
-		if (Data.params.range){
+		if (p.range){
 			std::cout << "Selecting range..." << std::endl;
-			std::string bgi_file = p.bgen_file + ".bgi";
-			genfile::bgen::IndexQuery::UniquePtr query = genfile::bgen::IndexQuery::create(bgi_file);
-			genfile::bgen::IndexQuery::GenomicRange rr1(Data.params.chr, Data.params.start, Data.params.end);
-			query->include_range( rr1 ).initialise() ;
-			Data.bgenView->set_query( query ) ;
+			genfile::bgen::IndexQuery::UniquePtr query = genfile::bgen::IndexQuery::create(p.bgi_file);
+			genfile::bgen::IndexQuery::GenomicRange rr1(p.chr, p.start, p.end);
+			query->include_range( rr1 ).initialise();
+			Data.bgenView->set_query( query );
+		}
+
+		// incl rsids filter
+		if(p.incl_rsids_file != "NULL"){
+			Data.read_incl_rsids();
+			std::cout << "Filtering SNPs by rsid..." << std::endl;
+			genfile::bgen::IndexQuery::UniquePtr query = genfile::bgen::IndexQuery::create(p.bgi_file);
+			query->include_rsids( Data.rsid_list ).initialise();
+			Data.bgenView->set_query( query );
 		}
 
 		// Summary info

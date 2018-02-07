@@ -50,7 +50,8 @@ void parse_arguments(parameters &p, int argc, char *argv[]) {
 		"--convert_to_vcf",
 		"--lm",
 		"--interaction",
-		"--incl_sample_ids"
+		"--incl_sample_ids",
+		"--incl_rsids"
 	};
 
 	std::set<std::string>::iterator set_it;
@@ -174,7 +175,14 @@ void parse_arguments(parameters &p, int argc, char *argv[]) {
 
 			if(strcmp(in_str, "--incl_sample_ids") == 0) {
 				check_counts(in_str, i, 1, argc);
-				p.incl_sids_file = argv[i + 1]; // includ sample ids file
+				p.incl_sids_file = argv[i + 1]; // include sample ids file
+				check_file_exists(p.incl_sids_file);
+				i += 1;
+			}
+
+			if(strcmp(in_str, "--incl_rsids") == 0) {
+				check_counts(in_str, i, 1, argc);
+				p.incl_sids_file = argv[i + 1]; // include variant ids file
 				check_file_exists(p.incl_sids_file);
 				i += 1;
 			}
@@ -210,6 +218,14 @@ void parse_arguments(parameters &p, int argc, char *argv[]) {
 		if(!has_all){
 			std::cout << "ERROR: bgen and out files should all be provided in conjunction with --convert_to_vcf." << std::endl;
 			std::exit(EXIT_FAILURE);
+		}
+	}
+	if(p.range){
+		struct stat buf;
+		p.bgi_file = p.bgen_file + ".bgi";
+		if(stat(p.bgi_file.c_str(), &buf) != 0){
+			std::cout << "If using --range the BGEN index file " << p.bgi_file << " must exist" << std::endl;
+			throw std::runtime_error("ERROR: file does not exist");
 		}
 	}
 }

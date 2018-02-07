@@ -56,6 +56,7 @@ class data
 
 	std::vector< double > info;
 	std::vector< double > maf;
+	std::vector< std::string > rsid_list;
 
 	std::map<int, bool> missing_covars; // set of subjects missing >= 1 covariate
 	std::map<int, bool> missing_phenos; // set of subjects missing >= phenotype
@@ -274,6 +275,29 @@ class data
 		} else {
 			return true;
 		}
+	}
+
+	void read_incl_rsids(){
+		boost_io::filtering_istream fg;
+		fg.push(boost_io::file_source(params.incl_rsids_file.c_str()));
+		if (!fg) {
+			std::cout << "ERROR: " << params.incl_rsids_file << " not opened." << std::endl;
+			std::exit(EXIT_FAILURE);
+		}
+
+		std::stringstream ss;
+		std::string line;
+		while (getline(fg, line)) {
+			ss.clear();
+			ss.str(line);
+			std::string s;
+			while(ss >> s) {
+				rsid_list.push_back(s);
+			}
+		}
+
+		std::sort(rsid_list.begin(), rsid_list.end());
+		rsid_list.erase(std::unique(rsid_list.begin(), rsid_list.end()), rsid_list.end());
 	}
 
 	void read_incl_sids(){
