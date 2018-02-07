@@ -13,6 +13,7 @@
 #include "class.h"
 #include "data.hpp"
 #include "genfile/bgen/bgen.hpp"
+#include "genfile/bgen/View.hpp"
 #include "bgen_parser.hpp"
 #include "version.h"
 
@@ -45,14 +46,23 @@ int main( int argc, char** argv ) {
 		data Data( p.bgen_file );
 		Data.params = p;
 		Data.output_init();
-		Data.n_samples = Data.bgenParser.number_of_samples();
 
 		if(Data.params.incl_sids_file != "NULL"){
 			Data.read_incl_sids();
 		}
 
+		// range filter
+		if (Data.params.range){
+			std::cout << "Selecting range..." << std::endl;
+			std::string bgi_file = p.bgen_file + ".bgi";
+			genfile::bgen::IndexQuery::UniquePtr query = genfile::bgen::IndexQuery::create(bgi_file);
+			genfile::bgen::IndexQuery::GenomicRange rr1(Data.params.chr, Data.params.start, Data.params.end);
+			query->include_range( rr1 ).initialise() ;
+			Data.bgenView->set_query( query ) ;
+		}
+
 		// Summary info
-		Data.bgenParser.summarise(std::cout);
+		Data.bgenView->summarise(std::cout);
 
 		if(p.mode_lm){
 			// Start loading the good stuff

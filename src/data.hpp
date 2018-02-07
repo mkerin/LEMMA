@@ -17,6 +17,7 @@
 #include "tools/eigen3.3/Eigenvalues"
 
 #include "bgen_parser.hpp"
+#include "genfile/bgen/View.hpp"
 
 #include <boost/math/distributions/chi_squared.hpp>
 #include <boost/iostreams/filtering_stream.hpp>
@@ -68,21 +69,21 @@ class data
 	Eigen::MatrixXd Y; // phenotype matrix
 	Eigen::MatrixXd W; // covariate matrix
 	Eigen::VectorXd Z; // interaction vector
-	BgenParser bgenParser; // hopefully initialised appropriately from
-						   // initialisation list in Data constructor
+	genfile::bgen::View::UniquePtr bgenView;
 	std::vector< double > beta, tau, neglogP, neglogP_2dof;
 	std::vector< std::vector< double > > gamma;
 
 	boost_io::filtering_ostream outf;
 	
 	// constructors/destructors
-	// data() : bgenParser( "NULL" ) {
+	// data() : bgenView( "NULL" ) {
 	// 	bgen_pass = false; // No bgen file set; read_bgen_chunk won't run.
 	// }
 
-	data( std::string filename ) : bgenParser( filename ){
+	data( std::string filename ) {
+		bgenView = genfile::bgen::View::create(filename);
 		bgen_pass = true;
-		n_samples = bgenParser.number_of_samples();
+		n_samples = bgenView->number_of_samples();
 	}
 	
 	~data() {
@@ -100,7 +101,7 @@ class data
 			outf << "##fileformat=VCFv4.2\n"
 				<< "FORMAT=<ID=GP,Type=Float,Number=G,Description=\"Genotype call probabilities\">\n"
 				<< "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT" ;
-			bgenParser.get_sample_ids(
+			bgenView->get_sample_ids(
 				[&]( std::string const& id ) { outf << "\t" << id ; }
 			) ;
 			outf << "\n" ;
@@ -114,24 +115,23 @@ class data
 	}
 
 	bool read_bgen_chunk() {
-		// Wrapper around BgenParser to read in a 'chunk' of data. Remembers
+		// Wrapper around BgenView to read in a 'chunk' of data. Remembers
 		// if last call hit the EOF, and returns false if so.
 		// Assumed that:
 		// - commandline args parsed and passed to params
-		// - bgenParser initialised with correct filename
+		// - bgenView initialised with correct filename
 
 		// Exit function if last call hit EOF.
 		if (!bgen_pass) return false;
-
-		// Update n_samples (only needed on 1st run, but not sure where to put this)
-		// n_samples = bgenParser.number_of_samples(); // TODO: move this line.
 
 		// Temporary variables to store info from read_variant()
 		std::string chr_j ;
 		uint32_t pos_j ;
 		std::string rsid_j ;
 		std::vector< std::string > alleles_j ;
+		std::string SNPID ; // read but ignored
 		std::vector< std::vector< double > > probs ;
+		ProbSetter setter( &probs );
 		std::map<int, bool> missing_genos;
 
 		double d1, theta, x, dosage, check, info_j, f1, f2;
@@ -149,18 +149,18 @@ class data
 
 		std::size_t valid_count, jj = 0;
 		while ( jj < params.chunk_size && bgen_pass ) {
-			bgen_pass = bgenParser.read_variant( &chr_j, &pos_j, &rsid_j, &alleles_j );
+			bgen_pass = bgenView->read_variant( &SNPID, &rsid_j, &chr_j, &pos_j, &alleles_j );
 			if (!bgen_pass) break;
 			assert( alleles_j.size() > 0 );
 
-			// range filter
-			if (params.range && (pos_j < params.start || pos_j > params.end)){
-				bgenParser.ignore_probs();
-				continue;
-			}
+			// // range filter
+			// if (params.range && (pos_j < params.start || pos_j > params.end)){
+			// 	bgenView->ignore_genotype_data_block();
+			// 	continue;
+			// }
 
 			// Read probs + check maf filter
-			bgenParser.read_probs( &probs );
+			bgenView->read_genotype_data_block( setter );
 
 			// maf + info filters; computed on valid sample_ids & variants whose alleles
 			// sum to 1
@@ -285,7 +285,7 @@ class data
 		}
 
 		std::vector<std::string> bgen_ids;
-		bgenParser.get_sample_ids(
+		bgenView->get_sample_ids(
 			[&]( std::string const& id ) { bgen_ids.push_back(id); }
 		);
 
