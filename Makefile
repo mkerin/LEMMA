@@ -3,18 +3,25 @@ SRCDIR := src
 INCLUDES = -Ibuild/genfile/include/ -I3rd_party/zstd-1.1.0/lib/ \
            -Ibuild/db/include/ -I3rd_party/sqlite3 -I3rd_party/boost_1_55_0
 LIBS =     -Lbuild/ -Lbuild/3rd_party/zstd-1.1.0 -Lbuild/db -Lbuild/3rd_party/sqlite3 \
-           -Lbuild/3rd_party/boost_1_55_0 -lbgen -ldb -lsqlite3 -lboost \
-           -lz -ldl -lrt -lpthread -lzstd
+           -Lbuild/3rd_party/boost_1_55_0
 FLAGS = -g3 -std=c++11 -Wno-deprecated $(LIBS) $(INCLUDES)
 
 HEADERS := parse_arguments.hpp data.hpp class.h bgen_parser.hpp
 HEADERS := $(addprefix $(SRCDIR)/,$(HEADERS))
 
 rescomp: CXX = /apps/well/gcc/7.2.0/bin/g++
+rescomp: FLAGS += -lbgen -ldb -lsqlite3 -lboost -lz -ldl -lrt -lpthread -lzstd
 rescomp: $(TARGET)
 
 garganey: CXX = g++
+garganey: FLAGS += -lbgen -ldb -lsqlite3 -lboost -lz -ldl -lrt -lpthread -lzstd
 garganey: $(TARGET)
+
+# Cutting out -lrt, -lz
+laptop: CXX = /usr/local/Cellar/gcc/7.3.0/bin/x86_64-apple-darwin17.4.0-g++-7
+laptop: LD_LIBRARY_PATH = $(ls -d /usr/local/Cellar/gcc/* | tail -n1)/lib
+laptop: FLAGS += -lbgen -ldb -lsqlite3 -lboost -ldl -lpthread -lzstd -L$(LD_LIBRARY_PATH)
+laptop: $(TARGET)
 
 $(TARGET) : $(SRCDIR)/bgen_prog.cpp $(HEADERS)
 	$(info $$CXX is [${CXX}])
