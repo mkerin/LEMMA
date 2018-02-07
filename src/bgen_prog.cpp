@@ -59,7 +59,7 @@ int main( int argc, char** argv ) {
 		}
 
 		// incl rsids filter
-		if(p.incl_rsids_file != "NULL"){
+		if(p.select_snps){
 			Data.read_incl_rsids();
 			std::cout << "Filtering SNPs by rsid..." << std::endl;
 			genfile::bgen::IndexQuery::UniquePtr query = genfile::bgen::IndexQuery::create(p.bgi_file);

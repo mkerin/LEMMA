@@ -182,8 +182,9 @@ void parse_arguments(parameters &p, int argc, char *argv[]) {
 
 			if(strcmp(in_str, "--incl_rsids") == 0) {
 				check_counts(in_str, i, 1, argc);
-				p.incl_sids_file = argv[i + 1]; // include variant ids file
-				check_file_exists(p.incl_sids_file);
+				p.select_snps = true;
+				p.incl_rsids_file = argv[i + 1]; // include variant ids file
+				check_file_exists(p.incl_rsids_file);
 				i += 1;
 			}
 
@@ -220,7 +221,7 @@ void parse_arguments(parameters &p, int argc, char *argv[]) {
 			std::exit(EXIT_FAILURE);
 		}
 	}
-	if(p.range){
+	if(p.range || p.select_snps){
 		struct stat buf;
 		p.bgi_file = p.bgen_file + ".bgi";
 		if(stat(p.bgi_file.c_str(), &buf) != 0){
