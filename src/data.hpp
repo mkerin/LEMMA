@@ -71,6 +71,7 @@ class data
 	BgenParser bgenParser; // hopefully initialised appropriately from
 						   // initialisation list in Data constructor
 	std::vector< double > beta, tau, neglogP, neglogP_2dof;
+	std::vector< std::vector< double > > gamma;
 
 	boost_io::filtering_ostream outf;
 	
@@ -107,7 +108,8 @@ class data
 
 		if(params.mode_lm){
 			// Output header for vcf file
-			outf << "chr rsid pos a_0 a_1 af info beta tau neglogP" << std::endl;
+			outf << "chr\trsid\tpos\ta_0\ta_1\taf\tinfo\tbeta\ttau";
+			outf << "\t1dof_neglogP\tgamma1\tgamma2\tgamma3\t2dof_neglogP" << std::endl;
 		}
 	}
 
@@ -614,30 +616,23 @@ class data
 
 		beta.clear();
 		tau.clear();
+		gamma.clear();
 		neglogP.clear();
+		neglogP_2dof.clear();
 		xtx_inv = 1.0 / (n_samples - 1.0);
 
 		for (int jj = 0; jj < n_var; jj++){
 			Eigen::Map<Eigen::VectorXd> G_j(G.col(jj).data(), n_samples);
 			Eigen::Map<Eigen::VectorXd> Z_j(Z.col(jj).data(), n_samples);
-			
+
+			// null
 			beta_j = xtx_inv * (G_j.transpose() * Y)(0,0);
 			e_j = Y - G_j * beta_j;
-			// loglik_null = std::log(n_samples) - std::log(e_j.dot(e_j));
-			// loglik_null *= n_samples/2.0;
 
+			// alt - 1dof
 			tau_j = (Z_j.transpose() * e_j)(0,0) / (Z_j.transpose() * Z_j)(0,0);
 			f_j = e_j - Z_j * tau_j;
-			// loglik_alt = std::log(n_samples) - std::log(f_j.dot(f_j));
-			// loglik_alt *= n_samples/2.0;
 
-			// std::cout << "Null loglik: " << loglik_null << std::endl;
-			// std::cout << "Alt loglik: " << loglik_alt << std::endl;
-
-			// chi_stat = 2*(loglik_alt - loglik_null);
-			// std::cout << "Test statistic: " << chi_stat << std::endl;
-			// pval = 1 - boost::math::cdf(chi_dist, chi_stat);
-			
 
 			// Saving variables
 			beta.push_back(beta_j);
@@ -647,28 +642,41 @@ class data
 			// 2 dof stuff
 			Eigen::MatrixXd A = Eigen::MatrixXd::Zero(n_samples, 3);
 			Eigen::MatrixXd AA = Eigen::MatrixXd::Zero(n_samples, 2);
-			Eigen::DiagonalMatrix<double, 2> D;
-			std::vector<double> nn(3);
+			Eigen::MatrixXd D;
+			std::vector<double> nn(3, 0);
+			std::vector< double > gamma_vec(3, std::nan(""));
 			int kk;
 			for (int ii = 0; ii < n_samples; ii++){
 				kk = GG(ii,jj);
 				nn[kk] += 1.0;
 			}
-			for (int ii = 0; ii < n_samples; ii++){
-				kk = GG(ii,jj);
-				A(ii, kk) = vv(ii);
-				if(kk == 0){
-					AA(ii, 0) -= nn[1] * vv(ii) / nn[0];
-					AA(ii, 1) -= nn[2] * vv(ii) / nn[0];
-				} else {
-					AA(ii, kk-1) = vv(ii);
+// std::cout << "Matrix GG:" << std::endl << GG << std::endl;
+// std::cout << "table: " << nn[0] << ", " << nn[1] << ", " << nn[2] << std::endl; 
+			if(std::all_of(nn.begin(), nn.end(), [](int i){return i>0.0;})){
+				for (int ii = 0; ii < n_samples; ii++){
+					kk = GG(ii,jj);
+					// A(ii, kk) = vv(ii);
+					if(kk == 0){
+						AA(ii, 0) -= nn[1] * vv(ii) / nn[0];
+						AA(ii, 1) -= nn[2] * vv(ii) / nn[0];
+					} else {
+						AA(ii, kk-1) = vv(ii);
+					}
 				}
-			}
+// std::cout << "Matrix AA:" << std::endl << AA << std::endl;
+				D = (AA.transpose() * AA);
+				gamma_j = D.ldlt().solve(AA.transpose() * Y);
+				g_j = e_j - AA * gamma_j;
 
-			D = (AA.transpose() * AA).diagonal().asDiagonal();
-			gamma_j = D.inverse() * (AA.transpose() * Y);
-			g_j = e_j - AA * gamma_j;
-			neglogP_2dof.push_back(lrt(e_j, g_j, 2));
+				gamma_vec[1] = gamma_j(0, 0);
+				gamma_vec[2] = gamma_j(1, 0);
+				gamma_vec[0] = -(nn[1]*gamma_vec[1] + nn[2]*gamma_vec[2]) / nn[0];
+				gamma.push_back(gamma_vec);
+				neglogP_2dof.push_back(lrt(e_j, g_j, 2));
+			} else {
+				gamma.push_back(gamma_vec);
+				neglogP_2dof.push_back(std::nan(""));
+			}
 		}
 	}
 
@@ -684,7 +692,10 @@ class data
 		loglik_alt *= n_samples/2.0;
 
 		chi_stat = 2*(loglik_alt - loglik_null);
-		if (df == 2){
+		std::cout << "Null loglik: " << loglik_null << std::endl;
+		std::cout << "Alt loglik: " << loglik_alt << std::endl;
+		std::cout << "Test statistic: " << chi_stat << std::endl;
+		if (df == 1){
 			pval = 1.0 - boost::math::cdf(chi_dist_1, chi_stat);
 		} else {
 			pval = 1.0 - boost::math::cdf(chi_dist_2, chi_stat);
@@ -695,10 +706,11 @@ class data
 
 	void output_lm() {
 		for (int s = 0; s < n_var; s++){
-			outf << chromosome[s] << " " << rsid[s] << " " << position[s] << " ";
-			outf << alleles[s][0] << " " << alleles[s][1] << " " << maf[s] << " ";
-			outf << info[s] << " " << beta[s] << " " << tau[s] << " ";
- 			outf << neglogP[s] << std::endl;
+			outf << chromosome[s] << "\t" << rsid[s] << "\t" << position[s] << "\t";
+			outf << alleles[s][0] << "\t" << alleles[s][1] << "\t" << maf[s] << "\t";
+			outf << info[s] << "\t" << beta[s] << "\t" << tau[s] << "\t";
+ 			outf << neglogP[s] << "\t" << gamma[s][0] << "\t" << gamma[s][1];
+ 			outf << "\t" << gamma[s][2] << "\t" << neglogP_2dof[s] << std::endl;
 		}
 	}
 
