@@ -665,7 +665,7 @@ class data
 				}
 // std::cout << "Matrix AA:" << std::endl << AA << std::endl;
 				D = (AA.transpose() * AA);
-				gamma_j = D.ldlt().solve(AA.transpose() * Y);
+				gamma_j = D.ldlt().solve(AA.transpose() * e_j);
 				g_j = e_j - AA * gamma_j;
 
 				gamma_vec[1] = gamma_j(0, 0);

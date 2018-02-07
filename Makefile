@@ -46,7 +46,7 @@ test/tests-main.o: test/tests-main.cpp
 # Files in data/out are regarded as 'true', and we check that the equivalent
 # file in data/io_test is identical after making changes to the executable.
 .PHONY: testIO
-IOfiles := t1_range t2_lm t3_lm_two_chunks tr_lm_2dof
+IOfiles := t1_range t2_lm t3_lm_two_chunks t4_lm_2dof
 IOfiles := $(addprefix data/io_test/,$(addsuffix /attempt.out,$(IOfiles)))
 IOfiles += $(addprefix data/io_test/t2_lm/attempt, $(addsuffix .out,B C D))
 
