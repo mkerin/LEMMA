@@ -676,7 +676,6 @@ class data
 			tau_j = (Z_j.transpose() * e_j)(0,0) / (Z_j.transpose() * Z_j)(0,0);
 			f_j = e_j - Z_j * tau_j;
 
-
 			// Saving variables
 			beta.push_back(beta_j);
 			tau.push_back(tau_j);
@@ -693,8 +692,7 @@ class data
 				kk = GG(ii,jj);
 				nn[kk] += 1.0;
 			}
-// std::cout << "Matrix GG:" << std::endl << GG << std::endl;
-// std::cout << "table: " << nn[0] << ", " << nn[1] << ", " << nn[2] << std::endl; 
+
 			if(std::all_of(nn.begin(), nn.end(), [](int i){return i>0.0;})){
 				for (int ii = 0; ii < n_samples; ii++){
 					kk = GG(ii,jj);
@@ -706,7 +704,7 @@ class data
 						AA(ii, kk-1) = vv(ii);
 					}
 				}
-// std::cout << "Matrix AA:" << std::endl << AA << std::endl;
+
 				D = (AA.transpose() * AA);
 				gamma_j = D.ldlt().solve(AA.transpose() * e_j);
 				g_j = e_j - AA * gamma_j;
@@ -742,7 +740,7 @@ class data
 		}
 		neglogp = -1 * std::log10(pval);
 		return neglogp;
-}
+	}
 
 	void output_lm() {
 		for (int s = 0; s < n_var; s++){
@@ -789,14 +787,7 @@ class data
 		// Step 3; Center phenos, genotypes, normalise covars
 		center_matrix( Y, n_pheno );
 		center_matrix( W, n_covar );
-		int tmp = n_covar;
 		scale_matrix( W, n_covar, covar_names );
-		// if(tmp != n_covar){
-		// 	std::cout << "WARNING; just removed a covar for having zero variance.";
-		// 	std::cout << " But we don't track which one.." << std::endl;
-		// 	std::cout << "Please remind me to correct this!" << std::endl;
-		// }
-
 
 		// Step 4; Regress covars out of phenos
 		regress_covars();
