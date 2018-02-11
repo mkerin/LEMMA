@@ -188,10 +188,10 @@ class data
 			if(theta > 1e-10 && theta < 0.9999999999){
 				info_j -= f2 / (2.0 * valid_count * theta * (1.0 - theta));
 			}
-			if (params.maf_lim && theta < params.min_maf) {
+			if (params.maf_lim && (theta < params.min_maf || theta > 1 - params.min_maf)) {
 				continue;
 			}
-			if (params.info_lim && theta < params.min_info) {
+			if (params.info_lim && info_j < params.min_info) {
 				continue;
 			}
 
@@ -716,9 +716,6 @@ class data
 		loglik_alt *= n_samples/2.0;
 
 		chi_stat = 2*(loglik_alt - loglik_null);
-		std::cout << "Null loglik: " << loglik_null << std::endl;
-		std::cout << "Alt loglik: " << loglik_alt << std::endl;
-		std::cout << "Test statistic: " << chi_stat << std::endl;
 		if (df == 1){
 			pval = 1.0 - boost::math::cdf(chi_dist_1, chi_stat);
 		} else {
