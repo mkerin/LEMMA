@@ -135,7 +135,9 @@ class data
 		ProbSetter setter( &probs );
 		std::map<int, bool> missing_genos;
 
-		double d1, theta, x, dosage, check, info_j, f1, f2;
+		double d1, theta, x, dosage, check, info_j, f1, f2, chunk_missingness;
+		double missing_calls = 0.0;
+		int n_var_incomplete = 0;
 
 		// Wipe variant context from last chunk
 		maf.clear();
@@ -220,17 +222,23 @@ class data
 						check += x;
 					}
 
-					if(check > 0.9999 && check < 1.0001){
+					if(params.geno_check){
+						if(check > 0.9999 && check < 1.0001){
+							G(ii_obs,jj) = dosage;
+							mu += dosage;
+							count += 1;
+						} else if(check > 0){
+							std::cout << "Unexpected sum of allele probs: ";
+		 					std::cout << check << " at sample=" << ii;
+		 					std::cout << ", variant=" << jj << std::endl;
+							throw std::logic_error("Allele probs expected to sum to 1 or 0");
+						} else {
+							missing_genos[ii_obs] = 1;
+						}
+					} else {
 						G(ii_obs,jj) = dosage;
 						mu += dosage;
 						count += 1;
-					} else if(check > 0){
-						std::cout << "Unexpected sum of allele probs: ";
-	 					std::cout << check << " at sample=" << ii;
-	 					std::cout << ", variant=" << jj << std::endl;
-						throw std::logic_error("Allele probs expected to sum to 1 or 0");
-					} else {
-						missing_genos[ii_obs] = 1;
 					}
 
 					ii_obs++; // loop should end at ii_obs == n_samples
@@ -243,10 +251,14 @@ class data
 
 			// Set missing entries to mean
 			// Could mean center here, but still want to write to VCF.
-			mu = mu / count;
-			for (int ii = 0; ii < n_samples; ii++) {
-				if (missing_genos.count(ii) != 0) {
-					G(ii, jj) = mu;
+			if(missing_genos.size() > 0){
+				n_var_incomplete += 1;
+				missing_calls += (double) missing_genos.size();
+				mu = mu / count;
+				for (int ii = 0; ii < n_samples; ii++) {
+					if (missing_genos.count(ii) != 0) {
+						G(ii, jj) = mu;
+					}
 				}
 			}
 			jj++;
@@ -267,6 +279,13 @@ class data
 			Eigen::MatrixXd tmp;
 			tmp = (G.array() + 0.5).matrix();
 			GG = tmp.cast <int> ();
+		}
+
+		chunk_missingness = missing_calls / (double) (n_var * n_samples);
+		if(chunk_missingness > 0.0){
+			std::cout << "Chunk missingness " << chunk_missingness << "(";
+ 			std::cout << n_var_incomplete << "/" << n_var;
+			std::cout << " variants incomplete)" << std::endl;
 		}
 
 		if(jj == 0){

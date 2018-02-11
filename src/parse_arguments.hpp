@@ -51,7 +51,8 @@ void parse_arguments(parameters &p, int argc, char *argv[]) {
 		"--lm",
 		"--interaction",
 		"--incl_sample_ids",
-		"--incl_rsids"
+		"--incl_rsids",
+		"--no_geno_check"
 	};
 
 	std::set<std::string>::iterator set_it;
@@ -150,6 +151,11 @@ void parse_arguments(parameters &p, int argc, char *argv[]) {
 				p.info_lim = true;
 				p.min_info = std::stod(argv[i + 1]); // bgen file
 				i += 1;
+			}
+
+			if(strcmp(in_str, "--no_geno_check") == 0) {
+				p.geno_check = false;
+				i += 0;
 			}
 
 			if(strcmp(in_str, "--chunk") == 0) {
