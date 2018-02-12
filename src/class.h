@@ -13,7 +13,7 @@ class parameters {
 		int chunk_size, missing_code;
 		uint32_t start, end;
 		bool range, maf_lim, info_lim, mode_vcf, mode_lm, test_2dof, select_snps;
-		bool geno_check;
+		bool geno_check, mode_joint_model;
 		double min_maf, min_info;
 		std::vector < std::string > incl_sample_ids;
 	
@@ -34,6 +34,7 @@ class parameters {
 		info_lim = false;
 		mode_lm = false;
 		mode_vcf = false;
+		mode_joint_model = false;
 		test_2dof = true;
 		select_snps = false;
 		geno_check = true; // check allele probs sum to 1 by default

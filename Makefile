@@ -104,6 +104,15 @@ data/io_test/t4_lm_2dof/attempt.out: data/io_test/example.v11.bgen ./bin/bgen_pr
 	    --range 01 3000 3001 --out $@
 	diff $(dir $@)answer.out $@
 
+# Joint model test
+data/io_test/t5_joint_model/attempt.out: data/io_test/example.v11.bgen ./bin/bgen_prog
+	./bin/bgen_prog --joint_model \
+	    --bgen $< \
+	    --pheno $(dir $@)t2.pheno \
+	    --covar $(dir $@)t2.covar \
+	    --range 01 2000 2001 --out $@
+	diff $(dir $@)answer.out $@
+
 # Clean dir
 cleanIO:
 	rm $(IOfiles)

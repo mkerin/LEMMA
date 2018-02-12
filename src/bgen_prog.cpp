@@ -70,7 +70,12 @@ int main( int argc, char** argv ) {
 		// Summary info
 		Data.bgenView->summarise(std::cout);
 
-		if(p.mode_lm){
+		// if(p.mode_joint_model){
+		// 	Data.calc_joint_model();
+		// 	Data.output_results();
+		// }
+
+		if(p.mode_lm || p.mode_joint_model){
 			// Start loading the good stuff
 			Data.run();
 		}
@@ -78,7 +83,6 @@ int main( int argc, char** argv ) {
 		if (p.mode_vcf){
 			// Reading in from bgen file
 			while (Data.read_bgen_chunk()) {
-				std::cout << "Top of the bgen chunk while-loop" << std::endl;
 				for (int jj = 0; jj < Data.n_var; jj++ ) {
 					Data.outf << Data.chromosome[jj] << '\t'
 						<< Data.position[jj] << '\t'
