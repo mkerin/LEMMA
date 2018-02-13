@@ -7,6 +7,8 @@
 #include <fstream>
 #include <cassert>
 #include <cstdlib>
+#include <chrono>      // start/end time info
+#include <ctime>       // start/end time info
 #include <stdexcept>
 #include <memory>
 #include "parse_arguments.hpp"
@@ -77,7 +79,15 @@ int main( int argc, char** argv ) {
 
 		if(p.mode_lm || p.mode_joint_model){
 			// Start loading the good stuff
+			auto start = std::chrono::system_clock::now();
+			std::time_t start_time = std::chrono::system_clock::to_time_t(start);
+			std::cout << "Starting analysis at " << std::ctime(&start_time) << std::endl;
 			Data.run();
+			auto end = std::chrono::system_clock::now();
+			std::chrono::duration<double> elapsed_seconds = end-start;
+			std::time_t end_time = std::chrono::system_clock::to_time_t(end);
+			std::cout << "Analysis finished at " << std::ctime(&end_time) << std::endl;
+			std::cout << "Elapsed time: " << elapsed_seconds.count() << "s" << std::endl;
 		}
 
 		if (p.mode_vcf){

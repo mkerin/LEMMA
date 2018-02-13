@@ -5,7 +5,7 @@
 #include <iostream>
 #include <algorithm>
 #include <cmath>
-#include <cstddef> // for ptrdiff_t class
+#include <cstddef>     // for ptrdiff_t class
 #include <map>
 #include <vector>
 #include <string>
@@ -51,6 +51,7 @@ class data
 	long int n_snps; // number of snps
 	bool bgen_pass;
 	int n_var;
+	std::size_t n_var_parsed; // Track progress through IndexQuery
 
 	bool G_reduced;   // Variables to track whether we have already
 	bool Y_reduced;   // reduced to complete cases or not.
@@ -87,6 +88,7 @@ class data
 		bgenView = genfile::bgen::View::create(filename);
 		bgen_pass = true;
 		n_samples = bgenView->number_of_samples();
+		n_var_parsed = 0;
 	}
 	
 	~data() {
@@ -180,6 +182,7 @@ class data
 		std::size_t valid_count, jj = 0;
 		while ( jj < params.chunk_size && bgen_pass ) {
 			bgen_pass = bgenView->read_variant( &SNPID, &rsid_j, &chr_j, &pos_j, &alleles_j );
+			n_var_parsed++;
 			if (!bgen_pass) break;
 			assert( alleles_j.size() > 0 );
 
@@ -892,16 +895,14 @@ class data
 		}
 
 		while (read_bgen_chunk()) {
-			std::cout << "Chunk " << ch+1 << " read (size " << n_var << ")";
-			std::cout << std::endl;
 			// Raw dosage read in to G
-			// std::cout << "Raw G is " << G.rows() << "x" << G.cols() << std::endl;
-			// std::cout << G << std::endl;
+			std::cout << "Chunk " << ch+1 << " read (size " << n_var;
+			// std::cout << ", " << n_var_parsed << "/" << bgenView->number_of_variants();
+			std::cout << " variants parsed)" << std::endl;
 
 			// Normalise genotypes
 			center_matrix( G, n_var );
 			scale_matrix( G, n_var );
-			std::cout << "Genotypes normalised" << std::endl;
 
 			// Actually compute models
 			if(params.mode_lm){
@@ -909,7 +910,6 @@ class data
 			} else if(params.mode_joint_model){
 				calc_joint_model();
 			}
-			std::cout << "Interaction tests computed for chunk." << std::endl;
 			output_results();
 			ch++;
 		}
