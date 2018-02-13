@@ -17,8 +17,11 @@
 #include "tools/eigen3.3/Eigenvalues"
 
 #include "bgen_parser.hpp"
+#include "genfile/bgen/View.hpp"
 
 #include <boost/math/distributions/chi_squared.hpp>
+#include <boost/math/distributions/fisher_f.hpp>
+#include <boost/math/distributions/students_t.hpp>
 #include <boost/iostreams/filtering_stream.hpp>
 #include <boost/iostreams/device/file.hpp>
 
@@ -55,6 +58,7 @@ class data
 
 	std::vector< double > info;
 	std::vector< double > maf;
+	std::vector< std::string > rsid_list;
 
 	std::map<int, bool> missing_covars; // set of subjects missing >= 1 covariate
 	std::map<int, bool> missing_phenos; // set of subjects missing >= phenotype
@@ -68,21 +72,21 @@ class data
 	Eigen::MatrixXd Y; // phenotype matrix
 	Eigen::MatrixXd W; // covariate matrix
 	Eigen::VectorXd Z; // interaction vector
-	BgenParser bgenParser; // hopefully initialised appropriately from
-						   // initialisation list in Data constructor
+	genfile::bgen::View::UniquePtr bgenView;
 	std::vector< double > beta, tau, neglogP, neglogP_2dof;
 	std::vector< std::vector< double > > gamma;
 
 	boost_io::filtering_ostream outf;
 	
 	// constructors/destructors
-	// data() : bgenParser( "NULL" ) {
+	// data() : bgenView( "NULL" ) {
 	// 	bgen_pass = false; // No bgen file set; read_bgen_chunk won't run.
 	// }
 
-	data( std::string filename ) : bgenParser( filename ){
+	data( std::string filename ) {
+		bgenView = genfile::bgen::View::create(filename);
 		bgen_pass = true;
-		n_samples = bgenParser.number_of_samples();
+		n_samples = bgenView->number_of_samples();
 	}
 	
 	~data() {
@@ -100,7 +104,7 @@ class data
 			outf << "##fileformat=VCFv4.2\n"
 				<< "FORMAT=<ID=GP,Type=Float,Number=G,Description=\"Genotype call probabilities\">\n"
 				<< "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT" ;
-			bgenParser.get_sample_ids(
+			bgenView->get_sample_ids(
 				[&]( std::string const& id ) { outf << "\t" << id ; }
 			) ;
 			outf << "\n" ;
@@ -111,30 +115,56 @@ class data
 			outf << "chr\trsid\tpos\ta_0\ta_1\taf\tinfo\tbeta\ttau";
 			outf << "\t1dof_neglogP\tgamma1\tgamma2\tgamma3\t2dof_neglogP" << std::endl;
 		}
+
+		if(params.mode_joint_model){
+			outf << "chr\trsid\tpos\ta_0\ta_1\taf\tinfo\ttau\t1dof_neglogP";
+ 			outf << std::endl;
+		}
+	}
+
+	void output_results() {
+		if(params.mode_lm){
+			for (int s = 0; s < n_var; s++){
+				outf << chromosome[s] << "\t" << rsid[s] << "\t" << position[s] << "\t";
+				outf << alleles[s][0] << "\t" << alleles[s][1] << "\t" << maf[s] << "\t";
+				outf << info[s] << "\t" << beta[s] << "\t" << tau[s] << "\t";
+	 			outf << neglogP[s] << "\t" << gamma[s][0] << "\t" << gamma[s][1];
+	 			outf << "\t" << gamma[s][2] << "\t" << neglogP_2dof[s] << std::endl;
+			}
+		}
+
+		if(params.mode_joint_model){
+			for (int s = 0; s < n_var; s++){
+				outf << chromosome[s] << "\t" << rsid[s] << "\t" << position[s] << "\t";
+				outf << alleles[s][0] << "\t" << alleles[s][1] << "\t" << maf[s] << "\t";
+				outf << info[s] << "\t" << tau[s] << "\t" << neglogP[s] << std::endl;
+			}
+		}
 	}
 
 	bool read_bgen_chunk() {
-		// Wrapper around BgenParser to read in a 'chunk' of data. Remembers
+		// Wrapper around BgenView to read in a 'chunk' of data. Remembers
 		// if last call hit the EOF, and returns false if so.
 		// Assumed that:
 		// - commandline args parsed and passed to params
-		// - bgenParser initialised with correct filename
+		// - bgenView initialised with correct filename
 
 		// Exit function if last call hit EOF.
 		if (!bgen_pass) return false;
-
-		// Update n_samples (only needed on 1st run, but not sure where to put this)
-		// n_samples = bgenParser.number_of_samples(); // TODO: move this line.
 
 		// Temporary variables to store info from read_variant()
 		std::string chr_j ;
 		uint32_t pos_j ;
 		std::string rsid_j ;
 		std::vector< std::string > alleles_j ;
+		std::string SNPID ; // read but ignored
 		std::vector< std::vector< double > > probs ;
+		ProbSetter setter( &probs );
 		std::map<int, bool> missing_genos;
 
-		double d1, theta, x, dosage, check, info_j, f1, f2;
+		double d1, theta, x, dosage, check, info_j, f1, f2, chunk_missingness;
+		double missing_calls = 0.0;
+		int n_var_incomplete = 0;
 
 		// Wipe variant context from last chunk
 		maf.clear();
@@ -149,18 +179,18 @@ class data
 
 		std::size_t valid_count, jj = 0;
 		while ( jj < params.chunk_size && bgen_pass ) {
-			bgen_pass = bgenParser.read_variant( &chr_j, &pos_j, &rsid_j, &alleles_j );
+			bgen_pass = bgenView->read_variant( &SNPID, &rsid_j, &chr_j, &pos_j, &alleles_j );
 			if (!bgen_pass) break;
 			assert( alleles_j.size() > 0 );
 
-			// range filter
-			if (params.range && (pos_j < params.start || pos_j > params.end)){
-				bgenParser.ignore_probs();
-				continue;
-			}
+			// // range filter
+			// if (params.range && (pos_j < params.start || pos_j > params.end)){
+			// 	bgenView->ignore_genotype_data_block();
+			// 	continue;
+			// }
 
 			// Read probs + check maf filter
-			bgenParser.read_probs( &probs );
+			bgenView->read_genotype_data_block( setter );
 
 			// maf + info filters; computed on valid sample_ids & variants whose alleles
 			// sum to 1
@@ -187,10 +217,10 @@ class data
 			if(theta > 1e-10 && theta < 0.9999999999){
 				info_j -= f2 / (2.0 * valid_count * theta * (1.0 - theta));
 			}
-			if (params.maf_lim && theta < params.min_maf) {
+			if (params.maf_lim && (theta < params.min_maf || theta > 1 - params.min_maf)) {
 				continue;
 			}
-			if (params.info_lim && theta < params.min_info) {
+			if (params.info_lim && info_j < params.min_info) {
 				continue;
 			}
 
@@ -219,17 +249,23 @@ class data
 						check += x;
 					}
 
-					if(check > 0.9999 && check < 1.0001){
+					if(params.geno_check){
+						if(check > 0.9999 && check < 1.0001){
+							G(ii_obs,jj) = dosage;
+							mu += dosage;
+							count += 1;
+						} else if(check > 0){
+							std::cout << "Unexpected sum of allele probs: ";
+		 					std::cout << check << " at sample=" << ii;
+		 					std::cout << ", variant=" << jj << std::endl;
+							throw std::logic_error("Allele probs expected to sum to 1 or 0");
+						} else {
+							missing_genos[ii_obs] = 1;
+						}
+					} else {
 						G(ii_obs,jj) = dosage;
 						mu += dosage;
 						count += 1;
-					} else if(check > 0){
-						std::cout << "Unexpected sum of allele probs: ";
-	 					std::cout << check << " at sample=" << ii;
-	 					std::cout << ", variant=" << jj << std::endl;
-						throw std::logic_error("Allele probs expected to sum to 1 or 0");
-					} else {
-						missing_genos[ii_obs] = 1;
 					}
 
 					ii_obs++; // loop should end at ii_obs == n_samples
@@ -242,10 +278,14 @@ class data
 
 			// Set missing entries to mean
 			// Could mean center here, but still want to write to VCF.
-			mu = mu / count;
-			for (int ii = 0; ii < n_samples; ii++) {
-				if (missing_genos.count(ii) != 0) {
-					G(ii, jj) = mu;
+			if(missing_genos.size() > 0){
+				n_var_incomplete += 1;
+				missing_calls += (double) missing_genos.size();
+				mu = mu / count;
+				for (int ii = 0; ii < n_samples; ii++) {
+					if (missing_genos.count(ii) != 0) {
+						G(ii, jj) = mu;
+					}
 				}
 			}
 			jj++;
@@ -268,12 +308,42 @@ class data
 			GG = tmp.cast <int> ();
 		}
 
+		chunk_missingness = missing_calls / (double) (n_var * n_samples);
+		if(chunk_missingness > 0.0){
+			std::cout << "Chunk missingness " << chunk_missingness << "(";
+ 			std::cout << n_var_incomplete << "/" << n_var;
+			std::cout << " variants incomplete)" << std::endl;
+		}
+
 		if(jj == 0){
 			// Immediate EOF
 			return false;
 		} else {
 			return true;
 		}
+	}
+
+	void read_incl_rsids(){
+		boost_io::filtering_istream fg;
+		fg.push(boost_io::file_source(params.incl_rsids_file.c_str()));
+		if (!fg) {
+			std::cout << "ERROR: " << params.incl_rsids_file << " not opened." << std::endl;
+			std::exit(EXIT_FAILURE);
+		}
+
+		std::stringstream ss;
+		std::string line;
+		while (getline(fg, line)) {
+			ss.clear();
+			ss.str(line);
+			std::string s;
+			while(ss >> s) {
+				rsid_list.push_back(s);
+			}
+		}
+
+		std::sort(rsid_list.begin(), rsid_list.end());
+		rsid_list.erase(std::unique(rsid_list.begin(), rsid_list.end()), rsid_list.end());
 	}
 
 	void read_incl_sids(){
@@ -285,7 +355,7 @@ class data
 		}
 
 		std::vector<std::string> bgen_ids;
-		bgenParser.get_sample_ids(
+		bgenView->get_sample_ids(
 			[&]( std::string const& id ) { bgen_ids.push_back(id); }
 		);
 
@@ -300,7 +370,6 @@ class data
 				ss.str(line);
 				std::string s;
 				ss >> s;
-				// TODO: This comparison is not yet working.
 				if (bb >= n_samples){
 					throw std::logic_error("ERROR: Either you have tried "
 					"to include an id not present in the BGEN file, or the "
@@ -311,6 +380,10 @@ class data
 					bb++;
 					if (bb >= n_samples){
 						std::cout << "Failed to find a match for sample_id:";
+						std::cout << "The first 10 bgen ids are:" << std::endl;
+						for(int iii = 0; iii < 10; iii++){
+							std::cout << bgen_ids[iii] << std::endl;
+						}
 						std::cout << s << std::endl;
 						throw std::logic_error("ERROR: Either you have tried "
 						"to include an id not present in the BGEN file, or the "
@@ -364,7 +437,7 @@ class data
 			++n_cols;
 			col_names.push_back(s);
 		}
-		std::cout << " Detected " << n_cols << " columns from " << filename << std::endl;
+		std::cout << " Detected " << n_cols << " column(s) from " << filename << std::endl;
 
 		// Write remainder of file to Eigen matrix M
 		incomplete_row.clear();
@@ -466,7 +539,7 @@ class data
 		}
 
 		if (keep.size() != n_cols) {
-			std::cout << " Removing " << (n_cols - keep.size())  << " columns with zero variance:" << std::endl;
+			std::cout << " Removing " << (n_cols - keep.size())  << " column(s) with zero variance:" << std::endl;
 			for(int kk = 0; kk < (n_cols - keep.size()); kk++){
 				std::cout << reject_names[kk] << std::endl;
 			}
@@ -604,10 +677,8 @@ class data
 			if (it == covar_names.end()){
 				throw std::invalid_argument("Can't locate --interaction parameter");
 			}
-			std::cout << "Interaction parameter " << *it << " found!" << std::endl;
 			x_col = it - covar_names.begin();
 		} else {
-			std::cout << "Choosing first covar to use as interaction term (default)" << std::endl;
 			x_col = 0;
 		}
 
@@ -633,7 +704,6 @@ class data
 			tau_j = (Z_j.transpose() * e_j)(0,0) / (Z_j.transpose() * Z_j)(0,0);
 			f_j = e_j - Z_j * tau_j;
 
-
 			// Saving variables
 			beta.push_back(beta_j);
 			tau.push_back(tau_j);
@@ -650,8 +720,7 @@ class data
 				kk = GG(ii,jj);
 				nn[kk] += 1.0;
 			}
-// std::cout << "Matrix GG:" << std::endl << GG << std::endl;
-// std::cout << "table: " << nn[0] << ", " << nn[1] << ", " << nn[2] << std::endl; 
+
 			if(std::all_of(nn.begin(), nn.end(), [](int i){return i>0.0;})){
 				for (int ii = 0; ii < n_samples; ii++){
 					kk = GG(ii,jj);
@@ -663,7 +732,7 @@ class data
 						AA(ii, kk-1) = vv(ii);
 					}
 				}
-// std::cout << "Matrix AA:" << std::endl << AA << std::endl;
+
 				D = (AA.transpose() * AA);
 				gamma_j = D.ldlt().solve(AA.transpose() * e_j);
 				g_j = e_j - AA * gamma_j;
@@ -680,6 +749,79 @@ class data
 		}
 	}
 
+	void calc_joint_model() {
+		// Y = G beta
+		// vs
+		// Y = G beta + Z tau
+		// Want:
+		// - coefficients
+		// - variance explained
+		// - F test comparing model fit (just need residuals)
+		// - AIC?
+		// Common sense checks; n < p
+
+		// Determine which covar to use in interaction
+		std::ptrdiff_t x_col;
+		if( params.x_param_name != "NULL"){
+			std::vector<std::string>::iterator it;
+			it = std::find(covar_names.begin(), covar_names.end(), params.x_param_name);
+			if (it == covar_names.end()){
+				throw std::invalid_argument("Can't locate --interaction parameter");
+			}
+			x_col = it - covar_names.begin();
+		} else {
+			x_col = 0;
+		}
+
+		Eigen::VectorXd vv(Eigen::Map<Eigen::VectorXd>(W.col(x_col).data(), n_samples));
+		std::cout << "Initialising matrix W (" << G.rows() << "," << 2*G.cols() << ")" << std::endl;
+		Eigen::MatrixXd W(G.rows(), G.cols() + G.cols());
+		W << G, (G.array().colwise() * vv.array()).matrix();
+		std::cout << W << std::endl;
+		// G should be centered and scaled by now
+		std::cout << "Fitting polygenic model" << std::endl;
+		Eigen::MatrixXd beta = solve(G.transpose() * G, G.transpose() * Y);
+		Eigen::VectorXd e_null = Y - G * beta;
+
+		// eta; vector of coefficients c(beta, tau)
+		std::cout << "Fitting joint interaction model" << std::endl;
+		Eigen::MatrixXd eta = solve(W.transpose() * W, W.transpose() * Y);
+		Eigen::VectorXd e_alt = Y - W * eta;
+		std::cout << eta << std::endl;
+		std::cout << e_alt << std::endl;
+
+		boost::math::students_t t_dist(n_samples - n_var - 1);
+		double pval_j, eta_j;
+		for(int jj = 0; jj < n_var; jj++){
+			eta_j = eta(n_var + jj, 0);
+			tau.push_back(eta_j);
+			pval_j = 1.0 - boost::math::cdf(t_dist, eta_j);
+			neglogP.push_back(-1*std::log10(pval_j));
+		}
+
+		// F test
+		double f_stat, rss_null, rss_alt, pval, neglogp_joint;
+		rss_null = e_null.dot(e_null);
+		rss_alt = e_alt.dot(e_alt);
+		f_stat = (rss_null - rss_alt) / (double) n_var;
+		f_stat /= rss_alt / (double) (n_samples - n_var - 1);
+		boost::math::fisher_f f_dist(n_var, n_samples - n_var);
+		pval = 1.0 - boost::math::cdf(f_dist, f_stat);
+		neglogp_joint = -1 * std::log10(pval);
+
+		// Output
+		std::cout << "F-test comparing models " << std::endl;
+		std::cout << "H0: Y = G x beta" << std::endl;
+		std::cout << "vs" << std::endl;
+		std::cout << "H0: Y = G x beta + Z x tau" << std::endl;
+		std::cout << "F-stat = " << f_stat << ", neglogP = " << neglogp_joint << std::endl;
+
+		std::cout << "Variance explained by null: ";
+		std::cout << 100 * (1.0 - rss_null / (Y.transpose() * Y)(0,0)) << std::endl;
+		std::cout << "Variance explained by alt: ";
+		std::cout << 100 * (1.0 - rss_alt / (Y.transpose() * Y)(0,0)) << std::endl;
+	}
+
 	double lrt(Eigen::VectorXd null, Eigen::VectorXd alt, int df){
 		// Logliks correct up to ignoreable constant
 		boost::math::chi_squared chi_dist_1(1), chi_dist_2(2);
@@ -692,9 +834,6 @@ class data
 		loglik_alt *= n_samples/2.0;
 
 		chi_stat = 2*(loglik_alt - loglik_null);
-		std::cout << "Null loglik: " << loglik_null << std::endl;
-		std::cout << "Alt loglik: " << loglik_alt << std::endl;
-		std::cout << "Test statistic: " << chi_stat << std::endl;
 		if (df == 1){
 			pval = 1.0 - boost::math::cdf(chi_dist_1, chi_stat);
 		} else {
@@ -702,16 +841,6 @@ class data
 		}
 		neglogp = -1 * std::log10(pval);
 		return neglogp;
-}
-
-	void output_lm() {
-		for (int s = 0; s < n_var; s++){
-			outf << chromosome[s] << "\t" << rsid[s] << "\t" << position[s] << "\t";
-			outf << alleles[s][0] << "\t" << alleles[s][1] << "\t" << maf[s] << "\t";
-			outf << info[s] << "\t" << beta[s] << "\t" << tau[s] << "\t";
- 			outf << neglogP[s] << "\t" << gamma[s][0] << "\t" << gamma[s][1];
- 			outf << "\t" << gamma[s][2] << "\t" << neglogP_2dof[s] << std::endl;
-		}
 	}
 
 	void reduce_to_complete_cases() {
@@ -749,17 +878,18 @@ class data
 		// Step 3; Center phenos, genotypes, normalise covars
 		center_matrix( Y, n_pheno );
 		center_matrix( W, n_covar );
-		int tmp = n_covar;
 		scale_matrix( W, n_covar, covar_names );
-		// if(tmp != n_covar){
-		// 	std::cout << "WARNING; just removed a covar for having zero variance.";
-		// 	std::cout << " But we don't track which one.." << std::endl;
-		// 	std::cout << "Please remind me to correct this!" << std::endl;
-		// }
-
 
 		// Step 4; Regress covars out of phenos
 		regress_covars();
+
+		// TODO: Move UI messages to coherent place?
+		if( params.x_param_name != "NULL"){
+			std::cout << "Searching for --interaction param ";
+			std::cout << params.x_param_name << std::endl;
+		} else {
+			std::cout << "Choosing first covar to use as interaction term (default)" << std::endl;
+		}
 
 		while (read_bgen_chunk()) {
 			std::cout << "Chunk " << ch+1 << " read (size " << n_var << ")";
@@ -772,13 +902,15 @@ class data
 			center_matrix( G, n_var );
 			scale_matrix( G, n_var );
 			std::cout << "Genotypes normalised" << std::endl;
-			// std::cout << "Normalised G is " << G.rows() << "x" << G.cols() << std::endl;
-			// std::cout << G << std::endl;
 
 			// Actually compute models
-			calc_lrts();
-			std::cout << "1dof interaction test computed" << std::endl;
-			output_lm();
+			if(params.mode_lm){
+				calc_lrts();
+			} else if(params.mode_joint_model){
+				calc_joint_model();
+			}
+			std::cout << "Interaction tests computed for chunk." << std::endl;
+			output_results();
 			ch++;
 		}
 	}

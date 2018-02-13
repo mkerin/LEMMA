@@ -13,17 +13,15 @@
 #include "class.h"
 #include "data.hpp"
 #include "genfile/bgen/bgen.hpp"
+#include "genfile/bgen/View.hpp"
 #include "bgen_parser.hpp"
 #include "version.h"
 
-// TODO: get --range to work off of .bgi files
 // TODO: Sensible restructuring of interaction code
-// TODO: --interaction option! Currently taking 1st column of covariates.
 // TODO: Use high precision double for pval
 // TODO: implement tests for info filter
 // TODO: tests for read_pheno, read_covar? Clarify if args for these are compulsory.
 // TODO: copy argument_sanity()
-// TODO: function to check that files exist
 
 // Efficiency changes:
 // 1) Use --range to edit query before reading bgen file
@@ -45,16 +43,39 @@ int main( int argc, char** argv ) {
 		data Data( p.bgen_file );
 		Data.params = p;
 		Data.output_init();
-		Data.n_samples = Data.bgenParser.number_of_samples();
 
-		if(Data.params.incl_sids_file != "NULL"){
+		// incl sample ids filter
+		if(p.incl_sids_file != "NULL"){
 			Data.read_incl_sids();
 		}
 
-		// Summary info
-		Data.bgenParser.summarise(std::cout);
+		// range filter
+		if (p.range){
+			std::cout << "Selecting range..." << std::endl;
+			genfile::bgen::IndexQuery::UniquePtr query = genfile::bgen::IndexQuery::create(p.bgi_file);
+			genfile::bgen::IndexQuery::GenomicRange rr1(p.chr, p.start, p.end);
+			query->include_range( rr1 ).initialise();
+			Data.bgenView->set_query( query );
+		}
 
-		if(p.mode_lm){
+		// incl rsids filter
+		if(p.select_snps){
+			Data.read_incl_rsids();
+			std::cout << "Filtering SNPs by rsid..." << std::endl;
+			genfile::bgen::IndexQuery::UniquePtr query = genfile::bgen::IndexQuery::create(p.bgi_file);
+			query->include_rsids( Data.rsid_list ).initialise();
+			Data.bgenView->set_query( query );
+		}
+
+		// Summary info
+		Data.bgenView->summarise(std::cout);
+
+		// if(p.mode_joint_model){
+		// 	Data.calc_joint_model();
+		// 	Data.output_results();
+		// }
+
+		if(p.mode_lm || p.mode_joint_model){
 			// Start loading the good stuff
 			Data.run();
 		}
@@ -62,7 +83,6 @@ int main( int argc, char** argv ) {
 		if (p.mode_vcf){
 			// Reading in from bgen file
 			while (Data.read_bgen_chunk()) {
-				std::cout << "Top of the bgen chunk while-loop" << std::endl;
 				for (int jj = 0; jj < Data.n_var; jj++ ) {
 					Data.outf << Data.chromosome[jj] << '\t'
 						<< Data.position[jj] << '\t'
