@@ -86,7 +86,7 @@ int main( int argc, char** argv ) {
 			auto end = std::chrono::system_clock::now();
 			std::chrono::duration<double> elapsed_seconds = end-start;
 			std::time_t end_time = std::chrono::system_clock::to_time_t(end);
-			std::cout << "Analysis finished at " << std::ctime(&end_time) << std::endl;
+			std::cout << "Analysis finished at " << std::ctime(&end_time);
 			std::cout << "Elapsed time: " << elapsed_seconds.count() << "s" << std::endl;
 		}
 

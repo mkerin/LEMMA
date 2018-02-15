@@ -24,6 +24,7 @@
 #include <boost/math/distributions/students_t.hpp>
 #include <boost/iostreams/filtering_stream.hpp>
 #include <boost/iostreams/device/file.hpp>
+#include <boost/iostreams/filter/gzip.hpp>
 
 namespace boost_io = boost::iostreams;
 
@@ -99,6 +100,9 @@ class data
 		std::string ofile, gz_str = ".gz";
 
 		ofile = params.out_file;
+		if (params.out_file.find(gz_str) != std::string::npos) {
+			outf.push(boost_io::gzip_compressor());
+		}
 		outf.push(boost_io::file_sink(ofile.c_str()));
 
 		if(params.mode_vcf){
@@ -406,7 +410,7 @@ class data
 			// throw std::runtime_error("ERROR: problem converting incl_sample_ids.");
 			throw;
 		}
-		std::cout << "Subsetted down to " << bb << " ids from --incl_sample_ids";
+		std::cout << "Subsetted down to " << ii << " ids from --incl_sample_ids";
 		std::cout << std::endl;
 	}
 
@@ -837,6 +841,9 @@ class data
 		loglik_alt *= n_samples/2.0;
 
 		chi_stat = 2*(loglik_alt - loglik_null);
+		if(chi_stat < 0 && chi_stat > -0.0000001){
+			chi_stat = 0.0; // Sometimes we get -1e-09
+		}
 		if (df == 1){
 			pval = 1.0 - boost::math::cdf(chi_dist_1, chi_stat);
 		} else {
@@ -897,7 +904,7 @@ class data
 		while (read_bgen_chunk()) {
 			// Raw dosage read in to G
 			std::cout << "Chunk " << ch+1 << " read (size " << n_var;
-			// std::cout << ", " << n_var_parsed << "/" << bgenView->number_of_variants();
+			std::cout << ", " << n_var_parsed-1 << "/" << bgenView->number_of_variants();
 			std::cout << " variants parsed)" << std::endl;
 
 			// Normalise genotypes
