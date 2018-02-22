@@ -119,7 +119,7 @@ class data
 		if(params.mode_lm){
 			// Output header for vcf file
 			outf << "chr\trsid\tpos\ta_0\ta_1\taf\tinfo\tbeta\ttau";
-			outf << "\t1dof_neglogP\tgamma1\tgamma2\tgamma3\t2dof_neglogP" << std::endl;
+			outf << "\tneglogP_1dof\tgamma1\tgamma2\tgamma3\tneglogP_2dof" << std::endl;
 		}
 
 		if(params.mode_joint_model){
