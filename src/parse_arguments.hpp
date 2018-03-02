@@ -8,6 +8,8 @@
 #include <sys/stat.h>
 #include "class.h"
 #include "version.h"
+#include <regex>
+#include <stdexcept>
 
 void check_counts(std::string in_str, int i, int num, int argc);
 void parse_arguments(parameters &p, int argc, char *argv[]);
@@ -17,9 +19,12 @@ void check_counts(std::string in_str, int i, int num, int argc) {
 	// Stop overflow from argv
 	if (i + num >= argc) {
 		if (num == 1) {
-			std::cout << "ERROR: flag " << in_str << " requres an argument. Please refer to the manual for usage instructions." << std::endl;
+			std::cout << "ERROR: flag " << in_str << " requres an argument. ";
+			std::cout << "Please refer to the manual for usage instructions." << std::endl;
 		} else {
-			std::cout << "ERROR: flag " << in_str << " seems to require " + std::to_string(num) + " arguments. No arguments of this type should be implemented yet.." << std::endl;
+			std::cout << "ERROR: flag " << in_str << " seems to require ";
+ 			std::cout << std::to_string(num) + " arguments. No arguments of ";
+			std::cout << "this type should be implemented yet.." << std::endl;
 		}
 		std::exit(EXIT_FAILURE);
 	}
@@ -49,11 +54,17 @@ void parse_arguments(parameters &p, int argc, char *argv[]) {
 		"--out",
 		"--convert_to_vcf",
 		"--lm",
+		"--full_lm",
 		"--joint_model",
+		"--mode_vb",
 		"--interaction",
 		"--incl_sample_ids",
 		"--incl_rsids",
-		"--no_geno_check"
+		"--rsid",
+		"--no_geno_check",
+		"--genetic_confounders",
+		"--hyps_grid",
+		"--hyps_probs"
 	};
 
 	std::set<std::string>::iterator set_it;
@@ -98,8 +109,14 @@ void parse_arguments(parameters &p, int argc, char *argv[]) {
 			// flags with parameters should eat their arguments
 			// & also make sure they don't go over argc
 
+			// Modes - a variety of different functionalities now included
 			if(strcmp(in_str, "--convert_to_vcf") == 0) {
 				p.mode_vcf = true;
+				i += 0;
+			}
+
+			if(strcmp(in_str, "--full_lm") == 0) {
+				p.mode_lm2 = true;
 				i += 0;
 			}
 
@@ -113,10 +130,22 @@ void parse_arguments(parameters &p, int argc, char *argv[]) {
 				i += 0;
 			}
 
+			if(strcmp(in_str, "--mode_vb") == 0) {
+				p.mode_vb = true;
+				i += 0;
+			}
+
+			// Data inputs
 			if(strcmp(in_str, "--bgen") == 0) {
 				check_counts(in_str, i, 1, argc);
 				p.bgen_file = argv[i + 1]; // bgen file
-				check_file_exists(p.bgen_file);
+
+				std::regex reg_asterisk("\\*");
+				if (std::regex_search(p.bgen_file, reg_asterisk)) {
+					p.bgen_wildcard = true;
+				} else {
+					check_file_exists(p.bgen_file);
+				}
 				i += 1;
 			}
 
@@ -145,6 +174,21 @@ void parse_arguments(parameters &p, int argc, char *argv[]) {
 				i += 1;
 			}
 
+			if(strcmp(in_str, "--hyps_grid") == 0) {
+				check_counts(in_str, i, 1, argc);
+				p.hyps_grid_file = argv[i + 1]; // covar file
+				check_file_exists(p.hyps_grid_file);
+				i += 1;
+			}
+
+			if(strcmp(in_str, "--hyps_probs") == 0) {
+				check_counts(in_str, i, 1, argc);
+				p.hyps_probs_file = argv[i + 1]; // covar file
+				check_file_exists(p.hyps_probs_file);
+				i += 1;
+			}
+
+			// Filters
 			if(strcmp(in_str, "--maf") == 0) {
 				check_counts(in_str, i, 1, argc);
 				p.maf_lim = true;
@@ -156,17 +200,6 @@ void parse_arguments(parameters &p, int argc, char *argv[]) {
 				check_counts(in_str, i, 1, argc);
 				p.info_lim = true;
 				p.min_info = std::stod(argv[i + 1]); // bgen file
-				i += 1;
-			}
-
-			if(strcmp(in_str, "--no_geno_check") == 0) {
-				p.geno_check = false;
-				i += 0;
-			}
-
-			if(strcmp(in_str, "--chunk") == 0) {
-				check_counts(in_str, i, 1, argc);
-				p.chunk_size = std::stoi(argv[i + 1]); // bgen file
 				i += 1;
 			}
 
@@ -200,9 +233,47 @@ void parse_arguments(parameters &p, int argc, char *argv[]) {
 				i += 1;
 			}
 
+			if(strcmp(in_str, "--rsid") == 0) {
+				check_counts(in_str, i, 1, argc);
+				p.select_rsid = true;
+				int jj = i+1;
+				while(jj < argc){
+					std::string arg_str(argv[jj]);
+					if (arg_str.find("--") != std::string::npos) break;
+					p.rsid.push_back(argv[jj]);
+					jj++;
+				}
+				i += 1;
+			}
+
+			// Other options
+			if(strcmp(in_str, "--no_geno_check") == 0) {
+				p.geno_check = false;
+				i += 0;
+			}
+
+			if(strcmp(in_str, "--chunk") == 0) {
+				check_counts(in_str, i, 1, argc);
+				p.chunk_size = std::stoi(argv[i + 1]); // bgen file
+				i += 1;
+			}
+
 			if(strcmp(in_str, "--interaction") == 0) {
 				check_counts(in_str, i, 1, argc);
-				p.x_param_name = argv[i + 1]; // includ sample ids file
+				p.x_param_name = argv[i + 1]; // include sample ids file
+				i += 1;
+			}
+
+			if(strcmp(in_str, "--genetic_confounders") == 0) {
+				check_counts(in_str, i, 1, argc);
+				int jj = i+1;
+				while(jj < argc){
+					std::string arg_str(argv[jj]);
+					if (arg_str.find("--") != std::string::npos) break;
+					p.gconf.push_back(argv[jj]);
+					jj++;
+				}
+				p.n_gconf = jj - i - 1;
 				i += 1;
 			}
 		}
@@ -211,10 +282,13 @@ void parse_arguments(parameters &p, int argc, char *argv[]) {
 	// Sanity checks here
 	int mode_count = 0;
 	mode_count += (p.mode_lm ? 1 : 0);
+	mode_count += (p.mode_lm2 ? 1 : 0);
+	mode_count += (p.mode_vb ? 1 : 0);
 	mode_count += (p.mode_vcf ? 1 : 0);
 	mode_count += (p.mode_joint_model ? 1 : 0);
-	if(mode_count > 1){
-		std::cout << "ERROR: only one of flags --lm, --joint_model or --convert_to_vcf should be present." << std::endl;
+	if(mode_count != 1){
+		std::cout << "ERROR: exactly one of flags --lm, --mode_vb, --full_lm, ";
+		std::cout << "--joint_model or --convert_to_vcf should be present." << std::endl;
 		std::exit(EXIT_FAILURE);
 	}
 	if(p.mode_lm){
@@ -224,8 +298,29 @@ void parse_arguments(parameters &p, int argc, char *argv[]) {
 		bool has_covar = p.covar_file != "NULL";
 		bool has_all = (has_covar && has_pheno && has_out && has_bgen);
 		if(!has_all){
-			std::cout << "ERROR: bgen, covar, pheno and out files should all be provided in conjunction with --lm." << std::endl;
+			std::cout << "ERROR: bgen, covar, pheno and out files should all be ";
+			std::cout << "provided in conjunction with --lm." << std::endl;
 			std::exit(EXIT_FAILURE);
+		}
+		if(p.bgen_wildcard){
+			std::cout << "ERROR: bgen wildcard input only works with --joint_model." << std::endl;
+			throw std::runtime_error("Wrong input; check manual.");
+		}
+	}
+	if(p.mode_lm2){
+		bool has_bgen = p.bgen_file != "NULL";
+		bool has_out = p.out_file != "NULL";
+		bool has_pheno = p.pheno_file != "NULL";
+		bool has_covar = p.covar_file != "NULL";
+		bool has_all = (has_covar && has_pheno && has_out && has_bgen);
+		if(!has_all){
+			std::cout << "ERROR: bgen, covar, pheno and out files should all be ";
+			std::cout << "provided in conjunction with --lm." << std::endl;
+			std::exit(EXIT_FAILURE);
+		}
+		if(p.bgen_wildcard){
+			std::cout << "ERROR: bgen wildcard input only works with --joint_model." << std::endl;
+			throw std::runtime_error("Wrong input; check manual.");
 		}
 	}
 	if(p.mode_joint_model){
@@ -235,7 +330,8 @@ void parse_arguments(parameters &p, int argc, char *argv[]) {
 		bool has_covar = p.covar_file != "NULL";
 		bool has_all = (has_covar && has_pheno && has_out && has_bgen);
 		if(!has_all){
-			std::cout << "ERROR: bgen, covar, pheno and out files should all be provided in conjunction with --joint_model." << std::endl;
+			std::cout << "ERROR: bgen, covar, pheno and out files should all be ";
+			std::cout << "provided in conjunction with --joint_model." << std::endl;
 			std::exit(EXIT_FAILURE);
 		}
 	}
@@ -244,8 +340,13 @@ void parse_arguments(parameters &p, int argc, char *argv[]) {
 		bool has_out = p.out_file != "NULL";
 		bool has_all = (has_out && has_bgen);
 		if(!has_all){
-			std::cout << "ERROR: bgen and out files should all be provided in conjunction with --convert_to_vcf." << std::endl;
+			std::cout << "ERROR: bgen and out files should all be provided ";
+			std::cout << "in conjunction with --convert_to_vcf." << std::endl;
 			std::exit(EXIT_FAILURE);
+		}
+		if(p.bgen_wildcard){
+			std::cout << "ERROR: bgen wildcard input only works with --joint_model." << std::endl;
+			throw std::runtime_error("Wrong input; check manual.");
 		}
 	}
 	if(p.range || p.select_snps){
@@ -256,6 +357,39 @@ void parse_arguments(parameters &p, int argc, char *argv[]) {
 			throw std::runtime_error("ERROR: file does not exist");
 		}
 	}
+	if(p.gconf.size() > 0 && !p.mode_lm2){
+		throw std::runtime_error("--genetic_confounders should only be used with --full_lm.");
+	}
+
+	// mode_vb specific options
+	if(p.mode_vb){
+		bool has_bgen = p.bgen_file != "NULL";
+		bool has_out = p.out_file != "NULL";
+		bool has_pheno = p.pheno_file != "NULL";
+		bool has_all = (has_pheno && has_out && has_bgen);
+		if(!has_all){
+			std::cout << "ERROR: bgen, pheno and out filepaths should all be ";
+			std::cout << "provided in conjunction with --mode_vb." << std::endl;
+			std::exit(EXIT_FAILURE);
+		}
+		bool has_hyps = p.hyps_grid_file != "NULL";
+		bool has_import_sampling = p.hyps_probs_file != "NULL";
+		bool has_grids = (has_hyps && has_import_sampling);
+		if(!has_grids){
+			std::cout << "ERROR: search grids for hyperparameter values and ";
+			std::cout << "densities should be provided in conjunction with --mode_vb." << std::endl;
+			std::exit(EXIT_FAILURE);
+		}
+	}
+	if(!p.mode_vb){
+		if(p.hyps_grid_file != "NULL"){
+			throw std::runtime_error("--hyps_grid should only be used with --mode_vb");
+		}
+		if(p.hyps_probs_file != "NULL"){
+			throw std::runtime_error("--hyps_probs should only be used with --mode_vb");
+		}
+	}
+
 }
 
 #endif

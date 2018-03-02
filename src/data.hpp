@@ -6,6 +6,8 @@
 #include <algorithm>
 #include <cmath>
 #include <cstddef>     // for ptrdiff_t class
+#include <chrono>      // start/end time info
+#include <ctime>       // start/end time info
 #include <map>
 #include <vector>
 #include <string>
@@ -17,11 +19,13 @@
 #include "tools/eigen3.3/Eigenvalues"
 
 #include "bgen_parser.hpp"
+#include "genfile/bgen/bgen.hpp"
 #include "genfile/bgen/View.hpp"
 
 #include <boost/math/distributions/chi_squared.hpp>
 #include <boost/math/distributions/fisher_f.hpp>
 #include <boost/math/distributions/students_t.hpp>
+#include <boost/math/distributions/complement.hpp> // complements
 #include <boost/iostreams/filtering_stream.hpp>
 #include <boost/iostreams/device/file.hpp>
 #include <boost/iostreams/filter/gzip.hpp>
@@ -79,6 +83,13 @@ class data
 	std::vector< std::vector< double > > gamma;
 
 	boost_io::filtering_ostream outf;
+
+	std::chrono::system_clock::time_point start;
+
+	// grid things for vbayes
+	std::vector< std::string > hyps_names, imprt_names;
+	Eigen::MatrixXd hyps_grid, imprt_grid;
+
 	
 	// constructors/destructors
 	// data() : bgenView( "NULL" ) {
@@ -90,9 +101,20 @@ class data
 		bgen_pass = true;
 		n_samples = bgenView->number_of_samples();
 		n_var_parsed = 0;
+
+		// system time at start
+		start = std::chrono::system_clock::now();
+		std::time_t start_time = std::chrono::system_clock::to_time_t(start);
+		std::cout << "Starting analysis at " << std::ctime(&start_time) << std::endl;
 	}
 	
 	~data() {
+		// system time at end
+		auto end = std::chrono::system_clock::now();
+		std::chrono::duration<double> elapsed_seconds = end-start;
+		std::time_t end_time = std::chrono::system_clock::to_time_t(end);
+		std::cout << "Analysis finished at " << std::ctime(&end_time);
+		std::cout << "Elapsed time: " << elapsed_seconds.count() << "s" << std::endl;
 	}
 
 	void output_init() {
@@ -120,6 +142,18 @@ class data
 			// Output header for vcf file
 			outf << "chr\trsid\tpos\ta_0\ta_1\taf\tinfo\tbeta\ttau";
 			outf << "\t1dof_neglogP\tgamma1\tgamma2\tgamma3\t2dof_neglogP" << std::endl;
+		}
+
+		if(params.mode_lm2){
+			outf << "chr\trsid\tpos\ta_0\ta_1\taf\tinfo";
+			for (int kk = 0; kk < n_covar; kk++){
+				outf << "\tbeta_" << covar_names[kk];
+			}
+			outf << "\tbeta_var_j\tbeta_gx" << params.x_param_name;
+			for (int kk = 0; kk < params.n_gconf; kk++){
+				outf << "\tbeta_gx" << params.gconf[kk];
+			}
+			outf << "\tneglogP_gx" << params.x_param_name << std::endl;
 		}
 
 		if(params.mode_joint_model){
@@ -414,6 +448,79 @@ class data
 		std::cout << std::endl;
 	}
 
+	void read_grid_file( std::string filename,
+						 Eigen::MatrixXd& M,
+						 std::vector< std::string >& col_names){
+		// Used in mode_vb only.
+		// Slightly different from read_txt_file in that I don't know
+		// how many rows there will be and we can assume no missing values.
+
+		boost_io::filtering_istream fg;
+		fg.push(boost_io::file_source(filename.c_str()));
+		if (!fg) {
+			std::cout << "ERROR: " << filename << " not opened." << std::endl;
+			std::exit(EXIT_FAILURE);
+		}
+
+		// Read file twice to acertain number of lines
+		std::string line;
+		int n_grid = 0;
+		getline(fg, line);
+		while (getline(fg, line)) {
+			n_grid++;
+		}
+		fg.reset();
+		fg.push(boost_io::file_source(filename.c_str()));
+
+		// Reading column names
+		if (!getline(fg, line)) {
+			std::cout << "ERROR: " << filename << " not read." << std::endl;
+			std::exit(EXIT_FAILURE);
+		}
+		std::stringstream ss;
+		std::string s;
+		int n_cols = 0;
+		ss.clear();
+		ss.str(line);
+		while (ss >> s) {
+			++n_cols;
+			col_names.push_back(s);
+		}
+		std::cout << " Detected " << n_cols << " column(s) from " << filename << std::endl;
+
+		// Write remainder of file to Eigen matrix M
+		M.resize(n_grid, n_cols);
+		int i = 0;
+		double tmp_d;
+		try {
+			while (getline(fg, line)) {
+				if (i >= n_grid) {
+					throw std::runtime_error("ERROR: could not convert txt file (too many lines).");
+				}
+				ss.clear();
+				ss.str(line);
+				for (int k = 0; k < n_cols; k++) {
+					std::string s;
+					ss >> s;
+					try{
+						tmp_d = stod(s);
+					} catch (const std::invalid_argument &exc){
+						std::cout << s << " on line " << i << std::endl;
+						throw;
+					}
+
+					M(i, k) = tmp_d;
+				}
+				i++; // loop should end at i == n_grid
+			}
+			if (i < n_grid) {
+				throw std::runtime_error("ERROR: could not convert txt file (too few lines).");
+			}
+		} catch (const std::exception &exc) {
+			throw;
+		}
+	}
+
 	void read_txt_file( std::string filename,
 						Eigen::MatrixXd& M,
 						int& n_cols,
@@ -622,6 +729,32 @@ class data
 		W_reduced = false;
 	}
 
+	void read_grids(){
+		// For use in vbayes object
+
+		if ( params.hyps_grid_file != "NULL" ) {
+			read_grid_file( params.hyps_grid_file, hyps_grid, hyps_names );
+		} else {
+			throw std::invalid_argument( "Tried to read NULL hyperparameter grid file." );
+		}
+		if ( params.hyps_probs_file != "NULL" ) {
+			read_grid_file( params.hyps_probs_file, imprt_grid, imprt_names );
+		} else {
+			throw std::invalid_argument( "Tried to read NULL importance sampling grid file." );
+		}
+
+		assert(hyps_grid.rows() == imprt_grid.rows());
+		assert(imprt_grid.cols() == 1);
+
+		std::vector< std::string > fixed_hyps_names;
+		fixed_hyps_names.push_back("sigma_e");
+		fixed_hyps_names.push_back("sigma_b");
+		fixed_hyps_names.push_back("pi");
+		if(hyps_names != fixed_hyps_names){
+			throw std::runtime_error("Column names of --hyps_grid must be sigma_e sigma_b pi");
+		}
+	}
+
 	void reduce_mat_to_complete_cases( Eigen::MatrixXd& M, 
 								   bool& matrix_reduced,
 								   int n_cols,
@@ -667,6 +800,17 @@ class data
 		Y = Y - ww * bb;
 	}
 
+	std::size_t find_covar_index( std::string colname ){
+		std::size_t x_col;
+		std::vector<std::string>::iterator it;
+		it = std::find(covar_names.begin(), covar_names.end(), colname);
+		if (it == covar_names.end()){
+			throw std::invalid_argument("Can't locate parameter " + colname);
+		}
+		x_col = it - covar_names.begin();
+		return x_col;
+	}
+
 	void calc_lrts() {
 		// For-loop through variants and compute interaction models.
 		// Save to
@@ -679,12 +823,7 @@ class data
 		// Determine which covar to use in interaction
 		std::ptrdiff_t x_col;
 		if( params.x_param_name != "NULL"){
-			std::vector<std::string>::iterator it;
-			it = std::find(covar_names.begin(), covar_names.end(), params.x_param_name);
-			if (it == covar_names.end()){
-				throw std::invalid_argument("Can't locate --interaction parameter");
-			}
-			x_col = it - covar_names.begin();
+			x_col = find_covar_index(params.x_param_name);
 		} else {
 			x_col = 0;
 		}
@@ -756,6 +895,65 @@ class data
 		}
 	}
 
+	void calc_lrts2() {
+		// Determine column indexs to include in X_g
+		std::vector< std::size_t > col_indexes;
+		if( params.x_param_name != "NULL"){
+			col_indexes.push_back(find_covar_index(params.x_param_name));
+		} else {
+			col_indexes.push_back(0);
+		}
+		for (int ii = 0; ii < params.n_gconf; ii++){
+			col_indexes.push_back(find_covar_index(params.gconf[ii]));
+		}
+
+		for (int jj = 0; jj < n_var; jj++){
+			// Build matrix X_g
+			Eigen::MatrixXd tmp;
+			tmp = (getCols(W, col_indexes)).array().colwise() * G.col(jj).array();
+			int tmp_ncol = params.n_gconf + 1;
+			center_matrix( tmp, tmp_ncol );
+			scale_matrix( tmp, tmp_ncol );
+
+			// Combine to matrix X_comb = (X_c, X_g)
+			int comb_col = n_covar + 2 + params.n_gconf;
+			Eigen::MatrixXd X_comb(n_samples, comb_col);
+			X_comb << W, G.col(jj), tmp;
+
+			// Fit joint regression Y = X_comb beta_comb + epsilon
+			Eigen::MatrixXd XtX_comb = X_comb.transpose() * X_comb;
+			Eigen::MatrixXd XtX_comb_inv = XtX_comb.inverse();
+			Eigen::MatrixXd beta_comb_j = XtX_comb_inv * X_comb.transpose() * Y;
+
+			// Create vector of standard errors
+			double s_var = (Y - X_comb * beta_comb_j).norm() / std::sqrt(n_samples - comb_col);
+			std::vector< double > se;
+			for (int kk = 0; kk < comb_col; kk++){
+				se.push_back(s_var * std::sqrt(XtX_comb_inv(kk, kk)));
+			}
+
+			// Compute t-test on GxE param
+			double n_dof;
+			n_dof = (double) (n_samples - (n_covar + 2 + params.n_gconf));
+			boost::math::students_t t_dist(n_dof);
+			double t_stat = beta_comb_j(n_covar + 1, 0) / se[n_covar + 1];
+
+			// p-value from 2 tailed t-test
+			double q = 2 * boost::math::cdf(boost::math::complement(t_dist, fabs(t_stat)));
+
+ 			// Output stats
+			outf << chromosome[jj] << "\t" << rsid[jj] << "\t" << position[jj];
+			outf << "\t" << alleles[jj][0] << "\t" << alleles[jj][1] << "\t";
+			outf << maf[jj] << "\t" << info[jj];
+
+			for (int kk = 0; kk < n_covar + 2 + params.n_gconf; kk++){
+				outf << "\t" << beta_comb_j(kk, 0);
+			}
+
+			outf << "\t" << -1 * std::log10(q) << std::endl;
+		}
+	}
+
 	void calc_joint_model() {
 		// Y = G beta
 		// vs
@@ -766,6 +964,9 @@ class data
 		// - F test comparing model fit (just need residuals)
 		// - AIC?
 		// Common sense checks; n < p
+		if (n_var > n_samples){
+			throw std::logic_error("n_samples must be less than n_var for the joint model");
+		}
 
 		// Determine which covar to use in interaction
 		std::ptrdiff_t x_col;
@@ -833,7 +1034,6 @@ class data
 		// Logliks correct up to ignoreable constant
 		boost::math::chi_squared chi_dist_1(1), chi_dist_2(2);
 		double loglik_null, loglik_alt, chi_stat, neglogp;
-		long double pval;
 
 		loglik_null = std::log(n_samples) - std::log(null.dot(null));
 		loglik_null *= n_samples/2.0;
@@ -845,11 +1045,11 @@ class data
 			chi_stat = 0.0; // Sometimes we get -1e-09
 		}
 		if (df == 1){
-			pval = 1.0 - boost::math::cdf(chi_dist_1, chi_stat);
+			neglogp = std::log10(boost::math::cdf(boost::math::complement(chi_dist_1, chi_stat)));
 		} else {
-			pval = 1.0 - boost::math::cdf(chi_dist_2, chi_stat);
+			neglogp = std::log10(boost::math::cdf(boost::math::complement(chi_dist_2, chi_stat)));
 		}
-		neglogp = -1 * std::log10(pval);
+		neglogp *= -1.0;
 		return neglogp;
 	}
 
@@ -870,6 +1070,9 @@ class data
 		n_samples -= incomplete_cases.size();
 		missing_phenos.clear();
 		missing_covars.clear();
+
+		std::cout << "Reduced to " << n_samples << " samples with complete data";
+ 		std::cout << " across covariates and phenotype." << std::endl;
 	}
 
 	void run() {
@@ -891,7 +1094,10 @@ class data
 		scale_matrix( W, n_covar, covar_names );
 
 		// Step 4; Regress covars out of phenos
-		regress_covars();
+		if(!params.mode_lm2){
+			std::cout << " Regressing out covariates" << std::endl;
+			regress_covars();
+		}
 
 		// TODO: Move UI messages to coherent place?
 		if( params.x_param_name != "NULL"){
@@ -900,6 +1106,9 @@ class data
 		} else {
 			std::cout << "Choosing first covar to use as interaction term (default)" << std::endl;
 		}
+
+		// Write headers to output file
+		output_init();
 
 		while (read_bgen_chunk()) {
 			// Raw dosage read in to G
@@ -914,81 +1123,16 @@ class data
 			// Actually compute models
 			if(params.mode_lm){
 				calc_lrts();
+				output_results();
+			} else if(params.mode_lm2){
+				calc_lrts2();
 			} else if(params.mode_joint_model){
 				calc_joint_model();
+				output_results();
 			}
-			output_results();
 			ch++;
 		}
 	}
-
-// 	void center_matrix( Eigen::MatrixXd& M,
-// 					int& n_cols,
-// 					std::map< int, bool > incomplete_row ){
-// 	// Center eigen matrix passed by reference.
-// 
-// 	std::vector<size_t> keep;
-// 	for (int k = 0; k < n_cols; k++) {
-// 		double mu = 0.0;
-// 		double count = 0;
-// 		for (int i = 0; i < n_samples; i++) {
-// 			if (incomplete_row.count(i) == 0) {
-// 				mu += M(i, k);
-// 				count += 1;
-// 			}
-// 		}
-// 
-// 		mu = mu / count;
-// 		for (int i = 0; i < n_samples; i++) {
-// 			if (incomplete_row.count(i) == 0) {
-// 				M(i, k) -= mu;
-// 			} else {
-// 				M(i, k) = 0.0;
-// 			}
-// 		}
-// 		// std::cout << "Mean centered matrix:" << std::endl << M << std::endl;
-// 	}
-// }
-
-	// void scale_matrix( Eigen::MatrixXd& M,
-	// 					int& n_cols,
-	// 					std::map< int, bool > incomplete_row ){
-	// 	// Scale eigen matrix passed by reference.
-	// 	// Removes columns with zero variance.
-	// 
-	// 	std::vector<size_t> keep;
-	// 	for (int k = 0; k < n_cols; k++) {
-	// 		double sigma = 0.0;
-	// 		double count = 0;
-	// 		for (int i = 0; i < n_samples; i++) {
-	// 			if (incomplete_row.count(i) == 0) {
-	// 				double val = M(i, k);
-	// 				sigma += val * val;
-	// 				count += 1;
-	// 			}
-	// 		}
-	// 
-	// 		sigma = sqrt(sigma/(count - 1));
-	// 		if (sigma > 1e-12) {  
-	// 			for (int i = 0; i < n_samples; i++) {
-	// 				if (incomplete_row.count(i) == 0) {
-	// 					M(i, k) /= sigma;
-	// 				}
-	// 			}
-	// 			keep.push_back(k);
-	// 		}
-	// 	}
-	// 
-	// 	if (keep.size() != n_cols) {
-	// 		std::cout << " Removing " << (n_cols - keep.size())  << " columns with zero variance." << std::endl;
-	// 		M = getCols(M, keep);
-	// 		n_cols = keep.size();
-	// 	}
-	// 
-	// 	if (n_cols == 0) {
-	// 		throw std::runtime_error("ERROR: No columns left with nonzero variance after scale_matrix()");
-	// 	}
-	// }
 };
 
 

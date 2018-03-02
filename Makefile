@@ -6,7 +6,7 @@ LIBS =     -Lbuild/ -Lbuild/3rd_party/zstd-1.1.0 -Lbuild/db -Lbuild/3rd_party/sq
            -Lbuild/3rd_party/boost_1_55_0
 FLAGS = -g3 -std=c++11 -Wno-deprecated $(LIBS) $(INCLUDES)
 
-HEADERS := parse_arguments.hpp data.hpp class.h bgen_parser.hpp
+HEADERS := parse_arguments.hpp data.hpp class.h bgen_parser.hpp vbayes.hpp
 HEADERS := $(addprefix $(SRCDIR)/,$(HEADERS))
 
 rescomp: CXX = /apps/well/gcc/7.2.0/bin/g++
@@ -29,24 +29,30 @@ $(TARGET) : $(SRCDIR)/bgen_prog.cpp $(HEADERS)
 	$(info $$LDFLAGS is [${LDFLAGS}])
 	$(CXX) -o $@ $< $(FLAGS)
 
+file_parse : file_parse.cpp
+	$(CXX) -o $@ $< $(FLAGS)
+
 # UnitTests
+.PHONY: testIO, testUNIT
+
 # Note: this uses the Catch library to Unit Test the cpp source code. If we want
 # to test input/output of the executable we do that directly with the Makefile
 # and `diff` command.
 # UNITTESTS := test-data.cpp tests-parse-arguments.cpp 
 # UNITTESTS := $(addprefix test/,$(UNITTESTS))
 
-test/tests: test/tests-main.o
-	g++ $< -o $@  $(FLAGS) && ./$@ -r compact
+testUNIT: test/tests-main
 
-test/tests-main.o: test/tests-main.cpp
-	g++ test/tests-main.cpp -c -o $@ $(FLAGS)
+test/tests-main: test/tests-main.o
+	$(CXX) $< -o $@  $(FLAGS) && ./$@
+
+test/tests-main.o: test/tests-main.cpp $(SRCDIR)/bgen_prog.cpp $(HEADERS)
+	$(CXX) test/tests-main.cpp -c -o $@ $(FLAGS)
 
 # IO Tests
 # Files in data/out are regarded as 'true', and we check that the equivalent
 # file in data/io_test is identical after making changes to the executable.
-.PHONY: testIO
-IOfiles := t1_range t2_lm t3_lm_two_chunks t4_lm_2dof
+IOfiles := t1_range t2_lm t3_lm_two_chunks t4_lm_2dof t5_joint_model t6_lm2
 IOfiles := $(addprefix data/io_test/,$(addsuffix /attempt.out,$(IOfiles)))
 IOfiles += $(addprefix data/io_test/t2_lm/attempt, $(addsuffix .out,B C D))
 IOfiles += $(addprefix data/io_test/t1_range/attempt, $(addsuffix .out,B))
@@ -111,13 +117,25 @@ data/io_test/t4_lm_2dof/attempt.out: data/io_test/example.v11.bgen ./bin/bgen_pr
 	    --range 01 3000 3001 --out $@
 	diff $(dir $@)answer.out $@
 
-# Joint model test
-data/io_test/t5_joint_model/attempt.out: data/io_test/example.v11.bgen ./bin/bgen_prog
-	./bin/bgen_prog --joint_model \
+# # Joint model test
+# data/io_test/t5_joint_model/attempt.out: data/io_test/example.v11.bgen ./bin/bgen_prog
+# 	./bin/bgen_prog --joint_model \
+# 	    --bgen $< \
+# 	    --pheno $(dir $@)t2.pheno \
+# 	    --covar $(dir $@)t2.covar \
+# 	    --range 01 2000 2001 --out $@
+# 	diff $(dir $@)answer.out $@
+
+# linear regression with full gene-env-covariates model
+data/io_test/t6_lm2/attempt.out: data/io_test/example.v11.bgen ./bin/bgen_prog
+	./bin/bgen_prog --full_lm \
 	    --bgen $< \
-	    --pheno $(dir $@)t2.pheno \
-	    --covar $(dir $@)t2.covar \
-	    --range 01 2000 2001 --out $@
+	    --pheno $(dir $@)t6.pheno \
+	    --covar $(dir $@)t6.covar \
+	    --interaction covar1 \
+	    --genetic_confounders covar2 \
+	    --range 01 2000 2001 \
+	    --out $@
 	diff $(dir $@)answer.out $@
 
 # Clean dir
