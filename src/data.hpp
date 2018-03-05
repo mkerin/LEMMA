@@ -89,6 +89,7 @@ class data
 	// grid things for vbayes
 	std::vector< std::string > hyps_names, imprt_names;
 	Eigen::MatrixXd hyps_grid, imprt_grid;
+	Eigen::VectorXd alpha_init, mu_init;
 
 	
 	// constructors/destructors
@@ -752,6 +753,31 @@ class data
 		fixed_hyps_names.push_back("pi");
 		if(hyps_names != fixed_hyps_names){
 			throw std::runtime_error("Column names of --hyps_grid must be sigma_e sigma_b pi");
+		}
+	}
+
+	void read_alpha_mu(){
+		// For use in vbayes object
+		Eigen::MatrixXd alpha_mat, mu_mat;
+
+		std::vector< std::string > placeholder;
+		if ( params.alpha_file != "NULL" ) {
+			std::cout << "Reading initialisation for alpha from file" << std::endl;
+			read_grid_file( params.alpha_file, alpha_mat, placeholder );
+			assert(alpha_mat.cols() == 1);
+			assert(alpha_mat.rows() == n_var);
+			alpha_init = Eigen::Map<Eigen::VectorXd>(alpha_mat.data(), alpha_mat.cols()*alpha_mat.rows());
+		} else {
+			throw std::invalid_argument( "Tried to read NULL --alpha_init file." );
+		}
+		if ( params.mu_file != "NULL" ) {
+			std::cout << "Reading initialisation for mu from file" << std::endl;
+			read_grid_file( params.mu_file, mu_mat, placeholder );
+			assert(mu_mat.cols() == 1);
+			assert(mu_mat.rows() == n_var);
+			mu_init = Eigen::Map<Eigen::VectorXd>(mu_mat.data(), mu_mat.cols()*mu_mat.rows());
+		} else {
+			throw std::invalid_argument( "Tried to read NULL --mu_init file." );
 		}
 	}
 

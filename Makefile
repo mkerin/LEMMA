@@ -1,3 +1,6 @@
+
+RSCRIPT := Rscript
+
 TARGET := bin/bgen_prog
 SRCDIR := src
 INCLUDES = -Ibuild/genfile/include/ -I3rd_party/zstd-1.1.0/lib/ \
@@ -137,6 +140,30 @@ data/io_test/t6_lm2/attempt.out: data/io_test/example.v11.bgen ./bin/bgen_prog
 	    --range 01 2000 2001 \
 	    --out $@
 	diff $(dir $@)answer.out $@
+
+# Search over single point on hyp grid only
+data/io_test/t7_varbvs_sub/attempt.out: data/io_test/t7_varbvs_sub/n500_p1000.bgen ./bin/bgen_prog
+	./bin/bgen_prog --mode_vb \
+	    --bgen $< \
+	    --pheno $(dir $@)pheno.txt \
+	    --hyps_grid $(dir $@)hyperpriors_grid_sub.txt \
+	    --hyps_probs $(dir $@)hyperpriors_probs_sub.txt \
+	    --alpha_init $(dir $@)alpha_init.txt \
+	    --mu_init $(dir $@)mu_init.txt \
+	    --out $@
+	$(RSCRIPT) R/plot_vbayes_pip.R $@ $(dir $@)plots/pip_$(notdir $(basename $@)).pdf
+	diff $(dir $@)answer.out $@
+
+# comparison with the varbvs R package
+data/io_test/t8_varbvs/attempt.out: data/io_test/t7_varbvs/n500_p1000.bgen ./bin/bgen_prog
+	./bin/bgen_prog --mode_vb \
+	    --bgen $< \
+	    --pheno $(dir $@)pheno.txt \
+	    --hyps_grid $(dir $@)hyperpriors_grid.txt \
+	    --hyps_probs $(dir $@)hyperpriors_probs.txt \
+	    --out $@
+	$(RSCRIPT) R/plot_vbayes_pip.R $@ $(dir $@)plots/pip_$(notdir $(basename $@)).pdf
+	diff $(dir $@)answer.out $@ $(dir $@)pheno.txt
 
 # Clean dir
 cleanIO:

@@ -157,6 +157,11 @@ int main( int argc, char** argv ) {
 			// Read in grids for importance sampling
 			Data.read_grids();
 
+			// Read starting point for VB approximation if provided
+			if(p.alpha_file != "NULL" && p.mu_file != "NULL"){
+				Data.read_alpha_mu();
+			}
+
 			// Pass data to VBayes object
 			vbayes VB(Data);
 			VB.check_inputs();

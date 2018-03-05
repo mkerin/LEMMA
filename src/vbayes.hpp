@@ -53,13 +53,18 @@ class vbayes {
 	std::vector< Eigen::VectorXd > alpha_i;
 	std::vector< Eigen::VectorXd > mu_i;
 
+	// Initial values of alpha & mu for second round of optimisation
+	Eigen::VectorXd alpha1, mu1;
+
 	std::vector< int > fwd_pass;
 	std::vector< int > back_pass;
 
 	// posteriors
 	std::vector< double > weights;
+	std::vector< double > logw;
 	std::vector< double > alpha_av, mu_av, beta_av;
 
+	bool initialize_params_default;
 
 	int sigma_ind;
 	int sig_b_ind;
@@ -85,6 +90,15 @@ class vbayes {
 		hyps_grid = dat.hyps_grid;
 		dXtX = (X.transpose() * X).diagonal();
 		Xty = X.transpose() * Y;
+
+		// non random initialisation
+		if(dat.params.alpha_file != "NULL" && dat.params.mu_file != "NULL"){
+			alpha1 = dat.alpha_init;
+			mu1 = dat.mu_init;
+			initialize_params_default = false;
+		} else {
+			initialize_params_default = true;
+		}
 	}
 
 	// For use in unit testing.
@@ -215,7 +229,7 @@ class vbayes {
 		std::vector< double > s_sq(n_var, 0);
 		std::vector< int > iter;
 		Eigen::VectorXd alpha0, mu0, Xr;
-		double diff, sigma, sigmab, pi, logw;
+		double diff, sigma, sigmab, pi, logw_i;
 
 		sigma = hyps(sigma_ind);
 		sigmab = hyps(sig_b_ind);
@@ -231,7 +245,6 @@ class vbayes {
 		}
 
 		// Start inner loop
-		std::cout << "Starting inner loop" << std::endl;
 		for(int ll = 0; ll < iter_max; ll++){
 			alpha0 = alpha;
 			mu0 = mu;
@@ -244,7 +257,6 @@ class vbayes {
 			}
 
 			// Variational inference; update alpha, beta, Xr
-			std::cout << "Starting update" << std::endl;
 			inner_loop_update(hyps, alpha, mu, Xr, iter);
 
 			// Break maximum change in mixing coefficients is less than some
@@ -255,24 +267,25 @@ class vbayes {
 			}
 		}
 
-		// log-lik lower bound logw (eq 14)
-		logw = calc_logw(sigma, sigmab, pi, s_sq, alpha, mu);
+		// log-lik lower bound logw_i for i'th hyperparam gridpoint (eq 14)
+		logw_i = calc_logw(sigma, sigmab, pi, s_sq, alpha, mu);
 
-		return logw;
+		return logw_i;
 	}
 
 	void run(){
 		Eigen::RowVectorXd hyps;
-		Eigen::VectorXd alpha, mu, alpha1, mu1, Xr, rr;
+		Eigen::VectorXd alpha, mu, Xr, rr;
 		std::vector< double > s_sq(n_var, 0);
-		double sigma, sigmab, pi, logw, logw1;
+		double sigma, sigmab, pi, logw_i, logw1;
 		int cnt;
 		bool check = false;
 
 		logw1 = -1.0 * std::numeric_limits<double>::max();
 
 		// Allocate memory
-		weights.resize(n_grid, 0.0);
+		weights.resize(n_grid);
+		logw.resize(n_grid, 0.0);
 		rr.resize(n_var);
 		alpha_i.resize(n_grid);
 		mu_i.resize(n_grid);
@@ -284,24 +297,26 @@ class vbayes {
 		}
 
 		// First run with random alpha / mu
-		for (int ii = 0; ii < n_grid; ii++){
-			std::cout << "\rRound 1: grid point " << ii+1 << "/" << n_grid;
-			hyps = hyps_grid.row(ii);
+		if(initialize_params_default){
+			for (int ii = 0; ii < n_grid; ii++){
+				std::cout << "\rRound 1: grid point " << ii+1 << "/" << n_grid;
+				hyps = hyps_grid.row(ii);
 
-			// Initialise alpha and mu randomly
-			random_alpha_mu(alpha, mu);
+				// Initialise alpha and mu randomly
+				random_alpha_mu(alpha, mu);
 
-			std::cout << "Starting outer loop" << std::endl;
-			logw = outer_loop(hyps, alpha, mu);
-			if (logw > logw1){
-				check = true;
-				logw1 = logw;
-				alpha1 = alpha;
-				mu1 = mu;
+				std::cout << "Starting outer loop" << std::endl;
+				logw_i = outer_loop(hyps, alpha, mu);
+				if (logw_i > logw1){
+					check = true;
+					logw1 = logw_i;
+					alpha1 = alpha;
+					mu1 = mu;
+				}
 			}
 		}
 
-		if(!check){
+		if(initialize_params_default && !check){
 			throw std::runtime_error("ERROR: No valid common starting points found.");
 		}
 
@@ -314,10 +329,10 @@ class vbayes {
 			alpha = alpha1;
 			mu = mu1;
 
-			logw = outer_loop(hyps, alpha, mu);
+			logw_i = outer_loop(hyps, alpha, mu);
 
 			// Compute unnormalised importance weights
-			weights[ii] = logw / probs_grid(ii,0);
+			logw[ii] = logw_i / probs_grid(ii,0);
 
 			// Save optimised alpha / mu
 			alpha_i[ii] = alpha;
@@ -327,11 +342,11 @@ class vbayes {
 		// Normalise importance weights
 		double my_sum;
 		for (int ii = 0; ii < n_grid; ii++){
-			my_sum += weights[ii];
+			my_sum += logw[ii];
 		}
 
 		for (int ii = 0; ii < n_grid; ii++){
-			weights[ii] /= my_sum;
+			weights[ii] = logw[ii] / my_sum;
 		}
 
 		// Average alpha + mu over hyperparams
@@ -350,7 +365,7 @@ class vbayes {
 	void write_to_file( std::string ofile ){
 		std::string gz_str = ".gz";
 		std::size_t pos = ofile.rfind(".");
-		std::string ofile_hyps = ofile.substr(0, --pos) + "_hyps." + ofile.substr(++(++pos), ofile.length());
+		std::string ofile_hyps = ofile.substr(0, pos) + "_hyps." + ofile.substr(++pos, ofile.length());
 		std::cout << "Writing posterior PIP and beta probabilities to " << ofile << std::endl;
 		std::cout << "Writing posterior hyperparameter probabilities to " << ofile_hyps << std::endl;
 
@@ -365,12 +380,13 @@ class vbayes {
 
 		outf << "post_alpha post_mu post_beta" << std::endl;
 		for (int kk = 0; kk < n_var; kk++){
-			outf << alpha_av[kk] << " " << mu_av[kk] << std::endl;
+			outf << alpha_av[kk] << " " << mu_av[kk] << " ";
+ 			outf << beta_av[kk] << std::endl;
 		}
 
-		outf_hyps << "post_hyps" << std::endl;
+		outf_hyps << "weights logw" << std::endl;
 		for (int ii = 0; ii < n_grid; ii++){
-			outf_hyps << weights[ii] << std::endl;
+			outf_hyps << weights[ii] << " " << logw[ii] << std::endl;
 		}
 	}
 };

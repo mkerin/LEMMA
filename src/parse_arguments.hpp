@@ -64,7 +64,9 @@ void parse_arguments(parameters &p, int argc, char *argv[]) {
 		"--no_geno_check",
 		"--genetic_confounders",
 		"--hyps_grid",
-		"--hyps_probs"
+		"--hyps_probs",
+		"--alpha_init",
+		"--mu_init"
 	};
 
 	std::set<std::string>::iterator set_it;
@@ -185,6 +187,20 @@ void parse_arguments(parameters &p, int argc, char *argv[]) {
 				check_counts(in_str, i, 1, argc);
 				p.hyps_probs_file = argv[i + 1]; // covar file
 				check_file_exists(p.hyps_probs_file);
+				i += 1;
+			}
+
+			if(strcmp(in_str, "--mu_init") == 0) {
+				check_counts(in_str, i, 1, argc);
+				p.mu_file = argv[i + 1]; // covar file
+				check_file_exists(p.mu_file);
+				i += 1;
+			}
+
+			if(strcmp(in_str, "--alpha_init") == 0) {
+				check_counts(in_str, i, 1, argc);
+				p.alpha_file = argv[i + 1]; // covar file
+				check_file_exists(p.alpha_file);
 				i += 1;
 			}
 
