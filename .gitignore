@@ -3,9 +3,15 @@ build/*
 lib/*
 3rd_party/*
 archive/*
+src/tools/*
+data/*
 
 # Ignore any executables
 bin/*
 
 # garbage files
 *.gch
+.Rproj.user
+.Rhistory
+*.Rproj
+
