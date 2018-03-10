@@ -18,6 +18,7 @@
 #include "genfile/bgen/View.hpp"
 #include "bgen_parser.hpp"
 #include "vbayes.hpp"
+#include "vbayes_x.hpp"
 #include "version.h"
 
 void read_directory(const std::string& name, std::vector<std::string>& v);
@@ -150,27 +151,49 @@ int main( int argc, char** argv ) {
 			// Read in phenotypes
 			Data.read_pheno();
 
+			// Read in covariates if present
+			if(p.covar_file != "NULL"){
+				Data.read_covar();
+			}
+
 			// Read in all genetic data
 			Data.params.chunk_size = Data.bgenView->number_of_variants();
 			Data.read_bgen_chunk();
+
+			// Regress out covariates if present
+			if(p.covar_file != "NULL"){
+				Data.regress_covars();
+			}
 
 			// Read in grids for importance sampling
 			Data.read_grids();
 
 			// Read starting point for VB approximation if provided
-			if(p.alpha_file != "NULL" && p.mu_file != "NULL"){
+			if(p.vb_init_file != "NULL"){
 				Data.read_alpha_mu();
 			}
 
 			// Pass data to VBayes object
-			vbayes VB(Data);
-			VB.check_inputs();
+			if(p.interaction_analysis){
+				vbayes_x VB(Data);
 
-			// Run inference
-			std::cout << "Starting to run variational inference" << std::endl;
-			VB.run();
+				VB.check_inputs();
+				VB.output_init();
 
-			VB.write_to_file( p.out_file );
+				// Run inference
+				std::cout << "Starting to run variational inference" << std::endl;
+				VB.run();
+				VB.output_results();
+			} else {
+				vbayes VB(Data);
+
+				VB.check_inputs();
+
+				// Run inference
+				std::cout << "Starting to run variational inference" << std::endl;
+				VB.run();
+				VB.write_to_file( p.out_file );
+			}
 		}
 
 		if (p.mode_vcf){

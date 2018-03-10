@@ -66,7 +66,8 @@ void parse_arguments(parameters &p, int argc, char *argv[]) {
 		"--hyps_grid",
 		"--hyps_probs",
 		"--alpha_init",
-		"--mu_init"
+		"--mu_init",
+		"--verbose",
 	};
 
 	std::set<std::string>::iterator set_it;
@@ -137,6 +138,11 @@ void parse_arguments(parameters &p, int argc, char *argv[]) {
 				i += 0;
 			}
 
+			if(strcmp(in_str, "--verbose") == 0) {
+				p.verbose = true;
+				i += 0;
+			}
+
 			// Data inputs
 			if(strcmp(in_str, "--bgen") == 0) {
 				check_counts(in_str, i, 1, argc);
@@ -190,17 +196,10 @@ void parse_arguments(parameters &p, int argc, char *argv[]) {
 				i += 1;
 			}
 
-			if(strcmp(in_str, "--mu_init") == 0) {
+			if(strcmp(in_str, "--vb_init") == 0) {
 				check_counts(in_str, i, 1, argc);
-				p.mu_file = argv[i + 1]; // covar file
-				check_file_exists(p.mu_file);
-				i += 1;
-			}
-
-			if(strcmp(in_str, "--alpha_init") == 0) {
-				check_counts(in_str, i, 1, argc);
-				p.alpha_file = argv[i + 1]; // covar file
-				check_file_exists(p.alpha_file);
+				p.vb_init_file = argv[i + 1]; // covar file
+				check_file_exists(p.vb_init_file);
 				i += 1;
 			}
 
@@ -276,6 +275,7 @@ void parse_arguments(parameters &p, int argc, char *argv[]) {
 
 			if(strcmp(in_str, "--interaction") == 0) {
 				check_counts(in_str, i, 1, argc);
+				p.interaction_analysis = true;
 				p.x_param_name = argv[i + 1]; // include sample ids file
 				i += 1;
 			}
@@ -389,12 +389,14 @@ void parse_arguments(parameters &p, int argc, char *argv[]) {
 			std::exit(EXIT_FAILURE);
 		}
 		bool has_hyps = p.hyps_grid_file != "NULL";
-		bool has_import_sampling = p.hyps_probs_file != "NULL";
-		bool has_grids = (has_hyps && has_import_sampling);
-		if(!has_grids){
-			std::cout << "ERROR: search grids for hyperparameter values and ";
-			std::cout << "densities should be provided in conjunction with --mode_vb." << std::endl;
+		if(!has_hyps){
+			std::cout << "ERROR: search grids for hyperparameter values";
+			std::cout << "should be provided in conjunction with --mode_vb." << std::endl;
 			std::exit(EXIT_FAILURE);
+		}
+
+		if(p.interaction_analysis && p.covar_file == "NULL"){
+			throw std::runtime_error("ERROR: --covar must be provided if --interaction analysis is being run.");
 		}
 	}
 	if(!p.mode_vb){

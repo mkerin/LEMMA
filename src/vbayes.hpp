@@ -7,6 +7,7 @@
 #include <limits>
 #include <random>
 #include "data.hpp"
+#include "utils.hpp"
 #include "tools/eigen3.3/Dense"
 #include "tools/eigen3.3/Sparse"
 #include "tools/eigen3.3/Eigenvalues"
@@ -15,10 +16,10 @@
 #include <boost/iostreams/filter/gzip.hpp>
 
 
-inline double sigmoid(double x);
-inline double int_klbeta(Eigen::VectorXd alpha,
-						 Eigen::VectorXd mu, 
-						 std::vector< double > s_sq,
+// inline double sigmoid(double x);
+inline double int_klbeta(const Eigen::Ref<const Eigen::VectorXd>& alpha,
+						 const Eigen::Ref<const Eigen::VectorXd>& mu, 
+						 const std::vector< double >& s_sq,
 						 double var,
 						 int n_var,
 						 double eps);
@@ -32,43 +33,42 @@ class vbayes {
 	// https://projecteuclid.org/euclid.ba/1339616726
 
 	public:
-	int n_grid; // size of grid
-
-	double n_samples;  // TODO: check type is appropriate
-	std::size_t n_var;
-	double PI = 3.1415926535897;
 	int iter_max = 1000;
+	double PI = 3.1415926535897;
 	double diff_tol = 1e-4;
 	double eps = std::numeric_limits<double>::min();
 
-	Eigen::MatrixXd X;     // dosage matrix - reference variable!
-	Eigen::MatrixXd Y;     // residual phenotype matrix - reference variable!
-	Eigen::VectorXd dXtX;  // diagonal of X^T * X
+
+	int n_grid;            // size of hyperparameter grid
+	double n_samples;
+	std::size_t n_var;
+	int sigma_ind;
+	int sig_b_ind;
+	int pi_ind;
+
+	Eigen::MatrixXd X;          // dosage matrix
+	Eigen::MatrixXd Y;          // residual phenotype matrix
+	Eigen::VectorXd dXtX;       // diagonal of X^T * X
 	Eigen::MatrixXd Xty;
-	Eigen::VectorXd rr;    // column vector of elements rr[kk] = alpha[kk]mu[kk]
+	Eigen::VectorXd rr;         // column vector of elements rr[kk] = alpha[kk]mu[kk]
 	Eigen::MatrixXd hyps_grid;
 	Eigen::MatrixXd probs_grid; // prob of each point in grid under hyps
 
-	// Stores values of alpha / mu over importance sampling grid
+	std::vector< int > fwd_pass;
+	std::vector< int > back_pass;
+	bool initialize_params_default;
+
+	// Optimal alpha & mu for each point in importance sampling grid
 	std::vector< Eigen::VectorXd > alpha_i;
 	std::vector< Eigen::VectorXd > mu_i;
 
-	// Initial values of alpha & mu for second round of optimisation
+	// Optimal init of alpha & mu for variational approximation
 	Eigen::VectorXd alpha1, mu1;
-
-	std::vector< int > fwd_pass;
-	std::vector< int > back_pass;
 
 	// posteriors
 	std::vector< double > weights;
 	std::vector< double > logw;
 	std::vector< double > alpha_av, mu_av, beta_av;
-
-	bool initialize_params_default;
-
-	int sigma_ind;
-	int sig_b_ind;
-	int pi_ind;
 
 	vbayes( data& dat ) : X( dat.G ),
  						  Y( dat.Y ) {
@@ -76,9 +76,9 @@ class vbayes {
 		sig_b_ind = 1;
 		pi_ind = 2;
 		std::vector< std::string > hyps_names;
-		hyps_names.push_back("sigma_e");
+		hyps_names.push_back("sigma");
 		hyps_names.push_back("sigma_b");
-		hyps_names.push_back("pi");
+		hyps_names.push_back("lambda_b");
 		assert(dat.hyps_names == hyps_names);
 
 		// Data size params
@@ -92,7 +92,7 @@ class vbayes {
 		Xty = X.transpose() * Y;
 
 		// non random initialisation
-		if(dat.params.alpha_file != "NULL" && dat.params.mu_file != "NULL"){
+		if(dat.params.vb_init_file != "NULL"){
 			alpha1 = dat.alpha_init;
 			mu1 = dat.mu_init;
 			initialize_params_default = false;
@@ -124,16 +124,20 @@ class vbayes {
 		}
 	}
 
-	void random_alpha_mu(Eigen::VectorXd& alpha,
-					   Eigen::VectorXd& mu){
+	// Resizes and writes to alpha & mu
+	void random_alpha_mu(Eigen::Ref<Eigen::VectorXd> alpha,
+						 Eigen::Ref<Eigen::VectorXd> mu){
+		// Writes to alpha & mu
+		// NB: Also resizes alpha & mu
+
 		std::default_random_engine gen_gauss, gen_unif;
 		std::normal_distribution<double> gaussian(0.0,1.0);
 		std::uniform_real_distribution<double> uniform(0.0,1.0);
 		double my_sum = 0;
 
 		// Check alpha / mu are correct size
-		alpha.resize(n_var);
-		mu.resize(n_var);
+		assert(alpha.rows() == n_var);
+		assert(mu.rows() == n_var);
 
 		// Random initialisation of alpha, mu
 		for (int kk = 0; kk < n_var; kk++){
@@ -148,11 +152,12 @@ class vbayes {
 		}
 	}
 
-	void inner_loop_update(Eigen::RowVectorXd hyps, 
-					Eigen::VectorXd& alpha,
-					Eigen::VectorXd& mu,
-					Eigen::VectorXd& Xr,
-					std::vector< int > iter){
+	// Writes to alpha, mu and Xr
+	void inner_loop_update(Eigen::Ref<Eigen::VectorXd> alpha,
+						   Eigen::Ref<Eigen::VectorXd> mu,
+						   Eigen::Ref<Eigen::VectorXd> Xr,
+						   const Eigen::Ref<const Eigen::RowVectorXd> hyps, 
+						   const std::vector< int >& iter){
 		// Inner loop as described in Carbonetto & Stephens Fig 1
 		// alpha & mu passed by reference.
 		// 
@@ -184,10 +189,11 @@ class vbayes {
 		}
 	}
 
+	// Takes only const parameters
 	double calc_logw(double sigma, double sigmab, double pi,
-				   std::vector< double > s_sq,
-				   Eigen::VectorXd& alpha,
-				   Eigen::VectorXd& mu){
+				   const std::vector< double >& s_sq,
+				   const Eigen::Ref<const Eigen::VectorXd>& alpha,
+				   const Eigen::Ref<const Eigen::VectorXd>& mu){
 		// Uses dXtX, X and Y from class namespace
 		double res = 0.0;
 		assert(mu.rows() == n_var);
@@ -222,9 +228,10 @@ class vbayes {
 		return res;
 	}
 
-	double outer_loop(Eigen::RowVectorXd hyps,
-					Eigen::VectorXd alpha,
-					Eigen::VectorXd mu){
+	// Returns logw and writes to alpha & mu
+	double outer_loop(const Eigen::Ref<const Eigen::RowVectorXd> hyps,
+					  Eigen::Ref<Eigen::VectorXd> alpha,
+					  Eigen::Ref<Eigen::VectorXd> mu){
 		int cnt;
 		std::vector< double > s_sq(n_var, 0);
 		std::vector< int > iter;
@@ -257,7 +264,7 @@ class vbayes {
 			}
 
 			// Variational inference; update alpha, beta, Xr
-			inner_loop_update(hyps, alpha, mu, Xr, iter);
+			inner_loop_update(alpha, mu, Xr, hyps, iter);
 
 			// Break maximum change in mixing coefficients is less than some
 			// tolerance.
@@ -289,6 +296,8 @@ class vbayes {
 		rr.resize(n_var);
 		alpha_i.resize(n_grid);
 		mu_i.resize(n_grid);
+		alpha.resize(n_var);
+		mu.resize(n_var);
 
 		// Initialise forward & backward pass vectors
 		for(int kk = 0; kk < n_var; kk++){
@@ -329,10 +338,9 @@ class vbayes {
 			alpha = alpha1;
 			mu = mu1;
 
-			logw_i = outer_loop(hyps, alpha, mu);
-
 			// Compute unnormalised importance weights
-			logw[ii] = logw_i / probs_grid(ii,0);
+			logw_i = outer_loop(hyps, alpha, mu);
+			logw[ii] = logw_i;
 
 			// Save optimised alpha / mu
 			alpha_i[ii] = alpha;
@@ -340,13 +348,24 @@ class vbayes {
 		}
 
 		// Normalise importance weights
-		double my_sum;
+		double max_elem, my_sum = 0;
+
 		for (int ii = 0; ii < n_grid; ii++){
-			my_sum += logw[ii];
+			weights[ii] = logw[ii] - std::log(probs_grid(ii,0));
+		}
+
+		max_elem = *std::max_element(weights.begin(), weights.end());
+
+		for (int ii = 0; ii < n_grid; ii++){
+			weights[ii] = std::exp(logw[ii] - max_elem);
 		}
 
 		for (int ii = 0; ii < n_grid; ii++){
-			weights[ii] = logw[ii] / my_sum;
+			my_sum += weights[ii];
+		}
+
+		for (int ii = 0; ii < n_grid; ii++){
+			weights[ii] /= my_sum;
 		}
 
 		// Average alpha + mu over hyperparams
@@ -391,13 +410,13 @@ class vbayes {
 	}
 };
 
-inline double sigmoid(double x){
-	return 1.0 / (1.0 + std::exp(-x));
-}
+// inline double sigmoid(double x){
+// 	return 1.0 / (1.0 + std::exp(-x));
+// }
 
-inline double int_klbeta(Eigen::VectorXd alpha,
-						 Eigen::VectorXd mu, 
-						 std::vector< double > s_sq,
+inline double int_klbeta(const Eigen::Ref<const Eigen::VectorXd>& alpha,
+						 const Eigen::Ref<const Eigen::VectorXd>& mu, 
+						 const std::vector< double >& s_sq,
 						 double var,
 						 int n_var,
 						 double eps){

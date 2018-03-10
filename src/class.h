@@ -10,13 +10,13 @@ class parameters {
 	public :
 		std::string bgen_file, chr, out_file, pheno_file, covar_file, bgi_file;
 		std::string incl_sids_file, x_param_name, incl_rsids_file;
-		std::string hyps_grid_file, hyps_probs_file, alpha_file, mu_file;
+		std::string hyps_grid_file, hyps_probs_file, vb_init_file;
 		std::vector< std::string > rsid;
 		int chunk_size, missing_code, n_gconf;
 		uint32_t start, end;
 		bool range, maf_lim, info_lim, mode_vcf, mode_lm, test_2dof, select_snps;
 		bool geno_check, mode_joint_model, bgen_wildcard, mode_lm2, mode_vb;
-		bool select_rsid;
+		bool select_rsid, interaction_analysis, verbose;
 		double min_maf, min_info;
 		std::vector < std::string > incl_sample_ids, gconf;
 	
@@ -30,11 +30,11 @@ class parameters {
 		out_file = "NULL";
 		hyps_grid_file = "NULL";
 		hyps_probs_file = "NULL";
-		alpha_file = "NULL";
-		mu_file = "NULL";
+		vb_init_file = "NULL";
 		incl_sids_file = "NULL";
 		incl_rsids_file = "NULL";
 		x_param_name = "NULL";
+		interaction_analysis = false;
 		chunk_size = 256;
 		missing_code = -999;
 		range = false;
@@ -49,6 +49,7 @@ class parameters {
 		select_snps = false;
 		select_rsid = false;
 		geno_check = true; // check allele probs sum to 1 by default
+		verbose = false;
 	}
 
 	~parameters() {

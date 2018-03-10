@@ -739,46 +739,58 @@ class data
 			throw std::invalid_argument( "Tried to read NULL hyperparameter grid file." );
 		}
 		if ( params.hyps_probs_file != "NULL" ) {
+			std::cout << "Hyperparameter densities file detected." << std::endl;
 			read_grid_file( params.hyps_probs_file, imprt_grid, imprt_names );
-		} else {
-			throw std::invalid_argument( "Tried to read NULL importance sampling grid file." );
+
+			assert(imprt_grid.cols() == 1);
+			assert(hyps_grid.rows() == imprt_grid.rows());
 		}
 
-		assert(hyps_grid.rows() == imprt_grid.rows());
-		assert(imprt_grid.cols() == 1);
+		std::vector< std::string > fixed_hyps_names, gxage_hyps_names;
 
-		std::vector< std::string > fixed_hyps_names;
-		fixed_hyps_names.push_back("sigma_e");
+		fixed_hyps_names.push_back("sigma");
 		fixed_hyps_names.push_back("sigma_b");
-		fixed_hyps_names.push_back("pi");
-		if(hyps_names != fixed_hyps_names){
-			throw std::runtime_error("Column names of --hyps_grid must be sigma_e sigma_b pi");
+		fixed_hyps_names.push_back("lambda_b");
+
+		gxage_hyps_names.push_back("sigma");
+		gxage_hyps_names.push_back("sigma_b");
+		gxage_hyps_names.push_back("sigma_g");
+		gxage_hyps_names.push_back("lambda_b");
+		gxage_hyps_names.push_back("lambda_g");
+
+		if(params.interaction_analysis){
+			if(hyps_names != gxage_hyps_names){
+				throw std::runtime_error("Column names of --hyps_grid must be sigma_e sigma_b sigma_gam lambda_b lambda_gam");
+			}
+		} else {
+			if(hyps_names != fixed_hyps_names){
+				throw std::runtime_error("Column names of --hyps_grid must be sigma_e sigma_b lambda");
+			}
 		}
+
 	}
 
 	void read_alpha_mu(){
 		// For use in vbayes object
-		Eigen::MatrixXd alpha_mat, mu_mat;
+		Eigen::MatrixXd vb_init_mat;
 
-		std::vector< std::string > placeholder;
-		if ( params.alpha_file != "NULL" ) {
+		std::vector< std::string > vb_init_colnames, cols_check;
+		cols_check.push_back("alpha");
+		cols_check.push_back("mu");
+		if ( params.vb_init_file != "NULL" ) {
 			std::cout << "Reading initialisation for alpha from file" << std::endl;
-			read_grid_file( params.alpha_file, alpha_mat, placeholder );
-			assert(alpha_mat.cols() == 1);
-			assert(alpha_mat.rows() == n_var);
-			alpha_init = Eigen::Map<Eigen::VectorXd>(alpha_mat.data(), alpha_mat.cols()*alpha_mat.rows());
+			read_grid_file( params.vb_init_file, vb_init_mat, vb_init_colnames );
+
+			assert(vb_init_mat.cols() == 2);
+			assert(vb_init_mat.rows() == n_var || vb_init_mat.rows() == 2*n_var);
+			assert(vb_init_colnames == cols_check);
+
+			alpha_init = Eigen::Map<Eigen::VectorXd>(vb_init_mat.col(0).data(), vb_init_mat.rows());
+			mu_init = Eigen::Map<Eigen::VectorXd>(vb_init_mat.col(1).data(), vb_init_mat.rows());
 		} else {
-			throw std::invalid_argument( "Tried to read NULL --alpha_init file." );
+			throw std::invalid_argument( "Tried to read NULL --vb_init file." );
 		}
-		if ( params.mu_file != "NULL" ) {
-			std::cout << "Reading initialisation for mu from file" << std::endl;
-			read_grid_file( params.mu_file, mu_mat, placeholder );
-			assert(mu_mat.cols() == 1);
-			assert(mu_mat.rows() == n_var);
-			mu_init = Eigen::Map<Eigen::VectorXd>(mu_mat.data(), mu_mat.cols()*mu_mat.rows());
-		} else {
-			throw std::invalid_argument( "Tried to read NULL --mu_init file." );
-		}
+
 	}
 
 	void reduce_mat_to_complete_cases( Eigen::MatrixXd& M, 

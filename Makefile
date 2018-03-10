@@ -9,7 +9,7 @@ LIBS =     -Lbuild/ -Lbuild/3rd_party/zstd-1.1.0 -Lbuild/db -Lbuild/3rd_party/sq
            -Lbuild/3rd_party/boost_1_55_0
 FLAGS = -g3 -std=c++11 -Wno-deprecated $(LIBS) $(INCLUDES)
 
-HEADERS := parse_arguments.hpp data.hpp class.h bgen_parser.hpp vbayes.hpp
+HEADERS := parse_arguments.hpp data.hpp class.h bgen_parser.hpp vbayes.hpp vbayes_x.hpp utils.hpp
 HEADERS := $(addprefix $(SRCDIR)/,$(HEADERS))
 
 rescomp: CXX = /apps/well/gcc/7.2.0/bin/g++
@@ -151,19 +151,21 @@ data/io_test/t7_varbvs_sub/attempt.out: data/io_test/t7_varbvs_sub/n500_p1000.bg
 	    --alpha_init $(dir $@)alpha_init.txt \
 	    --mu_init $(dir $@)mu_init.txt \
 	    --out $@
-	$(RSCRIPT) R/plot_vbayes_pip.R $@ $(dir $@)plots/pip_$(notdir $(basename $@)).pdf
+	$(RSCRIPT) R/plot_vbayes_pip.R $@ $(dir $@)plots/t7_pip_$(notdir $(basename $@)).pdf
 	diff $(dir $@)answer.out $@
 
 # comparison with the varbvs R package
-data/io_test/t8_varbvs/attempt.out: data/io_test/t7_varbvs/n500_p1000.bgen ./bin/bgen_prog
+data/io_test/t8_varbvs/attempt.out: data/io_test/t8_varbvs/n500_p1000.bgen ./bin/bgen_prog
 	./bin/bgen_prog --mode_vb \
 	    --bgen $< \
 	    --pheno $(dir $@)pheno.txt \
 	    --hyps_grid $(dir $@)hyperpriors_grid.txt \
 	    --hyps_probs $(dir $@)hyperpriors_probs.txt \
+	    --alpha_init $(dir $@)alpha_init.txt \
+	    --mu_init $(dir $@)mu_init.txt \
 	    --out $@
-	$(RSCRIPT) R/plot_vbayes_pip.R $@ $(dir $@)plots/pip_$(notdir $(basename $@)).pdf
-	diff $(dir $@)answer.out $@ $(dir $@)pheno.txt
+	$(RSCRIPT) R/plot_vbayes_pip.R $@ $(dir $@)plots/t8_pip_$(notdir $(basename $@)).pdf
+	diff $(dir $@)answer.out $@
 
 # Clean dir
 cleanIO:
