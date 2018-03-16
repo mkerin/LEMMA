@@ -6,9 +6,14 @@
 #include <cstdint>    // uint32_t
 #include <iostream>
 #include <limits>
+#include <random>
 #include "class.h"
+#include "data.hpp"
 #include "utils.hpp"  // sigmoid
 #include "tools/eigen3.3/Dense"
+#include <boost/iostreams/filtering_stream.hpp>
+#include <boost/iostreams/device/file.hpp>
+#include <boost/iostreams/filter/gzip.hpp>
 
 inline std::size_t find_covar_index( std::string colname, std::vector< std::string > col_names );
 
@@ -358,7 +363,7 @@ public:
 			if (kk < n_var){
 				i_Hr = i_Hr + (i_alpha(kk)*i_mu(kk) - rr_k) * X.col(kk);
 			} else {
-				i_Hr = i_Hr + (i_alpha(kk)*i_mu(kk) - rr_k) * X.col(kk - n_var).cwiseProduct(aa);
+				i_Hr = i_Hr + (i_alpha(kk)*i_mu(kk) - rr_k) * (X.col(kk - n_var).cwiseProduct(aa));
 			}
 		}
 	}
