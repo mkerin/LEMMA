@@ -107,23 +107,6 @@ public:
 		n_grid =         dat.hyps_grid.rows();
 		print_interval = std::max(1, n_grid / 10);
 
-		// non random initialisation
-		if(p.vb_init_file != "NULL"){
-			alpha_init         = dat.alpha_init;
-			mu_init            = dat.mu_init;
-			random_params_init = false;
-		} else {
-			random_params_init = true;
-		}
-
-		// Set covariable vector aa
-		if(p.x_param_name != "NULL"){
-			std::size_t x_col = find_covar_index(p.x_param_name, dat.covar_names);
-			aa                = dat.W.col(x_col);
-		} else {
-			aa                = dat.W.col(0);
-		}
-
 		// Allocate memory - vb
 		alpha_init.resize(n_var2);
 		mu_init.resize(n_var2);
@@ -144,6 +127,26 @@ public:
 		// Allocate memory - genetic
 		Hty.resize(n_var2);
 		dHtH.resize(n_var2);
+
+		// Set covariable vector aa
+		if(p.x_param_name != "NULL"){
+			std::size_t x_col = find_covar_index(p.x_param_name, dat.covar_names);
+			aa                = dat.W.col(x_col);
+		} else {
+			aa                = dat.W.col(0);
+		}
+
+		// non random initialisation
+		if(p.vb_init_file != "NULL"){
+			alpha_init         = dat.alpha_init;
+			mu_init            = dat.mu_init;
+			// Gen Hr_init
+			Eigen::VectorXd rr = alpha_init.cwiseProduct(mu_init);
+			Hr_init << (X * rr.segment(0, n_var) + (X * rr.segment(n_var, n_var)).cwiseProduct(aa));
+			random_params_init = false;
+		} else {
+			random_params_init = true;
+		}
 
 		// Assign data - genetic
 		probs_grid             = dat.imprt_grid;
@@ -203,6 +206,9 @@ public:
 			}
 			alpha_init = alpha1;
 			mu_init = mu1;
+			// gen Hr_init
+			Eigen::VectorXd rr = alpha_init.cwiseProduct(mu_init);
+			Hr_init << (X * rr.segment(0, n_var) + (X * rr.segment(n_var, n_var)).cwiseProduct(aa));
 
 			if(init_not_set){
 				throw std::runtime_error("No valid start points found (elbo estimates all non-finite?).");
@@ -413,7 +419,7 @@ public:
 			alpha_init(kk) /= my_sum;
 		}
 
-		// Could reduce matrix multiplication by making alpha and mu inits symmetric.
+		// Gen Hr; Could reduce matrix multiplication by making alpha and mu inits symmetric.
 		Eigen::VectorXd rr = alpha_init.cwiseProduct(mu_init);
 		Hr_init << (X * rr.segment(0, n_var) + (X * rr.segment(n_var, n_var)).cwiseProduct(aa));
 	}
@@ -460,6 +466,10 @@ public:
 
 		res = int_linear + int_gamma + int_klbeta;
 		return res;
+	}
+
+	void dump_calc_logw(double int_linear, double int_gamma, double int_klbeta){
+		// For use in debugging only
 	}
 
 	void output_init(){
