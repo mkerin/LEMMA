@@ -439,7 +439,7 @@ public:
 		}
 
 		// kl-beta
-		double var_b = i_sigma * i_sigma_g, var_g = i_sigma * i_sigma_g;
+		double var_b = i_sigma * i_sigma_b, var_g = i_sigma * i_sigma_g;
 		for (std::uint32_t kk = 0; kk < n_var; kk++){
 			int_klbeta += i_alpha(kk) * (1.0 + std::log(i_s_sq[kk] / var_b + eps) -
 								(i_s_sq[kk] + i_mu(kk) * i_mu(kk)) / var_b) / 2.0;
