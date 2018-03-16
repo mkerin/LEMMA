@@ -18,7 +18,7 @@
 #include "genfile/bgen/View.hpp"
 #include "bgen_parser.hpp"
 #include "vbayes.hpp"
-#include "vbayes_x.hpp"
+#include "vbayes_x2.hpp"
 #include "version.h"
 
 void read_directory(const std::string& name, std::vector<std::string>& v);
@@ -175,7 +175,7 @@ int main( int argc, char** argv ) {
 
 			// Pass data to VBayes object
 			if(p.interaction_analysis){
-				vbayes_x VB(Data);
+				VBayesX2 VB(Data);
 
 				VB.check_inputs();
 				VB.output_init();

@@ -65,8 +65,7 @@ void parse_arguments(parameters &p, int argc, char *argv[]) {
 		"--genetic_confounders",
 		"--hyps_grid",
 		"--hyps_probs",
-		"--alpha_init",
-		"--mu_init",
+		"--vb_init",
 		"--verbose",
 	};
 

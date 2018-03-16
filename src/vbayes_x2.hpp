@@ -84,6 +84,7 @@ public:
 
 	// boost fstreams
 	boost_io::filtering_ostream outf, outf_weights, outf_elbo, outf_inits;
+	boost_io::filtering_ostream outf_mus, outf_alphas;
 
 	// time monitoring
 	std::chrono::system_clock::time_point time_check;
@@ -99,7 +100,7 @@ public:
 		n_var2 =         2 * dat.n_var;
 		n_samples =      dat.n_samples;
 		n_grid =         dat.hyps_grid.rows();
-		print_interval = n_grid / 10;
+		print_interval = std::max(1, n_grid / 10);
 
 		// non random initialisation
 		if(p.vb_init_file != "NULL"){
@@ -121,11 +122,23 @@ public:
 		// Allocate memory - vb
 		alpha_init.resize(n_var2);
 		mu_init.resize(n_var2);
-		Hr_init.resize(n_var2);
+		Hr_init.resize(n_samples);
+		i_s_sq.resize(n_var2);
+		for(std::uint32_t kk = 0; kk < n_var2; kk++){
+			fwd_pass.push_back(kk);
+			back_pass.push_back(n_var2 - kk - 1);
+		}
+
+		// Reserve memory for trackers
+		counts_list.reserve(n_grid);              // Number of iterations to convergence at each step
+		logw_updates_list.reserve(n_grid);        // elbo updates at each ii
+		mu_list.reserve(n_grid);                  // best mu at each ii
+		alpha_list.reserve(n_grid);               // best alpha at each ii
+		logw_list.reserve(n_grid);                // best logw at each ii
 
 		// Allocate memory - genetic
 		Hty.resize(n_var2);
-		Hty.resize(n_var2);
+		dHtH.resize(n_var2);
 
 		// Assign data - genetic
 		probs_grid             = dat.imprt_grid;
@@ -155,6 +168,7 @@ public:
 		// Round 1; looking for best start point
 		if(random_params_init){
 			double logw_best = -std::numeric_limits<double>::max();
+			bool init_not_set = true;
 			Eigen::VectorXd mu1, alpha1;
 			for (int ii = 0; ii < n_grid; ii++){
 				if(ii % print_interval == 0){
@@ -179,10 +193,15 @@ public:
 					alpha1    = alpha_init;
 					mu1       = mu_init;
 					logw_best = i_logw;
+					init_not_set = false;
 				}
 			}
 			alpha_init = alpha1;
 			mu_init = mu1;
+
+			if(init_not_set){
+				throw std::runtime_error("No valid start points found (elbo estimates all non-finite?).");
+			}
 
 			// Write inits to file
 			for (std::uint32_t kk = 0; kk < n_var2; kk++){
@@ -209,16 +228,21 @@ public:
 		}
 
 		// Compute normalised weights using finite elbo
-		for (int ii = 0; ii < n_grid; ii++){
-			weights[ii] = logw_list[ii] + std::log(probs_grid(ii,0) + eps);
+		weights.resize(n_grid);
+		if(n_grid > 1){
+			for (int ii = 0; ii < n_grid; ii++){
+				weights[ii] = logw_list[ii] + std::log(probs_grid(ii,0) + eps);
+			}
+			weights = normaliseLogWeights(weights);
+		} else {
+			weights[0] = 1;
 		}
-		weights = normaliseLogWeights(weights);
 
 		// Average alpha + mu over finite weights
 		int nonfinite_count = 0;
-		post_alpha.resize(n_var2, 0.0);
-		post_mu.resize(n_var2, 0.0);
-		post_beta.resize(n_var2, 0.0);
+		post_alpha.resize(n_var2);
+		post_mu.resize(n_var2);
+		post_beta.resize(n_var2);
 		for (int ii = 0; ii < n_grid; ii++){
 			if(std::isfinite(weights[ii])){
 				for (std::uint32_t kk = 0; kk < n_var2; kk++){
@@ -270,11 +294,13 @@ public:
 				iter = back_pass;
 			}
 
-			// Update i_mum i_alpha, i_Hr
-			updateAlphaMu(iter);
+			// log elbo from each iteration, starting from init
 			if(p.verbose && update_trackers){
 				logw_updates.push_back(calc_logw());
 			}
+
+			// Update i_mum i_alpha, i_Hr
+			updateAlphaMu(iter);
 			count++;
 
 			// Diagnose convergence
@@ -296,6 +322,7 @@ public:
 			alpha_list.push_back(i_alpha);
 			mu_list.push_back(i_mu);
 			if(p.verbose){
+				logw_updates.push_back(i_logw);  // adding converged estimate
 				logw_updates_list.push_back(logw_updates);
 			}
 		}
@@ -381,8 +408,9 @@ public:
 			alpha_init(kk) /= my_sum;
 		}
 
-		Eigen::VectorXd Xr = X * (alpha_init.cwiseProduct(mu_init));
-		Hr_init << Xr, (Xr.cwiseProduct(aa));
+		// Could reduce matrix multiplication by making alpha and mu inits symmetric.
+		Eigen::VectorXd rr = alpha_init.cwiseProduct(mu_init);
+		Hr_init << (X * rr.segment(0, n_var) + (X * rr.segment(n_var, n_var)).cwiseProduct(aa));
 	}
 
 	double calc_logw(){
@@ -449,6 +477,12 @@ public:
 		if(p.verbose){
 			std::string ofile_elbo = fstream_init(outf_elbo, "_elbo.");
 			std::cout << "Writing ELBO from each VB iteration to " << ofile_elbo << std::endl;
+
+			std::string ofile_alphas = fstream_init(outf_alphas, "_alphas.");
+			std::cout << "Writing optimsed alpha from each grid point to " << ofile_alphas << std::endl;
+
+			std::string ofile_mus = fstream_init(outf_mus, "_mus.");
+			std::cout << "Writing optimsed alpha from each grid point to " << ofile_mus << std::endl;
 		}
 
 		// Headers
@@ -479,11 +513,22 @@ public:
 		}
 
 		if(p.verbose){
-			for (std::uint32_t kk = 0; kk < n_var2; kk++){
-				for (int cc = 0; cc < counts_list[kk]; cc++){
-					outf_elbo << logw_updates_list[kk][cc] << " ";
+			for (int ii = 0; ii < n_grid; ii++){
+				for (int cc = 0; cc < counts_list[ii]; cc++){
+					outf_elbo << logw_updates_list[ii][cc] << " ";
 				}
 				outf_elbo << std::endl;
+			}
+
+			// Writing optimised alpha and mu from each grid point to file
+			// 1 col per gridpoint
+			for (std::uint32_t kk = 0; kk < n_var2; kk++){
+				for (int ii = 0; ii < n_grid; ii++){
+					outf_alphas << alpha_list[ii][kk] << " ";
+					outf_mus << mu_list[ii][kk] << " ";
+				}
+				outf_alphas << std::endl;
+				outf_mus << std::endl;
 			}
 		}
 	}

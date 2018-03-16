@@ -269,7 +269,7 @@ class vbayes {
 			// Break maximum change in mixing coefficients is less than some
 			// tolerance.
 			diff = (alpha0 - alpha).cwiseAbs().maxCoeff();
-			if(diff > diff_tol){
+			if(diff < diff_tol){
 				break;
 			}
 		}

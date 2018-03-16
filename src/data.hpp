@@ -746,21 +746,12 @@ class data
 			assert(hyps_grid.rows() == imprt_grid.rows());
 		}
 
-		std::vector< std::string > fixed_hyps_names, gxage_hyps_names;
-
-		fixed_hyps_names.push_back("sigma");
-		fixed_hyps_names.push_back("sigma_b");
-		fixed_hyps_names.push_back("lambda_b");
-
-		gxage_hyps_names.push_back("sigma");
-		gxage_hyps_names.push_back("sigma_b");
-		gxage_hyps_names.push_back("sigma_g");
-		gxage_hyps_names.push_back("lambda_b");
-		gxage_hyps_names.push_back("lambda_g");
+		std::vector< std::string > fixed_hyps_names = {"sigma", "sigma_b", "lambda_b"};
+		std::vector< std::string > gxage_hyps_names = {"sigma", "sigma_b", "sigma_g", "lambda_b", "lambda_g"};
 
 		if(params.interaction_analysis){
-			if(hyps_names != gxage_hyps_names){
-				throw std::runtime_error("Column names of --hyps_grid must be sigma_e sigma_b sigma_gam lambda_b lambda_gam");
+			if(!std::includes(hyps_names.begin(), hyps_names.end(), gxage_hyps_names.begin(), gxage_hyps_names.end())){
+				throw std::runtime_error("Column names of --hyps_grid must be sigma_e sigma_b sigma_g lambda_b lambda_g");
 			}
 		} else {
 			if(hyps_names != fixed_hyps_names){
@@ -774,9 +765,9 @@ class data
 		// For use in vbayes object
 		Eigen::MatrixXd vb_init_mat;
 
-		std::vector< std::string > vb_init_colnames, cols_check;
-		cols_check.push_back("alpha");
-		cols_check.push_back("mu");
+		std::vector< std::string > vb_init_colnames;
+		std::vector< std::string > cols_check = {"alpha", "mu"};
+
 		if ( params.vb_init_file != "NULL" ) {
 			std::cout << "Reading initialisation for alpha from file" << std::endl;
 			read_grid_file( params.vb_init_file, vb_init_mat, vb_init_colnames );
