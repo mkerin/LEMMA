@@ -156,14 +156,23 @@ int main( int argc, char** argv ) {
 				Data.read_covar();
 			}
 
-			// Read in all genetic data
-			Data.params.chunk_size = Data.bgenView->number_of_variants();
-			Data.read_bgen_chunk();
+			// Step 3; Center phenos, normalise covars
+			Data.center_matrix( Data.Y, Data.n_pheno );
+			if(p.covar_file != "NULL"){
+				Data.center_matrix( Data.W, Data.n_covar );
+				Data.scale_matrix( Data.W, Data.n_covar, Data.covar_names );
+			}
 
 			// Regress out covariates if present
 			if(p.covar_file != "NULL"){
 				Data.regress_covars();
 			}
+
+			// Read in all genetic data + standardise to mean 0 var 1
+			Data.params.chunk_size = Data.bgenView->number_of_variants();
+			Data.read_bgen_chunk();
+			Data.center_matrix( Data.G, Data.n_var );
+			Data.scale_matrix_conserved( Data.G, Data.n_var );
 
 			// Read in grids for importance sampling
 			Data.read_grids();

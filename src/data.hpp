@@ -707,6 +707,32 @@ class data
 		}
 	}
 
+
+	void scale_matrix_conserved( Eigen::MatrixXd& M,
+						int& n_cols){
+		// Scale eigen matrix passed by reference.
+		// Does not remove columns with zero variance.
+		// Only call on matrixes which have been reduced to complete cases,
+		// as no check for incomplete rows.
+
+		for (int k = 0; k < n_cols; k++) {
+			double sigma = 0.0;
+			double count = 0;
+			for (int i = 0; i < n_samples; i++) {
+				double val = M(i, k);
+				sigma += val * val;
+				count += 1;
+			}
+
+			sigma = sqrt(sigma/(count - 1));
+			if (sigma > 1e-12) {  
+				for (int i = 0; i < n_samples; i++) {
+					M(i, k) /= sigma;
+				}
+			}
+		}
+	}
+
 	void read_pheno( ){
 		// Read phenotypes to Eigen matrix Y
 		if ( params.pheno_file != "NULL" ) {
