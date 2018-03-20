@@ -58,9 +58,8 @@ class data
 	int n_var;
 	std::size_t n_var_parsed; // Track progress through IndexQuery
 
-	bool G_reduced;   // Variables to track whether we have already
-	bool Y_reduced;   // reduced to complete cases or not.
-	bool W_reduced;
+	bool Y_reduced;   // Variables to track whether we have already
+	bool W_reduced;   // reduced to complete cases or not.
 
 	std::vector< double > info;
 	std::vector< double > maf;
@@ -341,7 +340,6 @@ class data
 		assert( position.size() == jj );
 		assert( alleles.size() == jj );
 		n_var = jj;
-		G_reduced = false;
 
 		// keep integer copy of genotypes for 2 dof test
 		if(params.test_2dof){
@@ -706,7 +704,6 @@ class data
 			throw std::runtime_error("ERROR: No columns left with nonzero variance after scale_matrix()");
 		}
 	}
-
 
 	void scale_matrix_conserved( Eigen::MatrixXd& M,
 						int& n_cols){

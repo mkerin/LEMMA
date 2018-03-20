@@ -153,6 +153,16 @@ public:
 		hyps_grid              = dat.hyps_grid;
 
 		Eigen::MatrixXd I_a_sq = aa.cwiseProduct(aa).asDiagonal();
+
+		// Eigen::VectorXd dXtX(n_var), dZtZ(n_var);
+		// for(std::std::uint32_t kk = 0; kk < n_var; kk++){
+		// 	dXtX(kk, kk) = X.col(kk).squaredNorm();
+		// 	dZtZ(kk, kk) = (X.col(kk).cwiseProduct(aa)).squaredNorm();
+		// }
+		// dHtH                   << dXtX, dZtZ;
+		// // Avoid calling X.tranpose()
+		// Hty                    << ( (Y.transpose() * X).tranpose(), (Y.cwiseProduct(aa).transpose() * X).tranpose() );
+
 		Eigen::VectorXd dXtX   = (X.transpose() * X).diagonal();
 		Eigen::VectorXd dZtZ   = (X.transpose() * I_a_sq * X).diagonal();
 		dHtH                   << dXtX, dZtZ;

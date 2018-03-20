@@ -7,14 +7,18 @@ INCLUDES = -Ibuild/genfile/include/ -I3rd_party/zstd-1.1.0/lib/ \
            -Ibuild/db/include/ -I3rd_party/sqlite3 -I3rd_party/boost_1_55_0
 LIBS =     -Lbuild/ -Lbuild/3rd_party/zstd-1.1.0 -Lbuild/db -Lbuild/3rd_party/sqlite3 \
            -Lbuild/3rd_party/boost_1_55_0
-FLAGS = -g3 -std=c++11 -Wno-deprecated $(LIBS) $(INCLUDES)
+FLAGS = -std=c++11 -Wno-deprecated $(LIBS) $(INCLUDES)
 
 HEADERS := parse_arguments.hpp data.hpp class.h bgen_parser.hpp vbayes.hpp vbayes_x.hpp utils.hpp vbayes_x2.hpp
 HEADERS := $(addprefix $(SRCDIR)/,$(HEADERS))
 
 rescomp: CXX = /apps/well/gcc/7.2.0/bin/g++
-rescomp: FLAGS += -lbgen -ldb -lsqlite3 -lboost -lz -ldl -lrt -lpthread -lzstd
+rescomp: FLAGS += -O3 -lbgen -ldb -lsqlite3 -lboost -lz -ldl -lrt -lpthread -lzstd
 rescomp: $(TARGET)
+
+rescomp-debug: CXX = /apps/well/gcc/7.2.0/bin/g++
+rescomp-debug: FLAGS += -g3 -lbgen -ldb -lsqlite3 -lboost -lz -ldl -lrt -lpthread -lzstd
+rescomp-debug: $(TARGET)
 
 garganey: CXX = g++
 garganey: FLAGS += -lbgen -ldb -lsqlite3 -lboost -lz -ldl -lrt -lpthread -lzstd
@@ -145,26 +149,28 @@ data/io_test/t6_lm2/attempt.out: data/io_test/example.v11.bgen ./bin/bgen_prog
 data/io_test/t7_varbvs_sub/attempt.out: data/io_test/t7_varbvs_sub/n500_p1000.bgen ./bin/bgen_prog
 	./bin/bgen_prog --mode_vb \
 	    --bgen $< \
+	    --interaction x \
+	    --covar $(dir $@)age.txt \
 	    --pheno $(dir $@)pheno.txt \
-	    --hyps_grid $(dir $@)hyperpriors_grid_sub.txt \
-	    --hyps_probs $(dir $@)hyperpriors_probs_sub.txt \
-	    --alpha_init $(dir $@)alpha_init.txt \
-	    --mu_init $(dir $@)mu_init.txt \
+	    --hyps_grid $(dir $@)hyperpriors_gxage_v1.txt \
+	    --hyps_probs $(dir $@)hyperpriors_gxage_v1_probs.txt \
+	    --vb_init $(dir $@)cpp_inference_inits.out \
 	    --out $@
-	$(RSCRIPT) R/plot_vbayes_pip.R $@ $(dir $@)plots/t7_pip_$(notdir $(basename $@)).pdf
+	# $(RSCRIPT) R/plot_vbayes_pip.R $@ $(dir $@)plots/t7_pip_$(notdir $(basename $@)).pdf
 	diff $(dir $@)answer.out $@
 
 # comparison with the varbvs R package
 data/io_test/t8_varbvs/attempt.out: data/io_test/t8_varbvs/n500_p1000.bgen ./bin/bgen_prog
 	./bin/bgen_prog --mode_vb \
 	    --bgen $< \
+	    --interaction x \
+	    --covar $(dir $@)age.txt \
 	    --pheno $(dir $@)pheno.txt \
-	    --hyps_grid $(dir $@)hyperpriors_grid.txt \
-	    --hyps_probs $(dir $@)hyperpriors_probs.txt \
-	    --alpha_init $(dir $@)alpha_init.txt \
-	    --mu_init $(dir $@)mu_init.txt \
+	    --hyps_grid $(dir $@)hyperpriors_gxage_v1.txt \
+	    --hyps_probs $(dir $@)hyperpriors_gxage_v1_probs.txt \
+	    --vb_init $(dir $@)cpp_inference_inits.out \
 	    --out $@
-	$(RSCRIPT) R/plot_vbayes_pip.R $@ $(dir $@)plots/t8_pip_$(notdir $(basename $@)).pdf
+	# $(RSCRIPT) R/plot_vbayes_pip.R $@ $(dir $@)plots/t8_pip_$(notdir $(basename $@)).pdf
 	diff $(dir $@)answer.out $@
 
 # Clean dir
