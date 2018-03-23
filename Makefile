@@ -59,7 +59,7 @@ test/tests-main.o: test/tests-main.cpp $(SRCDIR)/bgen_prog.cpp $(HEADERS)
 # IO Tests
 # Files in data/out are regarded as 'true', and we check that the equivalent
 # file in data/io_test is identical after making changes to the executable.
-IOfiles := t1_range t2_lm t3_lm_two_chunks t4_lm_2dof t5_joint_model t6_lm2
+IOfiles := t1_range t2_lm t3_lm_two_chunks t4_lm_2dof t5_joint_model t6_lm2 t7_varbvs_constrained
 IOfiles := $(addprefix data/io_test/,$(addsuffix /attempt.out,$(IOfiles)))
 IOfiles += $(addprefix data/io_test/t2_lm/attempt, $(addsuffix .out,B C D))
 IOfiles += $(addprefix data/io_test/t1_range/attempt, $(addsuffix .out,B))
@@ -145,23 +145,35 @@ data/io_test/t6_lm2/attempt.out: data/io_test/example.v11.bgen ./bin/bgen_prog
 	    --out $@
 	diff $(dir $@)answer.out $@
 
-# Search over single point on hyp grid only
-data/io_test/t7_varbvs_sub/attempt.out: data/io_test/t7_varbvs_sub/n500_p1000.bgen ./bin/bgen_prog
-	./bin/bgen_prog --mode_vb \
+# When sigma_b == sigma_g and lambda_b == lambda_g then we can compare with varbvs
+t7_dir     := data/io_test/t7_varbvs_constrained
+t7_context := $(t7_dir)/hyperpriors_gxage.txt $(t7_dir)/answer.rds
+
+$(t7_dir)/hyperpriors_gxage.txt: R/test7/gen_hyps.R
+	$(RSCRIPT) $<
+
+$(t7_dir)/answer.rds: R/test7/run_VBayesR.R $(t7_dir)/hyperpriors_gxage.txt
+	$(RSCRIPT) $<
+
+data/io_test/t7_varbvs_constrained/attempt.out: $(t7_dir)/n50_p100.bgen ./bin/bgen_prog $(t7_context)
+	./bin/bgen_prog --mode_vb --verbose \
 	    --bgen $< \
 	    --interaction x \
 	    --covar $(dir $@)age.txt \
 	    --pheno $(dir $@)pheno.txt \
-	    --hyps_grid $(dir $@)hyperpriors_gxage_v1.txt \
-	    --hyps_probs $(dir $@)hyperpriors_gxage_v1_probs.txt \
-	    --vb_init $(dir $@)cpp_inference_inits.out \
+	    --hyps_grid $(dir $@)hyperpriors_gxage.txt \
+	    --hyps_probs $(dir $@)hyperpriors_gxage_probs.txt \
+	    --vb_init $(dir $@)answer_init.txt \
 	    --out $@
 	# $(RSCRIPT) R/plot_vbayes_pip.R $@ $(dir $@)plots/t7_pip_$(notdir $(basename $@)).pdf
-	diff $(dir $@)answer.out $@
+	$(RSCRIPT) R/test7/check_output.R > $(dir $@)attempt.log
+	diff $(dir $@)answer.log $(dir $@)attempt.log
+
+
 
 # comparison with the varbvs R package
 data/io_test/t8_varbvs/attempt.out: data/io_test/t8_varbvs/n500_p1000.bgen ./bin/bgen_prog
-	./bin/bgen_prog --mode_vb \
+	./bin/bgen_prog --mode_vb --verbose \
 	    --bgen $< \
 	    --interaction x \
 	    --covar $(dir $@)age.txt \

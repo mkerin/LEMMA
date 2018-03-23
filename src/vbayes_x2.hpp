@@ -367,10 +367,10 @@ public:
 
 			// Update alpha (eq 10)  TODO: check syntax / i_  / sigmoid here!
 			if (kk < n_var){
-				ff_k = std::log(i_lam_b / (1.0 - i_lam_b) + eps) + std::log(i_s_sq[kk] / i_sigma_b / i_sigma + eps);
+				ff_k = std::log(i_lam_b / (1.0 - i_lam_b) + eps) + std::log(i_s_sq[kk] / i_sigma_b / i_sigma + eps) / 2.0;
 				ff_k += i_mu(kk) * i_mu(kk) / i_s_sq[kk] / 2.0;
 			} else {
-				ff_k = std::log(i_lam_g / (1.0 - i_lam_g) + eps) + std::log(i_s_sq[kk] / i_sigma_g / i_sigma + eps);
+				ff_k = std::log(i_lam_g / (1.0 - i_lam_g) + eps) + std::log(i_s_sq[kk] / i_sigma_g / i_sigma + eps) / 2.0;
 				ff_k += i_mu(kk) * i_mu(kk) / i_s_sq[kk] / 2.0;
 			}
 			i_alpha(kk) = sigmoid(ff_k);

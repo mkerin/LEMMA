@@ -292,10 +292,10 @@ class vbayes_x {
 
 			// Update alpha (eq 10)
 			if (kk < n_var){
-				ff = std::log(lam_b / (1.0 - lam_b) + eps) + std::log(s_sq / sigma_b / sigma + eps);
+				ff = std::log(lam_b / (1.0 - lam_b) + eps) + std::log(s_sq / sigma_b / sigma + eps) / 2.0;
 				ff += mu(kk) * mu(kk) / s_sq / 2.0;
 			} else {
-				ff = std::log(lam_g / (1.0 - lam_g) + eps) + std::log(s_sq / sigma_g / sigma + eps);
+				ff = std::log(lam_g / (1.0 - lam_g) + eps) + std::log(s_sq / sigma_g / sigma + eps) / 2.0;
 				ff += mu(kk) * mu(kk) / s_sq / 2.0;
 			}
 			alpha(kk) = sigmoid(ff);
