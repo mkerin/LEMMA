@@ -148,13 +148,6 @@ data/io_test/t6_lm2/attempt.out: data/io_test/example.v11.bgen ./bin/bgen_prog
 # When sigma_b == sigma_g and lambda_b == lambda_g then we can compare with varbvs
 t7_dir     := data/io_test/t7_varbvs_constrained
 t7_context := $(t7_dir)/hyperpriors_gxage.txt $(t7_dir)/answer.rds
-
-$(t7_dir)/hyperpriors_gxage.txt: R/test7/gen_hyps.R
-	$(RSCRIPT) $<
-
-$(t7_dir)/answer.rds: R/test7/run_VBayesR.R $(t7_dir)/hyperpriors_gxage.txt
-	$(RSCRIPT) $<
-
 data/io_test/t7_varbvs_constrained/attempt.out: $(t7_dir)/n50_p100.bgen ./bin/bgen_prog $(t7_context)
 	./bin/bgen_prog --mode_vb --verbose \
 	    --bgen $< \
@@ -165,25 +158,39 @@ data/io_test/t7_varbvs_constrained/attempt.out: $(t7_dir)/n50_p100.bgen ./bin/bg
 	    --hyps_probs $(dir $@)hyperpriors_gxage_probs.txt \
 	    --vb_init $(dir $@)answer_init.txt \
 	    --out $@
-	# $(RSCRIPT) R/plot_vbayes_pip.R $@ $(dir $@)plots/t7_pip_$(notdir $(basename $@)).pdf
-	$(RSCRIPT) R/test7/check_output.R > $(dir $@)attempt.log
+	$(RSCRIPT) R/vbayes_x_tests/check_output.R $(dir $@) > $(dir $@)attempt.log
 	diff $(dir $@)answer.log $(dir $@)attempt.log
 
+$(t7_dir)/hyperpriors_gxage.txt: R/t7/gen_hyps.R
+	$(RSCRIPT) $<
+
+$(t7_dir)/answer.rds: R/vbayes_x_tests/run_VBayesR.R $(t7_dir)/hyperpriors_gxage.txt
+	$(RSCRIPT) $< $(dir $@)
 
 
 # comparison with the varbvs R package
-data/io_test/t8_varbvs/attempt.out: data/io_test/t8_varbvs/n500_p1000.bgen ./bin/bgen_prog
+t8_dir     := data/io_test/t8_varbvs
+t8_context := $(t8_dir)/hyperpriors_gxage.txt $(t8_dir)/answer.rds
+data/io_test/t8_varbvs/attempt.out: data/io_test/t8_varbvs/n50_p100.bgen ./bin/bgen_prog $(t8_context)
 	./bin/bgen_prog --mode_vb --verbose \
 	    --bgen $< \
 	    --interaction x \
 	    --covar $(dir $@)age.txt \
 	    --pheno $(dir $@)pheno.txt \
-	    --hyps_grid $(dir $@)hyperpriors_gxage_v1.txt \
-	    --hyps_probs $(dir $@)hyperpriors_gxage_v1_probs.txt \
-	    --vb_init $(dir $@)cpp_inference_inits.out \
+	    --hyps_grid $(dir $@)hyperpriors_gxage.txt \
+	    --hyps_probs $(dir $@)hyperpriors_gxage_probs.txt \
+	    --vb_init $(dir $@)answer_init.txt \
 	    --out $@
-	# $(RSCRIPT) R/plot_vbayes_pip.R $@ $(dir $@)plots/t8_pip_$(notdir $(basename $@)).pdf
-	diff $(dir $@)answer.out $@
+	$(RSCRIPT) R/vbayes_x_tests/check_output.R $(dir $@) > $(dir $@)attempt.log
+	diff $(dir $@)answer.log $(dir $@)attempt.log
+
+$(t8_dir)/hyperpriors_gxage.txt: R/t8/gen_hyps.R
+	$(RSCRIPT) $<
+
+$(t8_dir)/answer.rds: R/vbayes_x_tests/run_VBayesR.R $(t8_dir)/hyperpriors_gxage.txt
+	$(RSCRIPT) $< $(dir $@)
+
+
 
 # Clean dir
 cleanIO:
