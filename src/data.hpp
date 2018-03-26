@@ -106,7 +106,7 @@ class data
 		start = std::chrono::system_clock::now();
 		std::time_t start_time = std::chrono::system_clock::to_time_t(start);
 		std::cout << "Starting analysis at " << std::ctime(&start_time) << std::endl;
-		std::cout << "Compiled from git branch: master" << std::endl;
+		std::cout << "Compiled from git branch: zero-hg" << std::endl;
 	}
 	
 	~data() {

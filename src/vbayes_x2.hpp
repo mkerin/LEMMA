@@ -47,10 +47,12 @@ public:
 	parameters p;
 	std::vector< std::uint32_t > fwd_pass;
 	std::vector< std::uint32_t > back_pass;
+	std::vector< std::uint32_t > back_pass_short;
 
 	// Data
 	Eigen::MatrixXd X;          // dosage matrix
 	Eigen::MatrixXd Y;          // residual phenotype matrix
+	Eigen::VectorXd dXtX;       // diagonal of X^T x X
 	Eigen::VectorXd dHtH;       // diagonal of H^T x H where H = (X, Z)
 	Eigen::VectorXd Hty;		// vector of H^T x y where H = (X, Z)
 	Eigen::VectorXd aa;         // column vector of participant ages
@@ -61,6 +63,7 @@ public:
 	Eigen::VectorXd alpha_init;         // column vector of participant ages
 	Eigen::VectorXd mu_init;         // column vector of participant ages
 	Eigen::VectorXd Hr_init;         // column vector of participant ages
+	Eigen::VectorXd Xr_init;         // column vector of participant ages
 
 	// Loop variables - don't have to worry about reference parameters
 	double                i_sigma;
@@ -111,10 +114,14 @@ public:
 		alpha_init.resize(n_var2);
 		mu_init.resize(n_var2);
 		Hr_init.resize(n_samples);
+		Xr_init.resize(n_samples);
 		i_s_sq.resize(n_var2);
 		for(std::uint32_t kk = 0; kk < n_var2; kk++){
 			fwd_pass.push_back(kk);
 			back_pass.push_back(n_var2 - kk - 1);
+		}
+		for(std::uint32_t kk = 0; kk < n_var; kk++){
+			back_pass_short.push_back(n_var - kk - 1);
 		}
 
 		// Reserve memory for trackers
@@ -127,6 +134,7 @@ public:
 		// Allocate memory - genetic
 		Hty.resize(n_var2);
 		dHtH.resize(n_var2);
+		dXtX.resize(n_var);
 
 		// Set covariable vector aa
 		if(p.x_param_name != "NULL"){
@@ -143,6 +151,7 @@ public:
 			// Gen Hr_init
 			Eigen::VectorXd rr = alpha_init.cwiseProduct(mu_init);
 			Hr_init << (X * rr.segment(0, n_var) + (X * rr.segment(n_var, n_var)).cwiseProduct(aa));
+			Xr_init << X * rr.segment(0, n_var);
 			random_params_init = false;
 		} else {
 			random_params_init = true;
@@ -207,7 +216,7 @@ public:
 				// Run outer loop - don't update trackers
 				runOuterLoop(false);
 
-				if(std::isfinite(i_logw) && i_logw > logw_best){
+				if(std::isfinite(i_logw) && i_logw > logw_best && i_sigma_g > 0){
 					alpha1    = alpha_init;
 					mu1       = mu_init;
 					logw_best = i_logw;
