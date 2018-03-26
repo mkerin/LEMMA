@@ -21,19 +21,20 @@ rescomp-debug: FLAGS += -g3 -lbgen -ldb -lsqlite3 -lboost -lz -ldl -lrt -lpthrea
 rescomp-debug: $(TARGET)
 
 garganey: CXX = g++
-garganey: FLAGS += -lbgen -ldb -lsqlite3 -lboost -lz -ldl -lrt -lpthread -lzstd
+garganey: FLAGS += -g3 -lbgen -ldb -lsqlite3 -lboost -lz -ldl -lrt -lpthread -lzstd
 garganey: $(TARGET)
 
 # Cutting out -lrt, -lz
 laptop: CXX = /usr/local/Cellar/gcc/7.3.0/bin/x86_64-apple-darwin17.4.0-g++-7
 laptop: LD_LIBRARY_PATH = $(ls -d /usr/local/Cellar/gcc/* | tail -n1)/lib
-laptop: FLAGS += -lbgen -ldb -lsqlite3 -lboost -ldl -lpthread -lzstd -L$(LD_LIBRARY_PATH)
+laptop: FLAGS += -g3 -lbgen -ldb -lsqlite3 -lboost -ldl -lpthread -lzstd -L$(LD_LIBRARY_PATH)
 laptop: $(TARGET)
 
-$(TARGET) : $(SRCDIR)/bgen_prog.cpp $(HEADERS)
+$(TARGET) lastest_compile_branch.txt : $(SRCDIR)/bgen_prog.cpp $(HEADERS)
 	$(info $$CXX is [${CXX}])
 	$(info $$CFLAGS is [${CFLAGS}])
 	$(info $$LDFLAGS is [${LDFLAGS}])
+	git rev-parse --abbrev-ref HEAD > lastest_compile_branch.txt
 	$(CXX) -o $@ $< $(FLAGS)
 
 file_parse : file_parse.cpp
@@ -59,7 +60,8 @@ test/tests-main.o: test/tests-main.cpp $(SRCDIR)/bgen_prog.cpp $(HEADERS)
 # IO Tests
 # Files in data/out are regarded as 'true', and we check that the equivalent
 # file in data/io_test is identical after making changes to the executable.
-IOfiles := t1_range t2_lm t3_lm_two_chunks t4_lm_2dof t5_joint_model t6_lm2 t7_varbvs_constrained
+IOfiles := t1_range t2_lm t3_lm_two_chunks t4_lm_2dof t5_joint_model t6_lm2 \
+           t7_varbvs_constrained t8_varbvs t9_varbvs_zero_hg
 IOfiles := $(addprefix data/io_test/,$(addsuffix /attempt.out,$(IOfiles)))
 IOfiles += $(addprefix data/io_test/t2_lm/attempt, $(addsuffix .out,B C D))
 IOfiles += $(addprefix data/io_test/t1_range/attempt, $(addsuffix .out,B))
@@ -145,7 +147,9 @@ data/io_test/t6_lm2/attempt.out: data/io_test/example.v11.bgen ./bin/bgen_prog
 	    --out $@
 	diff $(dir $@)answer.out $@
 
-# When sigma_b == sigma_g and lambda_b == lambda_g then we can compare with varbvs
+# TEST 7
+# Rescticted model with sigma_b == sigma_g and lambda_b == lambda_g
+# This is equivalent to the original carbonetto model on H = (X, Z)
 t7_dir     := data/io_test/t7_varbvs_constrained
 t7_context := $(t7_dir)/hyperpriors_gxage.txt $(t7_dir)/answer.rds
 data/io_test/t7_varbvs_constrained/attempt.out: $(t7_dir)/n50_p100.bgen ./bin/bgen_prog $(t7_context)
@@ -167,8 +171,8 @@ $(t7_dir)/hyperpriors_gxage.txt: R/t7/gen_hyps.R
 $(t7_dir)/answer.rds: R/vbayes_x_tests/run_VBayesR.R $(t7_dir)/hyperpriors_gxage.txt
 	$(RSCRIPT) $< $(dir $@)
 
-
-# comparison with the varbvs R package
+# TEST 8
+# Unrestricted model; comparison with R implementation
 t8_dir     := data/io_test/t8_varbvs
 t8_context := $(t8_dir)/hyperpriors_gxage.txt $(t8_dir)/answer.rds
 data/io_test/t8_varbvs/attempt.out: data/io_test/t8_varbvs/n50_p100.bgen ./bin/bgen_prog $(t8_context)
@@ -188,6 +192,26 @@ $(t8_dir)/hyperpriors_gxage.txt: R/t8/gen_hyps.R
 	$(RSCRIPT) $<
 
 $(t8_dir)/answer.rds: R/vbayes_x_tests/run_VBayesR.R $(t8_dir)/hyperpriors_gxage.txt
+	$(RSCRIPT) $< $(dir $@)
+
+# TEST 9
+# Tests when h_g is zero (ie collapse down to original carbonetto model on X)
+t9_dir     := data/io_test/t9_varbvs_zero_hg
+t9_context := $(t8_dir)/hyperpriors_gxage.txt $(t9_dir)/answer.rds
+data/io_test/t9_varbvs_zero_hg/attempt.out: data/io_test/t9_varbvs_zero_hg/n50_p100.bgen ./bin/bgen_prog $(t9_context)
+	./bin/bgen_prog --mode_vb --verbose \
+	    --bgen $< \
+	    --interaction x \
+	    --covar $(dir $@)age.txt \
+	    --pheno $(dir $@)pheno.txt \
+	    --hyps_grid $(dir $@)hyperpriors_gxage.txt \
+	    --hyps_probs $(dir $@)hyperpriors_gxage_probs.txt \
+	    --vb_init $(dir $@)answer_init.txt \
+	    --out $@
+	$(RSCRIPT) R/vbayes_x_tests/check_output.R $(dir $@) > $(dir $@)attempt.log
+	diff $(dir $@)answer.log $(dir $@)attempt.log
+
+$(t9_dir)/answer.rds: R/t9/t9_run_vbayesr.R $(t9_dir)/hyperpriors_gxage.txt
 	$(RSCRIPT) $< $(dir $@)
 
 
