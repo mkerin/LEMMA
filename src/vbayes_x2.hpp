@@ -191,6 +191,10 @@ public:
 	void run(){
 		std::cout << "Starting variational inference" << std::endl;
 		time_check = std::chrono::system_clock::now();
+		std::uint32_t L;
+
+		i_mu.resize(n_var2);
+		i_alpha.resize(n_var2);
 
 		// Round 1; looking for best start point
 		if(random_params_init){
@@ -210,11 +214,19 @@ public:
 				i_lam_b   = hyps_grid(ii, lam_b_ind);
 				i_lam_g   = hyps_grid(ii, lam_g_ind);
 
+				// If h_g == 0 then set free parameters approximating interaction
+				// coefficients to zero.
+				if (i_sigma_g < 0.000000001){
+					L = n_var;
+				} else {
+					L = n_var2;
+				}
+
 				// random start point
-				random_alpha_mu_init();
+				random_alpha_mu_init(L);
 
 				// Run outer loop - don't update trackers
-				runOuterLoop(false);
+				runOuterLoop(false, L);
 
 				if(std::isfinite(i_logw) && i_logw > logw_best && i_sigma_g > 0){
 					alpha1    = alpha_init;
@@ -228,6 +240,7 @@ public:
 			// gen Hr_init
 			Eigen::VectorXd rr = alpha_init.cwiseProduct(mu_init);
 			Hr_init << (X * rr.segment(0, n_var) + (X * rr.segment(n_var, n_var)).cwiseProduct(aa));
+			Xr_init << (X * rr.segment(0, n_var));
 
 			if(init_not_set){
 				throw std::runtime_error("No valid start points found (elbo estimates all non-finite?).");
@@ -253,8 +266,16 @@ public:
 			i_lam_b   = hyps_grid(ii, lam_b_ind);
 			i_lam_g   = hyps_grid(ii, lam_g_ind);
 
+			// If h_g == 0 then set free parameters approximating interaction
+			// coefficients to zero.
+			if (i_sigma_g < 0.000000001){
+				L = n_var;
+			} else {
+				L = n_var2;
+			}
+
 			// Run outer loop - update trackers
-			runOuterLoop(true);
+			runOuterLoop(true, L);
 		}
 
 		// Compute normalised weights using finite elbo
@@ -291,20 +312,28 @@ public:
 		}
 	}
 
-	void runOuterLoop(bool update_trackers){
+	void runOuterLoop(bool update_trackers, std::uint32_t L){
 		// minimise KL Divergence and assign elbo estimate
 		// Assumes alpha_init, mu_init and Hr_init already exist
 
 		// Assign initial values
 		i_alpha = alpha_init;
 		i_mu = mu_init;
-		i_Hr = Hr_init;
+		if(L == n_var2){
+			i_Hr = Hr_init;
+		} else {
+			i_Hr = Xr_init;
+			for(std::uint32_t kk = L; kk < n_var2; kk++){
+				i_alpha[kk] = 0.0;
+				i_mu[kk] = 0.0;
+			}
+		}
 
 		// Update s_sq
 		for (std::uint32_t kk = 0; kk < n_var; kk++){
 			i_s_sq[kk] = i_sigma_b * i_sigma / (i_sigma_b * dHtH(kk) + 1.0);
 		}
-		for (std::uint32_t kk = n_var; kk < n_var2; kk++){
+		for (std::uint32_t kk = n_var; kk < L; kk++){
 			i_s_sq[kk] = i_sigma_g * i_sigma / (i_sigma_g * dHtH(kk) + 1.0);
 		}
 
@@ -320,17 +349,19 @@ public:
 
 			if(count % 2 == 0){
 				iter = fwd_pass;
+			} else if(L == n_var){
+				iter = back_pass_short;
 			} else {
 				iter = back_pass;
 			}
 
 			// log elbo from each iteration, starting from init
 			if(p.verbose && update_trackers){
-				logw_updates.push_back(calc_logw());
+				logw_updates.push_back(calc_logw(L));
 			}
 
 			// Update i_mum i_alpha, i_Hr
-			updateAlphaMu(iter);
+			updateAlphaMu(iter, L);
 			count++;
 
 			// Diagnose convergence
@@ -340,7 +371,7 @@ public:
 			}
 		}
 
-		i_logw = calc_logw();
+		i_logw = calc_logw(L);
 		if(!std::isfinite(i_logw)){
 			std::cout << "WARNING: non-finite elbo estimate produced" << std::endl;
 		}
@@ -358,11 +389,12 @@ public:
 		}
 	}
 
-	void updateAlphaMu(std::vector< std::uint32_t > iter){
+	void updateAlphaMu(std::vector< std::uint32_t > iter, std::uint32_t L){
 		std::uint32_t kk;
 		double rr_k, ff_k;
-		for(std::uint32_t jj = 0; jj < n_var2; jj++){
+		for(std::uint32_t jj = 0; jj < L; jj++){
 			kk = iter[jj];
+			assert(kk < L);
 
 			rr_k = i_alpha(kk) * i_mu(kk);
 
@@ -414,7 +446,7 @@ public:
 		return my_weights;
 	}
 
-	void random_alpha_mu_init(){
+	void random_alpha_mu_init(std::uint32_t L){
 		// alpha_init a uniform simplex, mu_init standard gaussian
 		// Also sets Hr_init
 		std::default_random_engine gen_gauss, gen_unif;
@@ -427,30 +459,41 @@ public:
 		assert(mu_init.rows() == n_var2);
 
 		// Random initialisation of alpha, mu
-		for (std::uint32_t kk = 0; kk < n_var2; kk++){
+		for (std::uint32_t kk = 0; kk < L; kk++){
 			alpha_init(kk) = uniform(gen_unif);
 			mu_init(kk) = gaussian(gen_gauss);
 			my_sum += alpha_init(kk);
 		}
+		for (std::uint32_t kk = L; kk < n_var2; kk++){
+			alpha_init(kk) = 0.0;
+			mu_init(kk) = 0.0;
+		}
 
 		// Convert alpha to simplex. Why?
-		for (std::uint32_t kk = 0; kk < n_var2; kk++){
+		for (std::uint32_t kk = 0; kk < L; kk++){
 			alpha_init(kk) /= my_sum;
 		}
 
 		// Gen Hr; Could reduce matrix multiplication by making alpha and mu inits symmetric.
 		Eigen::VectorXd rr = alpha_init.cwiseProduct(mu_init);
-		Hr_init << (X * rr.segment(0, n_var) + (X * rr.segment(n_var, n_var)).cwiseProduct(aa));
+		if(L == n_var2){
+			Hr_init << (X * rr.segment(0, n_var) + (X * rr.segment(n_var, n_var)).cwiseProduct(aa));
+		} else {
+			Hr_init << (X * rr.segment(0, n_var));
+		}
 	}
 
-	double calc_logw(){
+	double calc_logw(std::uint32_t L){
 		// Using dHtH, Y, Hr and i_* variables
 		double res, int_linear = 0, int_gamma = 0, int_klbeta = 0;
 
 		// gen Var[B_k]
 		Eigen::VectorXd varB(n_var2);
-		for (std::uint32_t kk = 0; kk < n_var2; kk++){
+		for (std::uint32_t kk = 0; kk < L; kk++){
 			varB(kk) = i_alpha(kk)*(i_s_sq[kk] + (1 - i_alpha(kk)) * i_mu(kk) * i_mu(kk));
+		}
+		for (std::uint32_t kk = L; kk < n_var2; kk++){
+			varB(kk) = 0.0;
 		}
 
 		// Expectation of linear regression log-likelihood
@@ -463,7 +506,7 @@ public:
 			int_gamma += i_alpha(kk) * std::log(i_lam_b + eps);
 			int_gamma += (1.0 - i_alpha(kk)) * std::log(1.0 - i_lam_b + eps);
 		}
-		for (std::uint32_t kk = n_var; kk < n_var2; kk++){
+		for (std::uint32_t kk = n_var; kk < L; kk++){
 			int_gamma += i_alpha(kk) * std::log(i_lam_g + eps);
 			int_gamma += (1.0 - i_alpha(kk)) * std::log(1.0 - i_lam_g + eps);
 		}
@@ -474,11 +517,11 @@ public:
 			int_klbeta += i_alpha(kk) * (1.0 + std::log(i_s_sq[kk] / var_b + eps) -
 								(i_s_sq[kk] + i_mu(kk) * i_mu(kk)) / var_b) / 2.0;
 		}
-		for (std::uint32_t kk = n_var; kk < n_var2; kk++){
+		for (std::uint32_t kk = n_var; kk < L; kk++){
 			int_klbeta += i_alpha(kk) * (1.0 + std::log(i_s_sq[kk] / var_g + eps) -
 								(i_s_sq[kk] + i_mu(kk) * i_mu(kk)) / var_g) / 2.0;
 		}
-		for (std::uint32_t kk = 0; kk < n_var2; kk++){
+		for (std::uint32_t kk = 0; kk < L; kk++){
 			int_klbeta -= i_alpha[kk] * std::log(i_alpha[kk] + eps);
 			int_klbeta -= (1 - i_alpha[kk]) * std::log(1 - i_alpha[kk] + eps);
 		}
@@ -586,7 +629,7 @@ public:
 		for (int ii = 0; ii < n_grid; ii++){
 			assert(hyps_grid(ii, sigma_ind) > 0.0);
 			assert(hyps_grid(ii, sigma_b_ind) > 0.0);
-			assert(hyps_grid(ii, sigma_g_ind) > 0.0);
+			assert(hyps_grid(ii, sigma_g_ind) >= 0.0);
 			assert(hyps_grid(ii, lam_b_ind) > 0.0);
 			assert(hyps_grid(ii, lam_b_ind) < 1.0);
 			assert(hyps_grid(ii, lam_g_ind) < 1.0);
