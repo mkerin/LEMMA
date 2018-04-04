@@ -35,12 +35,51 @@ struct FreeParameters {
 	Eigen::VectorXd       Hr;
 }; 
 
-struct VbTracker {
+class VbTracker {
+public:
 	std::vector< int >             counts_list;              // Number of iterations to convergence at each step
 	std::vector< std::vector< double > > logw_updates_list;  // elbo updates at each ii
 	std::vector< Eigen::VectorXd > mu_list;                  // best mu at each ii
 	std::vector< Eigen::VectorXd > alpha_list;               // best alpha at each ii
 	std::vector< double >          logw_list;                // best logw at each ii
+
+	VbTracker(){
+	}
+
+	VbTracker(int n_list){
+		counts_list.resize(n_list);
+		mu_list.resize(n_list);
+		alpha_list.resize(n_list);
+		logw_list.resize(n_list);
+		logw_updates_list.resize(n_list);
+	}
+
+	~VbTracker() {
+	}
+
+	void resize(int n_list){
+		counts_list.resize(n_list);
+		mu_list.resize(n_list);
+		alpha_list.resize(n_list);
+		logw_list.resize(n_list);
+		logw_updates_list.resize(n_list);
+	}
+
+	void clear(){
+		counts_list.clear();
+		mu_list.clear();
+		alpha_list.clear();
+		logw_list.clear();
+		logw_updates_list.clear();
+	}
+
+	void copy_ith_element(int ii, VbTracker& other_tracker){
+		counts_list[ii]       = other_tracker.counts_list[ii];
+		mu_list[ii]           = other_tracker.mu_list[ii];
+		alpha_list[ii]        = other_tracker.alpha_list[ii];
+		logw_list[ii]         = other_tracker.logw_list[ii];
+		logw_updates_list[ii] = other_tracker.logw_updates_list[ii];
+	}
 };
 
 class VBayesX2 {
@@ -86,24 +125,14 @@ public:
 	Eigen::MatrixXd probs_grid; // prob of each point in grid under hyps
 
 	// Init points
-	Eigen::VectorXd alpha_init;         // column vector of participant ages
-	Eigen::VectorXd mu_init;         // column vector of participant ages
-	Eigen::VectorXd Hr_init;         // column vector of participant ages
-	Eigen::VectorXd Xr_init;         // column vector of participant ages
-
-	// Loop variables - don't have to worry about reference parameters
-	// Hyps           i_hyps;
-	// FreeParameters i_par;
-	// double         i_logw;
+	Eigen::VectorXd alpha_init; // column vector of participant ages
+	Eigen::VectorXd mu_init;    // column vector of participant ages
+	Eigen::VectorXd Hr_init;    // column vector of participant ages
+	Eigen::VectorXd Xr_init;    // column vector of participant ages
 
 	// Things to track from each interaction
-	// std::vector< int >             counts_list;              // Number of iterations to convergence at each step
-	// std::vector< std::vector< double > > logw_updates_list;  // elbo updates at each ii
-	// std::vector< Eigen::VectorXd > mu_list;                  // best mu at each ii
-	// std::vector< Eigen::VectorXd > alpha_list;               // best alpha at each ii
-	// std::vector< double >          logw_list;                // best logw at each ii
 	VbTracker stitched_tracker;
-	std::vector< double >          weights;             // best logw weighted by prior
+	std::vector< double > weights;             // best logw weighted by prior
 
 	// results
 	std::vector< double > post_alpha;
@@ -205,10 +234,12 @@ public:
 	void run(){
 		std::cout << "Starting variational inference" << std::endl;
 		time_check = std::chrono::system_clock::now();
+		if(p.n_thread > 1){
+			std::cout << "Running on " << p.n_thread << " threads" << std::endl;
+		}
 
 		// Divide grid of hyperparameters into chunks for multithreading
 		std::vector< std::vector< int > > chunks(p.n_thread);
-		// std::vector<int> chunk;
 		for (int ii = 0; ii < n_grid; ii++){
 			int ch_index = (ii % p.n_thread);
 			chunks[ch_index].push_back(ii);
@@ -217,13 +248,7 @@ public:
 		// Allocate memory for trackers
 		std::vector< VbTracker > trackers(p.n_thread);
 		for (int ch = 0; ch < p.n_thread; ch++){
-			trackers[ch].counts_list.resize(n_grid);              // Number of iterations to convergence at each step
-			trackers[ch].mu_list.resize(n_grid);                  // best mu at each ii
-			trackers[ch].alpha_list.resize(n_grid);               // best alpha at each ii
-			trackers[ch].logw_list.resize(n_grid);                // best logw at each ii
-			if(p.verbose){
-				trackers[ch].logw_updates_list.resize(n_grid);        // elbo updates at each ii
-			}
+			trackers[ch].resize(n_grid);
 		}
 
 		// Round 1; looking for best start point
@@ -256,14 +281,14 @@ public:
 				}
 			}
 
+			if(init_not_set){
+				throw std::runtime_error("No valid start points found (elbo estimates all non-finite?).");
+			}
+
 			// gen Hr_init
 			Eigen::VectorXd rr = alpha_init.cwiseProduct(mu_init);
 			Hr_init << (X * rr.segment(0, n_var) + (X * rr.segment(n_var, n_var)).cwiseProduct(aa));
 			Xr_init << (X * rr.segment(0, n_var));
-
-			if(init_not_set){
-				throw std::runtime_error("No valid start points found (elbo estimates all non-finite?).");
-			}
 
 			// Write inits to file
 			std::string ofile_inits = fstream_init(outf_inits, "_inits.");
@@ -274,22 +299,10 @@ public:
 			}
 
 			// Clear trackers between rounds
+			// This may actually be un-necessary?
 			for (int ch = 0; ch < p.n_thread; ch++){
-				trackers[ch].logw_list.clear();
-				trackers[ch].counts_list.clear();
-				trackers[ch].alpha_list.clear();
-				trackers[ch].mu_list.clear();
-				if(p.verbose){
-					trackers[ch].logw_updates_list.clear();
-				}
-
-				trackers[ch].counts_list.resize(n_grid);              // Number of iterations to convergence at each step
-				trackers[ch].mu_list.resize(n_grid);                  // best mu at each ii
-				trackers[ch].alpha_list.resize(n_grid);               // best alpha at each ii
-				trackers[ch].logw_list.resize(n_grid);                // best logw at each ii
-				if(p.verbose){
-					trackers[ch].logw_updates_list.resize(n_grid);        // elbo updates at each ii
-				}
+				trackers[ch].clear();
+				trackers[ch].resize(n_grid);
 			}
 		}
 
@@ -307,23 +320,10 @@ public:
 		}
 
 		// Stitch trackers back together if using multithreading
-		stitched_tracker.counts_list.resize(n_grid);              // Number of iterations to convergence at each step
-		stitched_tracker.mu_list.resize(n_grid);                  // best mu at each ii
-		stitched_tracker.alpha_list.resize(n_grid);               // best alpha at each ii
-		stitched_tracker.logw_list.resize(n_grid);                // best logw at each ii
-		if(p.verbose){
-			stitched_tracker.logw_updates_list.resize(n_grid);        // elbo updates at each ii
-		}
-		int tr;  // tracker index
+		stitched_tracker.resize(n_grid);
 		for (int ii = 0; ii < n_grid; ii++){
-			tr                               = (ii % p.n_thread);
-			stitched_tracker.counts_list[ii] = trackers[tr].counts_list[ii];              // Number of iterations to convergence at each step
-			stitched_tracker.mu_list[ii]     = trackers[tr].mu_list[ii];                  // best mu at each ii
-			stitched_tracker.alpha_list[ii]  = trackers[tr].alpha_list[ii];               // best alpha at each ii
-			stitched_tracker.logw_list[ii]   = trackers[tr].logw_list[ii];                // best logw at each ii
-			if(p.verbose){
-				stitched_tracker.logw_updates_list[ii] = trackers[tr].logw_updates_list[ii];        // elbo updates at each ii
-			}
+			int tr = (ii % p.n_thread);  // tracker index
+			stitched_tracker.copy_ith_element(ii, trackers[tr]);
 		}
 
 		// Compute normalised weights using finite elbo
