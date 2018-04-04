@@ -205,6 +205,12 @@ public:
 		std::uint32_t L;
 		Hyps i_hyps;
 
+		// Split into several chunks for multithreading
+		std::vector<int> chunk;
+		for (int ii = 0; ii < n_grid; ii++){
+			chunk.push_back(ii);
+		}
+
 		// Round 1; looking for best start point
 		if(random_params_init){
 			double logw_best = -std::numeric_limits<double>::max();
@@ -231,9 +237,6 @@ public:
 					L = n_var2;
 				}
 
-				// random start point
-				random_alpha_mu_init(L);
-
 				// Run outer loop - don't update trackers
 				double i_logw = runOuterLoop(false, L, i_hyps);
 
@@ -259,6 +262,15 @@ public:
 			for (std::uint32_t kk = 0; kk < n_var2; kk++){
 				outf_inits << alpha_init[kk] << " " << mu_init[kk] << std::endl;
 			}
+		}
+
+		// Clear trackers between rounds
+		logw_list.clear();
+		counts_list.clear();
+		alpha_list.clear();
+		mu_list.clear();
+		if(p.verbose){
+			logw_updates_list.clear();
 		}
 
 		// Round 2; initial values already assigned to alpha_init, mu_init
@@ -321,27 +333,31 @@ public:
 		}
 	}
 
-	double runOuterLoop(bool update_trackers, std::uint32_t L,
+	double runOuterLoop(bool main_loop, std::uint32_t L,
                       Hyps i_hyps){
 		// minimise KL Divergence and assign elbo estimate
 		// Assumes alpha_init, mu_init and Hr_init already exist
+		FreeParameters i_par;
 
 		// Assign initial values
-		FreeParameters i_par;
-		i_par.s_sq.resize(n_var2);
-		i_par.alpha = alpha_init;
-		i_par.mu = mu_init;
-		if(L == n_var2){
-			i_par.Hr = Hr_init;
+		if (!main_loop) {
+			random_alpha_mu_init(L, i_par);
 		} else {
-			i_par.Hr = Xr_init;
-			for(std::uint32_t kk = L; kk < n_var2; kk++){
-				i_par.alpha[kk] = 0.0;
-				i_par.mu[kk] = 0.0;
+			i_par.alpha = alpha_init;
+			i_par.mu = mu_init;
+			if(L == n_var2){
+				i_par.Hr = Hr_init;
+			} else {
+				i_par.Hr = Xr_init;
+				for(std::uint32_t kk = L; kk < n_var2; kk++){
+					i_par.alpha[kk] = 0.0;
+					i_par.mu[kk] = 0.0;
+				}
 			}
 		}
 
 		// Update s_sq
+		i_par.s_sq.resize(n_var2);
 		for (std::uint32_t kk = 0; kk < n_var; kk++){
 			i_par.s_sq[kk] = i_hyps.sigma_b * i_hyps.sigma / (i_hyps.sigma_b * dHtH(kk) + 1.0);
 		}
@@ -368,7 +384,7 @@ public:
 			}
 
 			// log elbo from each iteration, starting from init
-			if(p.verbose && update_trackers){
+			if(p.verbose && main_loop){
 				logw_updates.push_back(calc_logw(L, i_hyps, i_par));
 			}
 
@@ -389,16 +405,15 @@ public:
 		}
 
 		// Log all things that we want to track
-		if(update_trackers){
-			logw_list.push_back(i_logw);
-			counts_list.push_back(count);
-			alpha_list.push_back(i_par.alpha);
-			mu_list.push_back(i_par.mu);
-			if(p.verbose){
-				logw_updates.push_back(i_logw);  // adding converged estimate
-				logw_updates_list.push_back(logw_updates);
-			}
+		logw_list.push_back(i_logw);
+		counts_list.push_back(count);
+		alpha_list.push_back(i_par.alpha);
+		mu_list.push_back(i_par.mu);
+		if(p.verbose){
+			logw_updates.push_back(i_logw);  // adding converged estimate
+			logw_updates_list.push_back(logw_updates);
 		}
+
 		return i_logw;
 	}
 
@@ -460,40 +475,42 @@ public:
 		return my_weights;
 	}
 
-	void random_alpha_mu_init(std::uint32_t L){
-		// alpha_init a uniform simplex, mu_init standard gaussian
-		// Also sets Hr_init
+	void random_alpha_mu_init(std::uint32_t L,
+                              FreeParameters par){
+		// par.alpha a uniform simplex, par.mu standard gaussian
+		// Also sets par.Hr
 		std::default_random_engine gen_gauss, gen_unif;
 		std::normal_distribution<double> gaussian(0.0,1.0);
 		std::uniform_real_distribution<double> uniform(0.0,1.0);
 		double my_sum = 0;
 
-		// Check alpha / mu are correct size
-		assert(alpha_init.rows() == n_var2);
-		assert(mu_init.rows() == n_var2);
+		// Allocate memory
+		par.alpha.resize(n_var2);
+		par.mu.resize(n_var2);
+		par.Hr.resize(n_samples);
 
 		// Random initialisation of alpha, mu
 		for (std::uint32_t kk = 0; kk < L; kk++){
-			alpha_init(kk) = uniform(gen_unif);
-			mu_init(kk) = gaussian(gen_gauss);
-			my_sum += alpha_init(kk);
+			par.alpha(kk) = uniform(gen_unif);
+			par.mu(kk) = gaussian(gen_gauss);
+			my_sum += par.alpha(kk);
 		}
 		for (std::uint32_t kk = L; kk < n_var2; kk++){
-			alpha_init(kk) = 0.0;
-			mu_init(kk) = 0.0;
+			par.alpha(kk) = 0.0;
+			par.mu(kk) = 0.0;
 		}
 
 		// Convert alpha to simplex. Why?
 		for (std::uint32_t kk = 0; kk < L; kk++){
-			alpha_init(kk) /= my_sum;
+			par.alpha(kk) /= my_sum;
 		}
 
 		// Gen Hr; Could reduce matrix multiplication by making alpha and mu inits symmetric.
-		Eigen::VectorXd rr = alpha_init.cwiseProduct(mu_init);
+		Eigen::VectorXd rr = par.alpha.cwiseProduct(par.mu);
 		if(L == n_var2){
-			Hr_init << (X * rr.segment(0, n_var) + (X * rr.segment(n_var, n_var)).cwiseProduct(aa));
+			par.Hr << (X * rr.segment(0, n_var) + (X * rr.segment(n_var, n_var)).cwiseProduct(aa));
 		} else {
-			Hr_init << (X * rr.segment(0, n_var));
+			par.Hr << (X * rr.segment(0, n_var));
 		}
 	}
 
