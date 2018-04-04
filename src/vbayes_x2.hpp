@@ -34,6 +34,14 @@ struct FreeParameters {
 	Eigen::VectorXd       Hr;
 }; 
 
+struct VbTracker {
+	std::vector< int >             counts_list;              // Number of iterations to convergence at each step
+	std::vector< std::vector< double > > logw_updates_list;  // elbo updates at each ii
+	std::vector< Eigen::VectorXd > mu_list;                  // best mu at each ii
+	std::vector< Eigen::VectorXd > alpha_list;               // best alpha at each ii
+	std::vector< double >          logw_list;                // best logw at each ii
+};
+
 class VBayesX2 {
 public:
 	// Constants
@@ -88,11 +96,12 @@ public:
 	// double         i_logw;
 
 	// Things to track from each interaction
-	std::vector< int >             counts_list;              // Number of iterations to convergence at each step
-	std::vector< std::vector< double > > logw_updates_list;  // elbo updates at each ii
-	std::vector< Eigen::VectorXd > mu_list;                  // best mu at each ii
-	std::vector< Eigen::VectorXd > alpha_list;               // best alpha at each ii
-	std::vector< double >          logw_list;                // best logw at each ii
+	// std::vector< int >             counts_list;              // Number of iterations to convergence at each step
+	// std::vector< std::vector< double > > logw_updates_list;  // elbo updates at each ii
+	// std::vector< Eigen::VectorXd > mu_list;                  // best mu at each ii
+	// std::vector< Eigen::VectorXd > alpha_list;               // best alpha at each ii
+	// std::vector< double >          logw_list;                // best logw at each ii
+	VbTracker stitched_tracker;
 	std::vector< double >          weights;             // best logw weighted by prior
 
 	// results
@@ -133,12 +142,12 @@ public:
 			back_pass_short.push_back(n_var - kk - 1);
 		}
 
-		// Reserve memory for trackers
-		counts_list.reserve(n_grid);              // Number of iterations to convergence at each step
-		logw_updates_list.reserve(n_grid);        // elbo updates at each ii
-		mu_list.reserve(n_grid);                  // best mu at each ii
-		alpha_list.reserve(n_grid);               // best alpha at each ii
-		logw_list.reserve(n_grid);                // best logw at each ii
+		// // Reserve memory for trackers
+		// counts_list.reserve(n_grid);              // Number of iterations to convergence at each step
+		// logw_updates_list.reserve(n_grid);        // elbo updates at each ii
+		// mu_list.reserve(n_grid);                  // best mu at each ii
+		// alpha_list.reserve(n_grid);               // best alpha at each ii
+		// logw_list.reserve(n_grid);                // best logw at each ii
 
 		// Allocate memory - genetic
 		Hty.resize(n_var2);
@@ -211,9 +220,16 @@ public:
 			chunk.push_back(ii);
 		}
 
+		// reserve memory for trackers
+		VbTracker tracker;
+		tracker.counts_list.reserve(n_grid);              // Number of iterations to convergence at each step
+		tracker.logw_updates_list.reserve(n_grid);        // elbo updates at each ii
+		tracker.mu_list.reserve(n_grid);                  // best mu at each ii
+		tracker.alpha_list.reserve(n_grid);               // best alpha at each ii
+		tracker.logw_list.reserve(n_grid);                // best logw at each ii
+
 		// Round 1; looking for best start point
 		if(random_params_init){
-			double logw_best = -std::numeric_limits<double>::max();
 			bool init_not_set = true;
 			Eigen::VectorXd mu1, alpha1;
 			for (int ii = 0; ii < n_grid; ii++){
@@ -238,17 +254,29 @@ public:
 				}
 
 				// Run outer loop - don't update trackers
-				double i_logw = runOuterLoop(false, L, i_hyps);
+				runOuterLoop(false, L, i_hyps, tracker);
 
-				if(std::isfinite(i_logw) && i_logw > logw_best && i_hyps.sigma_g > 0){
-					alpha1    = alpha_init;
-					mu1       = mu_init;
-					logw_best = i_logw;
+				// if(std::isfinite(i_logw) && i_logw > logw_best && i_hyps.sigma_g > 0){
+				// 	alpha1    = alpha_init;
+				// 	mu1       = mu_init;
+				// 	logw_best = i_logw;
+				// 	init_not_set = false;
+				// }
+			}
+
+			// Find best init
+			double logw_best = -std::numeric_limits<double>::max();
+			for (int ii = 0; ii < n_grid; ii++){
+				double logw      = tracker.logw_list[ii];
+				double sigma_g   = hyps_grid(ii, sigma_g_ind);
+				if(std::isfinite(logw) && logw > logw_best && sigma_g > 0){
+					alpha_init   = tracker.alpha_list[ii];
+					mu_init      = tracker.mu_list[ii];
+					logw_best    = logw;
 					init_not_set = false;
 				}
 			}
-			alpha_init = alpha1;
-			mu_init = mu1;
+
 			// gen Hr_init
 			Eigen::VectorXd rr = alpha_init.cwiseProduct(mu_init);
 			Hr_init << (X * rr.segment(0, n_var) + (X * rr.segment(n_var, n_var)).cwiseProduct(aa));
@@ -259,18 +287,21 @@ public:
 			}
 
 			// Write inits to file
+			std::string ofile_inits = fstream_init(outf_inits, "_inits.");
+			std::cout << "Write start points for alpha and mu to " << ofile_inits << std::endl;
+			outf_inits << "alpha mu" << std::endl;
 			for (std::uint32_t kk = 0; kk < n_var2; kk++){
 				outf_inits << alpha_init[kk] << " " << mu_init[kk] << std::endl;
 			}
 		}
 
 		// Clear trackers between rounds
-		logw_list.clear();
-		counts_list.clear();
-		alpha_list.clear();
-		mu_list.clear();
+		tracker.logw_list.clear();
+		tracker.counts_list.clear();
+		tracker.alpha_list.clear();
+		tracker.mu_list.clear();
 		if(p.verbose){
-			logw_updates_list.clear();
+			tracker.logw_updates_list.clear();
 		}
 
 		// Round 2; initial values already assigned to alpha_init, mu_init
@@ -296,14 +327,17 @@ public:
 			}
 
 			// Run outer loop - update trackers
-			double i_logw = runOuterLoop(true, L, i_hyps);
+			runOuterLoop(true, L, i_hyps, tracker);
 		}
+
+		// Stich trackers back together if using multithreading
+		stitched_tracker = tracker;
 
 		// Compute normalised weights using finite elbo
 		weights.resize(n_grid);
 		if(n_grid > 1){
 			for (int ii = 0; ii < n_grid; ii++){
-				weights[ii] = logw_list[ii] + std::log(probs_grid(ii,0) + eps);
+				weights[ii] = stitched_tracker.logw_list[ii] + std::log(probs_grid(ii,0) + eps);
 			}
 			weights = normaliseLogWeights(weights);
 		} else {
@@ -318,9 +352,9 @@ public:
 		for (int ii = 0; ii < n_grid; ii++){
 			if(std::isfinite(weights[ii])){
 				for (std::uint32_t kk = 0; kk < n_var2; kk++){
-					post_alpha[kk] += weights[ii] * alpha_list[ii](kk);
-					post_mu[kk] += weights[ii] * mu_list[ii](kk);
-					post_beta[kk] += weights[ii] * mu_list[ii](kk) * alpha_list[ii](kk);
+					post_alpha[kk] += weights[ii] * stitched_tracker.alpha_list[ii](kk);
+					post_mu[kk] += weights[ii] * stitched_tracker.mu_list[ii](kk);
+					post_beta[kk] += weights[ii] * stitched_tracker.mu_list[ii](kk) * stitched_tracker.alpha_list[ii](kk);
 				}
 			} else {
 				nonfinite_count++;
@@ -331,10 +365,12 @@ public:
 			std::cout << "WARNING: " << nonfinite_count << " grid points returned non-finite ELBO.";
 			std::cout << "Skipping these when producing posterior estimates.";
 		}
+
+		std::cout << "Variational inference finished" << std::endl;
 	}
 
-	double runOuterLoop(bool main_loop, std::uint32_t L,
-                      Hyps i_hyps){
+	void runOuterLoop(bool main_loop, std::uint32_t L,
+                      Hyps i_hyps, VbTracker& tracker){
 		// minimise KL Divergence and assign elbo estimate
 		// Assumes alpha_init, mu_init and Hr_init already exist
 		FreeParameters i_par;
@@ -405,16 +441,14 @@ public:
 		}
 
 		// Log all things that we want to track
-		logw_list.push_back(i_logw);
-		counts_list.push_back(count);
-		alpha_list.push_back(i_par.alpha);
-		mu_list.push_back(i_par.mu);
+		tracker.logw_list.push_back(i_logw);
+		tracker.counts_list.push_back(count);
+		tracker.alpha_list.push_back(i_par.alpha);
+		tracker.mu_list.push_back(i_par.mu);
 		if(p.verbose){
 			logw_updates.push_back(i_logw);  // adding converged estimate
-			logw_updates_list.push_back(logw_updates);
+			tracker.logw_updates_list.push_back(logw_updates);
 		}
-
-		return i_logw;
 	}
 
 	void updateAlphaMu(std::vector< std::uint32_t > iter, std::uint32_t L,
@@ -579,10 +613,10 @@ public:
 		std::cout << "Writing posterior PIP and beta probabilities to " << ofile << std::endl;
 		std::cout << "Writing posterior hyperparameter probabilities to " << ofile_weights << std::endl;
 
-		if(random_params_init){
-			std::string ofile_inits = fstream_init(outf_inits, "_inits.");
-			std::cout << "Write start points for alpha and mu to " << ofile_inits << std::endl;
-		}
+		// if(random_params_init){
+		// 	std::string ofile_inits = fstream_init(outf_inits, "_inits.");
+		// 	std::cout << "Write start points for alpha and mu to " << ofile_inits << std::endl;
+		// }
 		if(p.verbose){
 			std::string ofile_elbo = fstream_init(outf_elbo, "_elbo.");
 			std::cout << "Writing ELBO from each VB iteration to " << ofile_elbo << std::endl;
@@ -597,9 +631,9 @@ public:
 		// Headers
 		outf << "post_alpha post_mu post_beta" << std::endl;
 		outf_weights << "weights logw log_prior count" << std::endl;
-		if(random_params_init){
-			outf_inits << "alpha mu" << std::endl;
-		}
+		// if(random_params_init){
+		// 	outf_inits << "alpha mu" << std::endl;
+		// }
 	}
 
 	void output_results(){
@@ -616,15 +650,15 @@ public:
 
 		// Write hyperparams weights to file
 		for (int ii = 0; ii < n_grid; ii++){
-			outf_weights << weights[ii] << " " << logw_list[ii] << " ";
+			outf_weights << weights[ii] << " " << stitched_tracker.logw_list[ii] << " ";
 			outf_weights << std::log(probs_grid(ii,0) + eps) << " ";
-			outf_weights << counts_list[ii] << std::endl;
+			outf_weights << stitched_tracker.counts_list[ii] << std::endl;
 		}
 
 		if(p.verbose){
 			for (int ii = 0; ii < n_grid; ii++){
-				for (int cc = 0; cc < counts_list[ii]; cc++){
-					outf_elbo << logw_updates_list[ii][cc] << " ";
+				for (int cc = 0; cc < stitched_tracker.counts_list[ii]; cc++){
+					outf_elbo << stitched_tracker.logw_updates_list[ii][cc] << " ";
 				}
 				outf_elbo << std::endl;
 			}
@@ -633,8 +667,8 @@ public:
 			// 1 col per gridpoint
 			for (std::uint32_t kk = 0; kk < n_var2; kk++){
 				for (int ii = 0; ii < n_grid; ii++){
-					outf_alphas << alpha_list[ii][kk] << " ";
-					outf_mus << mu_list[ii][kk] << " ";
+					outf_alphas << stitched_tracker.alpha_list[ii][kk] << " ";
+					outf_mus << stitched_tracker.mu_list[ii][kk] << " ";
 				}
 				outf_alphas << std::endl;
 				outf_mus << std::endl;
