@@ -7,6 +7,8 @@
 #include <iostream>
 #include <limits>
 #include <random>
+#include "sys/types.h"
+#include "sys/sysinfo.h"
 #include "class.h"
 #include "data.hpp"
 #include "utils.hpp"  // sigmoid
@@ -163,19 +165,19 @@ public:
 
 		Eigen::MatrixXd I_a_sq = aa.cwiseProduct(aa).asDiagonal();
 
+		// Avoid calling X.tranpose()
 		// Eigen::VectorXd dXtX(n_var), dZtZ(n_var);
 		// for(std::std::uint32_t kk = 0; kk < n_var; kk++){
 		// 	dXtX(kk, kk) = X.col(kk).squaredNorm();
 		// 	dZtZ(kk, kk) = (X.col(kk).cwiseProduct(aa)).squaredNorm();
 		// }
-		// dHtH                   << dXtX, dZtZ;
-		// // Avoid calling X.tranpose()
-		// Hty                    << ( (Y.transpose() * X).tranpose(), (Y.cwiseProduct(aa).transpose() * X).tranpose() );
+		Hty       << (Y.transpose() * X).transpose(), (Y.cwiseProduct(aa).transpose() * X).transpose();
 
 		Eigen::VectorXd dXtX   = (X.transpose() * X).diagonal();
 		Eigen::VectorXd dZtZ   = (X.transpose() * I_a_sq * X).diagonal();
+		// Hty                    << (X.transpose() * Y), (X.transpose() * (Y.cwiseProduct(aa)));
+
 		dHtH                   << dXtX, dZtZ;
- 		Hty                    << (X.transpose() * Y), (X.transpose() * (Y.cwiseProduct(aa)));
 	}
 
 	~VBayesX2(){
@@ -184,7 +186,9 @@ public:
 	void print_time_check(){
 		auto now = std::chrono::system_clock::now();
 		std::chrono::duration<double> elapsed_seconds = now-time_check;;
-		std::cout << " (" << elapsed_seconds.count() << "seconds since last timecheck)" << std::endl;
+		std::cout << " (" << elapsed_seconds.count();
+ 		std::cout << "seconds since last timecheck, estimated RAM usage = ";
+		std::cout << getValueRAM() << "KB)" << std::endl;
 		time_check = now;
 	}
 
@@ -202,7 +206,7 @@ public:
 			bool init_not_set = true;
 			Eigen::VectorXd mu1, alpha1;
 			for (int ii = 0; ii < n_grid; ii++){
-				if(ii % print_interval == 0){
+				if((ii + 1) % print_interval == 0){
 					std::cout << "\rRound 1: grid point " << ii+1 << "/" << n_grid;
 					print_time_check();
 				}
@@ -579,7 +583,7 @@ public:
 		// Write results of main inference to file
 		for (std::uint32_t kk = 0; kk < n_var2; kk++){
 			outf << post_alpha[kk] << " " << post_mu[kk] << " ";
- 			outf << post_beta[kk] << std::endl;
+			outf << post_beta[kk] << std::endl;
 		}
 
 		// Write hyperparams weights to file
@@ -635,6 +639,31 @@ public:
 			assert(hyps_grid(ii, lam_g_ind) < 1.0);
 			assert(hyps_grid(ii, lam_g_ind) > 0.0);
 		}
+	}
+
+	int parseLineRAM(char* line){
+		// This assumes that a digit will be found and the line ends in " Kb".
+		int i = strlen(line);
+		const char* p = line;
+		while (*p <'0' || *p > '9') p++;
+		line[i-3] = '\0';
+		i = atoi(p);
+		return i;
+	}
+
+	int getValueRAM(){ //Note: this value is in KB!
+		FILE* file = fopen("/proc/self/status", "r");
+		int result = -1;
+		char line[128];
+
+		while (fgets(line, 128, file) != NULL){
+			if (strncmp(line, "VmRSS:", 6) == 0){
+				result = parseLineRAM(line);
+				break;
+			}
+		}
+		fclose(file);
+		return result;
 	}
 };
 
