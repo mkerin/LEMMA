@@ -17,6 +17,10 @@ rescomp: CXX = /apps/well/gcc/7.2.0/bin/g++
 rescomp: FLAGS += -O3 -lbgen -ldb -lsqlite3 -lboost -lz -ldl -lrt -lpthread -lzstd
 rescomp: $(TARGET)
 
+rescomp-optim: CXX = /apps/well/gcc/7.2.0/bin/g++
+rescomp-optim: FLAGS += -O3 -ffast-math -fprefetch-loop-arrays -flto -lbgen -ldb -lsqlite3 -lboost -lz -ldl -lrt -lpthread -lzstd
+rescomp-optim: $(TARGET)
+
 rescomp-debug: CXX = /apps/well/gcc/7.2.0/bin/g++
 rescomp-debug: FLAGS += -g3 -lbgen -ldb -lsqlite3 -lboost -lz -ldl -lrt -lpthread -lzstd
 rescomp-debug: $(TARGET)

@@ -374,7 +374,7 @@ readCppOutput = function(inference_path){
     # Need to get a little more creative to get the elbo updates
     df.elbo = read.table(path.elbo, header = F, sep = "\1", stringsAsFactors = F)
     logw.updates.list = lapply(1:nrow(df.elbo), function(ii, daf){
-            as.numeric(unlist(strsplit(daf[ii,1], " ")))
+            as.numeric(unlist(strsplit(as.character(daf[ii,1]), " ")))
         }, df.elbo)
     
     res = list(weights           = df.weights$weights,
