@@ -7,6 +7,7 @@
 #include <iostream>
 #include <limits>
 #include <random>
+#include <thread> 
 #include "sys/types.h"
 #include "sys/sysinfo.h"
 #include "class.h"
@@ -227,11 +228,18 @@ public:
 
 		// Round 1; looking for best start point
 		if(random_params_init){
+			std::thread t1[p.n_thread];
 
 			for (int ch = 1; ch < p.n_thread; ch++){
-				runOuterLoop(chunks[ch], false, trackers[ch]);
+				t1[ch] = std::thread( [this, chunks, ch, &trackers] {
+					runOuterLoop(chunks[ch], false, trackers[ch]); 
+				} );
 			}
 			runOuterLoop(chunks[0], false, trackers[0]);
+
+			for (int ch = 1; ch < p.n_thread; ch++){
+				t1[ch].join();
+			}
 
 			// Find best init
 			double logw_best = -std::numeric_limits<double>::max();
@@ -264,33 +272,39 @@ public:
 			for (std::uint32_t kk = 0; kk < n_var2; kk++){
 				outf_inits << alpha_init[kk] << " " << mu_init[kk] << std::endl;
 			}
-		}
 
-		// Clear trackers between rounds
-		for (int ch = 0; ch < p.n_thread; ch++){
-			trackers[ch].logw_list.clear();
-			trackers[ch].counts_list.clear();
-			trackers[ch].alpha_list.clear();
-			trackers[ch].mu_list.clear();
-			if(p.verbose){
-				trackers[ch].logw_updates_list.clear();
-			}
+			// Clear trackers between rounds
+			for (int ch = 0; ch < p.n_thread; ch++){
+				trackers[ch].logw_list.clear();
+				trackers[ch].counts_list.clear();
+				trackers[ch].alpha_list.clear();
+				trackers[ch].mu_list.clear();
+				if(p.verbose){
+					trackers[ch].logw_updates_list.clear();
+				}
 
-			trackers[ch].counts_list.resize(n_grid);              // Number of iterations to convergence at each step
-			trackers[ch].mu_list.resize(n_grid);                  // best mu at each ii
-			trackers[ch].alpha_list.resize(n_grid);               // best alpha at each ii
-			trackers[ch].logw_list.resize(n_grid);                // best logw at each ii
-			if(p.verbose){
-				trackers[ch].logw_updates_list.resize(n_grid);        // elbo updates at each ii
+				trackers[ch].counts_list.resize(n_grid);              // Number of iterations to convergence at each step
+				trackers[ch].mu_list.resize(n_grid);                  // best mu at each ii
+				trackers[ch].alpha_list.resize(n_grid);               // best alpha at each ii
+				trackers[ch].logw_list.resize(n_grid);                // best logw at each ii
+				if(p.verbose){
+					trackers[ch].logw_updates_list.resize(n_grid);        // elbo updates at each ii
+				}
 			}
 		}
 
 
 		// Round 2; initial values already assigned to alpha_init, mu_init
+		std::thread t2[p.n_thread];
 		for (int ch = 1; ch < p.n_thread; ch++){
-			runOuterLoop(chunks[ch], true, trackers[ch]);
+			t2[ch] = std::thread( [this, chunks, ch, &trackers] {
+				runOuterLoop(chunks[ch], true, trackers[ch]); 
+			} );
 		}
 		runOuterLoop(chunks[0], true, trackers[0]);
+		for (int ch = 1; ch < p.n_thread; ch++){
+			t2[ch].join();
+		}
 
 		// Stitch trackers back together if using multithreading
 		stitched_tracker.counts_list.resize(n_grid);              // Number of iterations to convergence at each step
