@@ -204,39 +204,45 @@ public:
 	void run(){
 		std::cout << "Starting variational inference" << std::endl;
 		time_check = std::chrono::system_clock::now();
-		std::uint32_t L;
-		Hyps i_hyps;
 
-		// Split into several chunks for multithreading
-		std::vector<int> chunk;
+		// Divide grid of hyperparameters into chunks for multithreading
+		std::vector< std::vector< int > > chunks(p.n_thread);
+		// std::vector<int> chunk;
 		for (int ii = 0; ii < n_grid; ii++){
-			chunk.push_back(ii);
+			int ch_index = (ii % p.n_thread);
+			chunks[ch_index].push_back(ii);
 		}
 
 		// Allocate memory for trackers
-		VbTracker tracker;
-		tracker.counts_list.resize(n_grid);              // Number of iterations to convergence at each step
-		tracker.mu_list.resize(n_grid);                  // best mu at each ii
-		tracker.alpha_list.resize(n_grid);               // best alpha at each ii
-		tracker.logw_list.resize(n_grid);                // best logw at each ii
-		if(p.verbose){
-			tracker.logw_updates_list.resize(n_grid);        // elbo updates at each ii
+		std::vector< VbTracker > trackers(p.n_thread);
+		for (int ch = 0; ch < p.n_thread; ch++){
+			trackers[ch].counts_list.resize(n_grid);              // Number of iterations to convergence at each step
+			trackers[ch].mu_list.resize(n_grid);                  // best mu at each ii
+			trackers[ch].alpha_list.resize(n_grid);               // best alpha at each ii
+			trackers[ch].logw_list.resize(n_grid);                // best logw at each ii
+			if(p.verbose){
+				trackers[ch].logw_updates_list.resize(n_grid);        // elbo updates at each ii
+			}
 		}
 
 		// Round 1; looking for best start point
 		if(random_params_init){
 
-			runOuterLoop(chunk, false, tracker);
+			for (int ch = 1; ch < p.n_thread; ch++){
+				runOuterLoop(chunks[ch], false, trackers[ch]);
+			}
+			runOuterLoop(chunks[0], false, trackers[0]);
 
 			// Find best init
 			double logw_best = -std::numeric_limits<double>::max();
 			bool init_not_set = true;
 			for (int ii = 0; ii < n_grid; ii++){
-				double logw      = tracker.logw_list[ii];
+				int tr_index     = (ii % p.n_thread);
+				double logw      = trackers[tr_index].logw_list[ii];
 				double sigma_g   = hyps_grid(ii, sigma_g_ind);
 				if(std::isfinite(logw) && logw > logw_best && sigma_g > 0){
-					alpha_init   = tracker.alpha_list[ii];
-					mu_init      = tracker.mu_list[ii];
+					alpha_init   = trackers[tr_index].alpha_list[ii];
+					mu_init      = trackers[tr_index].mu_list[ii];
 					logw_best    = logw;
 					init_not_set = false;
 				}
@@ -261,27 +267,50 @@ public:
 		}
 
 		// Clear trackers between rounds
-		tracker.logw_list.clear();
-		tracker.counts_list.clear();
-		tracker.alpha_list.clear();
-		tracker.mu_list.clear();
-		if(p.verbose){
-			tracker.logw_updates_list.clear();
-		}
-		tracker.counts_list.resize(n_grid);              // Number of iterations to convergence at each step
-		tracker.mu_list.resize(n_grid);                  // best mu at each ii
-		tracker.alpha_list.resize(n_grid);               // best alpha at each ii
-		tracker.logw_list.resize(n_grid);                // best logw at each ii
-		if(p.verbose){
-			tracker.logw_updates_list.resize(n_grid);        // elbo updates at each ii
+		for (int ch = 0; ch < p.n_thread; ch++){
+			trackers[ch].logw_list.clear();
+			trackers[ch].counts_list.clear();
+			trackers[ch].alpha_list.clear();
+			trackers[ch].mu_list.clear();
+			if(p.verbose){
+				trackers[ch].logw_updates_list.clear();
+			}
+
+			trackers[ch].counts_list.resize(n_grid);              // Number of iterations to convergence at each step
+			trackers[ch].mu_list.resize(n_grid);                  // best mu at each ii
+			trackers[ch].alpha_list.resize(n_grid);               // best alpha at each ii
+			trackers[ch].logw_list.resize(n_grid);                // best logw at each ii
+			if(p.verbose){
+				trackers[ch].logw_updates_list.resize(n_grid);        // elbo updates at each ii
+			}
 		}
 
 
 		// Round 2; initial values already assigned to alpha_init, mu_init
-		runOuterLoop(chunk, true, tracker);
+		for (int ch = 1; ch < p.n_thread; ch++){
+			runOuterLoop(chunks[ch], true, trackers[ch]);
+		}
+		runOuterLoop(chunks[0], true, trackers[0]);
 
-		// Stich trackers back together if using multithreading
-		stitched_tracker = tracker;
+		// Stitch trackers back together if using multithreading
+		stitched_tracker.counts_list.resize(n_grid);              // Number of iterations to convergence at each step
+		stitched_tracker.mu_list.resize(n_grid);                  // best mu at each ii
+		stitched_tracker.alpha_list.resize(n_grid);               // best alpha at each ii
+		stitched_tracker.logw_list.resize(n_grid);                // best logw at each ii
+		if(p.verbose){
+			stitched_tracker.logw_updates_list.resize(n_grid);        // elbo updates at each ii
+		}
+		int tr;  // tracker index
+		for (int ii = 0; ii < n_grid; ii++){
+			tr                               = (ii % p.n_thread);
+			stitched_tracker.counts_list[ii] = trackers[tr].counts_list[ii];              // Number of iterations to convergence at each step
+			stitched_tracker.mu_list[ii]     = trackers[tr].mu_list[ii];                  // best mu at each ii
+			stitched_tracker.alpha_list[ii]  = trackers[tr].alpha_list[ii];               // best alpha at each ii
+			stitched_tracker.logw_list[ii]   = trackers[tr].logw_list[ii];                // best logw at each ii
+			if(p.verbose){
+				stitched_tracker.logw_updates_list[ii] = trackers[tr].logw_updates_list[ii];        // elbo updates at each ii
+			}
+		}
 
 		// Compute normalised weights using finite elbo
 		weights.resize(n_grid);

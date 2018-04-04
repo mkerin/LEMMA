@@ -12,7 +12,7 @@ class parameters {
 		std::string incl_sids_file, x_param_name, incl_rsids_file;
 		std::string hyps_grid_file, hyps_probs_file, vb_init_file;
 		std::vector< std::string > rsid;
-		int chunk_size, missing_code, n_gconf;
+		int chunk_size, missing_code, n_gconf, n_thread;
 		uint32_t start, end;
 		bool range, maf_lim, info_lim, mode_vcf, mode_lm, test_2dof, select_snps;
 		bool geno_check, mode_joint_model, bgen_wildcard, mode_lm2, mode_vb;
@@ -34,6 +34,7 @@ class parameters {
 		incl_sids_file = "NULL";
 		incl_rsids_file = "NULL";
 		x_param_name = "NULL";
+		n_thread = 1;
 		interaction_analysis = false;
 		chunk_size = 256;
 		missing_code = -999;

@@ -236,6 +236,30 @@ $(t10_dir)/attempt.out: $(t10_dir)/n50_p100.bgen ./bin/bgen_prog $(t10_context)
 $(t10_dir)/hyperpriors_gxage.txt: R/t10/gen_hyps.R
 	$(RSCRIPT) $<
 
+# TEST 11
+# Multi-thread; yeahhh boi!
+t11_dir     := data/io_test/t11_varbvs_multithread
+t11_context := $(t11_dir)/hyperpriors_gxage.txt $(t11_dir)/answer.rds
+$(t11_dir)/attempt.out: $(t11_dir)/n50_p100.bgen ./bin/bgen_prog $(t11_context)
+	./bin/bgen_prog --mode_vb --verbose \
+	    --bgen $< \
+	    --interaction x \
+	    --covar $(dir $@)age.txt \
+	    --pheno $(dir $@)pheno.txt \
+	    --hyps_grid $(dir $@)hyperpriors_gxage.txt \
+	    --hyps_probs $(dir $@)hyperpriors_gxage_probs.txt \
+	    --vb_init $(dir $@)answer_init.txt \
+	    --threads 2 \
+	    --out $@
+	$(RSCRIPT) R/vbayes_x_tests/check_output.R $(dir $@) > $(dir $@)attempt.log
+	diff $(dir $@)answer.log $(dir $@)attempt.log
+
+$(t11_dir)/hyperpriors_gxage.txt: R/t8/gen_hyps.R
+	$(RSCRIPT) $<
+
+$(t11_dir)/answer.rds: R/vbayes_x_tests/run_VBayesR.R $(t11_dir)/hyperpriors_gxage.txt
+	$(RSCRIPT) $< $(dir $@)
+
 
 # Clean dir
 cleanIO:

@@ -67,6 +67,7 @@ void parse_arguments(parameters &p, int argc, char *argv[]) {
 		"--hyps_probs",
 		"--vb_init",
 		"--verbose",
+		"--threads"
 	};
 
 	std::set<std::string>::iterator set_it;
@@ -230,6 +231,13 @@ void parse_arguments(parameters &p, int argc, char *argv[]) {
 				p.start = atoi(argv[i + 2]);
 				p.end = atoi(argv[i + 3]);
 				i += 3;
+			}
+
+			if(strcmp(in_str, "--threads") == 0) {
+				check_counts(in_str, i, 1, argc);
+				p.n_thread = atoi(argv[i + 1]);
+				if(p.n_thread < 1) throw std::runtime_error("--threads must be positive.");
+				i += 1;
 			}
 
 			if(strcmp(in_str, "--incl_sample_ids") == 0) {

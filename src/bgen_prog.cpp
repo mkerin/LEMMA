@@ -190,7 +190,6 @@ int main( int argc, char** argv ) {
 				VB.output_init();
 
 				// Run inference
-				std::cout << "Starting to run variational inference" << std::endl;
 				VB.run();
 				VB.output_results();
 			} else {
