@@ -83,9 +83,9 @@ public:
 	Eigen::VectorXd Xr_init;         // column vector of participant ages
 
 	// Loop variables - don't have to worry about reference parameters
-	Hyps           i_hyps;
-	FreeParameters i_par;
-	double         i_logw;
+	// Hyps           i_hyps;
+	// FreeParameters i_par;
+	// double         i_logw;
 
 	// Things to track from each interaction
 	std::vector< int >             counts_list;              // Number of iterations to convergence at each step
@@ -125,7 +125,6 @@ public:
 		mu_init.resize(n_var2);
 		Hr_init.resize(n_samples);
 		Xr_init.resize(n_samples);
-		i_par.s_sq.resize(n_var2);
 		for(std::uint32_t kk = 0; kk < n_var2; kk++){
 			fwd_pass.push_back(kk);
 			back_pass.push_back(n_var2 - kk - 1);
@@ -204,9 +203,7 @@ public:
 		std::cout << "Starting variational inference" << std::endl;
 		time_check = std::chrono::system_clock::now();
 		std::uint32_t L;
-
-		i_par.mu.resize(n_var2);
-		i_par.alpha.resize(n_var2);
+		Hyps i_hyps;
 
 		// Round 1; looking for best start point
 		if(random_params_init){
@@ -238,7 +235,7 @@ public:
 				random_alpha_mu_init(L);
 
 				// Run outer loop - don't update trackers
-				runOuterLoop(false, L);
+				double i_logw = runOuterLoop(false, L, i_hyps);
 
 				if(std::isfinite(i_logw) && i_logw > logw_best && i_hyps.sigma_g > 0){
 					alpha1    = alpha_init;
@@ -287,7 +284,7 @@ public:
 			}
 
 			// Run outer loop - update trackers
-			runOuterLoop(true, L);
+			double i_logw = runOuterLoop(true, L, i_hyps);
 		}
 
 		// Compute normalised weights using finite elbo
@@ -324,11 +321,14 @@ public:
 		}
 	}
 
-	void runOuterLoop(bool update_trackers, std::uint32_t L){
+	double runOuterLoop(bool update_trackers, std::uint32_t L,
+                      Hyps i_hyps){
 		// minimise KL Divergence and assign elbo estimate
 		// Assumes alpha_init, mu_init and Hr_init already exist
 
 		// Assign initial values
+		FreeParameters i_par;
+		i_par.s_sq.resize(n_var2);
 		i_par.alpha = alpha_init;
 		i_par.mu = mu_init;
 		if(L == n_var2){
@@ -369,11 +369,11 @@ public:
 
 			// log elbo from each iteration, starting from init
 			if(p.verbose && update_trackers){
-				logw_updates.push_back(calc_logw(L));
+				logw_updates.push_back(calc_logw(L, i_hyps, i_par));
 			}
 
 			// Update i_mum i_alpha, i_Hr
-			updateAlphaMu(iter, L);
+			updateAlphaMu(iter, L, i_hyps, i_par);
 			count++;
 
 			// Diagnose convergence
@@ -383,7 +383,7 @@ public:
 			}
 		}
 
-		i_logw = calc_logw(L);
+		double i_logw = calc_logw(L, i_hyps, i_par);
 		if(!std::isfinite(i_logw)){
 			std::cout << "WARNING: non-finite elbo estimate produced" << std::endl;
 		}
@@ -399,9 +399,11 @@ public:
 				logw_updates_list.push_back(logw_updates);
 			}
 		}
+		return i_logw;
 	}
 
-	void updateAlphaMu(std::vector< std::uint32_t > iter, std::uint32_t L){
+	void updateAlphaMu(std::vector< std::uint32_t > iter, std::uint32_t L,
+                       Hyps i_hyps, FreeParameters& i_par){
 		std::uint32_t kk;
 		double rr_k, ff_k;
 		for(std::uint32_t jj = 0; jj < L; jj++){
@@ -495,7 +497,8 @@ public:
 		}
 	}
 
-	double calc_logw(std::uint32_t L){
+	double calc_logw(std::uint32_t L,
+                     Hyps i_hyps, FreeParameters i_par){
 		// Using dHtH, Y, Hr and i_* variables
 		double res, int_linear = 0, int_gamma = 0, int_klbeta = 0;
 
