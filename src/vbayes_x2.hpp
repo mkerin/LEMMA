@@ -203,7 +203,7 @@ public:
 		auto now = std::chrono::system_clock::now();
 		std::chrono::duration<double> elapsed_seconds = now-time_check;;
 		std::cout << " (" << elapsed_seconds.count();
- 		std::cout << "seconds since last timecheck, estimated RAM usage = ";
+ 		std::cout << " seconds since last timecheck, estimated RAM usage = ";
 		std::cout << getValueRAM() << "KB)" << std::endl;
 		time_check = now;
 	}
@@ -255,13 +255,6 @@ public:
 
 				// Run outer loop - don't update trackers
 				runOuterLoop(false, L, i_hyps, tracker);
-
-				// if(std::isfinite(i_logw) && i_logw > logw_best && i_hyps.sigma_g > 0){
-				// 	alpha1    = alpha_init;
-				// 	mu1       = mu_init;
-				// 	logw_best = i_logw;
-				// 	init_not_set = false;
-				// }
 			}
 
 			// Find best init
@@ -288,7 +281,7 @@ public:
 
 			// Write inits to file
 			std::string ofile_inits = fstream_init(outf_inits, "_inits.");
-			std::cout << "Write start points for alpha and mu to " << ofile_inits << std::endl;
+			std::cout << "Writing start points for alpha and mu to " << ofile_inits << std::endl;
 			outf_inits << "alpha mu" << std::endl;
 			for (std::uint32_t kk = 0; kk < n_var2; kk++){
 				outf_inits << alpha_init[kk] << " " << mu_init[kk] << std::endl;
@@ -400,6 +393,9 @@ public:
 		for (std::uint32_t kk = n_var; kk < L; kk++){
 			i_par.s_sq[kk] = i_hyps.sigma_g * i_hyps.sigma / (i_hyps.sigma_g * dHtH(kk) + 1.0);
 		}
+		for (std::uint32_t kk = L; kk < n_var2; kk++){
+			i_par.s_sq[kk] = 0.0;
+		}
 
 		// Run inner loop until convergence
 		int count = 0;
@@ -510,7 +506,7 @@ public:
 	}
 
 	void random_alpha_mu_init(std::uint32_t L,
-                              FreeParameters par){
+                              FreeParameters& par){
 		// par.alpha a uniform simplex, par.mu standard gaussian
 		// Also sets par.Hr
 		std::default_random_engine gen_gauss, gen_unif;

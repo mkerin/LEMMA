@@ -61,7 +61,7 @@ test/tests-main.o: test/tests-main.cpp $(SRCDIR)/bgen_prog.cpp $(HEADERS)
 # Files in data/out are regarded as 'true', and we check that the equivalent
 # file in data/io_test is identical after making changes to the executable.
 IOfiles := t1_range t2_lm t3_lm_two_chunks t4_lm_2dof t5_joint_model t6_lm2 \
-           t7_varbvs_constrained t8_varbvs t9_varbvs_zero_hg
+           t7_varbvs_constrained t8_varbvs t9_varbvs_zero_hg t10_varbvs_without_init
 IOfiles := $(addprefix data/io_test/,$(addsuffix /attempt.out,$(IOfiles)))
 IOfiles += $(addprefix data/io_test/t2_lm/attempt, $(addsuffix .out,B C D))
 IOfiles += $(addprefix data/io_test/t1_range/attempt, $(addsuffix .out,B))
@@ -214,7 +214,27 @@ data/io_test/t9_varbvs_zero_hg/attempt.out: data/io_test/t9_varbvs_zero_hg/n50_p
 $(t9_dir)/answer.rds: R/t9/t9_run_vbayesr.R $(t9_dir)/hyperpriors_gxage.txt
 	$(RSCRIPT) $< $(dir $@)
 
+# TEST 10
+# Test when runnign from random start point.. this may be unstable
+t10_dir     := data/io_test/t10_varbvs_without_init
+t10_context := $(t10_dir)/hyperpriors_gxage.txt $(t10_dir)/answer.rds
+$(t10_dir)/attempt.out: $(t10_dir)/n50_p100.bgen ./bin/bgen_prog $(t10_context)
+	./bin/bgen_prog --mode_vb --verbose \
+	    --bgen $< \
+	    --interaction x \
+	    --covar $(dir $@)age.txt \
+	    --pheno $(dir $@)pheno.txt \
+	    --hyps_grid $(dir $@)hyperpriors_gxage.txt \
+	    --hyps_probs $(dir $@)hyperpriors_gxage_probs.txt \
+	    --out $@
+	$(RSCRIPT) R/t10/check_output.R $(dir $@) > $(dir $@)attempt.log
+	diff $(dir $@)answer.log $(dir $@)attempt.log
 
+$(t10_dir)/hyperpriors_gxage.txt: R/t10/gen_hyps.R
+	$(RSCRIPT) $<
+
+$(t10_dir)/answer.rds: R/vbayes_x_tests/run_VBayesR.R $(t10_dir)/hyperpriors_gxage.txt
+	$(RSCRIPT) $< $(dir $@)
 
 # Clean dir
 cleanIO:
