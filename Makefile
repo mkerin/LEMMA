@@ -1,5 +1,6 @@
 
 RSCRIPT := Rscript
+CP      := cp
 
 TARGET := bin/bgen_prog
 SRCDIR := src
@@ -217,7 +218,7 @@ $(t9_dir)/answer.rds: R/t9/t9_run_vbayesr.R $(t9_dir)/hyperpriors_gxage.txt
 # TEST 10
 # Test when runnign from random start point.. this may be unstable
 t10_dir     := data/io_test/t10_varbvs_without_init
-t10_context := $(t10_dir)/hyperpriors_gxage.txt $(t10_dir)/answer.rds
+t10_context := $(t10_dir)/hyperpriors_gxage.txt
 $(t10_dir)/attempt.out: $(t10_dir)/n50_p100.bgen ./bin/bgen_prog $(t10_context)
 	./bin/bgen_prog --mode_vb --verbose \
 	    --bgen $< \
@@ -227,14 +228,14 @@ $(t10_dir)/attempt.out: $(t10_dir)/n50_p100.bgen ./bin/bgen_prog $(t10_context)
 	    --hyps_grid $(dir $@)hyperpriors_gxage.txt \
 	    --hyps_probs $(dir $@)hyperpriors_gxage_probs.txt \
 	    --out $@
+	$(CP) $(t10_dir)/attempt_inits.out $(t10_dir)/answer_init.txt
+	$(RSCRIPT) R/vbayes_x_tests/run_VBayesR.R $(dir $@)
 	$(RSCRIPT) R/t10/check_output.R $(dir $@) > $(dir $@)attempt.log
 	diff $(dir $@)answer.log $(dir $@)attempt.log
 
 $(t10_dir)/hyperpriors_gxage.txt: R/t10/gen_hyps.R
 	$(RSCRIPT) $<
 
-$(t10_dir)/answer.rds: R/vbayes_x_tests/run_VBayesR.R $(t10_dir)/hyperpriors_gxage.txt
-	$(RSCRIPT) $< $(dir $@)
 
 # Clean dir
 cleanIO:

@@ -5,6 +5,7 @@
 # 
 source('R/misc.R')
 
+args = list("data/io_test/t10_varbvs_without_init")
 args = R.utils::cmdArgs()
 print(args)
 

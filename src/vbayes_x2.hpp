@@ -142,13 +142,6 @@ public:
 			back_pass_short.push_back(n_var - kk - 1);
 		}
 
-		// // Reserve memory for trackers
-		// counts_list.reserve(n_grid);              // Number of iterations to convergence at each step
-		// logw_updates_list.reserve(n_grid);        // elbo updates at each ii
-		// mu_list.reserve(n_grid);                  // best mu at each ii
-		// alpha_list.reserve(n_grid);               // best alpha at each ii
-		// logw_list.reserve(n_grid);                // best logw at each ii
-
 		// Allocate memory - genetic
 		Hty.resize(n_var2);
 		dHtH.resize(n_var2);
@@ -220,45 +213,24 @@ public:
 			chunk.push_back(ii);
 		}
 
-		// reserve memory for trackers
+		// Allocate memory for trackers
 		VbTracker tracker;
-		tracker.counts_list.reserve(n_grid);              // Number of iterations to convergence at each step
-		tracker.logw_updates_list.reserve(n_grid);        // elbo updates at each ii
-		tracker.mu_list.reserve(n_grid);                  // best mu at each ii
-		tracker.alpha_list.reserve(n_grid);               // best alpha at each ii
-		tracker.logw_list.reserve(n_grid);                // best logw at each ii
+		tracker.counts_list.resize(n_grid);              // Number of iterations to convergence at each step
+		tracker.mu_list.resize(n_grid);                  // best mu at each ii
+		tracker.alpha_list.resize(n_grid);               // best alpha at each ii
+		tracker.logw_list.resize(n_grid);                // best logw at each ii
+		if(p.verbose){
+			tracker.logw_updates_list.resize(n_grid);        // elbo updates at each ii
+		}
 
 		// Round 1; looking for best start point
 		if(random_params_init){
-			bool init_not_set = true;
-			Eigen::VectorXd mu1, alpha1;
-			for (int ii = 0; ii < n_grid; ii++){
-				if((ii + 1) % print_interval == 0){
-					std::cout << "\rRound 1: grid point " << ii+1 << "/" << n_grid;
-					print_time_check();
-				}
 
-				// Unpack hyperparams
-				i_hyps.sigma   = hyps_grid(ii, sigma_ind);
-				i_hyps.sigma_b = hyps_grid(ii, sigma_b_ind);
-				i_hyps.sigma_g = hyps_grid(ii, sigma_g_ind);
-				i_hyps.lam_b   = hyps_grid(ii, lam_b_ind);
-				i_hyps.lam_g   = hyps_grid(ii, lam_g_ind);
-
-				// If h_g == 0 then set free parameters approximating interaction
-				// coefficients to zero.
-				if (i_hyps.sigma_g < 0.000000001){
-					L = n_var;
-				} else {
-					L = n_var2;
-				}
-
-				// Run outer loop - don't update trackers
-				runOuterLoop(false, L, i_hyps, tracker);
-			}
+			runOuterLoop(chunk, false, tracker);
 
 			// Find best init
 			double logw_best = -std::numeric_limits<double>::max();
+			bool init_not_set = true;
 			for (int ii = 0; ii < n_grid; ii++){
 				double logw      = tracker.logw_list[ii];
 				double sigma_g   = hyps_grid(ii, sigma_g_ind);
@@ -296,32 +268,17 @@ public:
 		if(p.verbose){
 			tracker.logw_updates_list.clear();
 		}
+		tracker.counts_list.resize(n_grid);              // Number of iterations to convergence at each step
+		tracker.mu_list.resize(n_grid);                  // best mu at each ii
+		tracker.alpha_list.resize(n_grid);               // best alpha at each ii
+		tracker.logw_list.resize(n_grid);                // best logw at each ii
+		if(p.verbose){
+			tracker.logw_updates_list.resize(n_grid);        // elbo updates at each ii
+		}
+
 
 		// Round 2; initial values already assigned to alpha_init, mu_init
-		for (int ii = 0; ii < n_grid; ii++){
-			if(ii % print_interval == 0){
-				std::cout << "\rRound 2: grid point " << ii+1 << "/" << n_grid;
-				print_time_check();
-			}
-
-			// Unpack hyperparams
-			i_hyps.sigma   = hyps_grid(ii, sigma_ind);
-			i_hyps.sigma_b = hyps_grid(ii, sigma_b_ind);
-			i_hyps.sigma_g = hyps_grid(ii, sigma_g_ind);
-			i_hyps.lam_b   = hyps_grid(ii, lam_b_ind);
-			i_hyps.lam_g   = hyps_grid(ii, lam_g_ind);
-
-			// If h_g == 0 then set free parameters approximating interaction
-			// coefficients to zero.
-			if (i_hyps.sigma_g < 0.000000001){
-				L = n_var;
-			} else {
-				L = n_var2;
-			}
-
-			// Run outer loop - update trackers
-			runOuterLoop(true, L, i_hyps, tracker);
-		}
+		runOuterLoop(chunk, true, tracker);
 
 		// Stich trackers back together if using multithreading
 		stitched_tracker = tracker;
@@ -362,7 +319,43 @@ public:
 		std::cout << "Variational inference finished" << std::endl;
 	}
 
-	void runOuterLoop(bool main_loop, std::uint32_t L,
+	void runOuterLoop(std::vector<int> grid_index_list,
+                      const bool main_loop,
+                      VbTracker& tracker){
+		Hyps i_hyps;
+		std::uint32_t L;
+
+		for (auto ii : grid_index_list){
+			if((ii + 1) % print_interval == 0){
+				if(!main_loop){
+					std::cout << "\rRound 1: grid point " << ii+1 << "/" << n_grid;
+				} else {
+					std::cout << "\rRound 2: grid point " << ii+1 << "/" << n_grid;
+				}
+				print_time_check();
+			}
+
+			// Unpack hyperparams
+			i_hyps.sigma   = hyps_grid(ii, sigma_ind);
+			i_hyps.sigma_b = hyps_grid(ii, sigma_b_ind);
+			i_hyps.sigma_g = hyps_grid(ii, sigma_g_ind);
+			i_hyps.lam_b   = hyps_grid(ii, lam_b_ind);
+			i_hyps.lam_g   = hyps_grid(ii, lam_g_ind);
+
+			// If h_g == 0 then set free parameters approximating interaction
+			// coefficients to zero.
+			if (i_hyps.sigma_g < 0.000000001){
+				L = n_var;
+			} else {
+				L = n_var2;
+			}
+
+			// Run outer loop - don't update trackers
+			runInnerLoop(ii, main_loop, L, i_hyps, tracker);
+		}
+	}
+
+	void runInnerLoop(const int ii, bool main_loop, std::uint32_t L,
                       Hyps i_hyps, VbTracker& tracker){
 		// minimise KL Divergence and assign elbo estimate
 		// Assumes alpha_init, mu_init and Hr_init already exist
@@ -437,13 +430,13 @@ public:
 		}
 
 		// Log all things that we want to track
-		tracker.logw_list.push_back(i_logw);
-		tracker.counts_list.push_back(count);
-		tracker.alpha_list.push_back(i_par.alpha);
-		tracker.mu_list.push_back(i_par.mu);
+		tracker.logw_list[ii] = i_logw;
+		tracker.counts_list[ii] = count;
+		tracker.alpha_list[ii] = i_par.alpha;
+		tracker.mu_list[ii] = i_par.mu;
 		if(p.verbose){
 			logw_updates.push_back(i_logw);  // adding converged estimate
-			tracker.logw_updates_list.push_back(logw_updates);
+			tracker.logw_updates_list[ii] = logw_updates;
 		}
 	}
 
