@@ -19,6 +19,21 @@
 
 inline std::size_t find_covar_index( std::string colname, std::vector< std::string > col_names );
 
+struct Hyps{
+	double sigma;
+	double sigma_b;
+	double sigma_g;
+	double lam_b;
+	double lam_g;
+};
+
+struct FreeParameters {
+	std::vector< double > s_sq;
+	Eigen::VectorXd       alpha;
+	Eigen::VectorXd       mu;
+	Eigen::VectorXd       Hr;
+}; 
+
 class VBayesX2 {
 public:
 	// Constants
@@ -68,16 +83,9 @@ public:
 	Eigen::VectorXd Xr_init;         // column vector of participant ages
 
 	// Loop variables - don't have to worry about reference parameters
-	double                i_sigma;
-	double                i_sigma_b;
-	double                i_sigma_g;
-	double                i_lam_b;
-	double                i_lam_g;
-	double                i_logw;
-	std::vector< double > i_s_sq;
-	Eigen::VectorXd       i_alpha;
-	Eigen::VectorXd       i_mu;
-	Eigen::VectorXd       i_Hr;
+	Hyps           i_hyps;
+	FreeParameters i_par;
+	double         i_logw;
 
 	// Things to track from each interaction
 	std::vector< int >             counts_list;              // Number of iterations to convergence at each step
@@ -117,7 +125,7 @@ public:
 		mu_init.resize(n_var2);
 		Hr_init.resize(n_samples);
 		Xr_init.resize(n_samples);
-		i_s_sq.resize(n_var2);
+		i_par.s_sq.resize(n_var2);
 		for(std::uint32_t kk = 0; kk < n_var2; kk++){
 			fwd_pass.push_back(kk);
 			back_pass.push_back(n_var2 - kk - 1);
@@ -197,8 +205,8 @@ public:
 		time_check = std::chrono::system_clock::now();
 		std::uint32_t L;
 
-		i_mu.resize(n_var2);
-		i_alpha.resize(n_var2);
+		i_par.mu.resize(n_var2);
+		i_par.alpha.resize(n_var2);
 
 		// Round 1; looking for best start point
 		if(random_params_init){
@@ -212,15 +220,15 @@ public:
 				}
 
 				// Unpack hyperparams
-				i_sigma   = hyps_grid(ii, sigma_ind);
-				i_sigma_b = hyps_grid(ii, sigma_b_ind);
-				i_sigma_g = hyps_grid(ii, sigma_g_ind);
-				i_lam_b   = hyps_grid(ii, lam_b_ind);
-				i_lam_g   = hyps_grid(ii, lam_g_ind);
+				i_hyps.sigma   = hyps_grid(ii, sigma_ind);
+				i_hyps.sigma_b = hyps_grid(ii, sigma_b_ind);
+				i_hyps.sigma_g = hyps_grid(ii, sigma_g_ind);
+				i_hyps.lam_b   = hyps_grid(ii, lam_b_ind);
+				i_hyps.lam_g   = hyps_grid(ii, lam_g_ind);
 
 				// If h_g == 0 then set free parameters approximating interaction
 				// coefficients to zero.
-				if (i_sigma_g < 0.000000001){
+				if (i_hyps.sigma_g < 0.000000001){
 					L = n_var;
 				} else {
 					L = n_var2;
@@ -232,7 +240,7 @@ public:
 				// Run outer loop - don't update trackers
 				runOuterLoop(false, L);
 
-				if(std::isfinite(i_logw) && i_logw > logw_best && i_sigma_g > 0){
+				if(std::isfinite(i_logw) && i_logw > logw_best && i_hyps.sigma_g > 0){
 					alpha1    = alpha_init;
 					mu1       = mu_init;
 					logw_best = i_logw;
@@ -264,15 +272,15 @@ public:
 			}
 
 			// Unpack hyperparams
-			i_sigma   = hyps_grid(ii, sigma_ind);
-			i_sigma_b = hyps_grid(ii, sigma_b_ind);
-			i_sigma_g = hyps_grid(ii, sigma_g_ind);
-			i_lam_b   = hyps_grid(ii, lam_b_ind);
-			i_lam_g   = hyps_grid(ii, lam_g_ind);
+			i_hyps.sigma   = hyps_grid(ii, sigma_ind);
+			i_hyps.sigma_b = hyps_grid(ii, sigma_b_ind);
+			i_hyps.sigma_g = hyps_grid(ii, sigma_g_ind);
+			i_hyps.lam_b   = hyps_grid(ii, lam_b_ind);
+			i_hyps.lam_g   = hyps_grid(ii, lam_g_ind);
 
 			// If h_g == 0 then set free parameters approximating interaction
 			// coefficients to zero.
-			if (i_sigma_g < 0.000000001){
+			if (i_hyps.sigma_g < 0.000000001){
 				L = n_var;
 			} else {
 				L = n_var2;
@@ -321,24 +329,24 @@ public:
 		// Assumes alpha_init, mu_init and Hr_init already exist
 
 		// Assign initial values
-		i_alpha = alpha_init;
-		i_mu = mu_init;
+		i_par.alpha = alpha_init;
+		i_par.mu = mu_init;
 		if(L == n_var2){
-			i_Hr = Hr_init;
+			i_par.Hr = Hr_init;
 		} else {
-			i_Hr = Xr_init;
+			i_par.Hr = Xr_init;
 			for(std::uint32_t kk = L; kk < n_var2; kk++){
-				i_alpha[kk] = 0.0;
-				i_mu[kk] = 0.0;
+				i_par.alpha[kk] = 0.0;
+				i_par.mu[kk] = 0.0;
 			}
 		}
 
 		// Update s_sq
 		for (std::uint32_t kk = 0; kk < n_var; kk++){
-			i_s_sq[kk] = i_sigma_b * i_sigma / (i_sigma_b * dHtH(kk) + 1.0);
+			i_par.s_sq[kk] = i_hyps.sigma_b * i_hyps.sigma / (i_hyps.sigma_b * dHtH(kk) + 1.0);
 		}
 		for (std::uint32_t kk = n_var; kk < L; kk++){
-			i_s_sq[kk] = i_sigma_g * i_sigma / (i_sigma_g * dHtH(kk) + 1.0);
+			i_par.s_sq[kk] = i_hyps.sigma_g * i_hyps.sigma / (i_hyps.sigma_g * dHtH(kk) + 1.0);
 		}
 
 		// Run inner loop until convergence
@@ -349,7 +357,7 @@ public:
 		std::vector< std::uint32_t > iter;
 		std::vector< double > logw_updates;
 		while(!converged){
-			alpha_prev = i_alpha;
+			alpha_prev = i_par.alpha;
 
 			if(count % 2 == 0){
 				iter = fwd_pass;
@@ -369,7 +377,7 @@ public:
 			count++;
 
 			// Diagnose convergence
-			diff = (alpha_prev - i_alpha).cwiseAbs().maxCoeff();
+			diff = (alpha_prev - i_par.alpha).cwiseAbs().maxCoeff();
 			if(diff < diff_tol){
 				converged = true;
 			}
@@ -384,8 +392,8 @@ public:
 		if(update_trackers){
 			logw_list.push_back(i_logw);
 			counts_list.push_back(count);
-			alpha_list.push_back(i_alpha);
-			mu_list.push_back(i_mu);
+			alpha_list.push_back(i_par.alpha);
+			mu_list.push_back(i_par.mu);
 			if(p.verbose){
 				logw_updates.push_back(i_logw);  // adding converged estimate
 				logw_updates_list.push_back(logw_updates);
@@ -400,31 +408,31 @@ public:
 			kk = iter[jj];
 			assert(kk < L);
 
-			rr_k = i_alpha(kk) * i_mu(kk);
+			rr_k = i_par.alpha(kk) * i_par.mu(kk);
 
 			// Update mu (eq 9)
-			i_mu(kk) = i_s_sq[kk] / i_sigma;
+			i_par.mu(kk) = i_par.s_sq[kk] / i_hyps.sigma;
 			if (kk < n_var){
-				i_mu(kk) *= (Hty(kk) - i_Hr.dot(X.col(kk)) + dHtH(kk) * rr_k);
+				i_par.mu(kk) *= (Hty(kk) - i_par.Hr.dot(X.col(kk)) + dHtH(kk) * rr_k);
 			} else {
-				i_mu(kk) *= (Hty(kk) - i_Hr.dot(X.col(kk - n_var).cwiseProduct(aa)) + dHtH(kk) * rr_k);
+				i_par.mu(kk) *= (Hty(kk) - i_par.Hr.dot(X.col(kk - n_var).cwiseProduct(aa)) + dHtH(kk) * rr_k);
 			}
 
 			// Update alpha (eq 10)  TODO: check syntax / i_  / sigmoid here!
 			if (kk < n_var){
-				ff_k = std::log(i_lam_b / (1.0 - i_lam_b) + eps) + std::log(i_s_sq[kk] / i_sigma_b / i_sigma + eps) / 2.0;
-				ff_k += i_mu(kk) * i_mu(kk) / i_s_sq[kk] / 2.0;
+				ff_k = std::log(i_hyps.lam_b / (1.0 - i_hyps.lam_b) + eps) + std::log(i_par.s_sq[kk] / i_hyps.sigma_b / i_hyps.sigma + eps) / 2.0;
+				ff_k += i_par.mu(kk) * i_par.mu(kk) / i_par.s_sq[kk] / 2.0;
 			} else {
-				ff_k = std::log(i_lam_g / (1.0 - i_lam_g) + eps) + std::log(i_s_sq[kk] / i_sigma_g / i_sigma + eps) / 2.0;
-				ff_k += i_mu(kk) * i_mu(kk) / i_s_sq[kk] / 2.0;
+				ff_k = std::log(i_hyps.lam_g / (1.0 - i_hyps.lam_g) + eps) + std::log(i_par.s_sq[kk] / i_hyps.sigma_g / i_hyps.sigma + eps) / 2.0;
+				ff_k += i_par.mu(kk) * i_par.mu(kk) / i_par.s_sq[kk] / 2.0;
 			}
-			i_alpha(kk) = sigmoid(ff_k);
+			i_par.alpha(kk) = sigmoid(ff_k);
 
 			// Update i_Hr
 			if (kk < n_var){
-				i_Hr = i_Hr + (i_alpha(kk)*i_mu(kk) - rr_k) * X.col(kk);
+				i_par.Hr = i_par.Hr + (i_par.alpha(kk)*i_par.mu(kk) - rr_k) * X.col(kk);
 			} else {
-				i_Hr = i_Hr + (i_alpha(kk)*i_mu(kk) - rr_k) * (X.col(kk - n_var).cwiseProduct(aa));
+				i_par.Hr = i_par.Hr + (i_par.alpha(kk)*i_par.mu(kk) - rr_k) * (X.col(kk - n_var).cwiseProduct(aa));
 			}
 		}
 	}
@@ -494,40 +502,40 @@ public:
 		// gen Var[B_k]
 		Eigen::VectorXd varB(n_var2);
 		for (std::uint32_t kk = 0; kk < L; kk++){
-			varB(kk) = i_alpha(kk)*(i_s_sq[kk] + (1 - i_alpha(kk)) * i_mu(kk) * i_mu(kk));
+			varB(kk) = i_par.alpha(kk)*(i_par.s_sq[kk] + (1 - i_par.alpha(kk)) * i_par.mu(kk) * i_par.mu(kk));
 		}
 		for (std::uint32_t kk = L; kk < n_var2; kk++){
 			varB(kk) = 0.0;
 		}
 
 		// Expectation of linear regression log-likelihood
-		int_linear -= ((double) n_samples) * std::log(2.0 * PI * i_sigma + eps) / 2.0;
-		int_linear -= (Y - i_Hr).squaredNorm() / 2.0 / i_sigma;
-		int_linear -= 0.5 * (dHtH.dot(varB)) / i_sigma;
+		int_linear -= ((double) n_samples) * std::log(2.0 * PI * i_hyps.sigma + eps) / 2.0;
+		int_linear -= (Y - i_par.Hr).squaredNorm() / 2.0 / i_hyps.sigma;
+		int_linear -= 0.5 * (dHtH.dot(varB)) / i_hyps.sigma;
 
 		// gamma
 		for (std::uint32_t kk = 0; kk < n_var; kk++){
-			int_gamma += i_alpha(kk) * std::log(i_lam_b + eps);
-			int_gamma += (1.0 - i_alpha(kk)) * std::log(1.0 - i_lam_b + eps);
+			int_gamma += i_par.alpha(kk) * std::log(i_hyps.lam_b + eps);
+			int_gamma += (1.0 - i_par.alpha(kk)) * std::log(1.0 - i_hyps.lam_b + eps);
 		}
 		for (std::uint32_t kk = n_var; kk < L; kk++){
-			int_gamma += i_alpha(kk) * std::log(i_lam_g + eps);
-			int_gamma += (1.0 - i_alpha(kk)) * std::log(1.0 - i_lam_g + eps);
+			int_gamma += i_par.alpha(kk) * std::log(i_hyps.lam_g + eps);
+			int_gamma += (1.0 - i_par.alpha(kk)) * std::log(1.0 - i_hyps.lam_g + eps);
 		}
 
 		// kl-beta
-		double var_b = i_sigma * i_sigma_b, var_g = i_sigma * i_sigma_g;
+		double var_b = i_hyps.sigma * i_hyps.sigma_b, var_g = i_hyps.sigma * i_hyps.sigma_g;
 		for (std::uint32_t kk = 0; kk < n_var; kk++){
-			int_klbeta += i_alpha(kk) * (1.0 + std::log(i_s_sq[kk] / var_b + eps) -
-								(i_s_sq[kk] + i_mu(kk) * i_mu(kk)) / var_b) / 2.0;
+			int_klbeta += i_par.alpha(kk) * (1.0 + std::log(i_par.s_sq[kk] / var_b + eps) -
+								(i_par.s_sq[kk] + i_par.mu(kk) * i_par.mu(kk)) / var_b) / 2.0;
 		}
 		for (std::uint32_t kk = n_var; kk < L; kk++){
-			int_klbeta += i_alpha(kk) * (1.0 + std::log(i_s_sq[kk] / var_g + eps) -
-								(i_s_sq[kk] + i_mu(kk) * i_mu(kk)) / var_g) / 2.0;
+			int_klbeta += i_par.alpha(kk) * (1.0 + std::log(i_par.s_sq[kk] / var_g + eps) -
+								(i_par.s_sq[kk] + i_par.mu(kk) * i_par.mu(kk)) / var_g) / 2.0;
 		}
 		for (std::uint32_t kk = 0; kk < L; kk++){
-			int_klbeta -= i_alpha[kk] * std::log(i_alpha[kk] + eps);
-			int_klbeta -= (1 - i_alpha[kk]) * std::log(1 - i_alpha[kk] + eps);
+			int_klbeta -= i_par.alpha[kk] * std::log(i_par.alpha[kk] + eps);
+			int_klbeta -= (1 - i_par.alpha[kk]) * std::log(1 - i_par.alpha[kk] + eps);
 		}
 
 		res = int_linear + int_gamma + int_klbeta;
