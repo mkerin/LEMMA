@@ -308,6 +308,8 @@ public:
 
 
 		// Round 2; initial values already assigned to alpha_init, mu_init
+		std::cout << "Starting Round 2 (resetting timecheck)" << std::endl;
+		time_check = std::chrono::system_clock::now();
 		std::thread t2[p.n_thread];
 		for (int ch = 1; ch < p.n_thread; ch++){
 			t2[ch] = std::thread( [this, chunks, ch, &trackers] {
