@@ -1,6 +1,7 @@
 
 RSCRIPT := Rscript
 CP      := cp
+PRINTF  := printf
 
 TARGET := bin/bgen_prog
 SRCDIR := src
@@ -18,7 +19,7 @@ rescomp: FLAGS += -O3 -lbgen -ldb -lsqlite3 -lboost -lz -ldl -lrt -lpthread -lzs
 rescomp: $(TARGET)
 
 rescomp-optim: CXX = /apps/well/gcc/7.2.0/bin/g++
-rescomp-optim: FLAGS += -O3 -ffast-math -fprefetch-loop-arrays -flto -lbgen -ldb -lsqlite3 -lboost -lz -ldl -lrt -lpthread -lzstd
+rescomp-optim: FLAGS += -O3 -fno-rounding-math -fno-signed-zeros -fprefetch-loop-arrays -flto -lbgen -ldb -lsqlite3 -lboost -lz -ldl -lrt -lpthread -lzstd
 rescomp-optim: $(TARGET)
 
 rescomp-debug: CXX = /apps/well/gcc/7.2.0/bin/g++
@@ -39,7 +40,8 @@ $(TARGET) lastest_compile_branch.txt : $(SRCDIR)/bgen_prog.cpp $(HEADERS)
 	$(info $$CXX is [${CXX}])
 	$(info $$CFLAGS is [${CFLAGS}])
 	$(info $$LDFLAGS is [${LDFLAGS}])
-	git rev-parse --abbrev-ref HEAD > lastest_compile_branch.txt
+	git rev-parse --abbrev-ref HEAD > latest_compile_branch.txt
+	$(PRINTF) "\n\nCompilation flags:\n$(FLAGS)" >> latest_compile_branch.txt
 	$(CXX) -o $@ $< $(FLAGS)
 
 file_parse : file_parse.cpp

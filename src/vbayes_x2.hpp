@@ -61,8 +61,11 @@ public:
 		counts_list.resize(n_list);
 		mu_list.resize(n_list);
 		alpha_list.resize(n_list);
-		logw_list.resize(n_list);
 		logw_updates_list.resize(n_list);
+		logw_list.resize(n_list);
+		for (int ll = 0; ll < n_list; ll++){
+			logw_list[ll] = -std::numeric_limits<double>::max();
+		}
 	}
 
 	void clear(){
@@ -88,6 +91,7 @@ public:
 	const int iter_max = 100;
 	const double PI = 3.1415926535897;
 	const double diff_tol = 1e-4;
+	const int r1_max = 50;
 	const double eps = std::numeric_limits<double>::min();
 	const double logw_tol = 10;
 	int print_interval;              // print time every x grid points
@@ -253,14 +257,28 @@ public:
 
 		// Round 1; looking for best start point
 		if(random_params_init){
-			std::thread t1[p.n_thread];
+			std::vector< int > r1_points;
+			int r1_grid = 0, r1_interval = std::max(1, n_grid / r1_max);
+			for (int ii =0; ii < n_grid; ii++){
+				if(ii % r1_interval == 0){
+					r1_points.push_back(ii);
+					r1_grid++;
+				}
+			}
 
+			std::vector< std::vector< int > > r1_chunks(p.n_thread);
+			for (int rr = 0; rr < r1_grid; rr++){
+				int ch_index = (rr % p.n_thread);
+				r1_chunks[ch_index].push_back(r1_points[rr]);
+			}
+
+			std::thread t1[p.n_thread];
 			for (int ch = 1; ch < p.n_thread; ch++){
-				t1[ch] = std::thread( [this, chunks, ch, &trackers] {
-					runOuterLoop(chunks[ch], false, trackers[ch]); 
+				t1[ch] = std::thread( [this, r1_chunks, ch, &trackers] {
+					runOuterLoop(r1_chunks[ch], false, trackers[ch]); 
 				} );
 			}
-			runOuterLoop(chunks[0], false, trackers[0]);
+			runOuterLoop(r1_chunks[0], false, trackers[0]);
 
 			for (int ch = 1; ch < p.n_thread; ch++){
 				t1[ch].join();
