@@ -19,7 +19,7 @@ df.logw = as.data.frame(cbind(cpp.res$logw.vec, r.res$logw.vec))
 colnames(df.logw) = c("cpp", "r")
 print(df.logw)
 
-if (sum((df.logw$r - df.logw$cpp)^2) < 0.1){
+if (sum((df.logw$r - df.logw$cpp)^2) < 0.5){
     print("PASS")
 } else {
     print("FAIL")

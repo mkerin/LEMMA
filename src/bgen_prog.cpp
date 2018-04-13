@@ -158,6 +158,7 @@ int main( int argc, char** argv ) {
 
 			// Step 3; Center phenos, normalise covars
 			Data.center_matrix( Data.Y, Data.n_pheno );
+			Data.scale_matrix( Data.Y, Data.n_pheno, Data.pheno_names );
 			if(p.covar_file != "NULL"){
 				Data.center_matrix( Data.W, Data.n_covar );
 				Data.scale_matrix( Data.W, Data.n_covar, Data.covar_names );
