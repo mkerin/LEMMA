@@ -10,14 +10,14 @@ class parameters {
 	public :
 		std::string bgen_file, chr, out_file, pheno_file, covar_file, bgi_file;
 		std::string incl_sids_file, x_param_name, incl_rsids_file;
-		std::string hyps_grid_file, hyps_probs_file, vb_init_file;
+		std::string r1_hyps_grid_file, hyps_grid_file, hyps_probs_file, vb_init_file;
 		std::vector< std::string > rsid;
 		int chunk_size, missing_code, n_gconf, n_thread;
 		uint32_t start, end;
 		bool range, maf_lim, info_lim, mode_vcf, mode_lm, test_2dof, select_snps;
 		bool geno_check, mode_joint_model, bgen_wildcard, mode_lm2, mode_vb;
-		bool select_rsid, interaction_analysis, verbose;
-		double min_maf, min_info;
+		bool select_rsid, interaction_analysis, verbose, logw_lim_set;
+		double min_maf, min_info, logw_tol;
 		std::vector < std::string > incl_sample_ids, gconf;
 	
 	// constructors/destructors	
@@ -28,6 +28,7 @@ class parameters {
 		pheno_file = "NULL";
 		covar_file = "NULL";
 		out_file = "NULL";
+		r1_hyps_grid_file = "NULL";
 		hyps_grid_file = "NULL";
 		hyps_probs_file = "NULL";
 		vb_init_file = "NULL";
@@ -51,6 +52,7 @@ class parameters {
 		select_rsid = false;
 		geno_check = true; // check allele probs sum to 1 by default
 		verbose = false;
+		logw_lim_set = false;
 	}
 
 	~parameters() {

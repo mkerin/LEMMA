@@ -90,10 +90,9 @@ public:
 	// Constants
 	const int iter_max = 100;
 	const double PI = 3.1415926535897;
-	const double diff_tol = 1e-4;
-	const int r1_max = 50;
+	const double alpha_tol = 1e-4;
 	const double eps = std::numeric_limits<double>::min();
-	const double logw_tol = 10;
+	double logw_tol = 10;
 	int print_interval;              // print time every x grid points
 
 	// Column order of hyperparameters in grid
@@ -125,6 +124,7 @@ public:
 	Eigen::VectorXd dHtH;       // diagonal of H^T x H where H = (X, Z)
 	Eigen::VectorXd Hty;		// vector of H^T x y where H = (X, Z)
 	Eigen::VectorXd aa;         // column vector of participant ages
+	Eigen::MatrixXd r1_hyps_grid;
 	Eigen::MatrixXd hyps_grid;
 	Eigen::MatrixXd probs_grid; // prob of each point in grid under hyps
 
@@ -162,6 +162,9 @@ public:
 		n_samples =      dat.n_samples;
 		n_grid =         dat.hyps_grid.rows();
 		print_interval = std::max(1, n_grid / 10);
+		if(p.logw_lim_set){
+			logw_tol = p.logw_tol;
+		}
 
 		// Allocate memory - vb
 		alpha_init.resize(n_var2);
@@ -202,10 +205,16 @@ public:
 			random_params_init = true;
 		}
 
-		// Assign data - genetic
+		// Assign data - hyperparameters
 		probs_grid             = dat.imprt_grid;
 		hyps_grid              = dat.hyps_grid;
+		if(p.r1_hyps_grid_file == "NULL"){
+			r1_hyps_grid       = dat.hyps_grid;
+		} else {
+			r1_hyps_grid       = dat.r1_hyps_grid;
+		}
 
+		// Assign data - genetic
 		Eigen::MatrixXd I_a_sq = aa.cwiseProduct(aa).asDiagonal();
 
 		// Avoid calling X.tranpose()
@@ -242,43 +251,30 @@ public:
 			std::cout << "Running on " << p.n_thread << " threads" << std::endl;
 		}
 
-		// Divide grid of hyperparameters into chunks for multithreading
-		std::vector< std::vector< int > > chunks(p.n_thread);
-		for (int ii = 0; ii < n_grid; ii++){
-			int ch_index = (ii % p.n_thread);
-			chunks[ch_index].push_back(ii);
-		}
-
-		// Allocate memory for trackers
-		std::vector< VbTracker > trackers(p.n_thread);
-		for (int ch = 0; ch < p.n_thread; ch++){
-			trackers[ch].resize(n_grid);
-		}
-
 		// Round 1; looking for best start point
 		if(random_params_init){
-			std::vector< int > r1_points;
-			int r1_grid = 0, r1_interval = std::max(1, n_grid / r1_max);
-			for (int ii =0; ii < n_grid; ii++){
-				if(ii % r1_interval == 0){
-					r1_points.push_back(ii);
-					r1_grid++;
-				}
+			int r1_n_grid = r1_hyps_grid.rows();
+
+			// Round 1; Divide grid of hyperparameters into chunks for multithreading
+			std::vector< std::vector< int > > chunks(p.n_thread);
+			for (int ii = 0; ii < r1_n_grid; ii++){
+				int ch_index = (ii % p.n_thread);
+				chunks[ch_index].push_back(ii);
 			}
 
-			std::vector< std::vector< int > > r1_chunks(p.n_thread);
-			for (int rr = 0; rr < r1_grid; rr++){
-				int ch_index = (rr % p.n_thread);
-				r1_chunks[ch_index].push_back(r1_points[rr]);
+			// Round 1; Allocate memory for trackers
+			std::vector< VbTracker > trackers(p.n_thread);
+			for (int ch = 0; ch < p.n_thread; ch++){
+				trackers[ch].resize(r1_n_grid);
 			}
 
 			std::thread t1[p.n_thread];
 			for (int ch = 1; ch < p.n_thread; ch++){
-				t1[ch] = std::thread( [this, r1_chunks, ch, &trackers] {
-					runOuterLoop(r1_chunks[ch], false, trackers[ch]); 
+				t1[ch] = std::thread( [this, r1_n_grid, chunks, ch, &trackers] {
+					runOuterLoop(r1_hyps_grid, r1_n_grid, chunks[ch], false, trackers[ch]); 
 				} );
 			}
-			runOuterLoop(r1_chunks[0], false, trackers[0]);
+			runOuterLoop(r1_hyps_grid, r1_n_grid, chunks[0], false, trackers[0]);
 
 			for (int ch = 1; ch < p.n_thread; ch++){
 				t1[ch].join();
@@ -287,7 +283,7 @@ public:
 			// Find best init
 			double logw_best = -std::numeric_limits<double>::max();
 			bool init_not_set = true;
-			for (int ii = 0; ii < n_grid; ii++){
+			for (int ii = 0; ii < r1_n_grid; ii++){
 				int tr_index     = (ii % p.n_thread);
 				double logw      = trackers[tr_index].logw_list[ii];
 				double sigma_g   = hyps_grid(ii, sigma_g_ind);
@@ -315,15 +311,20 @@ public:
 			for (std::uint32_t kk = 0; kk < n_var2; kk++){
 				outf_inits << alpha_init[kk] << " " << mu_init[kk] << std::endl;
 			}
-
-			// Clear trackers between rounds
-			// This may actually be un-necessary?
-			for (int ch = 0; ch < p.n_thread; ch++){
-				trackers[ch].clear();
-				trackers[ch].resize(n_grid);
-			}
 		}
 
+		// Round 2; Divide grid of hyperparameters into chunks for multithreading
+		std::vector< std::vector< int > > chunks(p.n_thread);
+		for (int ii = 0; ii < n_grid; ii++){
+			int ch_index = (ii % p.n_thread);
+			chunks[ch_index].push_back(ii);
+		}
+
+		// Round 2; Allocate memory for trackers
+		std::vector< VbTracker > trackers(p.n_thread);
+		for (int ch = 0; ch < p.n_thread; ch++){
+			trackers[ch].resize(n_grid);
+		}
 
 		// Round 2; initial values already assigned to alpha_init, mu_init
 		std::cout << "Starting Round 2 (resetting timecheck)" << std::endl;
@@ -331,10 +332,10 @@ public:
 		std::thread t2[p.n_thread];
 		for (int ch = 1; ch < p.n_thread; ch++){
 			t2[ch] = std::thread( [this, chunks, ch, &trackers] {
-				runOuterLoop(chunks[ch], true, trackers[ch]); 
+				runOuterLoop(hyps_grid, n_grid, chunks[ch], true, trackers[ch]); 
 			} );
 		}
-		runOuterLoop(chunks[0], true, trackers[0]);
+		runOuterLoop(hyps_grid, n_grid, chunks[0], true, trackers[0]);
 		for (int ch = 1; ch < p.n_thread; ch++){
 			t2[ch].join();
 		}
@@ -382,7 +383,9 @@ public:
 		std::cout << "Variational inference finished" << std::endl;
 	}
 
-	void runOuterLoop(std::vector<int> grid_index_list,
+	void runOuterLoop(const Eigen::Ref<const Eigen::MatrixXd>& outer_hyps_grid,
+                      const int outer_n_grid,
+                      std::vector<int> grid_index_list,
                       const bool main_loop,
                       VbTracker& tracker){
 		Hyps i_hyps;
@@ -391,19 +394,19 @@ public:
 		for (auto ii : grid_index_list){
 			if((ii + 1) % print_interval == 0){
 				if(!main_loop){
-					std::cout << "\rRound 1: grid point " << ii+1 << "/" << n_grid;
+					std::cout << "\rRound 1: grid point " << ii+1 << "/" << outer_n_grid;
 				} else {
-					std::cout << "\rRound 2: grid point " << ii+1 << "/" << n_grid;
+					std::cout << "\rRound 2: grid point " << ii+1 << "/" << outer_n_grid;
 				}
 				print_time_check();
 			}
 
 			// Unpack hyperparams
-			i_hyps.sigma   = hyps_grid(ii, sigma_ind);
-			i_hyps.sigma_b = hyps_grid(ii, sigma_b_ind);
-			i_hyps.sigma_g = hyps_grid(ii, sigma_g_ind);
-			i_hyps.lam_b   = hyps_grid(ii, lam_b_ind);
-			i_hyps.lam_g   = hyps_grid(ii, lam_g_ind);
+			i_hyps.sigma   = outer_hyps_grid(ii, sigma_ind);
+			i_hyps.sigma_b = outer_hyps_grid(ii, sigma_b_ind);
+			i_hyps.sigma_g = outer_hyps_grid(ii, sigma_g_ind);
+			i_hyps.lam_b   = outer_hyps_grid(ii, lam_b_ind);
+			i_hyps.lam_g   = outer_hyps_grid(ii, lam_g_ind);
 
 			// If h_g == 0 then set free parameters approximating interaction
 			// coefficients to zero.
@@ -456,12 +459,13 @@ public:
 		// Run inner loop until convergence
 		int count = 0;
 		bool converged = false;
-		double diff;
+		double alpha_diff, logw_diff, logw_prev, i_logw = -std::numeric_limits<double>::max();
 		Eigen::VectorXd alpha_prev;
 		std::vector< std::uint32_t > iter;
 		std::vector< double > logw_updates;
 		while(!converged){
 			alpha_prev = i_par.alpha;
+			logw_prev = i_logw;
 
 			if(count % 2 == 0){
 				iter = fwd_pass;
@@ -472,8 +476,9 @@ public:
 			}
 
 			// log elbo from each iteration, starting from init
-			if(p.verbose && main_loop){
-				logw_updates.push_back(calc_logw(L, i_hyps, i_par));
+			if((p.verbose || p.logw_lim_set) && main_loop){
+				i_logw = calc_logw(L, i_hyps, i_par);
+				logw_updates.push_back(i_logw);
 			}
 
 			// Update i_mum i_alpha, i_Hr
@@ -481,13 +486,18 @@ public:
 			count++;
 
 			// Diagnose convergence
-			diff = (alpha_prev - i_par.alpha).cwiseAbs().maxCoeff();
-			if(diff < diff_tol){
+			alpha_diff = (alpha_prev - i_par.alpha).cwiseAbs().maxCoeff();
+			if(p.logw_lim_set){
+				logw_diff = i_logw - logw_prev;
+			} else {
+				logw_diff = 0.0;
+			}
+			if(alpha_diff < alpha_tol && logw_diff < logw_tol){
 				converged = true;
 			}
 		}
 
-		double i_logw = calc_logw(L, i_hyps, i_par);
+		i_logw = calc_logw(L, i_hyps, i_par);
 		if(!std::isfinite(i_logw)){
 			std::cout << "WARNING: non-finite elbo estimate produced" << std::endl;
 		}
@@ -543,19 +553,20 @@ public:
 	std::vector< double > normaliseLogWeights(std::vector< double > my_weights){
 		// Safer to normalise log-weights than niavely convert to weights
 		// Skip non-finite values!
+		int nn = my_weights.size();
 		double max_elem = *std::max_element(my_weights.begin(), my_weights.end());
-		for (int ii = 0; ii < n_grid; ii++){
+		for (int ii = 0; ii < nn; ii++){
 			my_weights[ii] = std::exp(my_weights[ii] - max_elem);
 		}
 
 		double my_sum = 0.0;
-		for (int ii = 0; ii < n_grid; ii++){
+		for (int ii = 0; ii < nn; ii++){
 			if(std::isfinite(weights[ii])){
 				my_sum += my_weights[ii];
 			}
 		}
 
-		for (int ii = 0; ii < n_grid; ii++){
+		for (int ii = 0; ii < nn; ii++){
 			my_weights[ii] /= my_sum;
 		}
 		return my_weights;
