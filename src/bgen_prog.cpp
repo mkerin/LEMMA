@@ -24,6 +24,7 @@
 void read_directory(const std::string& name, std::vector<std::string>& v);
 
 // TODO: Sensible restructuring of interaction code
+// TODO: Should not require grid_probs
 // TODO: Use high precision double for pval
 // TODO: implement tests for info filter
 // TODO: tests for read_pheno, read_covar? Clarify if args for these are compulsory.

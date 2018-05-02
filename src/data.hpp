@@ -777,11 +777,11 @@ class data
 		// Verify header of grid file as expected
 		if(params.interaction_analysis){
 			if(!std::includes(hyps_names.begin(), hyps_names.end(), true_gxage_names.begin(), true_gxage_names.end())){
-				throw std::runtime_error("Column names of --hyps_grid must be sigma_e sigma_b sigma_g lambda_b lambda_g");
+				throw std::runtime_error("Column names of --hyps_grid must be sigma sigma_b sigma_g lambda_b lambda_g");
 			}
 		} else {
 			if(hyps_names != true_fixed_names){
-				throw std::runtime_error("Column names of --hyps_grid must be sigma_e sigma_b lambda");
+				throw std::runtime_error("Column names of --hyps_grid must be sigma sigma_b lambda");
 			}
 		}
 
