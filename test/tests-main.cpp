@@ -9,6 +9,7 @@
 #include "../src/tools/eigen3.3/Dense"
 #include "../src/parse_arguments.hpp"
 #include "../src/vbayes.hpp"
+#include "../src/genotype_matrix.hpp"
 // #include "../src/data.hpp"
 
 TEST_CASE( "Checking parse_arguments", "[io]" ) {
@@ -212,6 +213,58 @@ TEST_CASE( "Algebra in Eigen3" ) {
 		res << 1, std::numeric_limits<double>::quiet_NaN(), 3;
 		CHECK(std::isnan(res.sum()));
 	}
+}
+
+TEST_CASE( "GenotypeMatrix Class" ) {
+
+	GenotypeMatrix GM(2, 3);
+	GM.assign_index(0, 0, 0.2);
+	GM.assign_index(0, 1, 0.2);
+	GM.assign_index(0, 2, 0.345);
+	GM.assign_index(1, 0, 0.8);
+	GM.assign_index(1, 1, 0.3);
+	GM.assign_index(1, 2, 0.213);
+
+	// Eigen::MatrixXd GM_uint(2,3);
+	// GM_uint << 51, 51, 8, 204, 76, 54;
+
+	SECTION("Empty constructor"){
+		GenotypeMatrix GM2;
+		GM2.resize(2, 3);
+		GM2.assign_index(0, 0, 0.2);
+		CHECK(GM2.read_index(0,0) == GM.read_index(0,0));
+	}
+
+	SECTION("Decompressed matrix multiplication"){
+		Eigen::VectorXd vv(3);
+		vv << 0.3, 0.55, 0.676;
+		Eigen::VectorXd res = GM * vv;
+		Eigen::VectorXd res_truth(2);
+		res_truth << 0.404352, 0.550898;
+		CHECK(Approx(res.sum()) == res_truth.sum());
+	}
+
+	SECTION("Read column access"){
+		Eigen::VectorXd c2a, c2b, c2_truth(2);
+		c2_truth << 0.201172, 0.298828;
+		// CHECK_THROWS(GM.col(1, c2a));
+		c2a.resize(2);
+		GM.col(1, c2a);
+		c2b = GM.col(1);
+		CHECK(Approx(c2a.sum()) == c2_truth.sum());
+		CHECK(Approx(c2b.sum()) == c2_truth.sum());
+	}
+
+	SECTION("Write column access"){
+		// write 2nd column to 1st column and check equivalent
+		Eigen::VectorXd c2, post_c1;
+		c2 = GM.col(1);
+		GM.assign_col(0, c2);
+		post_c1 = GM.col(0);
+
+		CHECK(post_c1 == c2);
+	}
+	
 }
 
 // TEST_CASE( "Checking data", "[data]" ) {

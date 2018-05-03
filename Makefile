@@ -11,7 +11,7 @@ LIBS =     -Lbuild/ -Lbuild/3rd_party/zstd-1.1.0 -Lbuild/db -Lbuild/3rd_party/sq
            -Lbuild/3rd_party/boost_1_55_0
 FLAGS = -std=c++11 -Wno-deprecated $(LIBS) $(INCLUDES)
 
-HEADERS := parse_arguments.hpp data.hpp class.h bgen_parser.hpp vbayes.hpp vbayes_x.hpp utils.hpp vbayes_x2.hpp
+HEADERS := parse_arguments.hpp data.hpp class.h bgen_parser.hpp vbayes.hpp vbayes_x.hpp utils.hpp vbayes_x2.hpp genotype_matrix.hpp
 HEADERS := $(addprefix $(SRCDIR)/,$(HEADERS))
 
 rescomp: CXX = /apps/well/gcc/7.2.0/bin/g++
