@@ -63,6 +63,8 @@ void parse_arguments(parameters &p, int argc, char *argv[]) {
 		"--rsid",
 		"--no_geno_check",
 		"--genetic_confounders",
+		"--r1_hyps_grid",
+		"--logw_tol",
 		"--hyps_grid",
 		"--hyps_probs",
 		"--vb_init",
@@ -189,6 +191,13 @@ void parse_arguments(parameters &p, int argc, char *argv[]) {
 				i += 1;
 			}
 
+			if(strcmp(in_str, "--r1_hyps_grid") == 0) {
+				check_counts(in_str, i, 1, argc);
+				p.r1_hyps_grid_file = argv[i + 1]; // covar file
+				check_file_exists(p.r1_hyps_grid_file);
+				i += 1;
+			}
+
 			if(strcmp(in_str, "--hyps_probs") == 0) {
 				check_counts(in_str, i, 1, argc);
 				p.hyps_probs_file = argv[i + 1]; // covar file
@@ -237,6 +246,15 @@ void parse_arguments(parameters &p, int argc, char *argv[]) {
 				check_counts(in_str, i, 1, argc);
 				p.n_thread = atoi(argv[i + 1]);
 				if(p.n_thread < 1) throw std::runtime_error("--threads must be positive.");
+				i += 1;
+			}
+
+			if(strcmp(in_str, "--logw_tol") == 0) {
+				check_counts(in_str, i, 1, argc);
+				p.logw_lim_set = true;
+				p.logw_tol = atof(argv[i + 1]);
+				if(p.n_thread < 0) throw std::runtime_error("--logw_tol must be positive.");
+				std::cout << "--logw_tol of " << p.logw_tol << " entered." << std::endl;
 				i += 1;
 			}
 

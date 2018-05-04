@@ -87,7 +87,7 @@ class data
 
 	// grid things for vbayes
 	std::vector< std::string > hyps_names, imprt_names;
-	Eigen::MatrixXd hyps_grid, imprt_grid;
+	Eigen::MatrixXd r1_hyps_grid, hyps_grid, imprt_grid;
 	Eigen::VectorXd alpha_init, mu_init;
 
 	
@@ -757,32 +757,42 @@ class data
 	void read_grids(){
 		// For use in vbayes object
 
-		if ( params.hyps_grid_file != "NULL" ) {
-			read_grid_file( params.hyps_grid_file, hyps_grid, hyps_names );
-		} else {
-			throw std::invalid_argument( "Tried to read NULL hyperparameter grid file." );
-		}
-		if ( params.hyps_probs_file != "NULL" ) {
-			std::cout << "Hyperparameter densities file detected." << std::endl;
-			read_grid_file( params.hyps_probs_file, imprt_grid, imprt_names );
+		std::vector< std::string > true_fixed_names = {"sigma", "sigma_b", "lambda_b"};
+		std::vector< std::string > true_gxage_names = {"sigma", "sigma_b", "sigma_g", "lambda_b", "lambda_g"};
 
-			assert(imprt_grid.cols() == 1);
-			assert(hyps_grid.rows() == imprt_grid.rows());
+		if ( params.hyps_grid_file == "NULL" ) {
+			throw std::invalid_argument( "Must provide hyperparameter grid file." );
+		}
+		if ( params.hyps_probs_file == "NULL" ) {
+			throw std::invalid_argument( "Must provide hyperparameter probabilities file." );
 		}
 
-		std::vector< std::string > fixed_hyps_names = {"sigma", "sigma_b", "lambda_b"};
-		std::vector< std::string > gxage_hyps_names = {"sigma", "sigma_b", "sigma_g", "lambda_b", "lambda_g"};
 
+		read_grid_file( params.hyps_grid_file, hyps_grid, hyps_names );
+		read_grid_file( params.hyps_probs_file, imprt_grid, imprt_names );
+
+		assert(imprt_grid.cols() == 1);
+		assert(hyps_grid.rows() == imprt_grid.rows());
+
+		// Verify header of grid file as expected
 		if(params.interaction_analysis){
-			if(!std::includes(hyps_names.begin(), hyps_names.end(), gxage_hyps_names.begin(), gxage_hyps_names.end())){
-				throw std::runtime_error("Column names of --hyps_grid must be sigma_e sigma_b sigma_g lambda_b lambda_g");
+			if(!std::includes(hyps_names.begin(), hyps_names.end(), true_gxage_names.begin(), true_gxage_names.end())){
+				throw std::runtime_error("Column names of --hyps_grid must be sigma sigma_b sigma_g lambda_b lambda_g");
 			}
 		} else {
-			if(hyps_names != fixed_hyps_names){
-				throw std::runtime_error("Column names of --hyps_grid must be sigma_e sigma_b lambda");
+			if(hyps_names != true_fixed_names){
+				throw std::runtime_error("Column names of --hyps_grid must be sigma sigma_b lambda");
 			}
 		}
 
+		// Option to provide separate grid to evaluate in round 1
+		std::vector< std::string > r1_hyps_names;
+		if ( params.r1_hyps_grid_file != "NULL" ) {
+			read_grid_file( params.r1_hyps_grid_file, r1_hyps_grid, r1_hyps_names );
+			if(hyps_names != r1_hyps_names){
+				throw std::invalid_argument( "Header of --r1_hyps_grid must match --hyps_grid." );
+			}
+		}
 	}
 
 	void read_alpha_mu(){

@@ -26,7 +26,7 @@ df.probs   = read.table(file.path(data.dir, "hyperpriors_gxage_probs.txt"), head
 
 
 ## Wrangling
-y          = as.vector(scale(y, center = T, scale = F))
+y          = as.vector(scale(y, center = T, scale = T))
 age        = as.vector(scale(age, center = T, scale = T))
 df.fit     = data.frame(y = y, age = age)
 fit        = lm(y ~ 0 + age, data = df.fit)
