@@ -19,33 +19,6 @@ Operations that class GenotypeMatrix should support:
 - resize()
 
 Questions:
-- How to implement Eigen matrix of fixed width type.
-	eg. Eigen::Matrix<std::uint8_t, Eigen::Dynamic, Eigen::Dynamic> G;
-	Documentation on available ScalarTypes is incomplete
-	https://eigen.tuxfamily.org/dox/TopicScalarTypes.html
-	https://eigen.tuxfamily.org/dox/TopicCustomizing_CustomScalar.html
-
-- Better implementation of matrix x vector multiplication
-	In theory matrix x vector multiplication should be easy
-	(G * v)_i = (G_compress * v)_i / nSegments * 2 + v.sum() / nSegments
-
-	However eigen does not support implicit type casting
-	https://stackoverflow.com/questions/38343752/eigen-multiply-a-float-matrix-by-a-bool-vector
-	so the operation (G_compress * v) is invalid (G_compress matrix of unsigned
-	ints, v vector of doubles).
-
-	Solution 1
-	Brute force - use for loops to compute (G_compress * v) manually. 
-	
-
-	Solution 2
-	Compress v to integers... Compression of dosages is easy because we know 
-	values lie in [0, 2). When v contains entries from all real numbers this may
-	result in large loss of information?
-
-	Solution 3
-	Implement own implicit casting?
-
 - More intelligent way to overload operators for write access.
 	eg. G.assign_col(jj, vec);     => G.col(jj) = vec;
 	eg. G.assign_index(ii, jj, x); => G(ii, jj) = x;
@@ -77,7 +50,7 @@ class GenotypeMatrix {
 	const double sumCompressionConstant = 0.5;
 
 public:
-	Eigen::Matrix<unsigned int, Eigen::Dynamic, Eigen::Dynamic> G;
+	Eigen::Matrix<unsigned char, Eigen::Dynamic, Eigen::Dynamic> G;
 
 	// Interface type of Eigen indices -> see eigen3/Eigen/src/Core/EigenBase.h
 	typedef Eigen::Index Index;
@@ -135,28 +108,25 @@ public:
 	}
 
 	// 	Replacement(s) for Eigen Matrix multiplication
-	// Brute force approach
-	template<typename Derived>
-	Eigen::MatrixXd operator*(const Eigen::MatrixBase<Derived>& rhs){
-		Eigen::MatrixXd M = Eigen::MatrixXd::Zero(G.rows(), rhs.cols());
-		double vecDecompressionConstant = rhs.sum() * sizeCompressedInterval;
-	
-		for (Index ii = 0; ii < G.rows(); ii++){
-			for (Index kk = 0; kk < rhs.cols(); kk++){
-				for (Index jj = 0; jj < G.cols(); jj++){
-					M(ii, kk) += G(ii, jj) * rhs(jj, kk);
-				}
-			}
-		}
-		return (M.array() * sizeCompressedInterval * 2.0 + vecDecompressionConstant).matrix();
+	Eigen::VectorXd operator*(const Eigen::Ref<const Eigen::VectorXd> rhs){
+		double vec_total = rhs.sum() * sizeCompressedInterval;
+		return ((G.cast<double>() * rhs).array() * sizeCompressedInterval * 2.0 + vec_total).matrix();
 	}
 
-	// Niave approach does not compile - eigen does not support implicit type casting!
-	// G a matrix of unsigned ints, rhs a matrix of doubles.
-	// Eigen::VectorXd operator*(const Eigen::Ref<const Eigen::VectorXd> rhs){
-	// 	double vec_total = rhs.sum() * sizeCompressedInterval * 0.5;
-	// 	// return ((G * rhs).cast<double>().array() * sizeCompressedInterval + vec_total).matrix();
-	// 	return G * rhs;
+	// Brute force approach
+	// template<typename Derived>
+	// Eigen::MatrixXd operator*(const Eigen::MatrixBase<Derived>& rhs){
+	// 	Eigen::MatrixXd M = Eigen::MatrixXd::Zero(G.rows(), rhs.cols());
+	// 	double vecDecompressionConstant = rhs.sum() * sizeCompressedInterval;
+	// 
+	// 	for (Index ii = 0; ii < G.rows(); ii++){
+	// 		for (Index kk = 0; kk < rhs.cols(); kk++){
+	// 			for (Index jj = 0; jj < G.cols(); jj++){
+	// 				M(ii, kk) += G(ii, jj) * rhs(jj, kk);
+	// 			}
+	// 		}
+	// 	}
+	// 	return (M.array() * sizeCompressedInterval * 2.0 + vecDecompressionConstant).matrix();
 	// }
 
 	// Utility functions
