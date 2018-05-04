@@ -240,7 +240,7 @@ TEST_CASE( "GenotypeMatrix Class" ) {
 		vv << 0.3, 0.55, 0.676;
 		Eigen::VectorXd res = GM * vv;
 		Eigen::VectorXd res_truth(2);
-		res_truth << 0.404352, 0.550898;
+		res_truth << 0.4046914, 0.5479180;
 		CHECK(Approx(res.sum()) == res_truth.sum());
 	}
 

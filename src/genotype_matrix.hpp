@@ -8,9 +8,9 @@ Useful links:
 Outline
 	Basically a wrapper around an Eigen matrix of unsigned ints.
 
-To compress dosage entries I split the interval [0,2) into 2^n segments. For each
-dosage value I store the index of the segment that it falls into, and return the
-midpoint of the segment when decompressing.
+To compress dosage entries I split the interval [0,1) into 2^n segments (dosage 
+matrix assumed to be standardised). For each dosage value I store the index of
+the segment that it falls into, and return the midpoint of the segment when decompressing.
 
 Operations that class GenotypeMatrix should support:
 - read/write access to the i,j th entry           operator()
@@ -43,7 +43,6 @@ Questions:
 // - Basically a wrapper around an eigen matrix
 class GenotypeMatrix {
 	// Compression objects
-	const std::uint8_t minCompressedValue = std::numeric_limits<std::uint8_t>::min();
 	const std::uint8_t maxCompressedValue = std::numeric_limits<std::uint8_t>::max();
 	const std::uint16_t numCompressedIntervals = static_cast<std::uint16_t> (maxCompressedValue + 1);
 	const double sizeCompressedInterval = 1.0/numCompressedIntervals;
@@ -109,8 +108,8 @@ public:
 
 	// 	Replacement(s) for Eigen Matrix multiplication
 	Eigen::VectorXd operator*(const Eigen::Ref<const Eigen::VectorXd> rhs){
-		double vec_total = rhs.sum() * sizeCompressedInterval;
-		return ((G.cast<double>() * rhs).array() * sizeCompressedInterval * 2.0 + vec_total).matrix();
+		double vec_total = rhs.sum() * sizeCompressedInterval * 0.5;
+		return ((G.cast<double>() * rhs).array() * sizeCompressedInterval + vec_total).matrix();
 	}
 
 	// Brute force approach
@@ -147,13 +146,13 @@ public:
 	/********** Compression/Decompression ************/
 	inline std::uint8_t CompressDosage(double dosage)
 	{
-		dosage = std::min(dosage, 1.999999);
-		return static_cast<std::uint16_t>(std::floor(dosage*numCompressedIntervals / 2.0)+minCompressedValue);
+		dosage = std::min(dosage, 0.999999);
+		return static_cast<std::uint16_t>(std::floor(dosage*numCompressedIntervals));
 	}
 
 	inline double DecompressDosage(std::uint8_t compressed_dosage)
 	{
-		return (compressed_dosage+sumCompressionConstant)*sizeCompressedInterval*2;
+		return (compressed_dosage+sumCompressionConstant)*sizeCompressedInterval;
 	}
 };
 
