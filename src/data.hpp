@@ -194,6 +194,7 @@ class data
 		if (!bgen_pass) return false;
 
 		// Temporary variables to store info from read_variant()
+		Eigen::VectorXd variant_j(n_samples);
 		std::string chr_j ;
 		uint32_t pos_j ;
 		std::string rsid_j ;
@@ -274,7 +275,8 @@ class data
 			position.push_back(pos_j);
 			alleles.push_back(alleles_j);
 			
-			// filters passed; write dosage to G
+			// filters passed; write dosage to variant_j
+			// Track mu + sd on first pass, then standardise before writing to G
 			// Note that we only write dosage for valid sample ids
 			std::size_t ii_obs = 0;
 			double mu = 0.0;
@@ -285,6 +287,11 @@ class data
 					dosage = 0.0;
 					check = 0.0;
 
+					// Check for overflow
+					if(ii_obs >= n_samples){
+						throw std::logic_error("INTERNAL ERROR: More genetic samples than expected");
+					}
+
 					for( std::size_t kk = 0; kk < probs[ii].size(); ++kk ) {
 						x = probs[ii][kk];
 						dosage += x * kk;
@@ -293,7 +300,7 @@ class data
 
 					if(params.geno_check){
 						if(check > 0.9999 && check < 1.0001){
-							G(ii_obs,jj) = dosage;
+							variant_j[ii_obs] = dosage;
 							mu += dosage;
 							count += 1;
 						} else if(check > 0){
@@ -305,7 +312,7 @@ class data
 							missing_genos[ii_obs] = 1;
 						}
 					} else {
-						G(ii_obs,jj) = dosage;
+						variant_j[ii_obs] = dosage;
 						mu += dosage;
 						count += 1;
 					}
@@ -318,18 +325,48 @@ class data
 				throw std::logic_error("ERROR: Fewer non-missing genotypes than expected");
 			}
 
-			// Set missing entries to mean
-			// Could mean center here, but still want to write to VCF.
+			// Center entries and set missing to zero
+			std::cout << "Starting to standardise vector" << std::endl;
 			if(missing_genos.size() > 0){
 				n_var_incomplete += 1;
 				missing_calls += (double) missing_genos.size();
-				mu = mu / count;
-				for (int ii = 0; ii < n_samples; ii++) {
-					if (missing_genos.count(ii) != 0) {
-						G(ii, jj) = mu;
-					}
+			}
+
+			mu = mu / count;
+			for (std::size_t ii = 0; ii < n_samples; ii++) {
+				if (missing_genos.count(ii) == 0) {
+					variant_j[ii] -= mu;
+				} else {
+					variant_j[ii] = 0.0;
 				}
 			}
+
+			double sigma = variant_j.squaredNorm();
+			sigma = std::sqrt(sigma/(count - 1.0));
+
+			if (sigma > 1e-12){
+				for (std::size_t ii = 0; ii < n_samples; ii++){
+					G(ii, jj) = variant_j[ii] / sigma;
+				}
+			} else {
+				for (std::size_t ii = 0; ii < n_samples; ii++){
+					G(ii, jj) = variant_j[ii];
+				}	
+			}
+			std::cout << variant_j << std::endl;
+
+			// // Set missing entries to mean
+			// // Could mean center here, but still want to write to VCF.
+			// if(missing_genos.size() > 0){
+			// 	n_var_incomplete += 1;
+			// 	missing_calls += (double) missing_genos.size();
+			// 	mu = mu / count;
+			// 	for (int ii = 0; ii < n_samples; ii++) {
+			// 		if (missing_genos.count(ii) != 0) {
+			// 			G(ii, jj) = mu;
+			// 		}
+			// 	}
+			// }
 			jj++;
 		}
 
@@ -1180,8 +1217,9 @@ class data
 			std::cout << " variants parsed)" << std::endl;
 
 			// Normalise genotypes
-			center_matrix( G, n_var );
-			scale_matrix( G, n_var );
+			// center_matrix( G, n_var );
+			// scale_matrix( G, n_var );
+			std::cout << G << std::endl;
 
 			// Actually compute models
 			if(params.mode_lm){
