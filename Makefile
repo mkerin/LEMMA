@@ -155,7 +155,7 @@ data/io_test/t6_lm2/attempt.out: data/io_test/example.v11.bgen ./bin/bgen_prog
 	diff $(dir $@)answer.out $@
 
 # TEST 7
-# Rescticted model with sigma_b == sigma_g and lambda_b == lambda_g
+# Restricted model with sigma_b == sigma_g and lambda_b == lambda_g
 # This is equivalent to the original carbonetto model on H = (X, Z)
 t7_dir     := data/io_test/t7_varbvs_constrained
 t7_context := $(t7_dir)/hyperpriors_gxage.txt $(t7_dir)/answer.rds
@@ -176,7 +176,15 @@ $(t7_dir)/hyperpriors_gxage.txt: R/t7/gen_hyps.R
 	$(RSCRIPT) $<
 
 $(t7_dir)/answer.rds: R/vbayes_x_tests/run_VBayesR.R $(t7_dir)/hyperpriors_gxage.txt
-	$(RSCRIPT) $< $(dir $@)
+	# $(RSCRIPT) $< $(dir $@)
+	Rscript ../../gw-reg/R/vbayes/vbayesr_commandline.R run \
+	  --pheno $(t7_dir)/pheno.txt \
+	  --covar $(t7_dir)/age.txt \
+	  --vcf $(t7_dir)/n50_p100.vcf.gz \
+	  --out $@ \
+	  --hyps_grid $(t7_dir)/hyperpriors_gxage.txt \
+	  --hyps_probs $(t7_dir)/hyperpriors_gxage_probs.txt \
+	  --vb_init $(dir $@)answer_init.txt
 
 # TEST 8
 # Unrestricted model; comparison with R implementation

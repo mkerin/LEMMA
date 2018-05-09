@@ -18,6 +18,9 @@
 #include <boost/iostreams/device/file.hpp>
 #include <boost/iostreams/filter/gzip.hpp>
 
+template <typename T>
+inline std::vector<int> validate_grid(const Eigen::MatrixXd &grid, const T n_var);
+inline Eigen::MatrixXd subset_matrix(const Eigen::MatrixXd &orig, const std::vector<int> &valid_points);
 inline std::size_t find_covar_index( std::string colname, std::vector< std::string > col_names );
 
 struct Hyps{
@@ -206,13 +209,38 @@ public:
 		}
 
 		// Assign data - hyperparameters
-		probs_grid             = dat.imprt_grid;
-		hyps_grid              = dat.hyps_grid;
-		if(p.r1_hyps_grid_file == "NULL"){
-			r1_hyps_grid       = dat.hyps_grid;
-		} else {
-			r1_hyps_grid       = dat.r1_hyps_grid;
+		std::vector<int> valid_points, r1_valid_points;
+		valid_points        = validate_grid(dat.hyps_grid, n_var);
+
+		if(n_grid < valid_points.size()){
+			std::cout << "WARNING: " << n_grid - valid_points.size();
+			std::cout << " invalid grid points removed from hyps_grid." << std::endl;
+			n_grid = valid_points.size();
 		}
+		std::cout << "about to subset first matrix" << std::endl;
+		probs_grid          = subset_matrix(dat.imprt_grid, valid_points);
+		std::cout << "subsetted first matrix" << std::endl;
+		hyps_grid           = subset_matrix(dat.hyps_grid, valid_points);
+		std::cout << "subsetted second matrix" << std::endl;
+
+		if(p.r1_hyps_grid_file == "NULL"){
+			r1_hyps_grid    = hyps_grid;
+		} else {
+			int r1_n_grid   = dat.r1_hyps_grid.rows();
+			r1_valid_points = validate_grid(dat.r1_hyps_grid, n_var);
+			std::cout << "about to subset third matrix" << std::endl;
+			r1_hyps_grid    = subset_matrix(dat.r1_hyps_grid, r1_valid_points);
+			std::cout << "subsetted third matrix" << std::endl;
+
+			if(r1_n_grid < r1_valid_points.size()){
+				std::cout << "WARNING: " << n_grid - valid_points.size();
+				std::cout << " invalid grid points removed from r1_hyps_grid." << std::endl;
+			}
+		}
+
+		std::cout << "subsetting finished" << std::endl;
+		std::cout << "Dim of hyps_grid" << hyps_grid.rows() << " x " << hyps_grid.cols();
+		std::cout << "Dim of probs_grid" << probs_grid.rows() << " x " << probs_grid.cols();
 
 		// Assign data - genetic
 		Eigen::MatrixXd I_a_sq = aa.cwiseProduct(aa).asDiagonal();
@@ -230,6 +258,7 @@ public:
 		// Hty                    << (X.transpose() * Y), (X.transpose() * (Y.cwiseProduct(aa)));
 
 		dHtH                   << dXtX, dZtZ;
+		std::cout << "reading in finished" << std::endl;
 	}
 
 	~VBayesX2(){
@@ -801,5 +830,44 @@ inline std::size_t find_covar_index( std::string colname, std::vector< std::stri
 	}
 	x_col = it - col_names.begin();
 	return x_col;
+}
+
+template <typename T>
+inline std::vector<int> validate_grid(const Eigen::MatrixXd &grid, const T n_var){
+	const int sigma_ind   = 0;
+	const int sigma_b_ind = 1;
+	const int sigma_g_ind = 2;
+	const int lam_b_ind   = 3;
+	const int lam_g_ind   = 4;
+	double lam_b, lam_g;
+	bool chck_lam_b, chck_lam_g, chck_sigma_b, chck_sigma_g, chck_sigma;
+
+	std::vector<int> valid_points;
+	for (int ii = 0; ii < grid.rows(); ii++){
+		lam_b = grid(ii, lam_b_ind);
+		lam_g = grid(ii, lam_g_ind);
+
+		chck_sigma   = (grid(ii, sigma_ind) > 0.0);
+		chck_sigma_b = (grid(ii, sigma_b_ind) > 0);
+		chck_sigma_g = (grid(ii, sigma_g_ind) >= 0);
+		chck_lam_b   = (lam_b >= 1.0 / (double) n_var) && (lam_b < 1.0);
+		chck_lam_g   = (lam_g >= 1.0 / (double) n_var) && (lam_g < 1.0);
+		if(chck_lam_b && chck_lam_g && chck_sigma && chck_sigma_g && chck_sigma_b){
+			valid_points.push_back(ii);
+		}
+	}
+	return valid_points;
+}
+
+inline Eigen::MatrixXd subset_matrix(const Eigen::MatrixXd &orig, const std::vector<int> &valid_points){
+	int n_cols = orig.cols(), n_rows = valid_points.size();
+	Eigen::MatrixXd subset(n_rows, n_cols);
+
+	for(int kk = 0; kk < n_rows; kk++){
+		for(int jj = 0; jj < n_cols; jj++){
+			subset(kk, jj) = orig(valid_points[kk], jj);
+		}
+	}
+	return subset;
 }
 #endif

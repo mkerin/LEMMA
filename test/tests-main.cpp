@@ -9,6 +9,7 @@
 #include "../src/tools/eigen3.3/Dense"
 #include "../src/parse_arguments.hpp"
 #include "../src/vbayes.hpp"
+#include "../src/vbayes_x2.hpp"
 // #include "../src/data.hpp"
 
 TEST_CASE( "Checking parse_arguments", "[io]" ) {
@@ -211,6 +212,26 @@ TEST_CASE( "Algebra in Eigen3" ) {
 		Eigen::VectorXd res(3);
 		res << 1, std::numeric_limits<double>::quiet_NaN(), 3;
 		CHECK(std::isnan(res.sum()));
+	}
+}
+
+TEST_CASE( "vbayes_x2.hpp", "[VBayesX2]" ) {
+	SECTION("Function to validate hyperparameter grid"){
+			int n_var = 50;
+			Eigen::MatrixXd orig(3, 5), attempt, answer(2, 5);
+			std::vector<int> attempt_vec, answer_vec;
+
+			// Filling answers
+			orig << 1, 0.1, 0.1, 0.1, 0.1,
+					1, 0.1, 0.1, 0.001, 0.1, 
+					1, 0.1, 0.1, 0.1, 0.1;
+			answer << 1, 0.1, 0.1, 0.1, 0.1,
+					  1, 0.1, 0.1, 0.1, 0.1;
+			answer_vec.push_back(0);
+			answer_vec.push_back(2);
+
+			CHECK(validate_grid(orig, n_var) == answer_vec);
+			CHECK(subset_matrix(orig, answer_vec) == answer);
 	}
 }
 
