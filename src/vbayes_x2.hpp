@@ -209,38 +209,14 @@ public:
 		}
 
 		// Assign data - hyperparameters
-		std::vector<int> valid_points, r1_valid_points;
-		valid_points        = validate_grid(dat.hyps_grid, n_var);
-
-		if(n_grid < valid_points.size()){
-			std::cout << "WARNING: " << n_grid - valid_points.size();
-			std::cout << " invalid grid points removed from hyps_grid." << std::endl;
-			n_grid = valid_points.size();
-		}
-		std::cout << "about to subset first matrix" << std::endl;
-		probs_grid          = subset_matrix(dat.imprt_grid, valid_points);
-		std::cout << "subsetted first matrix" << std::endl;
-		hyps_grid           = subset_matrix(dat.hyps_grid, valid_points);
-		std::cout << "subsetted second matrix" << std::endl;
+		probs_grid          = dat.imprt_grid;
+		hyps_grid           = dat.hyps_grid;
 
 		if(p.r1_hyps_grid_file == "NULL"){
 			r1_hyps_grid    = hyps_grid;
 		} else {
-			int r1_n_grid   = dat.r1_hyps_grid.rows();
-			r1_valid_points = validate_grid(dat.r1_hyps_grid, n_var);
-			std::cout << "about to subset third matrix" << std::endl;
-			r1_hyps_grid    = subset_matrix(dat.r1_hyps_grid, r1_valid_points);
-			std::cout << "subsetted third matrix" << std::endl;
-
-			if(r1_n_grid < r1_valid_points.size()){
-				std::cout << "WARNING: " << n_grid - valid_points.size();
-				std::cout << " invalid grid points removed from r1_hyps_grid." << std::endl;
-			}
+			r1_hyps_grid    = dat.r1_hyps_grid;
 		}
-
-		std::cout << "subsetting finished" << std::endl;
-		std::cout << "Dim of hyps_grid" << hyps_grid.rows() << " x " << hyps_grid.cols();
-		std::cout << "Dim of probs_grid" << probs_grid.rows() << " x " << probs_grid.cols();
 
 		// Assign data - genetic
 		Eigen::MatrixXd I_a_sq = aa.cwiseProduct(aa).asDiagonal();
@@ -258,7 +234,6 @@ public:
 		// Hty                    << (X.transpose() * Y), (X.transpose() * (Y.cwiseProduct(aa)));
 
 		dHtH                   << dXtX, dZtZ;
-		std::cout << "reading in finished" << std::endl;
 	}
 
 	~VBayesX2(){
@@ -781,17 +756,34 @@ public:
 	}
 
 	void check_inputs(){
+		// If grid contains hyperparameter values that aren't sensible then we exclude
 		assert(Y.rows() == n_samples);
 		assert(X.rows() == n_samples);
 
-		for (int ii = 0; ii < n_grid; ii++){
-			assert(hyps_grid(ii, sigma_ind) > 0.0);
-			assert(hyps_grid(ii, sigma_b_ind) > 0.0);
-			assert(hyps_grid(ii, sigma_g_ind) >= 0.0);
-			assert(hyps_grid(ii, lam_b_ind) > 0.0);
-			assert(hyps_grid(ii, lam_b_ind) < 1.0);
-			assert(hyps_grid(ii, lam_g_ind) < 1.0);
-			assert(hyps_grid(ii, lam_g_ind) > 0.0);
+		std::vector<int> valid_points, r1_valid_points;
+		valid_points        = validate_grid(hyps_grid, n_var);
+		probs_grid          = subset_matrix(probs_grid, valid_points);
+		hyps_grid           = subset_matrix(hyps_grid, valid_points);
+
+		if(n_grid > valid_points.size()){
+			std::cout << "WARNING: " << n_grid - valid_points.size();
+			std::cout << " invalid grid points removed from hyps_grid." << std::endl;
+			n_grid = valid_points.size();
+
+			// update print interval
+			print_interval = std::max(1, n_grid / 10);
+		}
+
+
+		if(p.r1_hyps_grid_file != "NULL"){
+			int r1_n_grid   = r1_hyps_grid.rows();
+			r1_valid_points = validate_grid(r1_hyps_grid, n_var);
+			r1_hyps_grid    = subset_matrix(r1_hyps_grid, r1_valid_points);
+
+			if(r1_n_grid > r1_valid_points.size()){
+				std::cout << "WARNING: " << r1_n_grid - r1_valid_points.size();
+				std::cout << " invalid grid points removed from r1_hyps_grid." << std::endl;
+			}
 		}
 	}
 
@@ -847,9 +839,9 @@ inline std::vector<int> validate_grid(const Eigen::MatrixXd &grid, const T n_var
 		lam_b = grid(ii, lam_b_ind);
 		lam_g = grid(ii, lam_g_ind);
 
-		chck_sigma   = (grid(ii, sigma_ind) > 0.0);
-		chck_sigma_b = (grid(ii, sigma_b_ind) > 0);
-		chck_sigma_g = (grid(ii, sigma_g_ind) >= 0);
+		chck_sigma   = (grid(ii, sigma_ind)   >  0.0);
+		chck_sigma_b = (grid(ii, sigma_b_ind) >  0.0);
+		chck_sigma_g = (grid(ii, sigma_g_ind) >= 0.0);
 		chck_lam_b   = (lam_b >= 1.0 / (double) n_var) && (lam_b < 1.0);
 		chck_lam_g   = (lam_g >= 1.0 / (double) n_var) && (lam_g < 1.0);
 		if(chck_lam_b && chck_lam_g && chck_sigma && chck_sigma_g && chck_sigma_b){

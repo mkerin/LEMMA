@@ -216,6 +216,56 @@ TEST_CASE( "Algebra in Eigen3" ) {
 }
 
 TEST_CASE( "vbayes_x2.hpp", "[VBayesX2]" ) {
+	parameters p;
+	char* argv[] = { (char*) "bin/bgen_prog", (char*) "--mode_vb", 
+					 (char*) "--interaction", (char*) "x",
+					 (char*) "--bgen", (char*) "data/case6_n50_p100.bgen",
+					 (char*) "--out", (char*) "data/fake.out",
+					 (char*) "--pheno", (char*) "data/pheno.txt",
+					 (char*) "--hyps_grid", (char*) "data/hyperpriors_gxage_v1_probs.txt",
+					 (char*) "--hyps_probs", (char*) "data/hyperpriors_gxage_v1.txt",
+					 (char*) "--vb_init", (char*) "data/vb_inits.out",
+					 (char*) "--covar", (char*) "data/age.txt"};
+	int argc = sizeof(argv)/sizeof(argv[0]);
+	parse_arguments(p, argc, argv);
+	data Data( p.bgen_file );
+	Data.params = p;
+
+	// Read in phenotypes
+	Data.read_pheno();
+	Data.center_matrix( Data.Y, Data.n_pheno );
+	Data.scale_matrix( Data.Y, Data.n_pheno, Data.pheno_names );
+
+	// Read in covariates if present
+	Data.read_covar();
+	Data.center_matrix( Data.W, Data.n_covar );
+	Data.scale_matrix( Data.W, Data.n_covar, Data.covar_names );
+
+	// Regress out covariates if present
+	Data.regress_covars();
+
+	// Read in all genetic data + standardise to mean 0 var 1
+	Data.params.chunk_size = Data.bgenView->number_of_variants();
+	Data.read_bgen_chunk();
+	Data.center_matrix( Data.G, Data.n_var );
+	Data.scale_matrix_conserved( Data.G, Data.n_var );
+
+	// Read in grids for importance sampling
+	Data.read_grids();
+
+	// Read starting point for VB approximation if provided
+	Data.read_alpha_mu();
+
+	// Pass data to VBayes object
+	VBayesX2 VB(Data);
+
+	// SECTION()
+	CHECK(VB.n_grid == 7);
+	VB.check_inputs();
+	CHECK(VB.n_grid == 6);
+	CHECK(VB.hyps_grid.rows() == 6);
+	CHECK(VB.probs_grid.rows() == 6);
+
 	SECTION("Function to validate hyperparameter grid"){
 			int n_var = 50;
 			Eigen::MatrixXd orig(3, 5), attempt, answer(2, 5);
