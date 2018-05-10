@@ -26,13 +26,13 @@ rescomp-debug: CXX = /apps/well/gcc/7.2.0/bin/g++
 rescomp-debug: FLAGS += -g3
 rescomp-debug: $(TARGET)
 
-garganey-debug: CXX = g++
-garganey-debug: FLAGS += -g3
-garganey-debug: $(TARGET)
-
 garganey: CXX = g++
-garganey: FLAGS += -O3
+garganey: FLAGS += -g3
 garganey: $(TARGET)
+
+garganey-optim: CXX = g++
+garganey-optim: FLAGS += -O3
+garganey-optim: $(TARGET)
 
 # Cutting out -lrt, -lz
 laptop: CXX = /usr/local/Cellar/gcc/7.3.0/bin/x86_64-apple-darwin17.4.0-g++-7
@@ -163,7 +163,7 @@ data/io_test/t6_lm2/attempt.out: data/io_test/example.v11.bgen ./bin/bgen_prog
 # This is equivalent to the original carbonetto model on H = (X, Z)
 t7_dir     := data/io_test/t7_varbvs_constrained
 t7_context := $(t7_dir)/hyperpriors_gxage.txt $(t7_dir)/answer.rds
-data/io_test/t7_varbvs_constrained/attempt.out: $(t7_dir)/n50_p100.bgen ./bin/bgen_prog $(t7_context)
+data/io_test/t7_varbvs_constrained/attempt.out: data/io_test/n50_p100.bgen ./bin/bgen_prog $(t7_context)
 	./bin/bgen_prog --mode_vb --verbose \
 	    --bgen $< \
 	    --interaction x \
@@ -181,7 +181,7 @@ $(t7_dir)/hyperpriors_gxage.txt: R/t7/gen_hyps.R
 
 $(t7_dir)/answer.rds: R/vbayes_x_tests/run_VBayesR.R $(t7_dir)/hyperpriors_gxage.txt
 	# $(RSCRIPT) $< $(dir $@)
-	Rscript ../../gw-reg/R/vbayes/vbayesr_commandline.R run \
+	Rscript R/vbayesr_commandline.R run \
 	  --pheno $(dir $@)pheno.txt \
 	  --covar $(dir $@)age.txt \
 	  --vcf $(dir $@)n50_p100.vcf.gz \
@@ -194,7 +194,7 @@ $(t7_dir)/answer.rds: R/vbayes_x_tests/run_VBayesR.R $(t7_dir)/hyperpriors_gxage
 # Unrestricted model; comparison with R implementation
 t8_dir     := data/io_test/t8_varbvs
 t8_context := $(t8_dir)/hyperpriors_gxage.txt $(t8_dir)/answer.rds
-data/io_test/t8_varbvs/attempt.out: data/io_test/t8_varbvs/n50_p100.bgen ./bin/bgen_prog $(t8_context)
+data/io_test/t8_varbvs/attempt.out: data/io_test/n50_p100.bgen ./bin/bgen_prog $(t8_context)
 	./bin/bgen_prog --mode_vb --verbose \
 	    --bgen $< \
 	    --interaction x \
@@ -212,7 +212,7 @@ $(t8_dir)/hyperpriors_gxage.txt: R/t8/gen_hyps.R
 
 $(t8_dir)/answer.rds: R/vbayes_x_tests/run_VBayesR.R $(t8_dir)/hyperpriors_gxage.txt
 	# $(RSCRIPT) $< $(dir $@)
-	Rscript ../../gw-reg/R/vbayes/vbayesr_commandline.R run \
+	Rscript R/vbayesr_commandline.R run \
 	  --pheno $(dir $@)pheno.txt \
 	  --covar $(dir $@)age.txt \
 	  --vcf $(dir $@)n50_p100.vcf.gz \
@@ -226,7 +226,7 @@ $(t8_dir)/answer.rds: R/vbayes_x_tests/run_VBayesR.R $(t8_dir)/hyperpriors_gxage
 # Tests when h_g is zero (ie collapse down to original carbonetto model on X)
 # t9_dir     := data/io_test/t9_varbvs_zero_hg
 # t9_context := $(t9_dir)/hyperpriors_gxage.txt $(t9_dir)/answer.rds
-# data/io_test/t9_varbvs_zero_hg/attempt.out: data/io_test/t9_varbvs_zero_hg/n50_p100.bgen ./bin/bgen_prog $(t9_context)
+# data/io_test/t9_varbvs_zero_hg/attempt.out: data/io_test/n50_p100.bgen ./bin/bgen_prog $(t9_context)
 # 	./bin/bgen_prog --mode_vb --verbose \
 # 	    --bgen $< \
 # 	    --interaction x \
@@ -257,7 +257,7 @@ $(t10_dir)/attempt.out: $(t10_dir)/n50_p100.bgen ./bin/bgen_prog $(t10_context)
 	    --out $@
 	$(CP) $(t10_dir)/attempt_inits.out $(t10_dir)/answer_init.txt
 	# $(RSCRIPT) R/vbayes_x_tests/run_VBayesR.R $(dir $@)
-	$(RSCRIPT) ../../gw-reg/R/vbayes/vbayesr_commandline.R run \
+	$(RSCRIPT) R/vbayesr_commandline.R run \
 	  --pheno $(dir $@)pheno.txt \
 	  --covar $(dir $@)age.txt \
 	  --vcf $(dir $@)n50_p100.vcf.gz \
@@ -294,7 +294,7 @@ $(t11_dir)/hyperpriors_gxage.txt: R/t8/gen_hyps.R
 
 $(t11_dir)/answer.rds: R/vbayes_x_tests/run_VBayesR.R $(t11_dir)/hyperpriors_gxage.txt
 	# $(RSCRIPT) $< $(dir $@)
-	$(RSCRIPT) ../../gw-reg/R/vbayes/vbayesr_commandline.R run \
+	$(RSCRIPT) R/vbayesr_commandline.R run \
 	  --pheno $(dir $@)pheno.txt \
 	  --covar $(dir $@)age.txt \
 	  --vcf $(dir $@)n50_p100.vcf.gz \

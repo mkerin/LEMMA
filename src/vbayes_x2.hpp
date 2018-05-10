@@ -290,7 +290,7 @@ public:
 			for (int ii = 0; ii < r1_n_grid; ii++){
 				int tr_index     = (ii % p.n_thread);
 				double logw      = trackers[tr_index].logw_list[ii];
-				double sigma_g   = hyps_grid(ii, sigma_g_ind);
+				double sigma_g   = r1_hyps_grid(ii, sigma_g_ind);
 				if(std::isfinite(logw) && logw > logw_best && sigma_g > 0){
 					alpha_init   = trackers[tr_index].alpha_list[ii];
 					mu_init      = trackers[tr_index].mu_list[ii];
