@@ -11,6 +11,7 @@
 #include "../src/vbayes.hpp"
 #include "../src/vbayes_x2.hpp"
 #include "../src/data.hpp"
+#include "../src/genotype_matrix.hpp"
 
 TEST_CASE( "Checking parse_arguments", "[io]" ) {
 	parameters p;
@@ -145,13 +146,13 @@ TEST_CASE( "Algebra in Eigen3" ) {
 
 TEST_CASE( "GenotypeMatrix Class" ) {
 
-	GenotypeMatrix GM(2, 3);
+	GenotypeMatrix GM(3, 2);
 	GM.assign_index(0, 0, 0.2);
-	GM.assign_index(0, 1, 0.2);
-	GM.assign_index(0, 2, 0.345);
 	GM.assign_index(1, 0, 0.8);
-	GM.assign_index(1, 1, 0.3);
-	GM.assign_index(1, 2, 0.213);
+	GM.assign_index(2, 0, 0.2);
+	GM.assign_index(0, 1, 0.3);
+	GM.assign_index(1, 1, 0.345);
+	GM.assign_index(2, 1, 0.213);
 
 	// Eigen::MatrixXd GM_uint(2,3);
 	// GM_uint << 51, 51, 8, 204, 76, 54;
@@ -163,20 +164,30 @@ TEST_CASE( "GenotypeMatrix Class" ) {
 		CHECK(GM2.read_index(0,0) == GM.read_index(0,0));
 	}
 
+	SECTION("Column means and sds computed correctly"){
+		GM.compute_means_and_sd();
+		Eigen::VectorXd true_mean(2), true_sd(2);
+		true_mean << 0.3997396, 0.2877604;
+		true_sd << 0.34731227, 0.06735686;
+
+		CHECK(GM.means_and_sd_computed == true);
+		CHECK(Approx(true_mean.sum()) == GM.compressed_dosage_means.sum());
+		CHECK(Approx(true_sd.sum()) == GM.compressed_dosage_sds.sum());
+	}
+
 	SECTION("Decompressed matrix multiplication"){
-		Eigen::VectorXd vv(3);
-		vv << 0.3, 0.55, 0.676;
+		Eigen::VectorXd vv(2);
+		vv << 0.55, 0.676;
 		Eigen::VectorXd res = GM * vv;
-		Eigen::VectorXd res_truth(2);
-		res_truth << 0.4046914, 0.5479180;
+		Eigen::VectorXd res_truth(3);
+		res_truth << -0.1868643, 1.2362057, -1.0493414;
 		CHECK(Approx(res.sum()) == res_truth.sum());
 	}
 
 	SECTION("Read column access"){
-		Eigen::VectorXd c2a, c2b, c2_truth(2);
-		c2_truth << 0.201172, 0.298828;
+		Eigen::VectorXd c2a(3), c2b, c2_truth(3);
+		c2_truth << 0.3007812, 0.3476562, 0.2148438;
 		// CHECK_THROWS(GM.col(1, c2a));
-		c2a.resize(2);
 		GM.col(1, c2a);
 		c2b = GM.col(1);
 		CHECK(Approx(c2a.sum()) == c2_truth.sum());
@@ -189,7 +200,6 @@ TEST_CASE( "GenotypeMatrix Class" ) {
 		c2 = GM.col(1);
 		GM.assign_col(0, c2);
 		post_c1 = GM.col(0);
-
 		CHECK(post_c1 == c2);
 	}
 }
