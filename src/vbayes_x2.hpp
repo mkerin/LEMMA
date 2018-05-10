@@ -18,6 +18,9 @@
 #include <boost/iostreams/device/file.hpp>
 #include <boost/iostreams/filter/gzip.hpp>
 
+template <typename T>
+inline std::vector<int> validate_grid(const Eigen::MatrixXd &grid, const T n_var);
+inline Eigen::MatrixXd subset_matrix(const Eigen::MatrixXd &orig, const std::vector<int> &valid_points);
 inline std::size_t find_covar_index( std::string colname, std::vector< std::string > col_names );
 
 struct Hyps{
@@ -206,12 +209,13 @@ public:
 		}
 
 		// Assign data - hyperparameters
-		probs_grid             = dat.imprt_grid;
-		hyps_grid              = dat.hyps_grid;
+		probs_grid          = dat.imprt_grid;
+		hyps_grid           = dat.hyps_grid;
+
 		if(p.r1_hyps_grid_file == "NULL"){
-			r1_hyps_grid       = dat.hyps_grid;
+			r1_hyps_grid    = hyps_grid;
 		} else {
-			r1_hyps_grid       = dat.r1_hyps_grid;
+			r1_hyps_grid    = dat.r1_hyps_grid;
 		}
 
 		// Assign data - genetic
@@ -286,7 +290,7 @@ public:
 			for (int ii = 0; ii < r1_n_grid; ii++){
 				int tr_index     = (ii % p.n_thread);
 				double logw      = trackers[tr_index].logw_list[ii];
-				double sigma_g   = hyps_grid(ii, sigma_g_ind);
+				double sigma_g   = r1_hyps_grid(ii, sigma_g_ind);
 				if(std::isfinite(logw) && logw > logw_best && sigma_g > 0){
 					alpha_init   = trackers[tr_index].alpha_list[ii];
 					mu_init      = trackers[tr_index].mu_list[ii];
@@ -752,17 +756,38 @@ public:
 	}
 
 	void check_inputs(){
+		// If grid contains hyperparameter values that aren't sensible then we exclude
 		assert(Y.rows() == n_samples);
 		assert(X.rows() == n_samples);
 
-		for (int ii = 0; ii < n_grid; ii++){
-			assert(hyps_grid(ii, sigma_ind) > 0.0);
-			assert(hyps_grid(ii, sigma_b_ind) > 0.0);
-			assert(hyps_grid(ii, sigma_g_ind) >= 0.0);
-			assert(hyps_grid(ii, lam_b_ind) > 0.0);
-			assert(hyps_grid(ii, lam_b_ind) < 1.0);
-			assert(hyps_grid(ii, lam_g_ind) < 1.0);
-			assert(hyps_grid(ii, lam_g_ind) > 0.0);
+		std::vector<int> valid_points, r1_valid_points;
+		valid_points        = validate_grid(hyps_grid, n_var);
+		probs_grid          = subset_matrix(probs_grid, valid_points);
+		hyps_grid           = subset_matrix(hyps_grid, valid_points);
+
+		if(valid_points.size() == 0){
+			throw std::runtime_error("No valid grid points in hyps_grid.");
+		} else if(n_grid > valid_points.size()){
+			std::cout << "WARNING: " << n_grid - valid_points.size();
+			std::cout << " invalid grid points removed from hyps_grid." << std::endl;
+			n_grid = valid_points.size();
+
+			// update print interval
+			print_interval = std::max(1, n_grid / 10);
+		}
+
+
+		if(p.r1_hyps_grid_file != "NULL"){
+			int r1_n_grid   = r1_hyps_grid.rows();
+			r1_valid_points = validate_grid(r1_hyps_grid, n_var);
+			r1_hyps_grid    = subset_matrix(r1_hyps_grid, r1_valid_points);
+
+			if(r1_valid_points.size() == 0){
+				throw std::runtime_error("No valid grid points in r1_hyps_grid.");
+			} else if(r1_n_grid > r1_valid_points.size()){
+				std::cout << "WARNING: " << r1_n_grid - r1_valid_points.size();
+				std::cout << " invalid grid points removed from r1_hyps_grid." << std::endl;
+			}
 		}
 	}
 
@@ -801,5 +826,44 @@ inline std::size_t find_covar_index( std::string colname, std::vector< std::stri
 	}
 	x_col = it - col_names.begin();
 	return x_col;
+}
+
+template <typename T>
+inline std::vector<int> validate_grid(const Eigen::MatrixXd &grid, const T n_var){
+	const int sigma_ind   = 0;
+	const int sigma_b_ind = 1;
+	const int sigma_g_ind = 2;
+	const int lam_b_ind   = 3;
+	const int lam_g_ind   = 4;
+	double lam_b, lam_g;
+	bool chck_lam_b, chck_lam_g, chck_sigma_b, chck_sigma_g, chck_sigma;
+
+	std::vector<int> valid_points;
+	for (int ii = 0; ii < grid.rows(); ii++){
+		lam_b = grid(ii, lam_b_ind);
+		lam_g = grid(ii, lam_g_ind);
+
+		chck_sigma   = (grid(ii, sigma_ind)   >  0.0);
+		chck_sigma_b = (grid(ii, sigma_b_ind) >  0.0);
+		chck_sigma_g = (grid(ii, sigma_g_ind) >= 0.0);
+		chck_lam_b   = (lam_b >= 1.0 / (double) n_var) && (lam_b < 1.0);
+		chck_lam_g   = (lam_g >= 1.0 / (double) n_var) && (lam_g < 1.0);
+		if(chck_lam_b && chck_lam_g && chck_sigma && chck_sigma_g && chck_sigma_b){
+			valid_points.push_back(ii);
+		}
+	}
+	return valid_points;
+}
+
+inline Eigen::MatrixXd subset_matrix(const Eigen::MatrixXd &orig, const std::vector<int> &valid_points){
+	int n_cols = orig.cols(), n_rows = valid_points.size();
+	Eigen::MatrixXd subset(n_rows, n_cols);
+
+	for(int kk = 0; kk < n_rows; kk++){
+		for(int jj = 0; jj < n_cols; jj++){
+			subset(kk, jj) = orig(valid_points[kk], jj);
+		}
+	}
+	return subset;
 }
 #endif

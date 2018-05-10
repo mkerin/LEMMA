@@ -5,6 +5,7 @@ lib/*
 archive/*
 src/tools/*
 data/*
+tests/data/*
 
 # Ignore any executables
 bin/*

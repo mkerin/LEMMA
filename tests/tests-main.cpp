@@ -9,8 +9,8 @@
 #include "../src/tools/eigen3.3/Dense"
 #include "../src/parse_arguments.hpp"
 #include "../src/vbayes.hpp"
-#include "../src/genotype_matrix.hpp"
-// #include "../src/data.hpp"
+#include "../src/vbayes_x2.hpp"
+#include "../src/data.hpp"
 
 TEST_CASE( "Checking parse_arguments", "[io]" ) {
 	parameters p;
@@ -101,78 +101,6 @@ TEST_CASE( "Checking parse_arguments", "[io]" ) {
 			CHECK(p.n_gconf == 3);
 		}
 	}
-	
-	// Annoyingly no death test functionality exists within the Catch2 framework
-	// SECTION( "Error caused by invalid flag" ) {
-	// 	const char* argv[] = { "bin/bgen_prog", "--hello", "you"};
-	// 	int argc = sizeof(argv)/sizeof(argv[0]);
-	// 	parse_arguments(p, argc, argv);
-	// }
-}
-
-TEST_CASE( "Unit test vbayes", "[vbayes]" ) {
-	double PI = 3.1415926535897;
-	Eigen::MatrixXd myX(2, 2), myY(2, 1);
-	myY << 1.0, 2.0;
-	myX << 1.0, 0.0, 0.0, 1.0;
-	vbayes VB(myX, myY);
-	
-	SECTION( "Check vbayes.returnZ" ) {
-		// Hardcoded comparison with R
-		Eigen::VectorXd alpha(2), mu(2);
-		alpha << 1.0, 0.0;
-		mu << 0.7, 0.2;
-		std::vector< double > s_sq;
-		s_sq.push_back(1.2);
-		s_sq.push_back(0.8);
-		double pi = 0.2;
-		double sigma = 1.0;
-		double sigmab = 1.0;
-
-		double res = -6.569298;
-		CHECK(Approx(res) == VB.calc_logw(sigma, sigmab, pi, s_sq, alpha, mu));
-	}
-
-	// SECTION( "Check vbayes.random_mu_alpha" ) {
-	// 	int n_var = 5;
-	// 	Eigen::MatrixXd myX(2, n_var), myY(2, 1);
-	// 	vbayes VB(myX, myY);
-	// 	Eigen::VectorXd alpha, mu;
-	// 	VB.random_alpha_mu(alpha, mu);
-	// 
-	// 	std::cout << "alpha mu" << std::endl;
-	// 	for (int kk = 0; kk < n_var; kk++){
-	// 		std::cout << alpha(kk) << " " << mu(kk) << std::endl;
-	// 	}
-	// }
-
-	// SECTION( "Check vbayes.calc_logw" ) {
-	// 	std::string dir = "data/io_test/t7_varbvs_sub/";
-	// 	data Data( "data/io_test/t7_varbvs_sub/n500_p1000.bgen" );
-	// 	Data.params.pheno_file = dir + "pheno.txt";
-	// 	Data.params.alpha_file = dir + "alpha_init.txt";
-	// 	Data.params.mu_file = dir + "mu_init.txt";
-	// 
-	// 	Data.read_pheno();
-	// 	Data.params.chunk_size = 1100;
-	// 	Data.read_bgen_chunk();
-	// 	Data.read_alpha_mu();
-	// 
-	// 	vbayes VB(Data.G, Data.Y);
-	// 	double sigma = 1.0;
-	// 	double sigmab = 1.0;
-	// 	double q = 0.01;
-	// 	double obs;
-	// 
-	// 	std::vector< double > s_sq;
-	// 	s_sq.resize(VB.n_var);
-	// 	for (int kk = 0; kk < VB.n_var; kk++){
-	// 		s_sq[kk] = sigmab * sigma / (sigmab * VB.dXtX(kk) + 1.0);
-	// 	}
-	// 
-	// 	obs = VB.calc_logw(sigma, sigmab, q, s_sq, Data.alpha_init, Data.mu_init);
-	// 	CHECK(Approx(obs) == -1169.272);
-	// }
 }
 
 TEST_CASE( "Algebra in Eigen3" ) {
@@ -264,7 +192,76 @@ TEST_CASE( "GenotypeMatrix Class" ) {
 
 		CHECK(post_c1 == c2);
 	}
-	
+}
+
+TEST_CASE( "vbayes_x2.hpp", "[VBayesX2]" ) {
+	parameters p;
+	char* argv[] = { (char*) "bin/bgen_prog", (char*) "--mode_vb", 
+					 (char*) "--interaction", (char*) "x",
+					 (char*) "--bgen", (char*) "tests/data/case6_n50_p100.bgen",
+					 (char*) "--out", (char*) "tests/data/fake.out",
+					 (char*) "--pheno", (char*) "tests/data/pheno.txt",
+					 (char*) "--hyps_grid", (char*) "tests/data/hyperpriors_gxage_v1.txt",
+					 (char*) "--hyps_probs", (char*) "tests/data/hyperpriors_gxage_v1_probs.txt",
+					 (char*) "--vb_init", (char*) "tests/data/vb_inits.out",
+					 (char*) "--covar", (char*) "tests/data/age.txt"};
+	int argc = sizeof(argv)/sizeof(argv[0]);
+	parse_arguments(p, argc, argv);
+	data Data( p.bgen_file );
+	Data.params = p;
+
+	// Read in phenotypes
+	Data.read_pheno();
+	Data.center_matrix( Data.Y, Data.n_pheno );
+	Data.scale_matrix( Data.Y, Data.n_pheno, Data.pheno_names );
+
+	// Read in covariates if present
+	Data.read_covar();
+	Data.center_matrix( Data.W, Data.n_covar );
+	Data.scale_matrix( Data.W, Data.n_covar, Data.covar_names );
+
+	// Regress out covariates if present
+	Data.regress_covars();
+
+	// Read in all genetic data + standardise to mean 0 var 1
+	Data.params.chunk_size = Data.bgenView->number_of_variants();
+	Data.read_bgen_chunk();
+	Data.center_matrix( Data.G, Data.n_var );
+	Data.scale_matrix_conserved( Data.G, Data.n_var );
+
+	// Read in grids for importance sampling
+	Data.read_grids();
+
+	// Read starting point for VB approximation if provided
+	Data.read_alpha_mu();
+
+	// Pass data to VBayes object
+	VBayesX2 VB(Data);
+
+	// SECTION()
+	CHECK(VB.n_grid == 7);
+	VB.check_inputs();
+	CHECK(VB.n_grid == 6);
+	CHECK(VB.hyps_grid.rows() == 6);
+	CHECK(VB.probs_grid.rows() == 6);
+
+	SECTION("Function to validate hyperparameter grid"){
+			int n_var = 50;
+			Eigen::MatrixXd orig(3, 5), attempt, answer(2, 5);
+			std::vector<int> attempt_vec, answer_vec;
+
+			// Filling answers
+			orig << 1, 0.1, 0.1, 0.1, 0.1,
+					1, 0.1, 0.1, 0.001, 0.1, 
+					1, 0.1, 0.1, 0.1, 0.1;
+			answer << 1, 0.1, 0.1, 0.1, 0.1,
+					  1, 0.1, 0.1, 0.1, 0.1;
+			answer_vec.push_back(0);
+			answer_vec.push_back(2);
+
+			CHECK(validate_grid(orig, n_var) == answer_vec);
+			CHECK(subset_matrix(orig, answer_vec) == answer);
+	}
 }
 
 // TEST_CASE( "Checking data", "[data]" ) {
@@ -277,7 +274,7 @@ TEST_CASE( "GenotypeMatrix Class" ) {
 // 	data Data( p.bgen_file );
 // 
 // 	SECTION( "read_txt_file behaving sensibly" ) {
-// 		std::string filename = "test/cases/test_covar.txt";
+// 		std::string filename = "tests/cases/test_covar.txt";
 // 		Eigen::MatrixXd M_read, M_ans(3, 3), M_cent(3, 3);
 // 		int n_cols;
 // 		std::vector< std::string > col_names_read, col_names_ans;
@@ -431,3 +428,28 @@ TEST_CASE( "GenotypeMatrix Class" ) {
 // 	}
 // 
 // }
+
+
+TEST_CASE( "Unit test vbayes", "[vbayes]" ) {
+	double PI = 3.1415926535897;
+	Eigen::MatrixXd myX(2, 2), myY(2, 1);
+	myY << 1.0, 2.0;
+	myX << 1.0, 0.0, 0.0, 1.0;
+	vbayes VB(myX, myY);
+	
+	SECTION( "Check vbayes.returnZ" ) {
+		// Hardcoded comparison with R
+		Eigen::VectorXd alpha(2), mu(2);
+		alpha << 1.0, 0.0;
+		mu << 0.7, 0.2;
+		std::vector< double > s_sq;
+		s_sq.push_back(1.2);
+		s_sq.push_back(0.8);
+		double pi = 0.2;
+		double sigma = 1.0;
+		double sigmab = 1.0;
+
+		double res = -6.569298;
+		CHECK(Approx(res) == VB.calc_logw(sigma, sigmab, pi, s_sq, alpha, mu));
+	}
+}
