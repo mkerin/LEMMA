@@ -97,16 +97,16 @@ class data
 	// }
 
 	data( std::string filename ) {
-		bgenView = genfile::bgen::View::create(filename);
-		bgen_pass = true;
-		n_samples = bgenView->number_of_samples();
-		n_var_parsed = 0;
-
 		// system time at start
 		start = std::chrono::system_clock::now();
 		std::time_t start_time = std::chrono::system_clock::to_time_t(start);
 		std::cout << "Starting analysis at " << std::ctime(&start_time) << std::endl;
 		std::cout << "Compiled from git branch: master" << std::endl;
+
+		bgenView = genfile::bgen::View::create(filename);
+		bgen_pass = true;
+		n_samples = bgenView->number_of_samples();
+		n_var_parsed = 0;
 	}
 	
 	~data() {

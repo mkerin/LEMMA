@@ -765,7 +765,9 @@ public:
 		probs_grid          = subset_matrix(probs_grid, valid_points);
 		hyps_grid           = subset_matrix(hyps_grid, valid_points);
 
-		if(n_grid > valid_points.size()){
+		if(valid_points.size() == 0){
+			throw std::runtime_error("No valid grid points in hyps_grid.");
+		} else if(n_grid > valid_points.size()){
 			std::cout << "WARNING: " << n_grid - valid_points.size();
 			std::cout << " invalid grid points removed from hyps_grid." << std::endl;
 			n_grid = valid_points.size();
@@ -780,7 +782,9 @@ public:
 			r1_valid_points = validate_grid(r1_hyps_grid, n_var);
 			r1_hyps_grid    = subset_matrix(r1_hyps_grid, r1_valid_points);
 
-			if(r1_n_grid > r1_valid_points.size()){
+			if(r1_valid_points.size() == 0){
+				throw std::runtime_error("No valid grid points in r1_hyps_grid.");
+			} else if(r1_n_grid > r1_valid_points.size()){
 				std::cout << "WARNING: " << r1_n_grid - r1_valid_points.size();
 				std::cout << " invalid grid points removed from r1_hyps_grid." << std::endl;
 			}

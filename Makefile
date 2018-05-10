@@ -8,26 +8,30 @@ SRCDIR := src
 INCLUDES = -Ibuild/genfile/include/ -I3rd_party/zstd-1.1.0/lib/ \
            -Ibuild/db/include/ -I3rd_party/sqlite3 -I3rd_party/boost_1_55_0
 LIBS =     -Lbuild/ -Lbuild/3rd_party/zstd-1.1.0 -Lbuild/db -Lbuild/3rd_party/sqlite3 \
-           -Lbuild/3rd_party/boost_1_55_0
-FLAGS = -std=c++11 -Wno-deprecated $(LIBS) $(INCLUDES)
+           -Lbuild/3rd_party/boost_1_55_0 -lbgen -ldb -lsqlite3 -lboost -lz -ldl -lrt -lpthread -lzstd
+FLAGS := -std=c++11 -Wno-deprecated $(LIBS) $(INCLUDES)
 
 HEADERS := parse_arguments.hpp data.hpp class.h bgen_parser.hpp vbayes.hpp vbayes_x.hpp utils.hpp vbayes_x2.hpp
 HEADERS := $(addprefix $(SRCDIR)/,$(HEADERS))
 
 rescomp: CXX = /apps/well/gcc/7.2.0/bin/g++
-rescomp: FLAGS += -O3 -lbgen -ldb -lsqlite3 -lboost -lz -ldl -lrt -lpthread -lzstd
+rescomp: FLAGS += -O3
 rescomp: $(TARGET)
 
 rescomp-optim: CXX = /apps/well/gcc/7.2.0/bin/g++
-rescomp-optim: FLAGS += -O3 -fno-rounding-math -fno-signed-zeros -fprefetch-loop-arrays -flto -lbgen -ldb -lsqlite3 -lboost -lz -ldl -lrt -lpthread -lzstd
+rescomp-optim: FLAGS += -O3 -fno-rounding-math -fno-signed-zeros -fprefetch-loop-arrays -flto
 rescomp-optim: $(TARGET)
 
 rescomp-debug: CXX = /apps/well/gcc/7.2.0/bin/g++
-rescomp-debug: FLAGS += -g3 -lbgen -ldb -lsqlite3 -lboost -lz -ldl -lrt -lpthread -lzstd
+rescomp-debug: FLAGS += -g3
 rescomp-debug: $(TARGET)
 
+garganey-debug: CXX = g++
+garganey-debug: FLAGS += -g3
+garganey-debug: $(TARGET)
+
 garganey: CXX = g++
-garganey: FLAGS += -g3 -lbgen -ldb -lsqlite3 -lboost -lz -ldl -lrt -lpthread -lzstd
+garganey: FLAGS += -O3
 garganey: $(TARGET)
 
 # Cutting out -lrt, -lz
@@ -54,21 +58,21 @@ file_parse : file_parse.cpp
 # to test input/output of the executable we do that directly with the Makefile
 # and `diff` command.
 # UNITTESTS := test-data.cpp tests-parse-arguments.cpp 
-# UNITTESTS := $(addprefix test/,$(UNITTESTS))
+# UNITTESTS := $(addprefix tests/,$(UNITTESTS))
 
-testUNIT: test/tests-main
+testUNIT: tests/tests-main
 
-test/tests-main: test/tests-main.o
+tests/tests-main: tests/tests-main.o
 	$(CXX) $< -o $@  $(FLAGS) && ./$@
 
-test/tests-main.o: test/tests-main.cpp $(SRCDIR)/bgen_prog.cpp $(HEADERS)
-	$(CXX) test/tests-main.cpp -c -o $@ $(FLAGS)
+tests/tests-main.o: tests/tests-main.cpp $(SRCDIR)/bgen_prog.cpp $(HEADERS)
+	$(CXX) tests/tests-main.cpp -c -o $@ $(FLAGS)
 
 # IO Tests
 # Files in data/out are regarded as 'true', and we check that the equivalent
 # file in data/io_test is identical after making changes to the executable.
 IOfiles := t1_range t2_lm t3_lm_two_chunks t4_lm_2dof t5_joint_model t6_lm2 \
-           t7_varbvs_constrained t8_varbvs t9_varbvs_zero_hg t10_varbvs_without_init
+           t7_varbvs_constrained t8_varbvs t10_varbvs_without_init
 IOfiles := $(addprefix data/io_test/,$(addsuffix /attempt.out,$(IOfiles)))
 IOfiles += $(addprefix data/io_test/t2_lm/attempt, $(addsuffix .out,B C D))
 IOfiles += $(addprefix data/io_test/t1_range/attempt, $(addsuffix .out,B))
@@ -178,12 +182,12 @@ $(t7_dir)/hyperpriors_gxage.txt: R/t7/gen_hyps.R
 $(t7_dir)/answer.rds: R/vbayes_x_tests/run_VBayesR.R $(t7_dir)/hyperpriors_gxage.txt
 	# $(RSCRIPT) $< $(dir $@)
 	Rscript ../../gw-reg/R/vbayes/vbayesr_commandline.R run \
-	  --pheno $(t7_dir)/pheno.txt \
-	  --covar $(t7_dir)/age.txt \
-	  --vcf $(t7_dir)/n50_p100.vcf.gz \
+	  --pheno $(dir $@)pheno.txt \
+	  --covar $(dir $@)age.txt \
+	  --vcf $(dir $@)n50_p100.vcf.gz \
 	  --out $@ \
-	  --hyps_grid $(t7_dir)/hyperpriors_gxage.txt \
-	  --hyps_probs $(t7_dir)/hyperpriors_gxage_probs.txt \
+	  --hyps_grid $(dir $@)hyperpriors_gxage.txt \
+	  --hyps_probs $(dir $@)hyperpriors_gxage_probs.txt \
 	  --vb_init $(dir $@)answer_init.txt
 
 # TEST 8
@@ -207,27 +211,36 @@ $(t8_dir)/hyperpriors_gxage.txt: R/t8/gen_hyps.R
 	$(RSCRIPT) $<
 
 $(t8_dir)/answer.rds: R/vbayes_x_tests/run_VBayesR.R $(t8_dir)/hyperpriors_gxage.txt
-	$(RSCRIPT) $< $(dir $@)
+	# $(RSCRIPT) $< $(dir $@)
+	Rscript ../../gw-reg/R/vbayes/vbayesr_commandline.R run \
+	  --pheno $(dir $@)pheno.txt \
+	  --covar $(dir $@)age.txt \
+	  --vcf $(dir $@)n50_p100.vcf.gz \
+	  --out $(dir $@)answer.rds \
+	  --hyps_grid $(dir $@)hyperpriors_gxage.txt \
+	  --hyps_probs $(dir $@)hyperpriors_gxage_probs.txt \
+	  --vb_init $(dir $@)answer_init.txt
 
+# NEED TO MAKE THIS RUN WITH VBAYESR IS WANT TO KEEP
 # TEST 9
 # Tests when h_g is zero (ie collapse down to original carbonetto model on X)
-t9_dir     := data/io_test/t9_varbvs_zero_hg
-t9_context := $(t8_dir)/hyperpriors_gxage.txt $(t9_dir)/answer.rds
-data/io_test/t9_varbvs_zero_hg/attempt.out: data/io_test/t9_varbvs_zero_hg/n50_p100.bgen ./bin/bgen_prog $(t9_context)
-	./bin/bgen_prog --mode_vb --verbose \
-	    --bgen $< \
-	    --interaction x \
-	    --covar $(dir $@)age.txt \
-	    --pheno $(dir $@)pheno.txt \
-	    --hyps_grid $(dir $@)hyperpriors_gxage.txt \
-	    --hyps_probs $(dir $@)hyperpriors_gxage_probs.txt \
-	    --vb_init $(dir $@)answer_init.txt \
-	    --out $@
-	$(RSCRIPT) R/vbayes_x_tests/check_output.R $(dir $@) > $(dir $@)attempt.log
-	diff $(dir $@)answer.log $(dir $@)attempt.log
-
-$(t9_dir)/answer.rds: R/t9/t9_run_vbayesr.R $(t9_dir)/hyperpriors_gxage.txt
-	$(RSCRIPT) $< $(dir $@)
+# t9_dir     := data/io_test/t9_varbvs_zero_hg
+# t9_context := $(t9_dir)/hyperpriors_gxage.txt $(t9_dir)/answer.rds
+# data/io_test/t9_varbvs_zero_hg/attempt.out: data/io_test/t9_varbvs_zero_hg/n50_p100.bgen ./bin/bgen_prog $(t9_context)
+# 	./bin/bgen_prog --mode_vb --verbose \
+# 	    --bgen $< \
+# 	    --interaction x \
+# 	    --covar $(dir $@)age.txt \
+# 	    --pheno $(dir $@)pheno.txt \
+# 	    --hyps_grid $(dir $@)hyperpriors_gxage.txt \
+# 	    --hyps_probs $(dir $@)hyperpriors_gxage_probs.txt \
+# 	    --vb_init $(dir $@)answer_init.txt \
+# 	    --out $@
+# 	$(RSCRIPT) R/vbayes_x_tests/check_output.R $(dir $@) > $(dir $@)attempt.log
+# 	diff $(dir $@)answer.log $(dir $@)attempt.log
+# 
+# $(t9_dir)/answer.rds: R/t9/t9_run_vbayesr.R $(t9_dir)/hyperpriors_gxage.txt
+# 	$(RSCRIPT) $< $(dir $@)
 
 # TEST 10
 # Test when runnign from random start point.. this may be unstable
@@ -243,7 +256,15 @@ $(t10_dir)/attempt.out: $(t10_dir)/n50_p100.bgen ./bin/bgen_prog $(t10_context)
 	    --hyps_probs $(dir $@)hyperpriors_gxage_probs.txt \
 	    --out $@
 	$(CP) $(t10_dir)/attempt_inits.out $(t10_dir)/answer_init.txt
-	$(RSCRIPT) R/vbayes_x_tests/run_VBayesR.R $(dir $@)
+	# $(RSCRIPT) R/vbayes_x_tests/run_VBayesR.R $(dir $@)
+	$(RSCRIPT) ../../gw-reg/R/vbayes/vbayesr_commandline.R run \
+	  --pheno $(dir $@)pheno.txt \
+	  --covar $(dir $@)age.txt \
+	  --vcf $(dir $@)n50_p100.vcf.gz \
+	  --out $(dir $@)answer.rds \
+	  --hyps_grid $(dir $@)hyperpriors_gxage.txt \
+	  --hyps_probs $(dir $@)hyperpriors_gxage_probs.txt \
+	  --vb_init $(dir $@)answer_init.txt
 	$(RSCRIPT) R/t10/check_output.R $(dir $@) > $(dir $@)attempt.log
 	diff $(dir $@)answer.log $(dir $@)attempt.log
 
@@ -272,7 +293,15 @@ $(t11_dir)/hyperpriors_gxage.txt: R/t8/gen_hyps.R
 	$(RSCRIPT) $<
 
 $(t11_dir)/answer.rds: R/vbayes_x_tests/run_VBayesR.R $(t11_dir)/hyperpriors_gxage.txt
-	$(RSCRIPT) $< $(dir $@)
+	# $(RSCRIPT) $< $(dir $@)
+	$(RSCRIPT) ../../gw-reg/R/vbayes/vbayesr_commandline.R run \
+	  --pheno $(dir $@)pheno.txt \
+	  --covar $(dir $@)age.txt \
+	  --vcf $(dir $@)n50_p100.vcf.gz \
+	  --out $(dir $@)answer.rds \
+	  --hyps_grid $(dir $@)hyperpriors_gxage.txt \
+	  --hyps_probs $(dir $@)hyperpriors_gxage_probs.txt \
+	  --vb_init $(dir $@)answer_init.txt
 
 
 # Clean dir
