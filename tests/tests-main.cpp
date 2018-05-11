@@ -224,9 +224,11 @@ TEST_CASE( "GenotypeMatrix Class" ) {
 			CHECK(res_truth[1] == Approx(res[1]));
 		}
 
-		// SECTION("Missing values handled correctly"){
-		// 
-		// }
+		SECTION("Missing values handled correctly"){
+			GM.assign_index(2, 0, std::nan(""));
+			CHECK(GM(1, 0) == Approx(0.7071068));
+			CHECK(0.0 == Approx(GM(2, 0)));
+		}
 	}
 }
 
