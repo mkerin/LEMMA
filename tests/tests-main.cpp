@@ -146,61 +146,87 @@ TEST_CASE( "Algebra in Eigen3" ) {
 
 TEST_CASE( "GenotypeMatrix Class" ) {
 
-	GenotypeMatrix GM(3, 2);
-	GM.assign_index(0, 0, 0.2);
-	GM.assign_index(1, 0, 0.8);
-	GM.assign_index(2, 0, 0.2);
-	GM.assign_index(0, 1, 0.3);
-	GM.assign_index(1, 1, 0.345);
-	GM.assign_index(2, 1, 0.213);
+	SECTION("low-mem mode on"){
+		GenotypeMatrix GM(true, 3, 2);
+		GM.assign_index(0, 0, 0.2);
+		GM.assign_index(1, 0, 0.8);
+		GM.assign_index(2, 0, 0.2);
+		GM.assign_index(0, 1, 0.3);
+		GM.assign_index(1, 1, 0.345);
+		GM.assign_index(2, 1, 0.213);
 
-	// Eigen::MatrixXd GM_uint(2,3);
-	// GM_uint << 51, 51, 8, 204, 76, 54;
+		SECTION("Empty constructor"){
+			GenotypeMatrix GM2(true);
+			GM2.resize(3, 2);
+			GM2.assign_index(0, 0, 0.2);
+			GM2.assign_index(1, 0, 0.8);
+			GM2.assign_index(2, 0, 0.2);
+			CHECK(GM2(0,0) == GM(0,0));
+		}
 
-	SECTION("Empty constructor"){
-		GenotypeMatrix GM2;
-		GM2.resize(2, 3);
-		GM2.assign_index(0, 0, 0.2);
-		CHECK(GM2.read_index(0,0) == GM.read_index(0,0));
+		SECTION("Column means and sds computed correctly"){
+			GM.calc_scaled_values();
+			Eigen::VectorXd true_mean(2), true_sd(2);
+			true_mean << 0.3997396, 0.2877604;
+			true_sd << 2.879253, 14.846298;   // 0.34731227, 0.06735686;
+
+			CHECK(GM.scaling_performed == true);
+			CHECK(Approx(true_mean.sum()) == GM.compressed_dosage_means.sum());
+			CHECK(Approx(true_sd.sum()) == GM.compressed_dosage_inv_sds.sum());
+		}
+
+		SECTION("Read access returns standardised values"){
+			CHECK(Approx(GM(0, 1)) == 0.1933112);
+		}
+
+		SECTION("Decompressed matrix multiplication"){
+			Eigen::VectorXd vv(2);
+			vv << 0.55, 0.676;
+			Eigen::VectorXd res = GM * vv;
+			Eigen::VectorXd res_truth(3);
+			res_truth << -0.1868643, 1.2362057, -1.0493414;
+			CHECK(res_truth[0] == Approx(res[0]));
+			CHECK(res_truth[1] == Approx(res[1]));
+		}
+
+		SECTION("Read column access"){
+			Eigen::VectorXd c2a(3), c2b, c2_truth(3);
+			c2_truth << 0.1933112, 0.8892314, -1.0825425;
+			// CHECK_THROWS(GM.col(1, c2a));
+			// GM.col(1, c2a);
+			c2b = GM.col(1);
+
+			// CHECK(Approx(c2a[0]) == c2_truth[0]);
+			CHECK(Approx(c2b[0]) == c2_truth[0]);
+			CHECK(Approx(c2b[1]) == c2_truth[1]);
+		}
 	}
 
-	SECTION("Column means and sds computed correctly"){
-		GM.compute_means_and_sd();
-		Eigen::VectorXd true_mean(2), true_sd(2);
-		true_mean << 0.3997396, 0.2877604;
-		true_sd << 0.34731227, 0.06735686;
+	SECTION("Normal functionality when low-mem off"){
+		GenotypeMatrix GM(false, 3, 2);
+		GM.assign_index(0, 0, 0.2);
+		GM.assign_index(1, 0, 0.8);
+		GM.assign_index(2, 0, 0.2);
+		GM.assign_index(0, 1, 0.3);
+		GM.assign_index(1, 1, 0.345);
+		GM.assign_index(2, 1, 0.213);
 
-		CHECK(GM.means_and_sd_computed == true);
-		CHECK(Approx(true_mean.sum()) == GM.compressed_dosage_means.sum());
-		CHECK(Approx(true_sd.sum()) == GM.compressed_dosage_sds.sum());
-	}
+		SECTION("Read access returns standardised values"){
+			CHECK(Approx(GM(0, 1)) == 0.2086301);
+		}
+		SECTION("Matrix multiplication functions on scaled matrix"){
+			Eigen::VectorXd vv(2);
+			vv << 0.55, 0.676;
+			Eigen::VectorXd res = GM * vv;
+			Eigen::VectorXd res_truth(3);
+			res_truth << -0.1765087, 1.2294428, -1.0529341;
+			CHECK(res_truth[0] == Approx(res[0]));
+			CHECK(res_truth[1] == Approx(res[1]));
+		}
 
-	SECTION("Decompressed matrix multiplication"){
-		Eigen::VectorXd vv(2);
-		vv << 0.55, 0.676;
-		Eigen::VectorXd res = GM * vv;
-		Eigen::VectorXd res_truth(3);
-		res_truth << -0.1868643, 1.2362057, -1.0493414;
-		CHECK(Approx(res.sum()) == res_truth.sum());
-	}
-
-	SECTION("Read column access"){
-		Eigen::VectorXd c2a(3), c2b, c2_truth(3);
-		c2_truth << 0.3007812, 0.3476562, 0.2148438;
-		// CHECK_THROWS(GM.col(1, c2a));
-		GM.col(1, c2a);
-		c2b = GM.col(1);
-		CHECK(Approx(c2a.sum()) == c2_truth.sum());
-		CHECK(Approx(c2b.sum()) == c2_truth.sum());
-	}
-
-	SECTION("Write column access"){
-		// write 2nd column to 1st column and check equivalent
-		Eigen::VectorXd c2, post_c1;
-		c2 = GM.col(1);
-		GM.assign_col(0, c2);
-		post_c1 = GM.col(0);
-		CHECK(post_c1 == c2);
+		// SECTION("Missing values handled correctly"){
+		// 
+		// }
 	}
 }
 
