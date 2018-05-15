@@ -69,7 +69,8 @@ void parse_arguments(parameters &p, int argc, char *argv[]) {
 		"--hyps_probs",
 		"--vb_init",
 		"--verbose",
-		"--threads"
+		"--threads",
+		"--low_mem"
 	};
 
 	std::set<std::string>::iterator set_it;
@@ -142,6 +143,11 @@ void parse_arguments(parameters &p, int argc, char *argv[]) {
 
 			if(strcmp(in_str, "--verbose") == 0) {
 				p.verbose = true;
+				i += 0;
+			}
+
+			if(strcmp(in_str, "--low_mem") == 0) {
+				p.low_mem = true;
 				i += 0;
 			}
 

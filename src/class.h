@@ -16,7 +16,7 @@ class parameters {
 		uint32_t start, end;
 		bool range, maf_lim, info_lim, mode_vcf, mode_lm, test_2dof, select_snps;
 		bool geno_check, mode_joint_model, bgen_wildcard, mode_lm2, mode_vb;
-		bool select_rsid, interaction_analysis, verbose, logw_lim_set;
+		bool select_rsid, interaction_analysis, verbose, logw_lim_set, low_mem;
 		double min_maf, min_info, logw_tol;
 		std::vector < std::string > incl_sample_ids, gconf;
 	
@@ -45,6 +45,7 @@ class parameters {
 		mode_lm = false;
 		mode_lm2 = false;
 		mode_vcf = false;
+		low_mem = false;
 		mode_joint_model = false;
 		mode_vb = false;
 		test_2dof = true;

@@ -98,21 +98,21 @@ class Data
 	// 	bgen_pass = false; // No bgen file set; read_bgen_chunk won't run.
 	// }
 
-	Data( const std::string& filename ) : G(false) {
-		// system time at start
-		start = std::chrono::system_clock::now();
-		std::time_t start_time = std::chrono::system_clock::to_time_t(start);
-		std::cout << "Starting analysis at " << std::ctime(&start_time) << std::endl;
-		std::cout << "Compiled from git branch: master" << std::endl;
+	// Data( const std::string& filename ) : G(false) {
+	// 	// system time at start
+	// 	start = std::chrono::system_clock::now();
+	// 	std::time_t start_time = std::chrono::system_clock::to_time_t(start);
+	// 	std::cout << "Starting analysis at " << std::ctime(&start_time) << std::endl;
+	// 	std::cout << "Compiled from git branch: master" << std::endl;
+	// 
+	// 	bgenView = genfile::bgen::View::create(filename);
+	// 	bgen_pass = true;
+	// 	n_samples = bgenView->number_of_samples();
+	// 	n_var_parsed = 0;
+	// 	filters_applied = false;
+	// }
 
-		bgenView = genfile::bgen::View::create(filename);
-		bgen_pass = true;
-		n_samples = bgenView->number_of_samples();
-		n_var_parsed = 0;
-		filters_applied = false;
-	}
-
-	Data( const parameters& p ) : params(p), G(false) {
+	Data( const parameters& p ) : params(p), G(p.low_mem) {
 		// system time at start
 		start = std::chrono::system_clock::now();
 		std::time_t start_time = std::chrono::system_clock::to_time_t(start);

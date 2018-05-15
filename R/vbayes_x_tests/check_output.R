@@ -11,7 +11,11 @@ print(args)
 test.dir = args[[1]]
 
 r.res = readROutput(file.path(test.dir, "answer.rds"))
-cpp.res = readCppOutput(file.path(test.dir, "attempt.out"))
+if(length(args) > 1){
+	cpp.res = readCppOutput(args[[2]])
+} else {
+	cpp.res = readCppOutput(file.path(test.dir, "attempt.out"))
+}
 
 
 df.logw = as.data.frame(cbind(cpp.res$logw.vec, r.res$logw.vec))

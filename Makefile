@@ -207,6 +207,19 @@ data/io_test/t8_varbvs/attempt.out: data/io_test/n50_p100.bgen ./bin/bgen_prog $
 	$(RSCRIPT) R/vbayes_x_tests/check_output.R $(dir $@) > $(dir $@)attempt.log
 	diff $(dir $@)answer.log $(dir $@)attempt.log
 
+data/io_test/t8_varbvs/attempt_low_mem.out: data/io_test/n50_p100.bgen ./bin/bgen_prog $(t8_context)
+	./bin/bgen_prog --mode_vb --verbose --low_mem \
+	    --bgen $< \
+	    --interaction x \
+	    --covar $(dir $@)age.txt \
+	    --pheno $(dir $@)pheno.txt \
+	    --hyps_grid $(dir $@)hyperpriors_gxage.txt \
+	    --hyps_probs $(dir $@)hyperpriors_gxage_probs.txt \
+	    --vb_init $(dir $@)answer_init.txt \
+	    --out $@
+	$(RSCRIPT) R/vbayes_x_tests/check_output.R $(dir $@) $@ > $(basename $@).log
+	diff $(dir $@)answer_low_mem.log $(basename $@).log
+
 $(t8_dir)/hyperpriors_gxage.txt: R/t8/gen_hyps.R
 	$(RSCRIPT) $<
 
