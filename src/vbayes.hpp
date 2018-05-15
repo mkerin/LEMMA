@@ -46,10 +46,11 @@ class vbayes {
 	int sig_b_ind;
 	int pi_ind;
 
-	Eigen::MatrixXd X;          // dosage matrix
+	GenotypeMatrix X;
+	// Eigen::MatrixXd X;          // dosage matrix
 	Eigen::MatrixXd Y;          // residual phenotype matrix
 	Eigen::VectorXd dXtX;       // diagonal of X^T * X
-	Eigen::MatrixXd Xty;
+	Eigen::VectorXd Xty;
 	Eigen::VectorXd rr;         // column vector of elements rr[kk] = alpha[kk]mu[kk]
 	Eigen::MatrixXd hyps_grid;
 	Eigen::MatrixXd probs_grid; // prob of each point in grid under hyps
@@ -70,7 +71,7 @@ class vbayes {
 	std::vector< double > logw;
 	std::vector< double > alpha_av, mu_av, beta_av;
 
-	vbayes( data& dat ) : X( dat.G ),
+	vbayes( Data& dat ) : X( dat.G ),
  						  Y( dat.Y ) {
 		sigma_ind = 0;
 		sig_b_ind = 1;
@@ -88,13 +89,23 @@ class vbayes {
 
 		probs_grid = dat.imprt_grid;
 		hyps_grid = dat.hyps_grid;
-		dXtX = (X.transpose() * X).diagonal();
-		Xty = X.transpose() * Y;
+		// dXtX = (X.transpose() * X).diagonal();
+		// Xty = X.transpose() * Y;
+		Xty.resize(n_var);
+		Xty << (X.transpose_vector_multiply(Y));
+		dXtX.resize(n_var);
+		Eigen::VectorXd col_j;
+		for (std::size_t jj; jj < n_var; jj++){
+			col_j = X.col(jj);
+			dXtX[jj] = col_j.dot(col_j);
+		}
 
 		// non random initialisation
 		if(dat.params.vb_init_file != "NULL"){
 			alpha1 = dat.alpha_init;
 			mu1 = dat.mu_init;
+			assert(alpha1.rows() == n_var);
+			assert(mu1.rows() == n_var);
 			initialize_params_default = false;
 		} else {
 			initialize_params_default = true;
@@ -102,12 +113,21 @@ class vbayes {
 	}
 
 	// For use in unit testing.
-	vbayes(Eigen::MatrixXd myX, Eigen::MatrixXd myY) : X( myX ), Y( myY ){
-		dXtX = (X.transpose() * X).diagonal();
-		Xty = X.transpose() * Y;
-		n_samples = X.rows();
-		n_var = X.cols();
-	}
+	// vbayes(Eigen::MatrixXd myX, Eigen::MatrixXd myY) : X( myX ), Y( myY ){
+	// 	// dXtX = (X.transpose() * X).diagonal();
+	// 	// Xty = X.transpose() * Y;
+	// 	n_samples = X.rows();
+	// 	n_var = X.cols();
+	// 
+	// 	Xty.resize(n_var);
+	// 	Xty << (X.transpose_vector_multiply(Y));
+	// 	dXtX.resize(n_var);
+	// 	Eigen::VectorXd col_j;
+	// 	for (std::size_t jj; jj < n_var; jj++){
+	// 		col_j = X.col(jj);
+	// 		dXtX[jj] = col_j.dot(col_j);
+	// 	}
+	// }
 
 	~vbayes(){
 	}

@@ -71,11 +71,11 @@ tests/tests-main.o: tests/tests-main.cpp $(SRCDIR)/bgen_prog.cpp $(HEADERS)
 # IO Tests
 # Files in data/out are regarded as 'true', and we check that the equivalent
 # file in data/io_test is identical after making changes to the executable.
-IOfiles := t1_range t2_lm t3_lm_two_chunks t4_lm_2dof t5_joint_model t6_lm2 \
-           t7_varbvs_constrained t8_varbvs t10_varbvs_without_init
+# IOfiles := t1_range t2_lm t3_lm_two_chunks t4_lm_2dof t5_joint_model t6_lm2 
+IOfiles :=           t7_varbvs_constrained t8_varbvs t10_varbvs_without_init
 IOfiles := $(addprefix data/io_test/,$(addsuffix /attempt.out,$(IOfiles)))
-IOfiles += $(addprefix data/io_test/t2_lm/attempt, $(addsuffix .out,B C D))
-IOfiles += $(addprefix data/io_test/t1_range/attempt, $(addsuffix .out,B))
+# IOfiles += $(addprefix data/io_test/t2_lm/attempt, $(addsuffix .out,B C D))
+# IOfiles += $(addprefix data/io_test/t1_range/attempt, $(addsuffix .out,B))
 
 testIO: $(IOfiles)
 	@

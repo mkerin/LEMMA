@@ -35,6 +35,7 @@ Questions:
 #include <iostream>
 #include <limits>
 #include <cstdint>               // uint32_t
+#include <cmath>
 #include "tools/eigen3.3/Dense"
 
 
@@ -45,17 +46,20 @@ class GenotypeMatrix {
 	// Compression objects
 	const std::uint8_t maxCompressedValue = std::numeric_limits<std::uint8_t>::max();
 	const std::uint16_t numCompressedIntervals = static_cast<std::uint16_t> (maxCompressedValue + 1);
-	const double intervalWidth = 2.0/numCompressedIntervals;
+	const double L = 2.0;
+	const double intervalWidth = L/numCompressedIntervals;
 	const double invIntervalWidth = numCompressedIntervals / 2.0;
+
+public:
+	const bool low_mem;
+	bool scaling_performed;
 
 	Eigen::Matrix<unsigned char, Eigen::Dynamic, Eigen::Dynamic> M; // used in low-mem mode
 	Eigen::MatrixXd G; // used when not in low-mem node
 
 	std::vector<std::map<int, bool>> missing_genos;
-public:
-	const bool low_mem;
-	bool scaling_performed;
 	Eigen::VectorXd compressed_dosage_means;
+	Eigen::VectorXd compressed_dosage_sds;
 	Eigen::VectorXd compressed_dosage_inv_sds;  // 1 / col-wise sd
 	std::size_t NN, PP;
 
@@ -63,10 +67,10 @@ public:
 	typedef Eigen::Index Index;
 
 	// Constructors
-	GenotypeMatrix(bool compression) : low_mem(compression){
+	GenotypeMatrix(bool use_compression) : low_mem(use_compression){
 		scaling_performed = false;
 	};
-	GenotypeMatrix(bool compression, int n, int p) : low_mem(compression){
+	GenotypeMatrix(bool use_compression, int n, int p) : low_mem(use_compression){
 		if(low_mem){
 			M.resize(n, p);
 		} else {
@@ -76,6 +80,7 @@ public:
 		PP = p;
 
 		compressed_dosage_means.resize(p);
+		compressed_dosage_sds.resize(p);
 		compressed_dosage_inv_sds.resize(p);
 		missing_genos.resize(p);
 
@@ -87,7 +92,8 @@ public:
 	/********** Input / Write access methods ************/
 
 	// Eigen element access
-	void assign_index(Index ii, Index jj, double x){
+	template <typename T, typename T2>
+	void assign_index(const T& ii, const T2& jj, double x){
 		if(low_mem){
 			if(std::isnan(x)){
 				throw std::runtime_error("ERROR: missing values not yet compatible in low-mem mode");
@@ -106,7 +112,7 @@ public:
 
 	// Replacement(s) for write-version of Eigen Method .col()
 	template<typename T>
-	void assign_col(T jj, Eigen::Ref<Eigen::VectorXd> vec){
+	void assign_col(const T& jj, Eigen::Ref<Eigen::VectorXd> vec){
 		assert(vec.rows() == NN);
 
 		if(low_mem){
@@ -125,7 +131,8 @@ public:
 	/********** Output / Read access methods ************/
 
 	// Eigen element access
-	double operator()(Index ii, Index jj){
+	template <typename T, typename T2>
+	double operator()(const T& ii, const T2& jj){
 		if(!scaling_performed){
 			calc_scaled_values();
 		}
@@ -160,7 +167,7 @@ public:
 	}
 
 	// Eigen matrix multiplication
-	Eigen::VectorXd operator*(const Eigen::Ref<const Eigen::VectorXd> rhs){
+	Eigen::VectorXd operator*(const Eigen::Ref<const Eigen::VectorXd>&  rhs){
 		if(!scaling_performed){
 			calc_scaled_values();
 		}
@@ -178,62 +185,29 @@ public:
 		}
 	}
 
+	// Eigen lhs matrix multiplication
+	Eigen::VectorXd transpose_vector_multiply(const Eigen::Ref<const Eigen::VectorXd>& lhs){
+		// G.transpose_vector_multiply(y) <=> (y^t G)^t <=> G^t y
+		// NOTE: assumes that lhs is centered!
+		if(!scaling_performed){
+			calc_scaled_values();
+		}
 
-	// Replacement(s) for read-version of Eigen Method .col()
-	// template<typename T>
-	// void col(T jj, Eigen::Ref<Eigen::VectorXd> vec){
-	// 	assert(vec.rows() == NN);
-	// 
-	// 	if(low_mem){
-	// 		for (Index ii = 0; ii < NN; ii++){
-	// 			vec[ii] = DecompressDosage(M(ii, jj));
-	// 		}
-	// 
-	// 		if(!scaling_performed){
-	// 			compute_means_and_sd();
-	// 		}
-	// 		vec = vec.array() - compressed_dosage_means[jj];
-	// 		vec *= compressed_dosage_inv_sds[jj];
-	// 	}
-	// }
+		Eigen::VectorXd res;
+		if(low_mem){
+			assert(lhs.rows() == M.rows());
+			assert(std::abs(lhs.sum()) < 1e-9);
 
-	// template<typename T>
-	// Eigen::VectorXd col(T jj){
-	// 	Eigen::VectorXd vec(NN);
-	// 
-	// 	if(!scaling_performed){
-	// 		calc_scaled_values();
-	// 	}
-	// 
-	// 	if(low_mem){
-	// 		for (Index ii = 0; ii < NN; ii++){
-	// 			vec[ii] = DecompressDosage(M(ii, jj));
-	// 		}
-	// 
-	// 		vec = vec.array() - compressed_dosage_means[jj];
-	// 		vec *= compressed_dosage_inv_sds[jj];
-	// 	} else {
-	// 		vec = G.col(jj);
-	// 	}
-	// 
-	// 	return vec;
-	// }
-	// 
-	// // Replacement(s) for write-version of Eigen Method .col()
-	// template<typename T>
-	// void assign_col(T jj, Eigen::Ref<Eigen::VectorXd> vec){
-	// 	assert(vec.rows() == NN);
-	// 
-	// 	if(low_mem){
-	// 		for (Index ii = 0; ii < NN; ii++){
-	// 			M(ii, jj) = CompressDosage(vec[ii]);
-	// 		}
-	// 	} else {
-	// 		for (Index ii = 0; ii < NN; ii++){
-	// 			G(ii, jj) = vec[ii];
-	// 		}
-	// 	}
-	// }
+			res = lhs.transpose() * M.cast<double>();
+			// std::cout << "first mult formed" << std::endl;
+			// tmp = tmp.cwiseProduct(compressed_dosage_inv_sds);
+			// std::cout << "second mult formed" << std::endl;
+			
+			return res.cwiseProduct(compressed_dosage_inv_sds) * intervalWidth;
+		} else {
+			return lhs.transpose() * G;
+		}
+	}
 
 	/********** Mean center & unit variance; internal use ************/
 	void calc_scaled_values(){
@@ -268,7 +242,15 @@ public:
 		compressed_dosage_sds /= ((double) NN - 1.0);
 		compressed_dosage_sds = compressed_dosage_sds.array().sqrt().matrix();
 
-		compressed_dosage_inv_sds = compressed_dosage_sds.cwiseInverse();
+		double sigma;
+		for (Index jj = 0; jj < PP; jj++){
+			sigma = compressed_dosage_sds[jj];
+			if (sigma > 1e-12){
+				compressed_dosage_inv_sds[jj] = 1 / sigma;
+			} else {
+				compressed_dosage_inv_sds[jj] = 0.0;
+			}
+		}
 	}
 
 	void standardise_matrix(){
@@ -318,7 +300,23 @@ public:
 			G.resize(n, p);
 		}
 		compressed_dosage_means.resize(p);
+		compressed_dosage_sds.resize(p);
 		compressed_dosage_inv_sds.resize(p);
+		missing_genos.resize(p);
+		NN = n;
+		PP = p;
+	}
+
+	template <typename T, typename T2>
+	void conservativeResize(const T& n, const T2& p){
+		if(low_mem){
+			M.conservativeResize(n, p);
+		} else {
+			G.conservativeResize(n, p);
+		}
+		compressed_dosage_means.conservativeResize(p);
+		compressed_dosage_sds.conservativeResize(p);
+		compressed_dosage_inv_sds.conservativeResize(p);
 		missing_genos.resize(p);
 		NN = n;
 		PP = p;
@@ -332,7 +330,7 @@ public:
 	/********** Compression/Decompression ************/
 	inline std::uint8_t CompressDosage(double dosage)
 	{
-		dosage = std::min(dosage, 1.999999);
+		dosage = std::min(dosage, L - 1e-6);
 		return static_cast<std::uint16_t>(std::floor(dosage * invIntervalWidth));
 	}
 

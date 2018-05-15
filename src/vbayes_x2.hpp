@@ -121,7 +121,8 @@ public:
 	std::vector< std::uint32_t > back_pass_short;
 
 	// Data
-	Eigen::MatrixXd X;          // dosage matrix
+	GenotypeMatrix X;
+	// Eigen::MatrixXd X;          // dosage matrix
 	Eigen::MatrixXd Y;          // residual phenotype matrix
 	Eigen::VectorXd dXtX;       // diagonal of X^T x X
 	Eigen::VectorXd dHtH;       // diagonal of H^T x H where H = (X, Z)
@@ -153,7 +154,7 @@ public:
 	// time monitoring
 	std::chrono::system_clock::time_point time_check;
 
-	VBayesX2( data& dat ) : X( dat.G ),
+	VBayesX2( Data& dat ) : X( dat.G ),
 							Y( dat.Y ), 
 							p( dat.params ) {
 		assert(std::includes(dat.hyps_names.begin(), dat.hyps_names.end(), hyps_names.begin(), hyps_names.end()));
@@ -199,6 +200,9 @@ public:
 		if(p.vb_init_file != "NULL"){
 			alpha_init         = dat.alpha_init;
 			mu_init            = dat.mu_init;
+
+			assert(alpha_init.rows() == n_var2);
+			assert(mu_init.rows() == n_var2);
 			// Gen Hr_init
 			Eigen::VectorXd rr = alpha_init.cwiseProduct(mu_init);
 			Hr_init << (X * rr.segment(0, n_var) + (X * rr.segment(n_var, n_var)).cwiseProduct(aa));
@@ -219,7 +223,7 @@ public:
 		}
 
 		// Assign data - genetic
-		Eigen::MatrixXd I_a_sq = aa.cwiseProduct(aa).asDiagonal();
+		Eigen::VectorXd a_sq = aa.cwiseProduct(aa);
 
 		// Avoid calling X.tranpose()
 		// Eigen::VectorXd dXtX(n_var), dZtZ(n_var);
@@ -227,10 +231,18 @@ public:
 		// 	dXtX(kk, kk) = X.col(kk).squaredNorm();
 		// 	dZtZ(kk, kk) = (X.col(kk).cwiseProduct(aa)).squaredNorm();
 		// }
-		Hty       << (Y.transpose() * X).transpose(), (Y.cwiseProduct(aa).transpose() * X).transpose();
+		// Hty       << (Y.transpose() * X).transpose(), (Y.cwiseProduct(aa).transpose() * X).transpose();
+		Hty       << (X.transpose_vector_multiply(Y)), (X.transpose_vector_multiply(Y.cwiseProduct(aa)));
 
-		Eigen::VectorXd dXtX   = (X.transpose() * X).diagonal();
-		Eigen::VectorXd dZtZ   = (X.transpose() * I_a_sq * X).diagonal();
+		// Eigen::VectorXd dXtX   = (X.transpose() * X).diagonal();
+		// Eigen::VectorXd dZtZ   = (X.transpose() * I_a_sq * X).diagonal();
+
+		Eigen::VectorXd dXtX(n_var), dZtZ(n_var), col_j;
+		for (std::size_t jj; jj < n_var; jj++){
+			col_j = X.col(jj);
+			dXtX[jj] = col_j.dot(col_j);
+			dZtZ[jj] = col_j.cwiseProduct(a_sq).dot(col_j);
+		}
 		// Hty                    << (X.transpose() * Y), (X.transpose() * (Y.cwiseProduct(aa)));
 
 		dHtH                   << dXtX, dZtZ;

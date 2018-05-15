@@ -37,9 +37,6 @@ void read_directory(const std::string& name, std::vector<std::string>& v);
 //    - read_covar() & read_pheno()
 //    - then edit query with incomplete cases before reading bgen
 
-// Notes:
-// - Replace missing data in BGEN files with mean
-
 // This example program reads data from a bgen file specified as the first argument
 // and outputs it as a VCF file.
 int main( int argc, char** argv ) {
@@ -47,146 +44,31 @@ int main( int argc, char** argv ) {
 
 	try {
 		parse_arguments(p, argc, argv);
-		data Data( p.bgen_file );
-		Data.params = p;
+		Data data( p );
 
 		// filter - incl sample ids
-		if(p.incl_sids_file != "NULL"){
-			Data.read_incl_sids();
-		}
-
 		// filter - range
-		if (p.range){
-			std::cout << "Selecting range..." << std::endl;
-			genfile::bgen::IndexQuery::UniquePtr query = genfile::bgen::IndexQuery::create(p.bgi_file);
-			genfile::bgen::IndexQuery::GenomicRange rr1(p.chr, p.start, p.end);
-			query->include_range( rr1 ).initialise();
-			Data.bgenView->set_query( query );
-		}
-
 		// filter - incl rsids
-		if(p.select_snps){
-			Data.read_incl_rsids();
-			std::cout << "Filtering SNPs by rsid..." << std::endl;
-			genfile::bgen::IndexQuery::UniquePtr query = genfile::bgen::IndexQuery::create(p.bgi_file);
-			query->include_rsids( Data.rsid_list ).initialise();
-			Data.bgenView->set_query( query );
-		}
-
 		// filter - select single rsid
-		if(p.select_rsid){
-			std::sort(p.rsid.begin(), p.rsid.end());
-			std::cout << "Filtering to rsids:" << std::endl;
-			for (int kk = 0; kk < p.rsid.size(); kk++) std::cout << p.rsid[kk]<< std::endl;
-			genfile::bgen::IndexQuery::UniquePtr query = genfile::bgen::IndexQuery::create(p.bgi_file);
-			query->include_rsids( p.rsid ).initialise();
-			Data.bgenView->set_query( query );
-		}
+		data.apply_filters();
 
 		// Summary info
-		Data.bgenView->summarise(std::cout);
-
-		if(p.mode_joint_model){
-			// // Step 1; Read in raw covariates and phenotypes
-			// // - also makes a record of missing values
-			// Data.read_covar();
-			// Data.read_pheno();
-			// 
-			// // Step 2; Reduce raw covariates and phenotypes to complete cases
-			// // - may change value of n_samples
-			// // - will also skip these cases when reading bgen later
-			// Data.reduce_to_complete_cases();
-			// 
-			// // Step 3; Center phenos, genotypes, normalise covars
-			// Data.center_matrix( Y, n_pheno );
-			// Data.center_matrix( W, n_covar );
-			// Data.scale_matrix( W, n_covar, covar_names );
-			// 
-			// // Step 4; Regress covars out of phenos
-			// Data.regress_covars();
-			// 
-			// // Step 5; Read all bgen data into single matrix
-			// if(!p.bgen_wildcard){
-			// 	// NB: maf/info filters apply during reading in.
-			// 	// Hence will only know if n > p afterwards.
-			// 	Data.params.chunk_size = Data.bgenView->number_of_variants();
-			// 	Data.read_bgen_chunk();
-			// } else {
-			// 	// reading from several files
-			// 	// std::vector<std::string> all_files;
-			// 	// std::string dir, file_prefix;
-			// 	// std::regex_search(str, m, re1);
-			// 	// std::cout << " ECMA (depth first search) match: " << m[0] << '\n';
-			// 	// read_directory("data/io_test/t5_bgen_wildcard", all_files);
-			// 	// std::string wildcard = "chr*.bgen";
-			// 	// std::regex dot_regex("\\.");
-			// 	// std::string new_wildcard = std::regex_replace(wildcard, dot_regex, "\\.");
-			// 	// std::cout << new_wildcard << std::endl;
-			// 	// std::regex asterisk_regex("\\*");
-			// 	// std::string new_wildcard2 = std::regex_replace(new_wildcard, asterisk_regex, "[[:digit:]]*");
-			// 	// std::cout << new_wildcard2.c_str() << std::endl;
-			// 	throw std::runtime_error("bgen wildcard functionality not yet implemented.")
-			// }
-		}
-
-		// NB Might be better to write a different run() function for each mode.
-		if(p.mode_lm){
-			std::cout << "Running SNPwise regression" << std::endl;
-			Data.run();
-		}
-
-		if (p.mode_lm2){
-			std::cout << "Running the full dependency model:" << std::endl;
-			std::cout << "Y = C + E + G + CxE + GxC + GxE" << std::endl;
-			std::cout << "WARNING: this is likely to be slow for a large number of SNPs" << std::endl;
-			Data.run();
-		}
-
-		if (p.mode_joint_model){
-			Data.run();
-		}
+		data.bgenView->summarise(std::cout);
 
 		if (p.mode_vb){
 			// Simple approach for the moment; don't bother about covariates etc
 
-			// Read in phenotypes
-			Data.read_pheno();
+			data.read_non_genetic_data();
+			data.standardise_non_genetic_data();
 
-			// Read in covariates if present
 			if(p.covar_file != "NULL"){
-				Data.read_covar();
+				data.regress_out_covars();
 			}
-
-			// Step 3; Center phenos, normalise covars
-			Data.center_matrix( Data.Y, Data.n_pheno );
-			Data.scale_matrix( Data.Y, Data.n_pheno, Data.pheno_names );
-			if(p.covar_file != "NULL"){
-				Data.center_matrix( Data.W, Data.n_covar );
-				Data.scale_matrix( Data.W, Data.n_covar, Data.covar_names );
-			}
-
-			// Regress out covariates if present
-			if(p.covar_file != "NULL"){
-				Data.regress_covars();
-			}
-
-			// Read in all genetic data + standardise to mean 0 var 1
-			Data.params.chunk_size = Data.bgenView->number_of_variants();
-			Data.read_bgen_chunk();
-			Data.center_matrix( Data.G, Data.n_var );
-			Data.scale_matrix_conserved( Data.G, Data.n_var );
-
-			// Read in grids for importance sampling
-			Data.read_grids();
-
-			// Read starting point for VB approximation if provided
-			if(p.vb_init_file != "NULL"){
-				Data.read_alpha_mu();
-			}
+			data.read_full_bgen();
 
 			// Pass data to VBayes object
 			if(p.interaction_analysis){
-				VBayesX2 VB(Data);
+				VBayesX2 VB(data);
 
 				VB.check_inputs();
 				VB.output_init();
@@ -195,7 +77,7 @@ int main( int argc, char** argv ) {
 				VB.run();
 				VB.output_results();
 			} else {
-				vbayes VB(Data);
+				vbayes VB(data);
 
 				VB.check_inputs();
 
@@ -207,26 +89,23 @@ int main( int argc, char** argv ) {
 		}
 
 		if (p.mode_vcf){
-			Data.output_init();
-			// Reading in from bgen file
-			while (Data.read_bgen_chunk()) {
-				for (int jj = 0; jj < Data.n_var; jj++ ) {
-					Data.outf << Data.chromosome[jj] << '\t'
-						<< Data.position[jj] << '\t'
-						<< Data.rsid[jj] << '\t' ;
-					Data.outf << Data.alleles[jj][0] << '\t' ;
-					for( std::size_t i = 1; i < Data.alleles[jj].size(); ++i ) {
-						Data.outf << ( i > 1 ? "," : "" ) << Data.alleles[jj][i] ;
-					}
-					Data.outf << "\t.\t.\t.\tGP" ;
+			throw std::runtime_error("Gutted from programme. See other branch.");
+		}
 
-					for (int ii = 0; ii < Data.n_samples; ii++ ) {
-						Data.outf << '\t' ;
-						Data.outf << Data.G(ii,jj);
-					}
-					Data.outf << "\n" ;
-				}
-			}
+		if(p.mode_joint_model){
+			throw std::runtime_error("Gutted from programme. See other branch.");
+		}
+
+		if(p.mode_lm){
+			throw std::runtime_error("Gutted from programme. See other branch.");
+		}
+
+		if (p.mode_lm2){
+			throw std::runtime_error("Gutted from programme. See other branch.");
+		}
+
+		if (p.mode_joint_model){
+			throw std::runtime_error("Gutted from programme. See other branch.");
 		}
 
 		return 0 ;
@@ -235,14 +114,4 @@ int main( int argc, char** argv ) {
 		std::cerr << "!! Uh-oh, error parsing bgen file.\n" ;
 		return -1 ;
 	}
-}
-
-
-void read_directory(const std::string& name, std::vector<std::string>& v) {
-	DIR* dirp = opendir(name.c_str());
-	struct dirent * dp;
-	while ((dp = readdir(dirp)) != NULL) {
-		v.push_back(dp->d_name);
-	}
-	closedir(dirp);
 }
