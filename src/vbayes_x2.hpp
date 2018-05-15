@@ -45,6 +45,7 @@ public:
 	std::vector< Eigen::VectorXd > mu_list;                  // best mu at each ii
 	std::vector< Eigen::VectorXd > alpha_list;               // best alpha at each ii
 	std::vector< double >          logw_list;                // best logw at each ii
+	std::vector< double >          elapsed_time_list;        // time to compute grid point
 
 	VbTracker(){
 	}
@@ -55,6 +56,7 @@ public:
 		alpha_list.resize(n_list);
 		logw_list.resize(n_list);
 		logw_updates_list.resize(n_list);
+		elapsed_time_list.resize(n_list);
 	}
 
 	~VbTracker() {
@@ -66,6 +68,7 @@ public:
 		alpha_list.resize(n_list);
 		logw_updates_list.resize(n_list);
 		logw_list.resize(n_list);
+		elapsed_time_list.resize(n_list);
 		for (int ll = 0; ll < n_list; ll++){
 			logw_list[ll] = -std::numeric_limits<double>::max();
 		}
@@ -77,6 +80,7 @@ public:
 		alpha_list.clear();
 		logw_list.clear();
 		logw_updates_list.clear();
+		elapsed_time_list.clear();
 	}
 
 	void copy_ith_element(int ii, VbTracker& other_tracker){
@@ -85,6 +89,7 @@ public:
 		alpha_list[ii]        = other_tracker.alpha_list[ii];
 		logw_list[ii]         = other_tracker.logw_list[ii];
 		logw_updates_list[ii] = other_tracker.logw_updates_list[ii];
+		elapsed_time_list[ii] = other_tracker.elapsed_time_list[ii];
 	}
 };
 
@@ -253,7 +258,7 @@ public:
 
 	void print_time_check(){
 		auto now = std::chrono::system_clock::now();
-		std::chrono::duration<double> elapsed_seconds = now-time_check;;
+		std::chrono::duration<double> elapsed_seconds = now-time_check;
 		std::cout << " (" << elapsed_seconds.count();
  		std::cout << " seconds since last timecheck, estimated RAM usage = ";
 		std::cout << getValueRAM() << "KB)" << std::endl;
@@ -442,6 +447,7 @@ public:
 		// minimise KL Divergence and assign elbo estimate
 		// Assumes alpha_init, mu_init and Hr_init already exist
 		FreeParameters i_par;
+		auto inner_start = std::chrono::system_clock::now();
 
 		// Assign initial values
 		if (!main_loop) {
@@ -519,10 +525,16 @@ public:
 		}
 
 		// Log all things that we want to track
+		auto inner_end = std::chrono::system_clock::now();
+		std::chrono::duration<double> elapsed = inner_end - inner_start;
+		// std::chrono::duration<double> elapsed_seconds = now-time_check;
+		// std::cout << " (" << elapsed_seconds.count();
+
 		tracker.logw_list[ii] = i_logw;
 		tracker.counts_list[ii] = count;
 		tracker.alpha_list[ii] = i_par.alpha;
 		tracker.mu_list[ii] = i_par.mu;
+		tracker.elapsed_time_list[ii] = elapsed.count();
 		if(p.verbose){
 			logw_updates.push_back(i_logw);  // adding converged estimate
 			tracker.logw_updates_list[ii] = logw_updates;
@@ -709,7 +721,7 @@ public:
 
 		// Headers
 		outf << "post_alpha post_mu post_beta" << std::endl;
-		outf_weights << "weights logw log_prior count" << std::endl;
+		outf_weights << "weights logw log_prior count time" << std::endl;
 		// if(random_params_init){
 		// 	outf_inits << "alpha mu" << std::endl;
 		// }
@@ -731,7 +743,8 @@ public:
 		for (int ii = 0; ii < n_grid; ii++){
 			outf_weights << weights[ii] << " " << stitched_tracker.logw_list[ii] << " ";
 			outf_weights << std::log(probs_grid(ii,0) + eps) << " ";
-			outf_weights << stitched_tracker.counts_list[ii] << std::endl;
+			outf_weights << stitched_tracker.counts_list[ii] << " ";
+			outf_weights << stitched_tracker.elapsed_time_list[ii] << std::endl;
 		}
 
 		if(p.verbose){
