@@ -71,11 +71,11 @@ int main( int argc, char** argv ) {
 				VBayesX2 VB(data);
 
 				VB.check_inputs();
-				VB.output_init();
+				// VB.output_init();
 
 				// Run inference
 				VB.run();
-				VB.output_results();
+				// VB.output_results();
 			} else {
 				vbayes VB(data);
 

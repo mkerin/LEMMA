@@ -17,6 +17,7 @@
 #include <boost/iostreams/filtering_stream.hpp>
 #include <boost/iostreams/device/file.hpp>
 #include <boost/iostreams/filter/gzip.hpp>
+#include <boost/filesystem.hpp>
 
 template <typename T>
 inline std::vector<int> validate_grid(const Eigen::MatrixXd &grid, const T n_var);
@@ -83,7 +84,7 @@ public:
 		elapsed_time_list.clear();
 	}
 
-	void copy_ith_element(int ii, VbTracker& other_tracker){
+	void copy_ith_element(int ii, const VbTracker& other_tracker){
 		counts_list[ii]       = other_tracker.counts_list[ii];
 		mu_list[ii]           = other_tracker.mu_list[ii];
 		alpha_list[ii]        = other_tracker.alpha_list[ii];
@@ -127,7 +128,6 @@ public:
 
 	// Data
 	GenotypeMatrix X;
-	// Eigen::MatrixXd X;          // dosage matrix
 	Eigen::MatrixXd Y;          // residual phenotype matrix
 	Eigen::VectorXd dXtX;       // diagonal of X^T x X
 	Eigen::VectorXd dHtH;       // diagonal of H^T x H where H = (X, Z)
@@ -142,15 +142,6 @@ public:
 	Eigen::VectorXd mu_init;    // column vector of participant ages
 	Eigen::VectorXd Hr_init;    // column vector of participant ages
 	Eigen::VectorXd Xr_init;    // column vector of participant ages
-
-	// Things to track from each interaction
-	VbTracker stitched_tracker;
-	std::vector< double > weights;             // best logw weighted by prior
-
-	// results
-	std::vector< double > post_alpha;
-	std::vector< double > post_mu;
-	std::vector< double > post_beta;
 
 	// boost fstreams
 	boost_io::filtering_ostream outf, outf_weights, outf_elbo, outf_inits;
@@ -302,6 +293,10 @@ public:
 				t1[ch].join();
 			}
 
+			if(p.verbose){
+				write_trackers_to_file("round1_", trackers, r1_n_grid);
+			}
+
 			// Find best init
 			double logw_best = -std::numeric_limits<double>::max();
 			bool init_not_set = true;
@@ -327,7 +322,7 @@ public:
 			Xr_init << (X * rr.segment(0, n_var));
 
 			// Write inits to file
-			std::string ofile_inits = fstream_init(outf_inits, "_inits.");
+			std::string ofile_inits = fstream_init(outf_inits, "", "_inits.");
 			std::cout << "Writing start points for alpha and mu to " << ofile_inits << std::endl;
 			outf_inits << "alpha mu" << std::endl;
 			for (std::uint32_t kk = 0; kk < n_var2; kk++){
@@ -362,45 +357,7 @@ public:
 			t2[ch].join();
 		}
 
-		// Stitch trackers back together if using multithreading
-		stitched_tracker.resize(n_grid);
-		for (int ii = 0; ii < n_grid; ii++){
-			int tr = (ii % p.n_thread);  // tracker index
-			stitched_tracker.copy_ith_element(ii, trackers[tr]);
-		}
-
-		// Compute normalised weights using finite elbo
-		weights.resize(n_grid);
-		if(n_grid > 1){
-			for (int ii = 0; ii < n_grid; ii++){
-				weights[ii] = stitched_tracker.logw_list[ii] + std::log(probs_grid(ii,0) + eps);
-			}
-			weights = normaliseLogWeights(weights);
-		} else {
-			weights[0] = 1;
-		}
-
-		// Average alpha + mu over finite weights
-		int nonfinite_count = 0;
-		post_alpha.resize(n_var2);
-		post_mu.resize(n_var2);
-		post_beta.resize(n_var2);
-		for (int ii = 0; ii < n_grid; ii++){
-			if(std::isfinite(weights[ii])){
-				for (std::uint32_t kk = 0; kk < n_var2; kk++){
-					post_alpha[kk] += weights[ii] * stitched_tracker.alpha_list[ii](kk);
-					post_mu[kk] += weights[ii] * stitched_tracker.mu_list[ii](kk);
-					post_beta[kk] += weights[ii] * stitched_tracker.mu_list[ii](kk) * stitched_tracker.alpha_list[ii](kk);
-				}
-			} else {
-				nonfinite_count++;
-			}
-		}
-
-		if(nonfinite_count > 0){
-			std::cout << "WARNING: " << nonfinite_count << " grid points returned non-finite ELBO.";
-			std::cout << "Skipping these when producing posterior estimates.";
-		}
+		write_trackers_to_file("", trackers, n_grid);
 
 		std::cout << "Variational inference finished" << std::endl;
 	}
@@ -582,7 +539,7 @@ public:
 		}
 	}
 
-	std::vector< double > normaliseLogWeights(std::vector< double > my_weights){
+	void normaliseLogWeights(std::vector< double >& my_weights){
 		// Safer to normalise log-weights than niavely convert to weights
 		// Skip non-finite values!
 		int nn = my_weights.size();
@@ -593,7 +550,7 @@ public:
 
 		double my_sum = 0.0;
 		for (int ii = 0; ii < nn; ii++){
-			if(std::isfinite(weights[ii])){
+			if(std::isfinite(my_weights[ii])){
 				my_sum += my_weights[ii];
 			}
 		}
@@ -601,7 +558,6 @@ public:
 		for (int ii = 0; ii < nn; ii++){
 			my_weights[ii] /= my_sum;
 		}
-		return my_weights;
 	}
 
 	void random_alpha_mu_init(std::uint32_t L,
@@ -695,47 +651,89 @@ public:
 		// For use in debugging only
 	}
 
-	void output_init(){
+	void write_trackers_to_file(const std::string& file_prefix,
+                                const std::vector< VbTracker >& trackers,
+                                const int my_n_grid){
+		// Stitch trackers back together if using multithreading
+		VbTracker stitched_tracker;
+		stitched_tracker.resize(my_n_grid);
+		for (int ii = 0; ii < my_n_grid; ii++){
+			int tr = (ii % p.n_thread);  // tracker index
+			stitched_tracker.copy_ith_element(ii, trackers[tr]);
+		}
+
+		output_init(file_prefix);
+		output_results(stitched_tracker, my_n_grid);
+	}
+
+	void output_init(const std::string& file_prefix){
 		// Initialise files ready to write;
 		// posteriors to ofile
 		// weights and logw weights to ofile_weights
 		// (verbose) elbo updates to ofile_elbo
 		// (random_params_init) alpha_init/mu_init to ofile_init
-		std::size_t pos = p.out_file.rfind(".");
+		std::string ofile, ofile_weights;
 
-		std::string ofile = fstream_init(outf, ".");
-		std::string ofile_weights = fstream_init(outf_weights, "_hyps.");
+		ofile = fstream_init(outf, file_prefix, "");
+		ofile_weights = fstream_init(outf_weights, file_prefix, "_hyps");
 		std::cout << "Writing posterior PIP and beta probabilities to " << ofile << std::endl;
 		std::cout << "Writing posterior hyperparameter probabilities to " << ofile_weights << std::endl;
 
-		// if(random_params_init){
-		// 	std::string ofile_inits = fstream_init(outf_inits, "_inits.");
-		// 	std::cout << "Write start points for alpha and mu to " << ofile_inits << std::endl;
-		// }
 		if(p.verbose){
-			std::string ofile_elbo = fstream_init(outf_elbo, "_elbo.");
+			std::string ofile_elbo, ofile_alphas, ofile_mus;
+			ofile_elbo = fstream_init(outf_elbo, file_prefix, "_elbo");
 			std::cout << "Writing ELBO from each VB iteration to " << ofile_elbo << std::endl;
 
-			std::string ofile_alphas = fstream_init(outf_alphas, "_alphas.");
-			std::cout << "Writing optimsed alpha from each grid point to " << ofile_alphas << std::endl;
+			ofile_alphas = fstream_init(outf_alphas, file_prefix, "_alphas");
+			std::cout << "Writing optimised alpha from each grid point to " << ofile_alphas << std::endl;
 
-			std::string ofile_mus = fstream_init(outf_mus, "_mus.");
-			std::cout << "Writing optimsed alpha from each grid point to " << ofile_mus << std::endl;
+			ofile_mus = fstream_init(outf_mus, file_prefix, "_mus");
+			std::cout << "Writing optimised mu from each grid point to " << ofile_mus << std::endl;
 		}
 
 		// Headers
 		outf << "post_alpha post_mu post_beta" << std::endl;
 		outf_weights << "weights logw log_prior count time" << std::endl;
-		// if(random_params_init){
-		// 	outf_inits << "alpha mu" << std::endl;
-		// }
 	}
 
-	void output_results(){
+	void output_results(const VbTracker& stitched_tracker, const int my_n_grid){
 		// Write;
 		// posteriors to ofile
 		// weights / logw / log_priors / counts to ofile_weights
 		// (verbose) elbo updates to ofile_elbo
+
+		// Compute normalised weights using finite elbo
+		std::vector< double > weights(my_n_grid);
+		if(n_grid > 1){
+			for (int ii = 0; ii < my_n_grid; ii++){
+				weights[ii] = stitched_tracker.logw_list[ii] + std::log(probs_grid(ii,0) + eps);
+			}
+			normaliseLogWeights(weights);
+		} else {
+			weights[0] = 1;
+		}
+
+		// Extract posterior values from tracker
+		int nonfinite_count = 0;
+		std::vector< double > post_alpha(n_var2);
+		std::vector< double > post_mu(n_var2);
+		std::vector< double > post_beta(n_var2);
+		for (int ii = 0; ii < my_n_grid; ii++){
+			if(std::isfinite(weights[ii])){
+				for (std::uint32_t kk = 0; kk < n_var2; kk++){
+					post_alpha[kk] += weights[ii] * stitched_tracker.alpha_list[ii](kk);
+					post_mu[kk] += weights[ii] * stitched_tracker.mu_list[ii](kk);
+					post_beta[kk] += weights[ii] * stitched_tracker.mu_list[ii](kk) * stitched_tracker.alpha_list[ii](kk);
+				}
+			} else {
+				nonfinite_count++;
+			}
+		}
+
+		if(nonfinite_count > 0){
+			std::cout << "WARNING: " << nonfinite_count << " grid points returned non-finite ELBO.";
+			std::cout << "Skipping these when producing posterior estimates.";
+		}
 
 		// Write results of main inference to file
 		for (std::uint32_t kk = 0; kk < n_var2; kk++){
@@ -744,7 +742,7 @@ public:
 		}
 
 		// Write hyperparams weights to file
-		for (int ii = 0; ii < n_grid; ii++){
+		for (int ii = 0; ii < my_n_grid; ii++){
 			outf_weights << weights[ii] << " " << stitched_tracker.logw_list[ii] << " ";
 			outf_weights << std::log(probs_grid(ii,0) + eps) << " ";
 			outf_weights << stitched_tracker.counts_list[ii] << " ";
@@ -752,7 +750,7 @@ public:
 		}
 
 		if(p.verbose){
-			for (int ii = 0; ii < n_grid; ii++){
+			for (int ii = 0; ii < my_n_grid; ii++){
 				for (int cc = 0; cc < stitched_tracker.counts_list[ii]; cc++){
 					outf_elbo << stitched_tracker.logw_updates_list[ii][cc] << " ";
 				}
@@ -762,7 +760,7 @@ public:
 			// Writing optimised alpha and mu from each grid point to file
 			// 1 col per gridpoint
 			for (std::uint32_t kk = 0; kk < n_var2; kk++){
-				for (int ii = 0; ii < n_grid; ii++){
+				for (int ii = 0; ii < my_n_grid; ii++){
 					outf_alphas << stitched_tracker.alpha_list[ii][kk] << " ";
 					outf_mus << stitched_tracker.mu_list[ii][kk] << " ";
 				}
@@ -772,11 +770,20 @@ public:
 		}
 	}
 
-	std::string fstream_init(boost_io::filtering_ostream& my_outf, std::string extra){
-		std::string gz_str = ".gz";
-		std::size_t pos = p.out_file.rfind(".");
+	std::string fstream_init(boost_io::filtering_ostream& my_outf,
+                             const std::string& file_prefix,
+                             const std::string& file_suffix){
 
-		std::string ofile = p.out_file.substr(0, pos) + extra + p.out_file.substr(pos+1, p.out_file.length());
+		boost::filesystem::path main_path(p.out_file);
+		boost::filesystem::path dir = main_path.parent_path();
+		boost::filesystem::path file_ext = main_path.extension();
+		boost::filesystem::path filename = main_path.replace_extension().filename();
+
+		std::string ofile = dir.string() + "/" + file_prefix + filename.string() +
+                            file_suffix + file_ext.string();
+
+		my_outf.reset();
+		std::string gz_str = ".gz";
 		if (p.out_file.find(gz_str) != std::string::npos) {
 			my_outf.push(boost_io::gzip_compressor());
 		}
