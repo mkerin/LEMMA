@@ -322,7 +322,7 @@ public:
 			Xr_init << (X * rr.segment(0, n_var));
 
 			// Write inits to file
-			std::string ofile_inits = fstream_init(outf_inits, "", "_inits.");
+			std::string ofile_inits = fstream_init(outf_inits, "", "_inits");
 			std::cout << "Writing start points for alpha and mu to " << ofile_inits << std::endl;
 			outf_inits << "alpha mu" << std::endl;
 			for (std::uint32_t kk = 0; kk < n_var2; kk++){
@@ -456,7 +456,7 @@ public:
 			}
 
 			// log elbo from each iteration, starting from init
-			if((p.verbose || p.logw_lim_set) && main_loop){
+			if((p.verbose || p.logw_lim_set)){
 				i_logw = calc_logw(L, i_hyps, i_par);
 				logw_updates.push_back(i_logw);
 			}
@@ -812,18 +812,16 @@ public:
 			print_interval = std::max(1, n_grid / 10);
 		}
 
+		// r1_hyps_grid assigned during constructor (ie before this function call)
+		int r1_n_grid   = r1_hyps_grid.rows();
+		r1_valid_points = validate_grid(r1_hyps_grid, n_var);
+		r1_hyps_grid    = subset_matrix(r1_hyps_grid, r1_valid_points);
 
-		if(p.r1_hyps_grid_file != "NULL"){
-			int r1_n_grid   = r1_hyps_grid.rows();
-			r1_valid_points = validate_grid(r1_hyps_grid, n_var);
-			r1_hyps_grid    = subset_matrix(r1_hyps_grid, r1_valid_points);
-
-			if(r1_valid_points.size() == 0){
-				throw std::runtime_error("No valid grid points in r1_hyps_grid.");
-			} else if(r1_n_grid > r1_valid_points.size()){
-				std::cout << "WARNING: " << r1_n_grid - r1_valid_points.size();
-				std::cout << " invalid grid points removed from r1_hyps_grid." << std::endl;
-			}
+		if(r1_valid_points.size() == 0){
+			throw std::runtime_error("No valid grid points in r1_hyps_grid.");
+		} else if(r1_n_grid > r1_valid_points.size()){
+			std::cout << "WARNING: " << r1_n_grid - r1_valid_points.size();
+			std::cout << " invalid grid points removed from r1_hyps_grid." << std::endl;
 		}
 	}
 
