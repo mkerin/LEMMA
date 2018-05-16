@@ -36,6 +36,8 @@ Questions:
 #include <limits>
 #include <cstdint>               // uint32_t
 #include <cmath>
+#include <vector>
+#include <map>
 #include "tools/eigen3.3/Dense"
 
 
@@ -61,6 +63,7 @@ public:
 	Eigen::VectorXd compressed_dosage_means;
 	Eigen::VectorXd compressed_dosage_sds;
 	Eigen::VectorXd compressed_dosage_inv_sds;  // 1 / col-wise sd
+	Eigen::VectorXd aa;  // vector of ages
 	std::size_t NN, PP;
 
 	// Interface type of Eigen indices -> see eigen3/Eigen/src/Core/EigenBase.h
@@ -70,7 +73,8 @@ public:
 	GenotypeMatrix(bool use_compression) : low_mem(use_compression){
 		scaling_performed = false;
 	};
-	GenotypeMatrix(bool use_compression, int n, int p) : low_mem(use_compression){
+
+	GenotypeMatrix(bool use_compression, const long int n, const long int p) : low_mem(use_compression){
 		if(low_mem){
 			M.resize(n, p);
 		} else {
@@ -83,6 +87,7 @@ public:
 		compressed_dosage_sds.resize(p);
 		compressed_dosage_inv_sds.resize(p);
 		missing_genos.resize(p);
+		aa.resize(n);
 
 		scaling_performed = false;
 	};
@@ -106,7 +111,6 @@ public:
 				G(ii, jj) = x;
 			}
 		}
-
 		scaling_performed = false;
 	}
 
@@ -153,16 +157,24 @@ public:
 		}
 
 		if(low_mem){
-			for (Index ii = 0; ii < NN; ii++){
-				vec[ii] = DecompressDosage(M(ii, jj));
+			if(jj < PP){
+				for (Index ii = 0; ii < NN; ii++){
+					vec[ii] = (DecompressDosage(M(ii, jj)) - compressed_dosage_means[jj]) * compressed_dosage_inv_sds[jj];
+				}
+			} else {
+				jj -= PP;
+				for (Index ii = 0; ii < NN; ii++){
+					vec[ii] = aa[ii] * (DecompressDosage(M(ii, jj)) - compressed_dosage_means[jj]) * compressed_dosage_inv_sds[jj];
+				}
 			}
-
-			vec = vec.array() - compressed_dosage_means[jj];
-			vec *= compressed_dosage_inv_sds[jj];
 		} else {
-			vec = G.col(jj);
+			if(jj < PP){
+				vec = G.col(jj);
+			} else {
+				jj -= PP;
+				vec = G.col(jj).cwiseProduct(aa);
+			}
 		}
-
 		return vec;
 	}
 
@@ -303,6 +315,7 @@ public:
 		compressed_dosage_sds.resize(p);
 		compressed_dosage_inv_sds.resize(p);
 		missing_genos.resize(p);
+		aa.resize(n);
 		NN = n;
 		PP = p;
 	}
@@ -317,6 +330,7 @@ public:
 		compressed_dosage_means.conservativeResize(p);
 		compressed_dosage_sds.conservativeResize(p);
 		compressed_dosage_inv_sds.conservativeResize(p);
+		aa.conservativeResize(n);
 		missing_genos.resize(p);
 		NN = n;
 		PP = p;

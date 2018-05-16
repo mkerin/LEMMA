@@ -1,12 +1,14 @@
-
 #include <iostream>
 #include "src/genotype_matrix.hpp"
 #include "src/tools/eigen3.3/Dense"
-
-//Memory used by a program in this moment
-
+#include <random>
+#include <chrono>
+#include <ctime>
 #include "sys/types.h"
 #include "sys/sysinfo.h"
+
+long int N, P;
+bool low_mem;
 
 namespace performance {
     int parseLineRAM(char* line){
@@ -35,60 +37,48 @@ namespace performance {
     }
 }
 
-//Call it like
-//LOG.print("total memory used [" + std::to_string(performance::getValueRAM()/1024) + " MB]\n");
+bool read(){
+	std::cout << "Input N:" << std::endl;
+	if(!(std::cin >> N)) return false;
+	std::cout << "Input P:" << std::endl;
+	if(!(std::cin >> P)) return false;
+	std::cout << "Use low_mem:" << std::endl;
+	if(!(std::cin >> low_mem)) return false;
+	return true;
+}
 
 int main() {
-	GenotypeMatrix GM(2, 3);
-	Eigen::MatrixXd M(2,3);
-	Eigen::VectorXd vv(3), res, c2a, c2b(2), c2c(2);
-	
-	// assignment
-	GM.assign_index(0, 0, 0.2);
-	GM.assign_index(0, 1, 0.2);
-	GM.assign_index(0, 2, 0.345);
-	GM.assign_index(1, 0, 0.8);
-	GM.assign_index(1, 1, 0.3);
-	GM.assign_index(1, 2, 0.213);
-	M << 0.2, 0.2, 0.345, 0.8, 0.3, 0.213;
-	vv << 0.3, 0.55, 0.676;
-	
-	
-	std::cout << "Uncompressed matrix: " << std::endl << M << std::endl;
-	std::cout << "Compressed matrix: " << std::endl << GM.G << std::endl;
-	std::cout << "Vector used for testing matrix multiplication: " << std::endl << vv << std::endl;
-	
-	std::cout << "Matrix multiplication with dosage matrix" << std::endl << M * vv << std::endl;
-	res = GM * vv;
-	std::cout << "Matrix multiplication with compressed matrix" << std::endl << res << std::endl;
-	
-	c2a = GM.col(1);
-	std::cout << "column 1: " << std::endl << c2a << std::endl;
-	
-	GM.col(1, c2b);
-	std::cout << "column 1: " << std::endl << c2b << std::endl;
-	
-	GM.assign_col(0, c2a);
-	std::cout << "Compressed matrix after assigning c2 to c1: " << std::endl << GM.G << std::endl;
-	
-	std::cout << "Entry 2, 2" << std::endl;
-	std::cout << GM.G(1,1) << std::endl;
+	std::default_random_engine gen_unif, gen_gauss;
+	std::normal_distribution<double> gaussian(0.0,1.0);
+	std::uniform_real_distribution<double> uniform(0.0,2.0);
 
-	// typedef Eigen::Matrix<unsigned char, Eigen::Dynamic, Eigen::Dynamic> MatrixXuc;
-	// MatrixXuc G = MatrixXuc::Random(2000,1000000);
-    // 
-	// Eigen::VectorXd res(2000), v = Eigen::VectorXd::Random(1000000);
-    // 
-	// std::cout << performance::getValueRAM()/1024 <<  " MB of RAM used" << std::endl;
-	// 
-	// std::cout << "Running matrix multiplication with explicit cast.";
-	// std::cout << "This will crash unless eigen is clever in its casting.." << std::endl;
-	// 
-	// res = (G.cast<double>() * v);
-	// std::cout << performance::getValueRAM()/1024 <<  " MB of RAM used" << std::endl;
+	// read in N, P from commandline
+	while(read()){
+		std::cout << "Low-mem mode: " << low_mem << std::endl;
+		GenotypeMatrix GM(low_mem);
+		GM.resize(N, P);
+		Eigen::VectorXd aa(N);
+		for (long int ii = 0; ii < N; ii++){
+			for (long int jj = 0; jj < P; jj++){
+				GM.assign_index(ii, jj, uniform(gen_unif));
+			}
+			aa[ii] = gaussian(gen_gauss);
+		}
+		std::cout << "aa initialised" << std::endl;
+		GM.aa = aa;
+		std::cout << "aa assigned" << std::endl;
+		auto now = std::chrono::system_clock::now();
 
-	// std::cout << "Creating matrixXd with 2 x 10^9 entries. This should crash an A node." << std::endl;
-	// Eigen::MatrixXd G = Eigen::MatrixXd::Random(2000,1000000);
+		// call .col many times
+		Eigen::VectorXd tmp;
+		for(std::size_t jj = P; jj < 2*P; jj++){
+			tmp = GM.col(jj);
+		}
+
+		auto end = std::chrono::system_clock::now();
+		std::chrono::duration<double> elapsed_seconds = end-now;
+		std::cout << P << " .col() calls finished after " << elapsed_seconds.count() << std::endl;
+	}
 
 	
 	return 0;

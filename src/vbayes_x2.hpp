@@ -200,6 +200,7 @@ public:
 		} else {
 			aa                = dat.W.col(0);
 		}
+		X.aa = aa;  // WARNING: Required to be able to call X.col(jj) with jj > P
 
 		// non random initialisation
 		if(p.vb_init_file != "NULL"){
@@ -570,11 +571,14 @@ public:
 			i_par.alpha(kk) = sigmoid(ff_k);
 
 			// Update i_Hr
-			if (kk < n_var){
-				i_par.Hr = i_par.Hr + (i_par.alpha(kk)*i_par.mu(kk) - rr_k) * X.col(kk);
-			} else {
-				i_par.Hr = i_par.Hr + (i_par.alpha(kk)*i_par.mu(kk) - rr_k) * (X.col(kk - n_var).cwiseProduct(aa));
-			}
+			// if (kk < n_var){
+			// 	i_par.Hr = i_par.Hr + (i_par.alpha(kk)*i_par.mu(kk) - rr_k) * X.col(kk);
+			// } else {
+			// 	i_par.Hr = i_par.Hr + (i_par.alpha(kk)*i_par.mu(kk) - rr_k) * (X.col(kk - n_var).cwiseProduct(aa));
+			// }
+
+			// Update i_Hr; faster to take schur product with aa inside genotype_matrix
+			i_par.Hr = i_par.Hr + (i_par.alpha(kk)*i_par.mu(kk) - rr_k) * (X.col(kk));
 		}
 	}
 
