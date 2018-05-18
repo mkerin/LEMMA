@@ -99,9 +99,9 @@ public:
 	// Constants
 	const int iter_max = 100;
 	const double PI = 3.1415926535897;
-	const double alpha_tol = 1e-4;
+	const double alpha_tol = 1e-2;
 	const double eps = std::numeric_limits<double>::min();
-	double logw_tol = 10;
+	double logw_tol = 1e-2;
 	int print_interval;              // print time every x grid points
 
 	// Column order of hyperparameters in grid
