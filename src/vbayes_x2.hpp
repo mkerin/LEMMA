@@ -43,6 +43,7 @@ class VbTracker {
 public:
 	std::vector< int >             counts_list;              // Number of iterations to convergence at each step
 	std::vector< std::vector< double > > logw_updates_list;  // elbo updates at each ii
+	std::vector< std::vector< double > > alpha_diff_list;  // elbo updates at each ii
 	std::vector< Eigen::VectorXd > mu_list;                  // best mu at each ii
 	std::vector< Eigen::VectorXd > alpha_list;               // best alpha at each ii
 	std::vector< double >          logw_list;                // best logw at each ii
@@ -57,6 +58,7 @@ public:
 		alpha_list.resize(n_list);
 		logw_list.resize(n_list);
 		logw_updates_list.resize(n_list);
+		alpha_diff_list.resize(n_list);
 		elapsed_time_list.resize(n_list);
 	}
 
@@ -68,6 +70,7 @@ public:
 		mu_list.resize(n_list);
 		alpha_list.resize(n_list);
 		logw_updates_list.resize(n_list);
+		alpha_diff_list.resize(n_list);
 		logw_list.resize(n_list);
 		elapsed_time_list.resize(n_list);
 		for (int ll = 0; ll < n_list; ll++){
@@ -81,6 +84,7 @@ public:
 		alpha_list.clear();
 		logw_list.clear();
 		logw_updates_list.clear();
+		alpha_diff_list.clear();
 		elapsed_time_list.clear();
 	}
 
@@ -90,6 +94,7 @@ public:
 		alpha_list[ii]        = other_tracker.alpha_list[ii];
 		logw_list[ii]         = other_tracker.logw_list[ii];
 		logw_updates_list[ii] = other_tracker.logw_updates_list[ii];
+		alpha_diff_list[ii] = other_tracker.alpha_diff_list[ii];
 		elapsed_time_list[ii] = other_tracker.elapsed_time_list[ii];
 	}
 };
@@ -99,7 +104,7 @@ public:
 	// Constants
 	const int iter_max = 100;
 	const double PI = 3.1415926535897;
-	const double alpha_tol = 1e-2;
+	const double alpha_tol = 1e-4;
 	const double eps = std::numeric_limits<double>::min();
 	double logw_tol = 1e-2;
 	int print_interval;              // print time every x grid points
@@ -144,7 +149,7 @@ public:
 	Eigen::VectorXd Xr_init;    // column vector of participant ages
 
 	// boost fstreams
-	boost_io::filtering_ostream outf, outf_weights, outf_elbo, outf_inits;
+	boost_io::filtering_ostream outf, outf_weights, outf_elbo, outf_alpha_diff, outf_inits;
 	boost_io::filtering_ostream outf_mus, outf_alphas;
 
 	// time monitoring
@@ -442,7 +447,7 @@ public:
 		double alpha_diff, logw_diff, logw_prev, i_logw = -std::numeric_limits<double>::max();
 		Eigen::VectorXd alpha_prev;
 		std::vector< std::uint32_t > iter;
-		std::vector< double > logw_updates;
+		std::vector< double > logw_updates, alpha_diff_updates;
 		while(!converged){
 			alpha_prev = i_par.alpha;
 			logw_prev = i_logw;
@@ -467,6 +472,7 @@ public:
 
 			// Diagnose convergence
 			alpha_diff = (alpha_prev - i_par.alpha).cwiseAbs().maxCoeff();
+			alpha_diff_updates.push_back(alpha_diff);
 			if(p.logw_lim_set){
 				logw_diff = i_logw - logw_prev;
 			} else {
@@ -496,6 +502,7 @@ public:
 		if(p.verbose){
 			logw_updates.push_back(i_logw);  // adding converged estimate
 			tracker.logw_updates_list[ii] = logw_updates;
+			tracker.alpha_diff_list[ii] = alpha_diff_updates;
 		}
 	}
 
@@ -680,9 +687,12 @@ public:
 		std::cout << "Writing posterior hyperparameter probabilities to " << ofile_weights << std::endl;
 
 		if(p.verbose){
-			std::string ofile_elbo, ofile_alphas, ofile_mus;
+			std::string ofile_elbo, ofile_alphas, ofile_mus, ofile_alpha_diff;
 			ofile_elbo = fstream_init(outf_elbo, file_prefix, "_elbo");
 			std::cout << "Writing ELBO from each VB iteration to " << ofile_elbo << std::endl;
+
+			ofile_alpha_diff = fstream_init(outf_alpha_diff, file_prefix, "_elbo");
+			std::cout << "Writing max change in alpha from each VB iteration to " << ofile_alpha_diff << std::endl;
 
 			ofile_alphas = fstream_init(outf_alphas, file_prefix, "_alphas");
 			std::cout << "Writing optimised alpha from each grid point to " << ofile_alphas << std::endl;
@@ -751,10 +761,17 @@ public:
 
 		if(p.verbose){
 			for (int ii = 0; ii < my_n_grid; ii++){
-				for (int cc = 0; cc < stitched_tracker.counts_list[ii]; cc++){
+				for (int cc = 0; cc < stitched_tracker.logw_updates_list[ii].size(); cc++){
 					outf_elbo << stitched_tracker.logw_updates_list[ii][cc] << " ";
 				}
 				outf_elbo << std::endl;
+			}
+
+			for (int ii = 0; ii < my_n_grid; ii++){
+				for (int cc = 0; cc < stitched_tracker.alpha_diff_list[ii].size(); cc++){
+					outf_alpha_diff << stitched_tracker.alpha_diff_list[ii][cc] << " ";
+				}
+				outf_alpha_diff << std::endl;
 			}
 
 			// Writing optimised alpha and mu from each grid point to file

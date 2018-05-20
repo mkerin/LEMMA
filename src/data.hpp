@@ -201,7 +201,7 @@ class Data
 	void standardise_non_genetic_data(){
 		// Step 3; Center phenos, normalise covars
 		center_matrix( Y, n_pheno );
-		scale_matrix( Y, n_pheno, pheno_names );
+		// scale_matrix( Y, n_pheno, pheno_names );
 		if(params.covar_file != "NULL"){
 			center_matrix( W, n_covar );
 			scale_matrix( W, n_covar, covar_names );
