@@ -168,6 +168,8 @@ class Data
 			query->include_rsids( params.rsid ).initialise();
 			bgenView->set_query( query );
 		}
+
+		filters_applied = true;
 	}
 
 	void read_non_genetic_data(){
@@ -185,7 +187,7 @@ class Data
 		}
 
 		// Exclude samples with missing values in phenos / covars / filters
-		reduce_to_complete_cases();
+		// reduce_to_complete_cases();
 
 		// Read in grids for importance sampling
 		if (params.mode_vb) {
@@ -484,6 +486,7 @@ class Data
 			// throw std::runtime_error("ERROR: problem converting incl_sample_ids.");
 			throw;
 		}
+		n_samples = ii;
 		std::cout << "Subsetted down to " << ii << " ids from --incl_sample_ids";
 		std::cout << std::endl;
 	}

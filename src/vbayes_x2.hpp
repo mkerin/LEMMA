@@ -466,13 +466,13 @@ public:
 			count++;
 
 			// Diagnose convergence
-			alpha_diff = (alpha_prev - i_par.alpha).cwiseAbs().maxCoeff();
+			// alpha_diff = (alpha_prev - i_par.alpha).cwiseAbs().maxCoeff();
 			if(p.logw_lim_set){
 				logw_diff = i_logw - logw_prev;
 			} else {
 				logw_diff = 0.0;
 			}
-			if(alpha_diff < alpha_tol && logw_diff < logw_tol){
+			if(logw_diff < 1e-4){
 				converged = true;
 			}
 		}
