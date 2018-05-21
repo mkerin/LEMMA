@@ -64,6 +64,7 @@ void parse_arguments(parameters &p, int argc, char *argv[]) {
 		"--no_geno_check",
 		"--genetic_confounders",
 		"--r1_hyps_grid",
+		"--r1_probs_grid",
 		"--logw_tol",
 		"--hyps_grid",
 		"--hyps_probs",
@@ -201,6 +202,13 @@ void parse_arguments(parameters &p, int argc, char *argv[]) {
 				check_counts(in_str, i, 1, argc);
 				p.r1_hyps_grid_file = argv[i + 1]; // covar file
 				check_file_exists(p.r1_hyps_grid_file);
+				i += 1;
+			}
+
+			if(strcmp(in_str, "--r1_probs_grid") == 0) {
+				check_counts(in_str, i, 1, argc);
+				p.r1_probs_grid_file = argv[i + 1]; // covar file
+				check_file_exists(p.r1_probs_grid_file);
 				i += 1;
 			}
 
