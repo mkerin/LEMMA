@@ -44,7 +44,11 @@ $(TARGET) lastest_compile_branch.txt : $(SRCDIR)/bgen_prog.cpp $(HEADERS)
 	$(info $$CXX is [${CXX}])
 	$(info $$CFLAGS is [${CFLAGS}])
 	$(info $$LDFLAGS is [${LDFLAGS}])
-	git rev-parse --abbrev-ref HEAD > latest_compile_branch.txt
+	echo "*********************************" >> latest_compile_branch.txt
+	echo "Run on host: `hostname`" >> latest_compile_branch.txt
+	echo "Git branch: `git rev-parse --abbrev-ref HEAD`" >> latest_compile_branch.txt
+	echo "Started at: `date`" >> latest_compile_branch.txt
+	echo "*********************************" >> latest_compile_branch.txt
 	$(PRINTF) "\n\nCompilation flags:\n$(FLAGS)" >> latest_compile_branch.txt
 	$(CXX) -o $@ $< $(FLAGS)
 
