@@ -168,6 +168,8 @@ class Data
 			query->include_rsids( params.rsid ).initialise();
 			bgenView->set_query( query );
 		}
+
+		filters_applied = true;
 	}
 
 	void read_non_genetic_data(){
@@ -478,12 +480,13 @@ class Data
 			}
 
 			for (int jj = bb; jj < n_samples; jj++){
-				incomplete_cases[bb] = 1;
+				incomplete_cases[jj] = 1;
 			}
 		} catch (const std::exception &exc) {
 			// throw std::runtime_error("ERROR: problem converting incl_sample_ids.");
 			throw;
 		}
+		// n_samples = ii;
 		std::cout << "Subsetted down to " << ii << " ids from --incl_sample_ids";
 		std::cout << std::endl;
 	}

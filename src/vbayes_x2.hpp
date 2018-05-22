@@ -104,7 +104,7 @@ public:
 	// Constants
 	const int iter_max = 100;
 	const double PI = 3.1415926535897;
-	const double alpha_tol = 1e-4;
+	const double alpha_tol = 1e-2;
 	const double eps = std::numeric_limits<double>::min();
 	double logw_tol = 1e-2;
 	int print_interval;              // print time every x grid points
@@ -464,10 +464,10 @@ public:
 			}
 
 			// log elbo from each iteration, starting from init
-			if((p.verbose || p.logw_lim_set)){
+			// if((p.verbose || p.logw_lim_set)){
 				i_logw = calc_logw(L, i_hyps, i_par);
 				logw_updates.push_back(i_logw);
-			}
+			// }
 
 			// Update i_mum i_alpha, i_Hr
 			updateAlphaMu(iter, L, i_hyps, i_par);
@@ -476,11 +476,11 @@ public:
 			// Diagnose convergence
 			alpha_diff = (alpha_prev - i_par.alpha).cwiseAbs().maxCoeff();
 			alpha_diff_updates.push_back(alpha_diff);
-			if(p.logw_lim_set){
+			// if(p.logw_lim_set){
 				logw_diff = i_logw - logw_prev;
-			} else {
-				logw_diff = 0.0;
-			}
+			// } else {
+			// 	logw_diff = 0.0;
+			// }
 			if(alpha_diff < alpha_tol && logw_diff < logw_tol){
 				converged = true;
 			}

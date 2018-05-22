@@ -178,6 +178,57 @@ public:
 		return vec;
 	}
 
+	// Eigen read column
+	template<typename T>
+	void col(T jj, Eigen::Ref<Eigen::VectorXd> vec){
+		if(!scaling_performed){
+			calc_scaled_values();
+		}
+
+		if(low_mem){
+			if(jj < PP){
+				for (Index ii = 0; ii < NN; ii++){
+					vec[ii] = (DecompressDosage(M(ii, jj)) - compressed_dosage_means[jj]) * compressed_dosage_inv_sds[jj];
+				}
+			} else {
+				jj -= PP;
+				for (Index ii = 0; ii < NN; ii++){
+					vec[ii] = aa[ii] * (DecompressDosage(M(ii, jj)) - compressed_dosage_means[jj]) * compressed_dosage_inv_sds[jj];
+				}
+			}
+		} else {
+			if(jj < PP){
+				vec = G.col(jj);
+			} else {
+				jj -= PP;
+				vec = G.col(jj).cwiseProduct(aa);
+			}
+		}
+	}
+
+	// Dot with jth col
+	double dot_with_jth_col(const Eigen::Ref<const Eigen::VectorXd>& vec, Index jj){
+		double tmp, offset, res;
+		if(!scaling_performed){
+			calc_scaled_values();
+		}
+
+		if (jj < PP){
+			tmp = vec.dot(M.col(jj).cast<double>());
+			offset = vec.sum();
+		} else {
+			jj -= PP;
+			for(Index ii = 0; ii < NN; ii++){
+				tmp += aa[ii] * vec[ii] * M(ii, jj);
+			}
+			offset = aa.dot(vec);
+		}
+
+		res = intervalWidth * tmp + offset * (intervalWidth * 0.5 - compressed_dosage_means[jj]);
+		res *= compressed_dosage_inv_sds[jj];
+		return res;
+	}
+
 	// Eigen matrix multiplication
 	Eigen::VectorXd operator*(const Eigen::Ref<const Eigen::VectorXd>&  rhs){
 		if(!scaling_performed){

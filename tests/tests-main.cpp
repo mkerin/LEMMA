@@ -216,6 +216,14 @@ TEST_CASE( "GenotypeMatrix Class" ) {
 			CHECK(res.cols() == 1);
 			CHECK(Approx(res(0, 0)) == 1.170866);
 		}
+
+		SECTION("dot_with_jth_col "){
+			Eigen::VectorXd yy(3);
+			yy << 10.2, 5.35, 3.1;
+ 			double res = GM.dot_with_jth_col(yy, 1);
+
+			CHECK(Approx(res) == 3.37328);
+		}
 	}
 
 	SECTION("Normal functionality when low-mem off"){
