@@ -139,6 +139,7 @@ public:
 	Eigen::VectorXd Hty;		// vector of H^T x y where H = (X, Z)
 	Eigen::VectorXd aa;         // column vector of participant ages
 	Eigen::MatrixXd r1_hyps_grid;
+	Eigen::MatrixXd r1_probs_grid;
 	Eigen::MatrixXd hyps_grid;
 	Eigen::MatrixXd probs_grid; // prob of each point in grid under hyps
 
@@ -220,8 +221,10 @@ public:
 
 		if(p.r1_hyps_grid_file == "NULL"){
 			r1_hyps_grid    = hyps_grid;
+			r1_probs_grid    = probs_grid;
 		} else {
 			r1_hyps_grid    = dat.r1_hyps_grid;
+			r1_probs_grid    = dat.r1_probs_grid;
 		}
 
 		// Assign data - genetic
@@ -299,7 +302,7 @@ public:
 			}
 
 			if(p.verbose){
-				write_trackers_to_file("round1_", trackers, r1_n_grid);
+				write_trackers_to_file("round1_", trackers, r1_n_grid, r1_probs_grid);
 			}
 
 			// Find best init
@@ -362,7 +365,7 @@ public:
 			t2[ch].join();
 		}
 
-		write_trackers_to_file("", trackers, n_grid);
+		write_trackers_to_file("", trackers, n_grid, probs_grid);
 
 		std::cout << "Variational inference finished" << std::endl;
 	}
@@ -523,6 +526,7 @@ public:
 			} else {
 				i_par.mu(kk) *= (Hty(kk) - i_par.Hr.dot(X.col(kk - n_var).cwiseProduct(aa)) + dHtH(kk) * rr_k);
 			}
+			// i_par.mu(kk) *= (Hty(kk) - i_par.Hr.dot(X.col(kk)) + dHtH(kk) * rr_k);
 
 			// Update alpha (eq 10)  TODO: check syntax / i_  / sigmoid here!
 			if (kk < n_var){
@@ -660,7 +664,8 @@ public:
 
 	void write_trackers_to_file(const std::string& file_prefix,
                                 const std::vector< VbTracker >& trackers,
-                                const int my_n_grid){
+                                const int my_n_grid,
+                                const Eigen::Ref<const Eigen::VectorXd>& my_probs_grid){
 		// Stitch trackers back together if using multithreading
 		VbTracker stitched_tracker;
 		stitched_tracker.resize(my_n_grid);
@@ -670,7 +675,7 @@ public:
 		}
 
 		output_init(file_prefix);
-		output_results(stitched_tracker, my_n_grid);
+		output_results(stitched_tracker, my_n_grid, my_probs_grid);
 	}
 
 	void output_init(const std::string& file_prefix){
@@ -691,7 +696,7 @@ public:
 			ofile_elbo = fstream_init(outf_elbo, file_prefix, "_elbo");
 			std::cout << "Writing ELBO from each VB iteration to " << ofile_elbo << std::endl;
 
-			ofile_alpha_diff = fstream_init(outf_alpha_diff, file_prefix, "_elbo");
+			ofile_alpha_diff = fstream_init(outf_alpha_diff, file_prefix, "_alpha_diff");
 			std::cout << "Writing max change in alpha from each VB iteration to " << ofile_alpha_diff << std::endl;
 
 			ofile_alphas = fstream_init(outf_alphas, file_prefix, "_alphas");
@@ -706,7 +711,8 @@ public:
 		outf_weights << "weights logw log_prior count time" << std::endl;
 	}
 
-	void output_results(const VbTracker& stitched_tracker, const int my_n_grid){
+	void output_results(const VbTracker& stitched_tracker, const int my_n_grid,
+						const Eigen::Ref<const Eigen::VectorXd>& my_probs_grid){
 		// Write;
 		// posteriors to ofile
 		// weights / logw / log_priors / counts to ofile_weights
@@ -716,7 +722,7 @@ public:
 		std::vector< double > weights(my_n_grid);
 		if(n_grid > 1){
 			for (int ii = 0; ii < my_n_grid; ii++){
-				weights[ii] = stitched_tracker.logw_list[ii] + std::log(probs_grid(ii,0) + eps);
+				weights[ii] = stitched_tracker.logw_list[ii] + std::log(my_probs_grid(ii,0) + eps);
 			}
 			normaliseLogWeights(weights);
 		} else {
@@ -754,7 +760,7 @@ public:
 		// Write hyperparams weights to file
 		for (int ii = 0; ii < my_n_grid; ii++){
 			outf_weights << weights[ii] << " " << stitched_tracker.logw_list[ii] << " ";
-			outf_weights << std::log(probs_grid(ii,0) + eps) << " ";
+			outf_weights << std::log(my_probs_grid(ii,0) + eps) << " ";
 			outf_weights << stitched_tracker.counts_list[ii] << " ";
 			outf_weights << stitched_tracker.elapsed_time_list[ii] << std::endl;
 		}
@@ -791,13 +797,18 @@ public:
                              const std::string& file_prefix,
                              const std::string& file_suffix){
 
-		boost::filesystem::path main_path(p.out_file);
-		boost::filesystem::path dir = main_path.parent_path();
-		boost::filesystem::path file_ext = main_path.extension();
-		boost::filesystem::path filename = main_path.replace_extension().filename();
+		// boost::filesystem::path main_path(p.out_file);
+		// boost::filesystem::path dir = main_path.parent_path();
+		// boost::filesystem::path file_ext = main_path.extension();
+		// boost::filesystem::path filename = main_path.replace_extension().filename();
 
-		std::string ofile = dir.string() + "/" + file_prefix + filename.string() +
-                            file_suffix + file_ext.string();
+		std::string filepath   = p.out_file;
+		std::string dir        = filepath.substr(0, filepath.rfind("/")+1);
+		std::string stem_w_dir = filepath.substr(0, filepath.find("."));
+		std::string stem       = stem_w_dir.substr(stem_w_dir.rfind("/")+1, stem_w_dir.size());
+		std::string ext        = filepath.substr(filepath.find("."), filepath.size());
+
+		std::string ofile      = dir + file_prefix + stem + file_suffix + ext;
 
 		my_outf.reset();
 		std::string gz_str = ".gz";

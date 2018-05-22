@@ -89,7 +89,7 @@ class Data
 
 	// grid things for vbayes
 	std::vector< std::string > hyps_names, imprt_names;
-	Eigen::MatrixXd r1_hyps_grid, hyps_grid, imprt_grid;
+	Eigen::MatrixXd r1_hyps_grid, r1_probs_grid, hyps_grid, imprt_grid;
 	Eigen::VectorXd alpha_init, mu_init;
 
 	
@@ -825,12 +825,13 @@ class Data
 		}
 
 		// Option to provide separate grid to evaluate in round 1
-		std::vector< std::string > r1_hyps_names;
+		std::vector< std::string > r1_hyps_names, r1_probs_names;
 		if ( params.r1_hyps_grid_file != "NULL" ) {
 			read_grid_file( params.r1_hyps_grid_file, r1_hyps_grid, r1_hyps_names );
 			if(hyps_names != r1_hyps_names){
 				throw std::invalid_argument( "Header of --r1_hyps_grid must match --hyps_grid." );
 			}
+			read_grid_file( params.r1_probs_grid_file, r1_probs_grid, r1_probs_names );
 		}
 	}
 
