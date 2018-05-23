@@ -62,8 +62,8 @@ int main( int argc, char** argv ) {
 			data.standardise_non_genetic_data();
 
 			if(p.covar_file != "NULL"){
-				std::cout << "WARNING: regress out covars done upstream" << std::endl;
-				// data.regress_out_covars();
+				// std::cout << "WARNING: regress out covars done upstream" << std::endl;
+				data.regress_out_covars();
 			}
 			data.read_full_bgen();
 
