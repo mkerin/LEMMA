@@ -57,6 +57,7 @@ void parse_arguments(parameters &p, int argc, char *argv[]) {
 		"--full_lm",
 		"--joint_model",
 		"--mode_vb",
+		"--mode_empirical_bayes",
 		"--interaction",
 		"--incl_sample_ids",
 		"--incl_rsids",
@@ -140,6 +141,11 @@ void parse_arguments(parameters &p, int argc, char *argv[]) {
 
 			if(strcmp(in_str, "--mode_vb") == 0) {
 				p.mode_vb = true;
+				i += 0;
+			}
+
+			if(strcmp(in_str, "--mode_empirical_bayes") == 0) {
+				p.mode_empirical_bayes = true;
 				i += 0;
 			}
 

@@ -18,7 +18,7 @@ class parameters {
 		bool range, maf_lim, info_lim, mode_vcf, mode_lm, test_2dof, select_snps;
 		bool geno_check, mode_joint_model, bgen_wildcard, mode_lm2, mode_vb;
 		bool select_rsid, interaction_analysis, verbose, low_mem;
-		bool elbo_tol_set_by_user, alpha_tol_set_by_user;
+		bool elbo_tol_set_by_user, alpha_tol_set_by_user, mode_empirical_bayes;
 		double min_maf, min_info, elbo_tol, alpha_tol;
 		std::vector < std::string > incl_sample_ids, gconf;
 	
@@ -48,6 +48,7 @@ class parameters {
 		mode_lm = false;
 		mode_lm2 = false;
 		mode_vcf = false;
+		mode_empirical_bayes = false;
 		low_mem = false;
 		mode_joint_model = false;
 		mode_vb = false;
@@ -56,7 +57,6 @@ class parameters {
 		select_rsid = false;
 		geno_check = true; // check allele probs sum to 1 by default
 		verbose = false;
-		logw_lim_set = false;
 		alpha_tol_set_by_user = false;
 		elbo_tol_set_by_user = false;
 	}

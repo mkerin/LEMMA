@@ -492,6 +492,10 @@ public:
 					converged = true;
 				}
 			}
+
+			if(main_loop && p.mode_empirical_bayes){
+				updateHyps(i_hyps, i_par, L);
+			}
 		}
 
 		i_logw = calc_logw(L, i_hyps, i_par);
@@ -517,6 +521,28 @@ public:
 		}
 	}
 
+	void updateHyps(Hyps& i_hyps, FreeParameters& i_par, std::uint32_t L){
+		// TODO: sigma update???
+
+		i_hyps.lam_b = 0.0;
+		i_hyps.lam_g = 0.0;
+		i_hyps.sigma_b = 0.0;
+		i_hyps.sigma_g = 0.0;
+		for (std::uint32_t kk = 0; kk < n_var; kk++){
+			i_hyps.lam_b += i_par.alpha[kk];
+			i_hyps.sigma_b += i_par.alpha[kk] * (i_par.s_sq[kk] + i_par.mu[kk] * i_par.mu[kk]);
+		}
+		i_hyps.sigma_b /= i_hyps.lam_b;
+
+		for (std::uint32_t kk = n_var; kk < L; kk++){
+			i_hyps.lam_g += i_par.alpha[kk];
+			i_hyps.sigma_g += i_par.alpha[kk] * (i_par.s_sq[kk] + i_par.mu[kk] * i_par.mu[kk]);
+		}
+		if(L < n_var2){
+			i_hyps.sigma_g /= i_hyps.lam_g;
+		}
+	}
+
 	void updateAlphaMu(std::vector< std::uint32_t > iter, std::uint32_t L,
                        Hyps i_hyps, FreeParameters& i_par){
 		std::uint32_t kk;
@@ -528,12 +554,7 @@ public:
 			rr_k = i_par.alpha(kk) * i_par.mu(kk);
 
 			// Update mu (eq 9)
-			i_par.mu(kk) = i_par.s_sq[kk] / i_hyps.sigma;
-			if (kk < n_var){
-				i_par.mu(kk) *= (Hty(kk) - i_par.Hr.dot(X.col(kk)) + dHtH(kk) * rr_k);
-			} else {
-				i_par.mu(kk) *= (Hty(kk) - i_par.Hr.dot(X.col(kk - n_var).cwiseProduct(aa)) + dHtH(kk) * rr_k);
-			}
+			i_par.mu(kk) = i_par.s_sq[kk] * (Hty(kk) - i_par.Hr.dot(X.col(kk)) + dHtH(kk) * rr_k) / i_hyps.sigma;
 
 			// Update alpha (eq 10)  TODO: check syntax / i_  / sigmoid here!
 			if (kk < n_var){
@@ -544,13 +565,6 @@ public:
 				ff_k += i_par.mu(kk) * i_par.mu(kk) / i_par.s_sq[kk] / 2.0;
 			}
 			i_par.alpha(kk) = sigmoid(ff_k);
-
-			// Update i_Hr
-			// if (kk < n_var){
-			// 	i_par.Hr = i_par.Hr + (i_par.alpha(kk)*i_par.mu(kk) - rr_k) * X.col(kk);
-			// } else {
-			// 	i_par.Hr = i_par.Hr + (i_par.alpha(kk)*i_par.mu(kk) - rr_k) * (X.col(kk - n_var).cwiseProduct(aa));
-			// }
 
 			// Update i_Hr; faster to take schur product with aa inside genotype_matrix
 			i_par.Hr = i_par.Hr + (i_par.alpha(kk)*i_par.mu(kk) - rr_k) * (X.col(kk));
