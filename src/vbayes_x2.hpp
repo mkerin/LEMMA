@@ -104,9 +104,9 @@ public:
 	// Constants
 	const int iter_max = 100;
 	const double PI = 3.1415926535897;
-	const double alpha_tol = 1e-2;
 	const double eps = std::numeric_limits<double>::min();
-	double logw_tol = 1e-2;
+	const double alpha_tol = 1e-4;
+	const double logw_tol = 1e-2;
 	int print_interval;              // print time every x grid points
 
 	// Column order of hyperparameters in grid
@@ -167,9 +167,6 @@ public:
 		n_samples =      dat.n_samples;
 		n_grid =         dat.hyps_grid.rows();
 		print_interval = std::max(1, n_grid / 10);
-		if(p.logw_lim_set){
-			logw_tol = p.logw_tol;
-		}
 
 		// Allocate memory - vb
 		alpha_init.resize(n_var2);
@@ -478,8 +475,22 @@ public:
 			// } else {
 			// 	logw_diff = 0.0;
 			// }
-			if(alpha_diff < alpha_tol && logw_diff < logw_tol){
-				converged = true;
+			if(p.alpha_tol_set_by_user && p.elbo_tol_set_by_user){
+				if(alpha_diff < p.alpha_tol && logw_diff < p.elbo_tol){
+					converged = true;
+				}
+			} else if(p.alpha_tol_set_by_user){
+				if(alpha_diff < p.alpha_tol){
+					converged = true;
+				}
+			} else if(p.elbo_tol_set_by_user){
+				if(logw_diff < p.elbo_tol){
+					converged = true;
+				}
+			} else {
+				if(alpha_diff < alpha_tol && logw_diff < logw_tol){
+					converged = true;
+				}
 			}
 		}
 
@@ -652,10 +663,6 @@ public:
 
 		res = int_linear + int_gamma + int_klbeta;
 		return res;
-	}
-
-	void dump_calc_logw(double int_linear, double int_gamma, double int_klbeta){
-		// For use in debugging only
 	}
 
 	void write_trackers_to_file(const std::string& file_prefix,
