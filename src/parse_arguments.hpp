@@ -57,6 +57,7 @@ void parse_arguments(parameters &p, int argc, char *argv[]) {
 		"--full_lm",
 		"--joint_model",
 		"--mode_vb",
+		"--mode_empirical_bayes",
 		"--interaction",
 		"--incl_sample_ids",
 		"--incl_rsids",
@@ -65,7 +66,8 @@ void parse_arguments(parameters &p, int argc, char *argv[]) {
 		"--genetic_confounders",
 		"--r1_hyps_grid",
 		"--r1_probs_grid",
-		"--logw_tol",
+		"--min_elbo_diff",
+		"--min_alpha_diff",
 		"--hyps_grid",
 		"--hyps_probs",
 		"--vb_init",
@@ -139,6 +141,11 @@ void parse_arguments(parameters &p, int argc, char *argv[]) {
 
 			if(strcmp(in_str, "--mode_vb") == 0) {
 				p.mode_vb = true;
+				i += 0;
+			}
+
+			if(strcmp(in_str, "--mode_empirical_bayes") == 0) {
+				p.mode_empirical_bayes = true;
 				i += 0;
 			}
 
@@ -263,12 +270,21 @@ void parse_arguments(parameters &p, int argc, char *argv[]) {
 				i += 1;
 			}
 
-			if(strcmp(in_str, "--logw_tol") == 0) {
+			if(strcmp(in_str, "--min_alpha_diff") == 0) {
 				check_counts(in_str, i, 1, argc);
-				p.logw_lim_set = true;
-				p.logw_tol = atof(argv[i + 1]);
-				if(p.n_thread < 0) throw std::runtime_error("--logw_tol must be positive.");
-				std::cout << "--logw_tol of " << p.logw_tol << " entered." << std::endl;
+				p.alpha_tol_set_by_user = true;
+				p.alpha_tol = atof(argv[i + 1]);
+				if(p.alpha_tol < 0) throw std::runtime_error("--min_alpha_diff must be positive.");
+				std::cout << "--min_alpha_diff of " << p.alpha_tol << " entered." << std::endl;
+				i += 1;
+			}
+
+			if(strcmp(in_str, "--min_elbo_diff") == 0) {
+				check_counts(in_str, i, 1, argc);
+				p.elbo_tol_set_by_user = true;
+				p.elbo_tol = atof(argv[i + 1]);
+				if(p.elbo_tol < 0) throw std::runtime_error("--min_elbo_diff must be positive.");
+				std::cout << "--min_elbo_diff of " << p.elbo_tol << " entered." << std::endl;
 				i += 1;
 			}
 

@@ -860,19 +860,18 @@ class Data
 
 	}
 
-	void reduce_mat_to_complete_cases( Eigen::MatrixXd& M, 
+	void reduce_mat_to_complete_cases( Eigen::Ref<Eigen::MatrixXd> M, 
 								   bool& matrix_reduced,
 								   int n_cols,
 								   std::map< int, bool > incomplete_cases ) {
 		// Remove rows contained in incomplete_cases
-		int n_incomplete;
 		Eigen::MatrixXd M_tmp;
 		if (matrix_reduced) {
 			throw std::runtime_error("ERROR: Trying to remove incomplete cases twice...");
 		}
 
 		// Create temporary matrix of complete cases
-		n_incomplete = incomplete_cases.size();
+		int n_incomplete = incomplete_cases.size();
 		M_tmp.resize(n_samples - n_incomplete, n_cols);
 
 		// Fill M_tmp with non-missing entries of M

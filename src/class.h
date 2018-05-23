@@ -12,12 +12,14 @@ class parameters {
 		std::string incl_sids_file, x_param_name, incl_rsids_file;
 		std::string r1_hyps_grid_file, r1_probs_grid_file, hyps_grid_file, hyps_probs_file, vb_init_file;
 		std::vector< std::string > rsid;
-		int chunk_size, missing_code, n_gconf, n_thread;
+		long int chunk_size;
+		int missing_code, n_gconf, n_thread;
 		uint32_t start, end;
 		bool range, maf_lim, info_lim, mode_vcf, mode_lm, test_2dof, select_snps;
 		bool geno_check, mode_joint_model, bgen_wildcard, mode_lm2, mode_vb;
-		bool select_rsid, interaction_analysis, verbose, logw_lim_set, low_mem;
-		double min_maf, min_info, logw_tol;
+		bool select_rsid, interaction_analysis, verbose, low_mem;
+		bool elbo_tol_set_by_user, alpha_tol_set_by_user, mode_empirical_bayes;
+		double min_maf, min_info, elbo_tol, alpha_tol;
 		std::vector < std::string > incl_sample_ids, gconf;
 	
 	// constructors/destructors	
@@ -46,6 +48,7 @@ class parameters {
 		mode_lm = false;
 		mode_lm2 = false;
 		mode_vcf = false;
+		mode_empirical_bayes = false;
 		low_mem = false;
 		mode_joint_model = false;
 		mode_vb = false;
@@ -54,7 +57,8 @@ class parameters {
 		select_rsid = false;
 		geno_check = true; // check allele probs sum to 1 by default
 		verbose = false;
-		logw_lim_set = false;
+		alpha_tol_set_by_user = false;
+		elbo_tol_set_by_user = false;
 	}
 
 	~parameters() {

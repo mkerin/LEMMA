@@ -104,9 +104,9 @@ public:
 	// Constants
 	const int iter_max = 100;
 	const double PI = 3.1415926535897;
-	const double alpha_tol = 1e-2;
 	const double eps = std::numeric_limits<double>::min();
-	double logw_tol = 1e-2;
+	const double alpha_tol = 1e-4;
+	const double logw_tol = 1e-2;
 	int print_interval;              // print time every x grid points
 
 	// Column order of hyperparameters in grid
@@ -168,9 +168,6 @@ public:
 		n_samples =      dat.n_samples;
 		n_grid =         dat.hyps_grid.rows();
 		print_interval = std::max(1, n_grid / 10);
-		if(p.logw_lim_set){
-			logw_tol = p.logw_tol;
-		}
 
 		// Allocate memory - vb
 		alpha_init.resize(n_var2);
@@ -481,8 +478,26 @@ public:
 			// } else {
 			// 	logw_diff = 0.0;
 			// }
-			if(alpha_diff < alpha_tol && logw_diff < logw_tol){
-				converged = true;
+			if(p.alpha_tol_set_by_user && p.elbo_tol_set_by_user){
+				if(alpha_diff < p.alpha_tol && logw_diff < p.elbo_tol){
+					converged = true;
+				}
+			} else if(p.alpha_tol_set_by_user){
+				if(alpha_diff < p.alpha_tol){
+					converged = true;
+				}
+			} else if(p.elbo_tol_set_by_user){
+				if(logw_diff < p.elbo_tol){
+					converged = true;
+				}
+			} else {
+				if(alpha_diff < alpha_tol && logw_diff < logw_tol){
+					converged = true;
+				}
+			}
+
+			if(main_loop && p.mode_empirical_bayes){
+				updateHyps(i_hyps, i_par, L);
 			}
 		}
 
@@ -509,6 +524,28 @@ public:
 		}
 	}
 
+	void updateHyps(Hyps& i_hyps, FreeParameters& i_par, std::uint32_t L){
+		// TODO: sigma update???
+
+		i_hyps.lam_b = 0.0;
+		i_hyps.lam_g = 0.0;
+		i_hyps.sigma_b = 0.0;
+		i_hyps.sigma_g = 0.0;
+		for (std::uint32_t kk = 0; kk < n_var; kk++){
+			i_hyps.lam_b += i_par.alpha[kk];
+			i_hyps.sigma_b += i_par.alpha[kk] * (i_par.s_sq[kk] + i_par.mu[kk] * i_par.mu[kk]);
+		}
+		i_hyps.sigma_b /= i_hyps.lam_b;
+
+		for (std::uint32_t kk = n_var; kk < L; kk++){
+			i_hyps.lam_g += i_par.alpha[kk];
+			i_hyps.sigma_g += i_par.alpha[kk] * (i_par.s_sq[kk] + i_par.mu[kk] * i_par.mu[kk]);
+		}
+		if(L < n_var2){
+			i_hyps.sigma_g /= i_hyps.lam_g;
+		}
+	}
+
 	void updateAlphaMu(std::vector< std::uint32_t > iter, std::uint32_t L,
                        Hyps i_hyps, FreeParameters& i_par){
 		std::uint32_t kk;
@@ -520,13 +557,14 @@ public:
 			rr_k = i_par.alpha(kk) * i_par.mu(kk);
 
 			// Update mu (eq 9)
-			i_par.mu(kk) = i_par.s_sq[kk] / i_hyps.sigma;
-			if (kk < n_var){
-				i_par.mu(kk) *= (Hty(kk) - i_par.Hr.dot(X.col(kk)) + dHtH(kk) * rr_k);
-			} else {
-				i_par.mu(kk) *= (Hty(kk) - i_par.Hr.dot(X.col(kk - n_var).cwiseProduct(aa)) + dHtH(kk) * rr_k);
-			}
+			// i_par.mu(kk) = i_par.s_sq[kk] / i_hyps.sigma;
+			// if (kk < n_var){
+			// 	i_par.mu(kk) *= (Hty(kk) - i_par.Hr.dot(X.col(kk)) + dHtH(kk) * rr_k);
+			// } else {
+			// 	i_par.mu(kk) *= (Hty(kk) - i_par.Hr.dot(X.col(kk - n_var).cwiseProduct(aa)) + dHtH(kk) * rr_k);
+			// }
 			// i_par.mu(kk) *= (Hty(kk) - i_par.Hr.dot(X.col(kk)) + dHtH(kk) * rr_k);
+			i_par.mu(kk) = i_par.s_sq[kk] * (Hty(kk) - i_par.Hr.dot(X.col(kk)) + dHtH(kk) * rr_k) / i_hyps.sigma;
 
 			// Update alpha (eq 10)  TODO: check syntax / i_  / sigmoid here!
 			if (kk < n_var){
@@ -537,13 +575,6 @@ public:
 				ff_k += i_par.mu(kk) * i_par.mu(kk) / i_par.s_sq[kk] / 2.0;
 			}
 			i_par.alpha(kk) = sigmoid(ff_k);
-
-			// Update i_Hr
-			// if (kk < n_var){
-			// 	i_par.Hr = i_par.Hr + (i_par.alpha(kk)*i_par.mu(kk) - rr_k) * X.col(kk);
-			// } else {
-			// 	i_par.Hr = i_par.Hr + (i_par.alpha(kk)*i_par.mu(kk) - rr_k) * (X.col(kk - n_var).cwiseProduct(aa));
-			// }
 
 			// Update i_Hr; faster to take schur product with aa inside genotype_matrix
 			i_par.Hr = i_par.Hr + (i_par.alpha(kk)*i_par.mu(kk) - rr_k) * (X.col(kk));
@@ -656,10 +687,6 @@ public:
 
 		res = int_linear + int_gamma + int_klbeta;
 		return res;
-	}
-
-	void dump_calc_logw(double int_linear, double int_gamma, double int_klbeta){
-		// For use in debugging only
 	}
 
 	void write_trackers_to_file(const std::string& file_prefix,

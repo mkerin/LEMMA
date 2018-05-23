@@ -49,7 +49,7 @@ $(TARGET) lastest_compile_branch.txt : $(SRCDIR)/bgen_prog.cpp $(HEADERS)
 	echo "Git branch: `git rev-parse --abbrev-ref HEAD`" >> latest_compile_branch.txt
 	echo "Started at: `date`" >> latest_compile_branch.txt
 	echo "*********************************" >> latest_compile_branch.txt
-	$(PRINTF) "\n\nCompilation flags:\n$(FLAGS)" >> latest_compile_branch.txt
+	$(PRINTF) "\n\nCompilation flags:\n$(FLAGS)\n" >> latest_compile_branch.txt
 	$(CXX) -o $@ $< $(FLAGS)
 
 file_parse : file_parse.cpp

@@ -206,7 +206,7 @@ public:
 		}
 	}
 
-	// Dot with jth col
+	// Dot with jth col - this was actually slower. Oh well.
 	double dot_with_jth_col(const Eigen::Ref<const Eigen::VectorXd>& vec, Index jj){
 		double tmp, offset, res;
 		if(!scaling_performed){
@@ -259,18 +259,38 @@ public:
 		Eigen::VectorXd res;
 		if(low_mem){
 			assert(lhs.rows() == M.rows());
-			assert(std::abs(lhs.sum()) < 1e-9);
-
-			res = lhs.transpose() * M.cast<double>();
-			// std::cout << "first mult formed" << std::endl;
-			// tmp = tmp.cwiseProduct(compressed_dosage_inv_sds);
-			// std::cout << "second mult formed" << std::endl;
+			double offset = lhs.sum();
 			
-			return res.cwiseProduct(compressed_dosage_inv_sds) * intervalWidth;
+			res = (lhs.transpose() * M.cast<double>()).array() + 0.5;
+			res *= intervalWidth;
+			res -= compressed_dosage_means;
+			return res.cwiseProduct(compressed_dosage_inv_sds);
 		} else {
 			return lhs.transpose() * G;
 		}
 	}
+
+	// // Eigen lhs matrix multiplication
+	// Eigen::VectorXd transpose_vector_multiply(const Eigen::Ref<const Eigen::VectorXd>& lhs,
+	// 										  bool lhs_centered){
+	// 	// G.transpose_vector_multiply(y) <=> (y^t G)^t <=> G^t y
+	// 	// NOTE: assumes that lhs is centered!
+	// 	if(!scaling_performed){
+	// 		calc_scaled_values();
+	// 	}
+	// 
+	// 	Eigen::VectorXd res;
+	// 	if(low_mem){
+	// 		assert(lhs.rows() == M.rows());
+	// 		assert(std::abs(lhs.sum()) < 1e-9);
+	// 
+	// 		res = lhs.transpose() * M.cast<double>();
+	// 
+	// 		return res.cwiseProduct(compressed_dosage_inv_sds) * intervalWidth;
+	// 	} else {
+	// 		return lhs.transpose() * G;
+	// 	}
+	// }
 
 	/********** Mean center & unit variance; internal use ************/
 	void calc_scaled_values(){
@@ -355,8 +375,8 @@ public:
 
 	inline Index cols() const { return PP; }
 
-	template <typename T>
-	void resize(const T& n, const T& p){
+	template <typename T, typename T2>
+	void resize(const T& n, const T2& p){
 		if(low_mem){
 			M.resize(n, p);
 		} else {
