@@ -11,6 +11,7 @@
 #include "sys/types.h"
 #include "sys/sysinfo.h"
 #include "class.h"
+#include "vbayes_tracker.hpp"
 #include "data.hpp"
 #include "utils.hpp"  // sigmoid
 #include "tools/eigen3.3/Dense"
@@ -38,66 +39,6 @@ struct FreeParameters {
 	Eigen::VectorXd       mu;
 	Eigen::VectorXd       Hr;
 }; 
-
-class VbTracker {
-public:
-	std::vector< int >             counts_list;              // Number of iterations to convergence at each step
-	std::vector< std::vector< double > > logw_updates_list;  // elbo updates at each ii
-	std::vector< std::vector< double > > alpha_diff_list;  // elbo updates at each ii
-	std::vector< Eigen::VectorXd > mu_list;                  // best mu at each ii
-	std::vector< Eigen::VectorXd > alpha_list;               // best alpha at each ii
-	std::vector< double >          logw_list;                // best logw at each ii
-	std::vector< double >          elapsed_time_list;        // time to compute grid point
-
-	VbTracker(){
-	}
-
-	VbTracker(int n_list){
-		counts_list.resize(n_list);
-		mu_list.resize(n_list);
-		alpha_list.resize(n_list);
-		logw_list.resize(n_list);
-		logw_updates_list.resize(n_list);
-		alpha_diff_list.resize(n_list);
-		elapsed_time_list.resize(n_list);
-	}
-
-	~VbTracker() {
-	}
-
-	void resize(int n_list){
-		counts_list.resize(n_list);
-		mu_list.resize(n_list);
-		alpha_list.resize(n_list);
-		logw_updates_list.resize(n_list);
-		alpha_diff_list.resize(n_list);
-		logw_list.resize(n_list);
-		elapsed_time_list.resize(n_list);
-		for (int ll = 0; ll < n_list; ll++){
-			logw_list[ll] = -std::numeric_limits<double>::max();
-		}
-	}
-
-	void clear(){
-		counts_list.clear();
-		mu_list.clear();
-		alpha_list.clear();
-		logw_list.clear();
-		logw_updates_list.clear();
-		alpha_diff_list.clear();
-		elapsed_time_list.clear();
-	}
-
-	void copy_ith_element(int ii, const VbTracker& other_tracker){
-		counts_list[ii]       = other_tracker.counts_list[ii];
-		mu_list[ii]           = other_tracker.mu_list[ii];
-		alpha_list[ii]        = other_tracker.alpha_list[ii];
-		logw_list[ii]         = other_tracker.logw_list[ii];
-		logw_updates_list[ii] = other_tracker.logw_updates_list[ii];
-		alpha_diff_list[ii] = other_tracker.alpha_diff_list[ii];
-		elapsed_time_list[ii] = other_tracker.elapsed_time_list[ii];
-	}
-};
 
 class VBayesX2 {
 public:
@@ -284,6 +225,7 @@ public:
 			std::vector< VbTracker > trackers(p.n_thread);
 			for (int ch = 0; ch < p.n_thread; ch++){
 				trackers[ch].resize(r1_n_grid);
+				trackers[ch].set_main_filepath(p.out_file);
 			}
 
 			std::thread t1[p.n_thread];
@@ -346,6 +288,7 @@ public:
 		std::vector< VbTracker > trackers(p.n_thread);
 		for (int ch = 0; ch < p.n_thread; ch++){
 			trackers[ch].resize(n_grid);
+			trackers[ch].set_main_filepath(p.out_file);
 		}
 
 		// Round 2; initial values already assigned to alpha_init, mu_init
@@ -444,14 +387,17 @@ public:
 		// Run inner loop until convergence
 		int count = 0;
 		bool converged = false;
-		double alpha_diff, logw_diff, logw_prev, i_logw = -std::numeric_limits<double>::max();
+		double alpha_diff, logw_diff, logw_prev;
 		Eigen::VectorXd alpha_prev;
 		std::vector< std::uint32_t > iter;
+		double i_logw = calc_logw(L, i_hyps, i_par);
 		std::vector< double > logw_updates, alpha_diff_updates;
+		logw_updates.push_back(i_logw);
 		while(!converged){
 			alpha_prev = i_par.alpha;
 			logw_prev = i_logw;
 
+			// Alternate between back and fwd passes
 			if(count % 2 == 0){
 				iter = fwd_pass;
 			} else if(L == n_var){
@@ -460,26 +406,19 @@ public:
 				iter = back_pass;
 			}
 
-			// log elbo from each iteration, starting from init
-			// if((p.verbose || p.logw_lim_set)){
-				i_logw = calc_logw(L, i_hyps, i_par);
-				logw_updates.push_back(i_logw);
-			// }
-
-			// Update i_mum i_alpha, i_Hr
+			// Update i_mu, i_alpha, i_Hr
 			updateAlphaMu(iter, L, i_hyps, i_par);
-			count++;
 
 			// Diagnose convergence
+			count++;
+			i_logw     = calc_logw(L, i_hyps, i_par);
+			logw_diff  = i_logw - logw_prev;
 			alpha_diff = (alpha_prev - i_par.alpha).cwiseAbs().maxCoeff();
+			logw_updates.push_back(i_logw);
 			alpha_diff_updates.push_back(alpha_diff);
-			// if(p.logw_lim_set){
-				logw_diff = i_logw - logw_prev;
-			// } else {
-			// 	logw_diff = 0.0;
-			// }
+
 			if(p.alpha_tol_set_by_user && p.elbo_tol_set_by_user){
-				if(alpha_diff < p.alpha_tol && logw_diff < p.elbo_tol){
+				if(alpha_diff < p.alpha_tol || logw_diff < p.elbo_tol){
 					converged = true;
 				}
 			} else if(p.alpha_tol_set_by_user){
@@ -501,7 +440,6 @@ public:
 			}
 		}
 
-		i_logw = calc_logw(L, i_hyps, i_par);
 		if(!std::isfinite(i_logw)){
 			std::cout << "WARNING: non-finite elbo estimate produced" << std::endl;
 		}
@@ -509,8 +447,6 @@ public:
 		// Log all things that we want to track
 		auto inner_end = std::chrono::system_clock::now();
 		std::chrono::duration<double> elapsed = inner_end - inner_start;
-		// std::chrono::duration<double> elapsed_seconds = now-time_check;
-		// std::cout << " (" << elapsed_seconds.count();
 
 		tracker.logw_list[ii] = i_logw;
 		tracker.counts_list[ii] = count;
@@ -522,27 +458,42 @@ public:
 			tracker.logw_updates_list[ii] = logw_updates;
 			tracker.alpha_diff_list[ii] = alpha_diff_updates;
 		}
+		tracker.push_interim_output(ii, main_loop);
 	}
 
 	void updateHyps(Hyps& i_hyps, FreeParameters& i_par, std::uint32_t L){
-		// TODO: sigma update???
-
-		i_hyps.lam_b = 0.0;
-		i_hyps.lam_g = 0.0;
+		i_hyps.lam_b   = 0.0;
+		i_hyps.lam_g   = 0.0;
 		i_hyps.sigma_b = 0.0;
 		i_hyps.sigma_g = 0.0;
+		i_hyps.sigma   = (Y - i_par.Hr).squaredNorm();
+
+		// max sigma
+		double k_varB;
+		for (std::uint32_t kk = 0; kk < L; kk++){
+			k_varB = i_par.alpha(kk)*(i_par.s_sq[kk] + (1 - i_par.alpha(kk)) * i_par.mu(kk) * i_par.mu(kk));
+			i_hyps.sigma += dHtH[kk] * k_varB;
+		}
+		i_hyps.sigma /= n_samples;
+
+		// max lambda_b & sigma_b
 		for (std::uint32_t kk = 0; kk < n_var; kk++){
 			i_hyps.lam_b += i_par.alpha[kk];
 			i_hyps.sigma_b += i_par.alpha[kk] * (i_par.s_sq[kk] + i_par.mu[kk] * i_par.mu[kk]);
 		}
 		i_hyps.sigma_b /= i_hyps.lam_b;
+		i_hyps.sigma_b /= i_hyps.sigma;
+		i_hyps.lam_b /= n_var;
 
+		// max lambda_b & sigma_b
 		for (std::uint32_t kk = n_var; kk < L; kk++){
 			i_hyps.lam_g += i_par.alpha[kk];
 			i_hyps.sigma_g += i_par.alpha[kk] * (i_par.s_sq[kk] + i_par.mu[kk] * i_par.mu[kk]);
 		}
 		if(L < n_var2){
 			i_hyps.sigma_g /= i_hyps.lam_g;
+			i_hyps.sigma_g /= i_hyps.sigma;
+			i_hyps.lam_g /= n_var;
 		}
 	}
 
@@ -777,6 +728,10 @@ public:
 			std::cout << "WARNING: " << nonfinite_count << " grid points returned non-finite ELBO.";
 			std::cout << "Skipping these when producing posterior estimates.";
 		}
+
+		// Set Precision
+		outf_elbo << std::setprecision(4) << std::fixed;
+		outf_alpha_diff << std::setprecision(4) << std::fixed;
 
 		// Write results of main inference to file
 		for (std::uint32_t kk = 0; kk < n_var2; kk++){
