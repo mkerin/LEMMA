@@ -261,9 +261,9 @@ public:
 			assert(lhs.rows() == M.rows());
 			double offset = lhs.sum();
 			
-			res = (lhs.transpose() * M.cast<double>()).array() + 0.5;
+			res = (lhs.transpose() * M.cast<double>()).array() + 0.5 * offset;
 			res *= intervalWidth;
-			res -= compressed_dosage_means;
+			res -= (offset * compressed_dosage_means);
 			return res.cwiseProduct(compressed_dosage_inv_sds);
 		} else {
 			return lhs.transpose() * G;
