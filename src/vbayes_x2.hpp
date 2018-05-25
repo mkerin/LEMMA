@@ -3,6 +3,8 @@
 #define VBAYES_X2_HPP
 
 #include <algorithm>
+#include <chrono>      // start/end time info
+#include <ctime>       // start/end time info
 #include <cstdint>    // uint32_t
 #include <iostream>
 #include <limits>
@@ -43,7 +45,7 @@ struct FreeParameters {
 class VBayesX2 {
 public:
 	// Constants
-	const int iter_max = 100;
+	const int iter_max = 200;
 	const double PI = 3.1415926535897;
 	const double eps = std::numeric_limits<double>::min();
 	const double alpha_tol = 1e-4;
@@ -354,6 +356,7 @@ public:
 		// Assumes alpha_init, mu_init and Hr_init already exist
 		FreeParameters i_par;
 		auto inner_start = std::chrono::system_clock::now();
+		std::chrono::duration<double> elapsed;
 
 		// Assign initial values
 		if (!main_loop) {
@@ -393,7 +396,8 @@ public:
 		double i_logw = calc_logw(L, i_hyps, i_par);
 		std::vector< double > logw_updates, alpha_diff_updates;
 		logw_updates.push_back(i_logw);
-		while(!converged){
+		tracker.interim_output_init(ii, main_loop);
+		while(!converged  && count < iter_max){
 			alpha_prev = i_par.alpha;
 			logw_prev = i_logw;
 
@@ -408,6 +412,9 @@ public:
 
 			// Update i_mu, i_alpha, i_Hr
 			updateAlphaMu(iter, L, i_hyps, i_par);
+			if(main_loop && p.mode_empirical_bayes){
+				updateHyps(i_hyps, i_par, L);
+			}
 
 			// Diagnose convergence
 			count++;
@@ -435,9 +442,10 @@ public:
 				}
 			}
 
-			if(main_loop && p.mode_empirical_bayes){
-				updateHyps(i_hyps, i_par, L);
-			}
+			// Log updates
+			auto update_end = std::chrono::system_clock::now();
+			elapsed = update_end - inner_start;
+			tracker.push_interim_iter_update(count, i_logw, alpha_diff, elapsed);
 		}
 
 		if(!std::isfinite(i_logw)){
@@ -446,7 +454,7 @@ public:
 
 		// Log all things that we want to track
 		auto inner_end = std::chrono::system_clock::now();
-		std::chrono::duration<double> elapsed = inner_end - inner_start;
+		elapsed = inner_end - inner_start;
 
 		tracker.logw_list[ii] = i_logw;
 		tracker.counts_list[ii] = count;

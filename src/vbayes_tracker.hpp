@@ -1,4 +1,6 @@
 
+#include <chrono>      // start/end time info
+#include <ctime>       // start/end time info
 #include <iostream>
 #include <stdexcept>
 #include <limits>
@@ -20,7 +22,7 @@ public:
 	std::vector< double >          elapsed_time_list;        // time to compute grid point
 
 	// For writing interim output
-	boost_io::filtering_ostream outf_elbo, outf_alpha_diff, outf_weights, outf_inits;
+	boost_io::filtering_ostream outf_elbo, outf_alpha_diff, outf_weights, outf_inits, outf_iter;
 	std::string main_out_file;
 	bool allow_interim_push;
 
@@ -52,9 +54,35 @@ public:
 		allow_interim_push = true;
 	}
 
+	void push_interim_iter_update(const int cnt,
+                                  const double c_logw,
+                                  const double c_alpha_diff,
+                                  const std::chrono::duration<double> elapsed){
+		outf_iter << cnt << "\t";
+		outf_iter << c_logw << "\t";
+		outf_iter << c_alpha_diff << "\t";
+		outf_iter << elapsed.count() << std::endl;
+	}
+
 	void push_interim_output(int ii, bool main_loop){
 		// Assumes that infomration for all measures that we track have between
 		// added to VbTracker at index ii.
+
+		// Write output to file
+		outf_weights << "NA" << " " << logw_list[ii] << " ";
+		outf_weights << "NA" << " ";
+		outf_weights << counts_list[ii] << " ";
+		outf_weights << elapsed_time_list[ii] << std::endl;
+
+		if(!main_loop){
+			for (std::uint32_t kk = 0; kk < alpha_list[ii].size(); kk++){
+				outf_inits << alpha_list[ii][kk] << " " << mu_list[ii][kk] << std::endl;
+			}
+		}
+	}
+
+	void interim_output_init(const int ii,
+                             const bool main_loop){
 		if(!allow_interim_push){
 			throw std::runtime_error("Internal error; interim push not expected");
 		}
@@ -64,49 +92,18 @@ public:
 		if(!main_loop){
 			ss = "r1_" + ss;
 		}
-		boost::filesystem::path interim_ext(ss), p(main_out_file), dir_point;
-		dir_point = p.parent_path() / interim_ext;
-		boost::filesystem::create_directories(dir_point);
+		boost::filesystem::path interim_ext(ss), p(main_out_file), dir;
+		dir = p.parent_path() / interim_ext;
+		boost::filesystem::create_directories(dir);
 
-		// Init files
-		interim_output_init(dir_point, main_loop);
+		std::string ofile_weights, ofile_inits, ofile_iter;
+		ofile_weights    = fstream_init(outf_weights, dir, "_hyps", false);
+		ofile_iter       = fstream_init(outf_iter, dir, "_iter_updates", false);
+		outf_weights << "weights logw log_prior count time" << std::endl;
+		outf_iter    << "count\telbo\talpha_diff\tseconds" << std::endl;
 
 		// Precision
-		outf_elbo << std::setprecision(4) << std::fixed;
-		outf_alpha_diff << std::setprecision(4) << std::fixed;
-
-		// Write output to file
-		for (int cc = 0; cc < logw_updates_list[ii].size(); cc++){
-			outf_elbo << logw_updates_list[ii][cc] << " ";
-		}
-		outf_elbo << std::endl;
-
-		for (int cc = 0; cc < alpha_diff_list[ii].size(); cc++){
-			outf_alpha_diff << alpha_diff_list[ii][cc] << " ";
-		}
-		outf_alpha_diff << std::endl;
-
-		outf_weights << "NA" << " " << logw_list[ii] << " ";
-		outf_weights << "NA" << " ";
-		outf_weights << counts_list[ii] << " ";
-		outf_weights << elapsed_time_list[ii] << std::endl;
-
-
-		if(!main_loop){
-			for (std::uint32_t kk = 0; kk < alpha_list[ii].size(); kk++){
-				outf_inits << alpha_list[ii][kk] << " " << mu_list[ii][kk] << std::endl;
-			}
-		}
-	}
-
-	void interim_output_init(const boost::filesystem::path& dir,
-                             const bool main_loop){
-		std::string ofile_weights, ofile_elbo, ofile_alpha_diff, ofile_inits;
-
-		ofile_elbo       = fstream_init(outf_elbo, dir, "_elbo", false);
-		ofile_alpha_diff = fstream_init(outf_alpha_diff, dir, "_alpha_diff", false);
-		ofile_weights    = fstream_init(outf_weights, dir, "_hyps", false);
-		outf_weights << "weights logw log_prior count time" << std::endl;
+		outf_iter       << std::setprecision(4) << std::fixed;
 
 		if(!main_loop){
 			ofile_inits     = fstream_init(outf_inits, dir, "_inits", true);
