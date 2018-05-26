@@ -498,7 +498,7 @@ public:
 			i_hyps.lam_g += i_par.alpha[kk];
 			i_hyps.sigma_g += i_par.alpha[kk] * (i_par.s_sq[kk] + i_par.mu[kk] * i_par.mu[kk]);
 		}
-		if(L < n_var2){
+		if(L == n_var2){
 			i_hyps.sigma_g /= i_hyps.lam_g;
 			i_hyps.sigma_g /= i_hyps.sigma;
 			i_hyps.lam_g /= n_var;
