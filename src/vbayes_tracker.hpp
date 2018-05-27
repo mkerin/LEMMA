@@ -11,6 +11,16 @@
 #include <boost/iostreams/filter/gzip.hpp>
 #include <boost/filesystem.hpp>
 
+
+struct Hyps{
+	double sigma;
+	double sigma_b;
+	double sigma_g;
+	double lam_b;
+	double lam_g;
+};
+
+
 class VbTracker {
 public:
 	std::vector< int >             counts_list;              // Number of iterations to convergence at each step
@@ -20,6 +30,7 @@ public:
 	std::vector< Eigen::VectorXd > alpha_list;               // best alpha at each ii
 	std::vector< double >          logw_list;                // best logw at each ii
 	std::vector< double >          elapsed_time_list;        // time to compute grid point
+	std::vector< Hyps >            hyps_list;                // hyps values at end of VB inference.
 
 	// For writing interim output
 	boost_io::filtering_ostream outf_elbo, outf_alpha_diff, outf_weights, outf_inits, outf_iter;
@@ -42,6 +53,7 @@ public:
 		logw_updates_list.resize(n_list);
 		alpha_diff_list.resize(n_list);
 		elapsed_time_list.resize(n_list);
+		hyps_list.resize(n_list);
 
 		allow_interim_push = true;
 	}
@@ -55,9 +67,15 @@ public:
 	}
 
 	void push_interim_iter_update(const int cnt,
+                                  const Hyps i_hyps,
                                   const double c_logw,
                                   const double c_alpha_diff,
                                   const std::chrono::duration<double> elapsed){
+		outf_iter << i_hyps.sigma << "\t";
+		outf_iter << i_hyps.sigma_b << "\t";
+		outf_iter << i_hyps.sigma_g << "\t";
+		outf_iter << i_hyps.lam_b << "\t";
+		outf_iter << i_hyps.lam_g << "\t";
 		outf_iter << cnt << "\t";
 		outf_iter << c_logw << "\t";
 		outf_iter << c_alpha_diff << "\t";
@@ -100,6 +118,7 @@ public:
 		ofile_weights    = fstream_init(outf_weights, dir, "_hyps", false);
 		ofile_iter       = fstream_init(outf_iter, dir, "_iter_updates", false);
 		outf_weights << "weights logw log_prior count time" << std::endl;
+		outf_iter    << "sigma\tsigma_b\tsigma_g\tlambda_b\tlambda_g\t";
 		outf_iter    << "count\telbo\talpha_diff\tseconds" << std::endl;
 
 		// Precision
@@ -134,7 +153,6 @@ public:
 		return ofile;
 	}
 
-
 	void resize(int n_list){
 		counts_list.resize(n_list);
 		mu_list.resize(n_list);
@@ -143,6 +161,7 @@ public:
 		alpha_diff_list.resize(n_list);
 		logw_list.resize(n_list);
 		elapsed_time_list.resize(n_list);
+		hyps_list.resize(n_list);
 		for (int ll = 0; ll < n_list; ll++){
 			logw_list[ll] = -std::numeric_limits<double>::max();
 		}
@@ -156,6 +175,7 @@ public:
 		logw_updates_list.clear();
 		alpha_diff_list.clear();
 		elapsed_time_list.clear();
+		hyps_list.clear();
 	}
 
 	void copy_ith_element(int ii, const VbTracker& other_tracker){
@@ -164,7 +184,8 @@ public:
 		alpha_list[ii]        = other_tracker.alpha_list[ii];
 		logw_list[ii]         = other_tracker.logw_list[ii];
 		logw_updates_list[ii] = other_tracker.logw_updates_list[ii];
-		alpha_diff_list[ii] = other_tracker.alpha_diff_list[ii];
+		alpha_diff_list[ii]   = other_tracker.alpha_diff_list[ii];
 		elapsed_time_list[ii] = other_tracker.elapsed_time_list[ii];
+		hyps_list[ii]         = other_tracker.hyps_list[ii];
 	}
 };

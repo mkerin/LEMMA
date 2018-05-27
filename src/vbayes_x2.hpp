@@ -27,14 +27,6 @@ inline std::vector<int> validate_grid(const Eigen::MatrixXd &grid, const T n_var
 inline Eigen::MatrixXd subset_matrix(const Eigen::MatrixXd &orig, const std::vector<int> &valid_points);
 inline std::size_t find_covar_index( std::string colname, std::vector< std::string > col_names );
 
-struct Hyps{
-	double sigma;
-	double sigma_b;
-	double sigma_g;
-	double lam_b;
-	double lam_g;
-};
-
 struct FreeParameters {
 	std::vector< double > s_sq;
 	Eigen::VectorXd       alpha;
@@ -169,18 +161,7 @@ public:
 
 		// Assign data - genetic
 		Eigen::VectorXd a_sq = aa.cwiseProduct(aa);
-
-		// Avoid calling X.tranpose()
-		// Eigen::VectorXd dXtX(n_var), dZtZ(n_var);
-		// for(std::std::uint32_t kk = 0; kk < n_var; kk++){
-		// 	dXtX(kk, kk) = X.col(kk).squaredNorm();
-		// 	dZtZ(kk, kk) = (X.col(kk).cwiseProduct(aa)).squaredNorm();
-		// }
-		// Hty       << (Y.transpose() * X).transpose(), (Y.cwiseProduct(aa).transpose() * X).transpose();
 		Hty       << (X.transpose_vector_multiply(Y)), (X.transpose_vector_multiply(Y.cwiseProduct(aa)));
-
-		// Eigen::VectorXd dXtX   = (X.transpose() * X).diagonal();
-		// Eigen::VectorXd dZtZ   = (X.transpose() * I_a_sq * X).diagonal();
 
 		Eigen::VectorXd dXtX(n_var), dZtZ(n_var), col_j;
 		for (std::size_t jj; jj < n_var; jj++){
@@ -188,8 +169,6 @@ public:
 			dXtX[jj] = col_j.dot(col_j);
 			dZtZ[jj] = col_j.cwiseProduct(a_sq).dot(col_j);
 		}
-		// Hty                    << (X.transpose() * Y), (X.transpose() * (Y.cwiseProduct(aa)));
-
 		dHtH                   << dXtX, dZtZ;
 	}
 
@@ -413,6 +392,10 @@ public:
 			// Update i_mu, i_alpha, i_Hr
 			updateAlphaMu(iter, L, i_hyps, i_par);
 			if(main_loop && p.mode_empirical_bayes){
+				// auto update_end = std::chrono::system_clock::now();
+				// elapsed = update_end - inner_start;
+				// i_logw     = calc_logw(L, i_hyps, i_par);
+				// tracker.push_interim_iter_update(count, i_hyps, i_logw, alpha_diff, elapsed);
 				updateHyps(i_hyps, i_par, L);
 			}
 
@@ -436,6 +419,9 @@ public:
 				if(logw_diff < p.elbo_tol){
 					converged = true;
 				}
+			} else if(p.mode_empirical_bayes && logw_diff < 0) {
+				//  Monotnic trajectory no longer required under EB?
+				converged = true;
 			} else {
 				if(alpha_diff < alpha_tol && logw_diff < logw_tol){
 					converged = true;
@@ -445,7 +431,7 @@ public:
 			// Log updates
 			auto update_end = std::chrono::system_clock::now();
 			elapsed = update_end - inner_start;
-			tracker.push_interim_iter_update(count, i_logw, alpha_diff, elapsed);
+			tracker.push_interim_iter_update(count, i_hyps, i_logw, alpha_diff, elapsed);
 		}
 
 		if(!std::isfinite(i_logw)){
@@ -461,6 +447,7 @@ public:
 		tracker.alpha_list[ii] = i_par.alpha;
 		tracker.mu_list[ii] = i_par.mu;
 		tracker.elapsed_time_list[ii] = elapsed.count();
+		tracker.hyps_list[ii] = i_hyps;
 		if(p.verbose){
 			logw_updates.push_back(i_logw);  // adding converged estimate
 			tracker.logw_updates_list[ii] = logw_updates;
@@ -694,7 +681,8 @@ public:
 
 		// Headers
 		outf << "post_alpha post_mu post_beta" << std::endl;
-		outf_weights << "weights logw log_prior count time" << std::endl;
+		outf_weights << "weights logw log_prior count time sigma sigma_b ";
+		outf_weights << "sigma_g lambda_b lambda_g" << std::endl;
 	}
 
 	void output_results(const VbTracker& stitched_tracker, const int my_n_grid,
@@ -752,7 +740,12 @@ public:
 			outf_weights << weights[ii] << " " << stitched_tracker.logw_list[ii] << " ";
 			outf_weights << std::log(my_probs_grid(ii,0) + eps) << " ";
 			outf_weights << stitched_tracker.counts_list[ii] << " ";
-			outf_weights << stitched_tracker.elapsed_time_list[ii] << std::endl;
+			outf_weights << stitched_tracker.elapsed_time_list[ii] <<  " ";
+			outf_weights << stitched_tracker.hyps_list[ii].sigma << " ";
+			outf_weights << stitched_tracker.hyps_list[ii].sigma_b << " ";
+			outf_weights << stitched_tracker.hyps_list[ii].sigma_g << " ";
+			outf_weights << stitched_tracker.hyps_list[ii].lam_b << " ";
+			outf_weights << stitched_tracker.hyps_list[ii].lam_g << std::endl;
 		}
 
 		if(p.verbose){
