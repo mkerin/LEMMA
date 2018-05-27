@@ -158,14 +158,24 @@ public:
 
 		if(low_mem){
 			if(jj < PP){
-				for (Index ii = 0; ii < NN; ii++){
-					vec[ii] = (DecompressDosage(M(ii, jj)) - compressed_dosage_means[jj]) * compressed_dosage_inv_sds[jj];
-				}
+				//for (Index ii = 0; ii < NN; ii++){
+				//	vec[ii] = (DecompressDosage(M(ii, jj)) - compressed_dosage_means[jj]) * compressed_dosage_inv_sds[jj];
+				//}
+
+				vec = M.cast<double>().col(jj);
+				vec *= (intervalWidth * compressed_dosage_inv_sds[jj]);
+				vec = vec.array() + (0.5 * intervalWidth - compressed_dosage_means[jj]) * compressed_dosage_inv_sds[jj];
+
 			} else {
 				jj -= PP;
-				for (Index ii = 0; ii < NN; ii++){
-					vec[ii] = aa[ii] * (DecompressDosage(M(ii, jj)) - compressed_dosage_means[jj]) * compressed_dosage_inv_sds[jj];
-				}
+				//for (Index ii = 0; ii < NN; ii++){
+				//	vec[ii] = aa[ii] * (DecompressDosage(M(ii, jj)) - compressed_dosage_means[jj]) * compressed_dosage_inv_sds[jj];
+				//}
+
+				vec = M.cast<double>().col(jj);
+				vec *= (intervalWidth * compressed_dosage_inv_sds[jj]);
+ 				vec = vec.array() + (0.5 * intervalWidth - compressed_dosage_means[jj]) * compressed_dosage_inv_sds[jj];
+				vec = vec.cwiseProduct(aa);
 			}
 		} else {
 			if(jj < PP){
