@@ -66,6 +66,9 @@ int main( int argc, char** argv ) {
 				data.regress_out_covars();
 			}
 			data.read_full_bgen();
+			if(p.vb_init_file != "NULL"){
+				data.read_alpha_mu();
+			}
 
 			// Pass data to VBayes object
 			if(p.interaction_analysis){

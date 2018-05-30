@@ -96,7 +96,7 @@ public:
 							p( dat.params ) {
 		assert(std::includes(dat.hyps_names.begin(), dat.hyps_names.end(), hyps_names.begin(), hyps_names.end()));
 		assert(p.interaction_analysis);
-
+		std::cout << "Version with X_kk" << std::endl;
 		// Data size params
 		n_var =          dat.n_var;
 		n_var2 =         2 * dat.n_var;
@@ -136,7 +136,11 @@ public:
 			alpha_init         = dat.alpha_init;
 			mu_init            = dat.mu_init;
 
-			assert(alpha_init.rows() == n_var2);
+			if(alpha_init.rows() != n_var2){
+				std::cout << n_var2 << " rows expected in alpha_init, ";
+ 				std::cout << alpha_init.rows() << " found." << std::endl;
+				assert(alpha_init.rows() == n_var2);
+			}
 			assert(mu_init.rows() == n_var2);
 			// Gen Hr_init
 			Eigen::VectorXd rr = alpha_init.cwiseProduct(mu_init);
@@ -390,6 +394,7 @@ public:
 			}
 
 			// Update i_mu, i_alpha, i_Hr
+			auto updateAlpha_start = std::chrono::system_clock::now();
 			updateAlphaMu(iter, L, i_hyps, i_par);
 			if(main_loop && p.mode_empirical_bayes){
 				// auto update_end = std::chrono::system_clock::now();
@@ -398,10 +403,17 @@ public:
 				// tracker.push_interim_iter_update(count, i_hyps, i_logw, alpha_diff, elapsed);
 				updateHyps(i_hyps, i_par, L);
 			}
+			auto updateAlpha_end = std::chrono::system_clock::now();
+			std::chrono::duration<double> updateAlphaMu_time = updateAlpha_end - updateAlpha_start;
+
+			// New elbo
+			auto calc_logw_start = std::chrono::system_clock::now();
+			i_logw     = calc_logw(L, i_hyps, i_par);
+			auto calc_logw_end = std::chrono::system_clock::now();
+			std::chrono::duration<double> calc_logw_time = calc_logw_end - calc_logw_start;
 
 			// Diagnose convergence
 			count++;
-			i_logw     = calc_logw(L, i_hyps, i_par);
 			logw_diff  = i_logw - logw_prev;
 			alpha_diff = (alpha_prev - i_par.alpha).cwiseAbs().maxCoeff();
 			logw_updates.push_back(i_logw);
@@ -431,7 +443,8 @@ public:
 			// Log updates
 			auto update_end = std::chrono::system_clock::now();
 			elapsed = update_end - inner_start;
-			tracker.push_interim_iter_update(count, i_hyps, i_logw, alpha_diff, elapsed);
+			tracker.push_interim_iter_update(count, i_hyps, i_logw, alpha_diff,
+                                             elapsed, updateAlphaMu_time, calc_logw_time);
 		}
 
 		if(!std::isfinite(i_logw)){
@@ -496,21 +509,15 @@ public:
                        Hyps i_hyps, FreeParameters& i_par){
 		std::uint32_t kk;
 		double rr_k, ff_k;
+		Eigen::VectorXd X_kk(n_samples);
 		for(std::uint32_t jj = 0; jj < L; jj++){
 			kk = iter[jj];
 			assert(kk < L);
 
 			rr_k = i_par.alpha(kk) * i_par.mu(kk);
-
-			// Update mu (eq 9)
-			// i_par.mu(kk) = i_par.s_sq[kk] / i_hyps.sigma;
-			// if (kk < n_var){
-			// 	i_par.mu(kk) *= (Hty(kk) - i_par.Hr.dot(X.col(kk)) + dHtH(kk) * rr_k);
-			// } else {
-			// 	i_par.mu(kk) *= (Hty(kk) - i_par.Hr.dot(X.col(kk - n_var).cwiseProduct(aa)) + dHtH(kk) * rr_k);
-			// }
-			// i_par.mu(kk) *= (Hty(kk) - i_par.Hr.dot(X.col(kk)) + dHtH(kk) * rr_k);
-			i_par.mu(kk) = i_par.s_sq[kk] * (Hty(kk) - i_par.Hr.dot(X.col(kk)) + dHtH(kk) * rr_k) / i_hyps.sigma;
+			X_kk = X.col(kk);
+			// Update mu (eq 9); faster to take schur product with aa inside genotype_matrix
+			i_par.mu(kk) = i_par.s_sq[kk] * (Hty(kk) - i_par.Hr.dot(X_kk) + dHtH(kk) * rr_k) / i_hyps.sigma;
 
 			// Update alpha (eq 10)  TODO: check syntax / i_  / sigmoid here!
 			if (kk < n_var){
@@ -523,7 +530,7 @@ public:
 			i_par.alpha(kk) = sigmoid(ff_k);
 
 			// Update i_Hr; faster to take schur product with aa inside genotype_matrix
-			i_par.Hr = i_par.Hr + (i_par.alpha(kk)*i_par.mu(kk) - rr_k) * (X.col(kk));
+			i_par.Hr = i_par.Hr + (i_par.alpha(kk)*i_par.mu(kk) - rr_k) * (X_kk);
 		}
 	}
 
@@ -680,7 +687,7 @@ public:
 		}
 
 		// Headers
-		outf << "post_alpha post_mu post_beta" << std::endl;
+		outf << "chr pos rsid a0 a1 post_alpha post_mu post_beta" << std::endl;
 		outf_weights << "weights logw log_prior count time sigma sigma_b ";
 		outf_weights << "sigma_g lambda_b lambda_g" << std::endl;
 	}
@@ -730,9 +737,12 @@ public:
 		outf_alpha_diff << std::setprecision(4) << std::fixed;
 
 		// Write results of main inference to file
+		std::uint32_t kk1;
 		for (std::uint32_t kk = 0; kk < n_var2; kk++){
-			outf << post_alpha[kk] << " " << post_mu[kk] << " ";
-			outf << post_beta[kk] << std::endl;
+			kk1 = kk % n_var;
+			outf << X.chromosome[kk1] << " " << X.position[kk1] << " " << X.rsid[kk1];
+			outf << " " << X.al_0[kk1] << " " << X.al_1[kk1] << " " << post_alpha[kk];
+ 			outf << " " << post_mu[kk] << " " << post_beta[kk] << std::endl;
 		}
 
 		// Write hyperparams weights to file
@@ -779,11 +789,6 @@ public:
 	std::string fstream_init(boost_io::filtering_ostream& my_outf,
                              const std::string& file_prefix,
                              const std::string& file_suffix){
-
-		// boost::filesystem::path main_path(p.out_file);
-		// boost::filesystem::path dir = main_path.parent_path();
-		// boost::filesystem::path file_ext = main_path.extension();
-		// boost::filesystem::path filename = main_path.replace_extension().filename();
 
 		std::string filepath   = p.out_file;
 		std::string dir        = filepath.substr(0, filepath.rfind("/")+1);

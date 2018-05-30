@@ -73,7 +73,8 @@ void parse_arguments(parameters &p, int argc, char *argv[]) {
 		"--vb_init",
 		"--verbose",
 		"--threads",
-		"--low_mem"
+		"--low_mem",
+		"--keep_constant_variants"
 	};
 
 	std::set<std::string>::iterator set_it;
@@ -141,6 +142,11 @@ void parse_arguments(parameters &p, int argc, char *argv[]) {
 
 			if(strcmp(in_str, "--mode_vb") == 0) {
 				p.mode_vb = true;
+				i += 0;
+			}
+
+			if(strcmp(in_str, "--keep_constant_variants") == 0) {
+				p.keep_constant_variants = true;
 				i += 0;
 			}
 

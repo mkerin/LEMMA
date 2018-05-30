@@ -40,6 +40,13 @@ Questions:
 #include <map>
 #include "tools/eigen3.3/Dense"
 
+inline Eigen::MatrixXd getCols(const Eigen::MatrixXd &X, const std::vector<size_t> &cols);
+inline void setCols(Eigen::MatrixXd &X, const std::vector<size_t> &cols, const Eigen::MatrixXd &values);
+inline size_t numRows(const Eigen::MatrixXd &A);
+inline size_t numCols(const Eigen::MatrixXd &A);
+inline void setCol(Eigen::MatrixXd &A, const Eigen::VectorXd &v, size_t col);
+inline Eigen::VectorXd getCol(const Eigen::MatrixXd &A, size_t col);
+
 
 // Memory efficient class for storing dosage data
 // - Use uint instead of double to store dosage probabilities
@@ -58,6 +65,12 @@ public:
 
 	Eigen::Matrix<unsigned char, Eigen::Dynamic, Eigen::Dynamic> M; // used in low-mem mode
 	Eigen::MatrixXd G; // used when not in low-mem node
+
+	std::vector< int > chromosome;
+	std::vector< std::string > al_0, al_1, rsid;
+	std::vector< uint32_t > position;
+	// chr~pos~a0~a1
+	std::vector< std::string > SNPKEY;
 
 	std::vector<std::map<int, bool>> missing_genos;
 	Eigen::VectorXd compressed_dosage_means;
@@ -323,22 +336,23 @@ public:
 		compressed_dosage_means /= (double) NN;
 
 		// Column standard deviation
-		double val;
+		double val, sigma;
 		Eigen::VectorXd compressed_dosage_sds(PP);
 		for (Index jj = 0; jj < PP; jj++){
-			compressed_dosage_sds[jj] = 0;
+			sigma = 0;
 			for (Index ii = 0; ii < NN; ii++){
 				val = DecompressDosage(M(ii, jj)) - compressed_dosage_means[jj];
-				compressed_dosage_sds[jj] += val * val;
+				sigma += val * val;
 			}
+			compressed_dosage_sds[jj] = sigma;
 		}
+
 		compressed_dosage_sds /= ((double) NN - 1.0);
 		compressed_dosage_sds = compressed_dosage_sds.array().sqrt().matrix();
 
-		double sigma;
 		for (Index jj = 0; jj < PP; jj++){
 			sigma = compressed_dosage_sds[jj];
-			if (sigma > 1e-12){
+			if (sigma > 1e-9){
 				compressed_dosage_inv_sds[jj] = 1 / sigma;
 			} else {
 				compressed_dosage_inv_sds[jj] = 0.0;
@@ -434,5 +448,7 @@ public:
 		return (compressed_dosage + 0.5)*intervalWidth;
 	}
 };
+
+
 
 #endif

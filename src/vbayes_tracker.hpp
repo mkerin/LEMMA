@@ -70,7 +70,9 @@ public:
                                   const Hyps i_hyps,
                                   const double c_logw,
                                   const double c_alpha_diff,
-                                  const std::chrono::duration<double> elapsed){
+                                  const std::chrono::duration<double> elapsed,
+                                  const std::chrono::duration<double> alpha_time,
+                                  const std::chrono::duration<double> logw_time){
 		outf_iter << i_hyps.sigma << "\t";
 		outf_iter << i_hyps.sigma_b << "\t";
 		outf_iter << i_hyps.sigma_g << "\t";
@@ -79,7 +81,9 @@ public:
 		outf_iter << cnt << "\t";
 		outf_iter << c_logw << "\t";
 		outf_iter << c_alpha_diff << "\t";
-		outf_iter << elapsed.count() << std::endl;
+		outf_iter << elapsed.count() << "\t";
+		outf_iter << alpha_time.count() << "\t";
+		outf_iter << logw_time.count() << std::endl;
 	}
 
 	void push_interim_output(int ii, bool main_loop){
@@ -119,7 +123,8 @@ public:
 		ofile_iter       = fstream_init(outf_iter, dir, "_iter_updates", false);
 		outf_weights << "weights logw log_prior count time" << std::endl;
 		outf_iter    << "sigma\tsigma_b\tsigma_g\tlambda_b\tlambda_g\t";
-		outf_iter    << "count\telbo\talpha_diff\tseconds" << std::endl;
+		outf_iter    << "count\telbo\talpha_diff\tseconds\tupdate_step\t";
+		outf_iter    << "logw_step" << std::endl;
 
 		// Precision
 		outf_iter       << std::setprecision(4) << std::fixed;

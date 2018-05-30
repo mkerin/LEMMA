@@ -48,7 +48,7 @@ class Data
 	public :
 	parameters params;
 
-	std::vector< std::string > chromosome, rsid, SNPID;
+	std::vector< std::string > chromosome, rsid;
 	std::vector< uint32_t > position;
 	std::vector< std::vector< std::string > > alleles;
 	
@@ -196,7 +196,7 @@ class Data
 
 		// Read starting point for VB approximation if provided
 		if(params.mode_vb && params.vb_init_file != "NULL"){
-			read_alpha_mu();
+			// read_alpha_mu();
 		}
 	}
 
@@ -236,7 +236,7 @@ class Data
 		std::map<int, bool> missing_genos;
 
 		double d1, theta, x, dosage, check, info_j, f1, f2, chunk_missingness;
-		double missing_calls = 0.0;
+		double dosage_mean, dosage_sigma, missing_calls = 0.0;
 		int n_var_incomplete = 0;
 
 		// Wipe variant context from last chunk
@@ -251,7 +251,9 @@ class Data
 		G.resize(n_samples, params.chunk_size);
 		// Eigen::VectorXd dosage_j(n_samples);
 
-		std::size_t valid_count, jj = 0;
+		long int n_constant_variance = 0;
+		double valid_count;
+		std::size_t jj = 0;
 		while ( jj < params.chunk_size && bgen_pass ) {
 			bgen_pass = bgenView->read_variant( &SNPID, &rsid_j, &chr_j, &pos_j, &alleles_j );
 			n_var_parsed++;
@@ -263,8 +265,8 @@ class Data
 
 			// maf + info filters; computed on valid sample_ids & variants whose alleles
 			// sum to 1
-			d1 = f2 = 0.0;
-			valid_count = 0;
+			std::map< std::size_t, bool > invalid_count;
+			d1 = f2 = valid_count = 0.0;
 			for( std::size_t ii = 0; ii < probs.size(); ++ii ) {
 				if (incomplete_cases.count(ii) == 0) {
 					f1 = dosage = check = 0.0;
@@ -275,9 +277,11 @@ class Data
 						check += x;
 					}
 					if(check > 0.9999 && check < 1.0001){
-						d1 += dosage;
+						d1 += dosage;   // dosage mean
 						f2 += (f1 - dosage * dosage);
 						valid_count++;
+					} else {
+						invalid_count[ii] = 1;
 					}
 				}
 			}
@@ -293,6 +297,31 @@ class Data
 				continue;
 			}
 
+			// check non-zero variance
+			double mu = d1 / valid_count;
+			if(!params.keep_constant_variants){
+				double val, sigma = 0;
+				for(std::size_t ii = 0; ii < probs.size(); ++ii){
+					if ((incomplete_cases.count(ii) == 0) && (invalid_count.count(ii) == 0)) {
+						val = 0.0;
+						for( std::size_t kk = 0; kk < probs[ii].size(); ++kk ) {
+							val += x * probs[ii][kk];
+						}
+						val -= mu;
+						sigma += val * val;
+					}
+				}
+				sigma = std::sqrt(sigma/(valid_count - 1.0));
+				std::cout << "d1: " << d1 << std::endl;
+				std::cout << "valid_count: " << valid_count << std::endl;
+				std::cout << "mean: " << mu << std::endl;
+				std::cout << "sigma: " << sigma << std::endl << std::endl;
+				if(sigma < 1e-9){
+					n_constant_variance++;
+					continue;
+				}
+			}
+
 			// filters passed; write contextual info
 			maf.push_back(theta);
 			info.push_back(info_j);
@@ -300,85 +329,53 @@ class Data
 			chromosome.push_back(chr_j);
 			position.push_back(pos_j);
 			alleles.push_back(alleles_j);
+			G.al_0.push_back(alleles_j[0]);
+			G.al_1.push_back(alleles_j[1]);
+			G.rsid.push_back(rsid_j);
+			G.chromosome.push_back(std::stoi(chr_j));
+			G.position.push_back(pos_j);
+			std::string key_j = chr_j + "~" + std::to_string(pos_j) + "~" + alleles_j[0] + "~" + alleles_j[1];
+			G.SNPKEY.push_back(key_j);
 			
 			// filters passed; write dosage to G
 			// Note that we only write dosage for valid sample ids
 			std::size_t ii_obs = 0;
-			double mu = 0.0;
-			double count = 0;
 			missing_genos.clear();
 			for( std::size_t ii = 0; ii < probs.size(); ++ii ) {
 				if (incomplete_cases.count(ii) == 0) {
 					dosage = 0.0;
-					check = 0.0;
 
 					for( std::size_t kk = 0; kk < probs[ii].size(); ++kk ) {
 						x = probs[ii][kk];
 						dosage += x * kk;
-						check += x;
 					}
 
 					if(params.geno_check){
-						if(check > 0.9999 && check < 1.0001){
-							// G(ii_obs,jj) = dosage;
-							// dosage_j[ii_obs] = dosage;
+						if(invalid_count.count(ii) == 0){
 							G.assign_index(ii_obs, jj, dosage);
-							mu += dosage;
-							count += 1;
-						} else if(check > 0){
-							std::cout << "Unexpected sum of allele probs: ";
-		 					std::cout << check << " at sample=" << ii;
-		 					std::cout << ", variant=" << jj << std::endl;
-							throw std::logic_error("Allele probs expected to sum to 1 or 0");
 						} else {
 							missing_genos[ii_obs] = 1;
 							G.assign_index(ii_obs, jj, std::nan(""));
 						}
 					} else {
-						// G(ii_obs,jj) = dosage;
-						// dosage_j[ii_obs] = dosage;
 						G.assign_index(ii_obs, jj, dosage);
-						mu += dosage;
-						count += 1;
 					}
 
 					ii_obs++; // loop should end at ii_obs == n_samples
 				}
 			}
+			// G.compressed_dosage_sds[jj] = sigma;
+			// G.compressed_dosage_means[jj] = d1;
 
 			if (ii_obs < n_samples) {
 				throw std::logic_error("ERROR: Fewer non-missing genotypes than expected");
 			}
 
-			// Set missing entries to mean
-			// Could mean center here, but still want to write to VCF.
+			// Log number of missing entries
 			if(missing_genos.size() > 0){
 				n_var_incomplete += 1;
 				missing_calls += (double) missing_genos.size();
 			}
-
-			// mu = mu / count;
-			// double val, sigma = 0.0;
-			// for (std::size_t ii = 0; ii < n_samples; ii++) {
-			// 	if (missing_genos.count(ii) == 0) {
-			// 		dosage_j[ii] -= mu;
-			// 		val = dosage_j[ii];
-			// 		sigma += val * val;
-			// 	} else {
-			// 		dosage_j[ii] = 0.0;
-			// 	}
-			// }
-			// 
-			// sigma = sqrt(sigma/(count - 1));
-			// if (sigma > 1e-12) {  
-			// 	for (std::size_t ii = 0; ii < n_samples; ii++) {
-			// 		dosage_j[ii] /= sigma;
-			// 	}
-			// }
-
-			// for (std::size_t ii = 0; ii < n_samples; ii++){
-			// 	G(ii, jj) = dosage_j[ii];
-			// }
 			jj++;
 		}
 
@@ -396,6 +393,11 @@ class Data
 			std::cout << "Chunk missingness " << chunk_missingness << "(";
  			std::cout << n_var_incomplete << "/" << n_var;
 			std::cout << " variants incomplete)" << std::endl;
+		}
+
+		if(n_constant_variance > 0){
+			std::cout << n_constant_variance << " variants removed due to ";
+			std::cout << "constant variance" << std::endl;
 		}
 
 		if(jj == 0){
@@ -553,6 +555,107 @@ class Data
 					}
 
 					M(i, k) = tmp_d;
+				}
+				i++; // loop should end at i == n_grid
+			}
+			if (i < n_grid) {
+				throw std::runtime_error("ERROR: could not convert txt file (too few lines).");
+			}
+		} catch (const std::exception &exc) {
+			throw;
+		}
+	}
+
+	void read_vb_init_file(std::string filename,
+                           Eigen::MatrixXd& M,
+                           std::vector< std::string >& col_names,
+                        //    std::vector< int >& init_chr,
+                        //    std::vector< uint32_t >& init_pos,
+                        //    std::vector< std::string >& init_a0,
+                           std::vector< std::string >& init_key){
+		// Used in mode_vb only.
+		// Need custom function to deal with variable input. Sometimes
+		// we have string columns with rsid / a_0 etc
+		// init_chr, init_pos, init_a0, init_a1;
+
+		boost_io::filtering_istream fg;
+		fg.push(boost_io::file_source(filename.c_str()));
+		if (!fg) {
+			std::cout << "ERROR: " << filename << " not opened." << std::endl;
+			std::exit(EXIT_FAILURE);
+		}
+
+		// Read file twice to acertain number of lines
+		std::string line;
+		int n_grid = 0;
+		getline(fg, line);
+		while (getline(fg, line)) {
+			n_grid++;
+		}
+		fg.reset();
+		fg.push(boost_io::file_source(filename.c_str()));
+
+		// Reading column names
+		if (!getline(fg, line)) {
+			std::cout << "ERROR: " << filename << " not read." << std::endl;
+			std::exit(EXIT_FAILURE);
+		}
+		std::stringstream ss;
+		std::string s;
+		int n_cols = 0;
+		ss.clear();
+		ss.str(line);
+		while (ss >> s) {
+			++n_cols;
+			col_names.push_back(s);
+		}
+		std::cout << " Detected " << n_cols << " column(s) from " << filename << std::endl;
+
+		// Write remainder of file to Eigen matrix M
+		M.resize(n_grid, n_cols);
+		int i = 0;
+		double tmp_d;
+		std::string key_i;
+		try {
+			while (getline(fg, line)) {
+				if (i >= n_grid) {
+					throw std::runtime_error("ERROR: could not convert txt file (too many lines).");
+				}
+				ss.clear();
+				ss.str(line);
+				if(n_cols == 2){
+					for (int k = 0; k < n_cols; k++) {
+						std::string s;
+						ss >> s;
+						try{
+							tmp_d = stod(s);
+						} catch (const std::invalid_argument &exc){
+							std::cout << s << " on line " << i << std::endl;
+							throw;
+						}
+						M(i, k) = tmp_d;
+					}
+				} else if(n_cols == 7){
+					key_i = "";
+					for (int k = 0; k < n_cols; k++) {
+						std::string s;
+						ss >> s;
+						if(k == 0){
+							key_i += s + "~";
+						} else if (k == 1){
+							key_i += s + "~";
+							// init_pos.push_back(std::stoull(s));
+						} else if (k == 3){
+							key_i += s + "~";
+							// init_a0.push_back(s);
+						} else if (k == 4){
+							key_i += s;
+							init_key.push_back(key_i);
+							// init_a1.push_back(s);
+						} else if(k >= 5){
+							M(i, k) = stod(s);
+						}
+					}
 				}
 				i++; // loop should end at i == n_grid
 			}
@@ -841,19 +944,51 @@ class Data
 	void read_alpha_mu(){
 		// For use in vbayes object
 		Eigen::MatrixXd vb_init_mat;
+		// std::vector< int > init_chr;
+		// std::vector< uint32_t > init_pos;
+		// chr~pos~a0~a1
+		std::vector< std::string > init_key;
+		// std::vector< std::string > init_a1;
 
 		std::vector< std::string > vb_init_colnames;
-		std::vector< std::string > cols_check = {"alpha", "mu"};
+		std::vector< std::string > cols_check1 = {"alpha", "mu"};
+		std::vector<std::string> cols_check2 = {"chr", "pos", "rsid", "a0", "a1", "beta", "gamma"};
 
 		if ( params.vb_init_file != "NULL" ) {
 			std::cout << "Reading initialisation for alpha from file" << std::endl;
-			read_grid_file( params.vb_init_file, vb_init_mat, vb_init_colnames );
+			read_vb_init_file(params.vb_init_file, vb_init_mat, vb_init_colnames,
+                              init_key);
 
-			assert(vb_init_mat.cols() == 2);
-			assert(vb_init_colnames == cols_check);
+			assert(vb_init_mat.cols() == 2 || vb_init_mat.cols() == 7);
+			assert(vb_init_colnames == cols_check1 || vb_init_colnames == cols_check2);
+			if(vb_init_mat.cols() == 2){
+				alpha_init = Eigen::Map<Eigen::VectorXd>(vb_init_mat.col(0).data(), vb_init_mat.rows());
+				mu_init = Eigen::Map<Eigen::VectorXd>(vb_init_mat.col(1).data(), vb_init_mat.rows());
+			} else {
+				std::cout << "--vb_init file with contextual information detected" << std::endl;
+				std::cout << "Warning: This will be O(PL) where L = " << vb_init_mat.rows();
+				std::cout << " is the number of lines in file given to --vb_init." << std::endl;
+				alpha_init = Eigen::VectorXd::Zero(2*n_var);
+				mu_init    = Eigen::VectorXd::Zero(2*n_var);
 
-			alpha_init = Eigen::Map<Eigen::VectorXd>(vb_init_mat.col(0).data(), vb_init_mat.rows());
-			mu_init = Eigen::Map<Eigen::VectorXd>(vb_init_mat.col(1).data(), vb_init_mat.rows());
+				std::vector<std::string>::iterator it;
+				std::uint32_t index_kk;
+				for(int kk = 0; kk < vb_init_mat.rows(); kk++){
+					it = std::find(G.SNPKEY.begin(), G.SNPKEY.end(), init_key[kk]);
+					if (it == G.SNPKEY.end()){
+						std::cout << "WARNING: Can't locate variant with key: ";
+						std::cout << init_key[kk] << std::endl;
+					} else {
+						index_kk = it - G.SNPKEY.begin();
+
+						alpha_init[index_kk]         = 1.0;
+						alpha_init[index_kk + n_var] = 1.0;
+						mu_init[index_kk]            = vb_init_mat(kk, 0);
+						mu_init[index_kk + n_var]    = vb_init_mat(kk, 1);
+					}
+				}
+			}
+
 		} else {
 			throw std::invalid_argument( "Tried to read NULL --vb_init file." );
 		}

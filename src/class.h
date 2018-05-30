@@ -19,6 +19,7 @@ class parameters {
 		bool geno_check, mode_joint_model, bgen_wildcard, mode_lm2, mode_vb;
 		bool select_rsid, interaction_analysis, verbose, low_mem;
 		bool elbo_tol_set_by_user, alpha_tol_set_by_user, mode_empirical_bayes;
+		bool keep_constant_variants;
 		double min_maf, min_info, elbo_tol, alpha_tol;
 		std::vector < std::string > incl_sample_ids, gconf;
 	
@@ -59,6 +60,7 @@ class parameters {
 		verbose = false;
 		alpha_tol_set_by_user = false;
 		elbo_tol_set_by_user = false;
+		keep_constant_variants = false;
 	}
 
 	~parameters() {

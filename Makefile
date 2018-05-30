@@ -97,6 +97,7 @@ testIO: $(IOfiles)
 # Small regression analysis; subset to complete cases, normalising, 1dof interaction model
 data/io_test/t2_lm/attempt.out: data/io_test/example.v11.bgen ./bin/bgen_prog
 	./bin/bgen_prog --lm \
+	    --keep_constant_variants \
 	    --bgen $< \
 	    --pheno $(dir $@)t2.pheno \
 	    --covar $(dir $@)t2.covar \
@@ -106,6 +107,7 @@ data/io_test/t2_lm/attempt.out: data/io_test/example.v11.bgen ./bin/bgen_prog
 # Same regression analysis as t2_lm but with chunk exact right size
 data/io_test/t2_lm/attemptB.out: data/io_test/example.v11.bgen ./bin/bgen_prog
 	./bin/bgen_prog --lm \
+	    --keep_constant_variants \
 	    --bgen $< \
 	    --pheno $(dir $@)t2.pheno \
 	    --covar $(dir $@)t2.covar \
@@ -116,6 +118,7 @@ data/io_test/t2_lm/attemptB.out: data/io_test/example.v11.bgen ./bin/bgen_prog
 # Same regression analysis as t2_lm but split into two chunks
 data/io_test/t2_lm/attemptC.out: data/io_test/example.v11.bgen ./bin/bgen_prog
 	./bin/bgen_prog --lm \
+	    --keep_constant_variants \
 	    --bgen $< \
 	    --pheno $(dir $@)t2.pheno \
 	    --covar $(dir $@)t2.covar \
@@ -126,6 +129,7 @@ data/io_test/t2_lm/attemptC.out: data/io_test/example.v11.bgen ./bin/bgen_prog
 # Same regression analysis as t2_lm but explicitly naming interaction column
 data/io_test/t2_lm/attemptD.out: data/io_test/example.v11.bgen ./bin/bgen_prog
 	./bin/bgen_prog --lm \
+	    --keep_constant_variants \
 	    --bgen $< \
 	    --pheno $(dir $@)t2.pheno \
 	    --covar $(dir $@)t2.covar \
@@ -135,6 +139,7 @@ data/io_test/t2_lm/attemptD.out: data/io_test/example.v11.bgen ./bin/bgen_prog
 
 data/io_test/t4_lm_2dof/attempt.out: data/io_test/example.v11.bgen ./bin/bgen_prog
 	./bin/bgen_prog --lm \
+	    --keep_constant_variants \
 	    --bgen $< \
 	    --pheno $(dir $@)t4.pheno \
 	    --covar $(dir $@)t4.covar \
@@ -153,6 +158,7 @@ data/io_test/t4_lm_2dof/attempt.out: data/io_test/example.v11.bgen ./bin/bgen_pr
 # linear regression with full gene-env-covariates model
 data/io_test/t6_lm2/attempt.out: data/io_test/example.v11.bgen ./bin/bgen_prog
 	./bin/bgen_prog --full_lm \
+	    --keep_constant_variants \
 	    --bgen $< \
 	    --pheno $(dir $@)t6.pheno \
 	    --covar $(dir $@)t6.covar \
@@ -169,6 +175,7 @@ t7_dir     := data/io_test/t7_varbvs_constrained
 t7_context := $(t7_dir)/hyperpriors_gxage.txt $(t7_dir)/answer.rds
 data/io_test/t7_varbvs_constrained/attempt.out: data/io_test/n50_p100.bgen ./bin/bgen_prog $(t7_context)
 	./bin/bgen_prog --mode_vb --verbose \
+	    --keep_constant_variants \
 	    --bgen $< \
 	    --interaction x \
 	    --covar $(dir $@)age.txt \
@@ -200,6 +207,7 @@ t8_dir     := data/io_test/t8_varbvs
 t8_context := $(t8_dir)/hyperpriors_gxage.txt $(t8_dir)/answer.rds
 data/io_test/t8_varbvs/attempt.out: data/io_test/n50_p100.bgen ./bin/bgen_prog $(t8_context)
 	./bin/bgen_prog --mode_vb --verbose \
+	    --keep_constant_variants \
 	    --bgen $< \
 	    --interaction x \
 	    --covar $(dir $@)age.txt \
@@ -213,6 +221,7 @@ data/io_test/t8_varbvs/attempt.out: data/io_test/n50_p100.bgen ./bin/bgen_prog $
 
 data/io_test/t8_varbvs/attempt_low_mem.out: data/io_test/n50_p100.bgen ./bin/bgen_prog $(t8_context)
 	./bin/bgen_prog --mode_vb --verbose --low_mem \
+	    --keep_constant_variants \
 	    --bgen $< \
 	    --interaction x \
 	    --covar $(dir $@)age.txt \
@@ -265,6 +274,7 @@ t10_dir     := data/io_test/t10_varbvs_without_init
 t10_context := $(t10_dir)/hyperpriors_gxage.txt
 $(t10_dir)/attempt.out: $(t10_dir)/n50_p100.bgen ./bin/bgen_prog $(t10_context)
 	./bin/bgen_prog --mode_vb --verbose \
+	    --keep_constant_variants \
 	    --bgen $< \
 	    --interaction x \
 	    --covar $(dir $@)age.txt \
@@ -294,6 +304,7 @@ t11_dir     := data/io_test/t11_varbvs_multithread
 t11_context := $(t11_dir)/hyperpriors_gxage.txt $(t11_dir)/answer.rds
 $(t11_dir)/attempt.out: $(t11_dir)/n50_p100.bgen ./bin/bgen_prog $(t11_context)
 	./bin/bgen_prog --mode_vb --verbose \
+	    --keep_constant_variants \
 	    --bgen $< \
 	    --interaction x \
 	    --covar $(dir $@)age.txt \
@@ -319,6 +330,34 @@ $(t11_dir)/answer.rds: R/vbayes_x_tests/run_VBayesR.R $(t11_dir)/hyperpriors_gxa
 	  --hyps_grid $(dir $@)hyperpriors_gxage.txt \
 	  --hyps_probs $(dir $@)hyperpriors_gxage_probs.txt \
 	  --vb_init $(dir $@)answer_init.txt
+
+# TEST 11
+# custom start;
+data/io_test/t12_varbvs/answer.out: data/io_test/n50_p100.bgen ./bin/bgen_prog
+	./bin/bgen_prog --mode_vb --verbose --low_mem \
+	    --keep_constant_variants \
+	    --bgen $< \
+	    --interaction x \
+	    --covar $(dir $@)age.txt \
+	    --pheno $(dir $@)pheno.txt \
+	    --hyps_grid $(dir $@)hyperpriors_gxage.txt \
+	    --hyps_probs $(dir $@)hyperpriors_gxage_probs.txt \
+	    --vb_init $(dir $@)vb_init.txt \
+	    --out $@
+
+data/io_test/t12_varbvs/attempt_scrambled.out: data/io_test/n50_p100.bgen ./bin/bgen_prog data/io_test/t12_varbvs/attempt1.out
+	./bin/bgen_prog --mode_vb --verbose --low_mem \
+	    --keep_constant_variants \
+	    --bgen $< \
+	    --interaction x \
+	    --covar $(dir $@)age.txt \
+	    --pheno $(dir $@)pheno.txt \
+	    --hyps_grid $(dir $@)hyperpriors_gxage.txt \
+	    --hyps_probs $(dir $@)hyperpriors_gxage_probs.txt \
+	    --vb_init $(dir $@)vb_init_scrambled.txt \
+	    --out $@
+	diff $@ data/io_test/t12_varbvs/answer.out
+
 
 
 # Clean dir
