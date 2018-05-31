@@ -37,7 +37,7 @@ struct FreeParameters {
 class VBayesX2 {
 public:
 	// Constants
-	const int iter_max = 200;
+	const int iter_max = 500;
 	const double PI = 3.1415926535897;
 	const double eps = std::numeric_limits<double>::min();
 	const double alpha_tol = 1e-4;
