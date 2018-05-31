@@ -1,7 +1,10 @@
+#ifndef VBAYES_TRACKER_HPP
+#define VBAYES_TRACKER_HPP
 
 #include <chrono>      // start/end time info
 #include <ctime>       // start/end time info
 #include <iostream>
+#include <iomanip>
 #include <stdexcept>
 #include <limits>
 #include <vector>
@@ -10,6 +13,9 @@
 #include <boost/iostreams/device/file.hpp>
 #include <boost/iostreams/filter/gzip.hpp>
 #include <boost/filesystem.hpp>
+
+
+namespace boost_io = boost::iostreams;
 
 
 struct Hyps{
@@ -194,3 +200,5 @@ public:
 		hyps_list[ii]         = other_tracker.hyps_list[ii];
 	}
 };
+
+#endif
