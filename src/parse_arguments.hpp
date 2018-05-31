@@ -74,7 +74,8 @@ void parse_arguments(parameters &p, int argc, char *argv[]) {
 		"--verbose",
 		"--threads",
 		"--low_mem",
-		"--keep_constant_variants"
+		"--keep_constant_variants",
+		"--force_round1",
 	};
 
 	std::set<std::string>::iterator set_it;
@@ -147,6 +148,11 @@ void parse_arguments(parameters &p, int argc, char *argv[]) {
 
 			if(strcmp(in_str, "--keep_constant_variants") == 0) {
 				p.keep_constant_variants = true;
+				i += 0;
+			}
+
+			if(strcmp(in_str, "--force_round1") == 0) {
+				p.user_requests_round1 = true;
 				i += 0;
 			}
 

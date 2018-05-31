@@ -37,7 +37,7 @@ struct FreeParameters {
 class VBayesX2 {
 public:
 	// Constants
-	const int iter_max = 200;
+	const int iter_max = 500;
 	const double PI = 3.1415926535897;
 	const double eps = std::numeric_limits<double>::min();
 	const double alpha_tol = 1e-4;
@@ -59,6 +59,7 @@ public:
 	std::uint32_t n_var;
 	std::uint32_t n_var2;
 	bool          random_params_init;
+	bool          run_round1;
 
 	// 
 	parameters p;
@@ -146,9 +147,15 @@ public:
 			Eigen::VectorXd rr = alpha_init.cwiseProduct(mu_init);
 			Hr_init << (X * rr.segment(0, n_var) + (X * rr.segment(n_var, n_var)).cwiseProduct(aa));
 			Xr_init << X * rr.segment(0, n_var);
+
 			random_params_init = false;
+			run_round1         = false;
+			if(p.user_requests_round1){
+				run_round1     = true;
+			}
 		} else {
 			random_params_init = true;
+			run_round1         = true;
 		}
 
 		// Assign data - hyperparameters
@@ -196,7 +203,7 @@ public:
 		}
 
 		// Round 1; looking for best start point
-		if(random_params_init){
+		if(run_round1){
 			int r1_n_grid = r1_hyps_grid.rows();
 
 			// Round 1; Divide grid of hyperparameters into chunks for multithreading
@@ -216,10 +223,10 @@ public:
 			std::thread t1[p.n_thread];
 			for (int ch = 1; ch < p.n_thread; ch++){
 				t1[ch] = std::thread( [this, r1_n_grid, chunks, ch, &trackers] {
-					runOuterLoop(r1_hyps_grid, r1_n_grid, chunks[ch], false, trackers[ch]); 
+					runOuterLoop(1, r1_hyps_grid, r1_n_grid, chunks[ch], random_params_init, trackers[ch]); 
 				} );
 			}
-			runOuterLoop(r1_hyps_grid, r1_n_grid, chunks[0], false, trackers[0]);
+			runOuterLoop(1, r1_hyps_grid, r1_n_grid, chunks[0], random_params_init, trackers[0]);
 
 			for (int ch = 1; ch < p.n_thread; ch++){
 				t1[ch].join();
@@ -282,10 +289,10 @@ public:
 		std::thread t2[p.n_thread];
 		for (int ch = 1; ch < p.n_thread; ch++){
 			t2[ch] = std::thread( [this, chunks, ch, &trackers] {
-				runOuterLoop(hyps_grid, n_grid, chunks[ch], true, trackers[ch]); 
+				runOuterLoop(2, hyps_grid, n_grid, chunks[ch], false, trackers[ch]); 
 			} );
 		}
-		runOuterLoop(hyps_grid, n_grid, chunks[0], true, trackers[0]);
+		runOuterLoop(2, hyps_grid, n_grid, chunks[0], false, trackers[0]);
 		for (int ch = 1; ch < p.n_thread; ch++){
 			t2[ch].join();
 		}
@@ -295,21 +302,18 @@ public:
 		std::cout << "Variational inference finished" << std::endl;
 	}
 
-	void runOuterLoop(const Eigen::Ref<const Eigen::MatrixXd>& outer_hyps_grid,
+	void runOuterLoop(const int round_index,
+                      const Eigen::Ref<const Eigen::MatrixXd>& outer_hyps_grid,
                       const int outer_n_grid,
                       std::vector<int> grid_index_list,
-                      const bool main_loop,
+                      const bool random_init,
                       VbTracker& tracker){
 		Hyps i_hyps;
 		std::uint32_t L;
 
 		for (auto ii : grid_index_list){
 			if((ii + 1) % print_interval == 0){
-				if(!main_loop){
-					std::cout << "\rRound 1: grid point " << ii+1 << "/" << outer_n_grid;
-				} else {
-					std::cout << "\rRound 2: grid point " << ii+1 << "/" << outer_n_grid;
-				}
+				std::cout << "\rRound " << round_index << ": grid point " << ii+1 << "/" << outer_n_grid;
 				print_time_check();
 			}
 
@@ -329,20 +333,27 @@ public:
 			}
 
 			// Run outer loop - don't update trackers
-			runInnerLoop(ii, main_loop, L, i_hyps, tracker);
+			runInnerLoop(ii, random_init, round_index, L, i_hyps, tracker);
 		}
 	}
 
-	void runInnerLoop(const int ii, bool main_loop, std::uint32_t L,
-                      Hyps i_hyps, VbTracker& tracker){
+	void runInnerLoop(const int ii,
+                      const bool random_init,
+                      const int round_index,
+                      const std::uint32_t L,
+                      Hyps i_hyps, 
+                      VbTracker& tracker){
 		// minimise KL Divergence and assign elbo estimate
 		// Assumes alpha_init, mu_init and Hr_init already exist
 		FreeParameters i_par;
 		auto inner_start = std::chrono::system_clock::now();
 		std::chrono::duration<double> elapsed;
+		long int hty_counter;
+		std::chrono::system_clock::time_point calc_logw_start, calc_logw_end;
+		std::chrono::duration<double> calc_logw_time;
 
 		// Assign initial values
-		if (!main_loop) {
+		if (random_init) {
 			random_alpha_mu_init(L, i_par);
 		} else {
 			i_par.alpha = alpha_init;
@@ -379,7 +390,7 @@ public:
 		double i_logw = calc_logw(L, i_hyps, i_par);
 		std::vector< double > logw_updates, alpha_diff_updates;
 		logw_updates.push_back(i_logw);
-		tracker.interim_output_init(ii, main_loop);
+		tracker.interim_output_init(ii, round_index);
 		while(!converged  && count < iter_max){
 			alpha_prev = i_par.alpha;
 			logw_prev = i_logw;
@@ -395,22 +406,30 @@ public:
 
 			// Update i_mu, i_alpha, i_Hr
 			auto updateAlpha_start = std::chrono::system_clock::now();
-			updateAlphaMu(iter, L, i_hyps, i_par);
-			if(main_loop && p.mode_empirical_bayes){
-				// auto update_end = std::chrono::system_clock::now();
-				// elapsed = update_end - inner_start;
-				// i_logw     = calc_logw(L, i_hyps, i_par);
-				// tracker.push_interim_iter_update(count, i_hyps, i_logw, alpha_diff, elapsed);
-				updateHyps(i_hyps, i_par, L);
-			}
+			updateAlphaMu(iter, L, i_hyps, i_par, hty_counter);
 			auto updateAlpha_end = std::chrono::system_clock::now();
 			std::chrono::duration<double> updateAlphaMu_time = updateAlpha_end - updateAlpha_start;
 
+			// Update hyps
+			if(round_index > 1 && p.mode_empirical_bayes){
+				auto update_end = std::chrono::system_clock::now();
+				elapsed = update_end - inner_start;
+
+				calc_logw_start = std::chrono::system_clock::now();
+				i_logw     = calc_logw(L, i_hyps, i_par);
+				calc_logw_end = std::chrono::system_clock::now();
+				calc_logw_time = calc_logw_end - calc_logw_start;
+
+				tracker.push_interim_iter_update(count, i_hyps, i_logw, alpha_diff,
+                                                 elapsed, updateAlphaMu_time, calc_logw_time, hty_counter);
+				updateHyps(i_hyps, i_par, L);
+			}
+
 			// New elbo
-			auto calc_logw_start = std::chrono::system_clock::now();
+			calc_logw_start = std::chrono::system_clock::now();
 			i_logw     = calc_logw(L, i_hyps, i_par);
-			auto calc_logw_end = std::chrono::system_clock::now();
-			std::chrono::duration<double> calc_logw_time = calc_logw_end - calc_logw_start;
+			calc_logw_end = std::chrono::system_clock::now();
+			calc_logw_time = calc_logw_end - calc_logw_start;
 
 			// Diagnose convergence
 			count++;
@@ -432,7 +451,7 @@ public:
 					converged = true;
 				}
 			} else if(p.mode_empirical_bayes && logw_diff < 0) {
-				//  Monotnic trajectory no longer required under EB?
+				//  Monotonic trajectory no longer required under EB?
 				converged = true;
 			} else {
 				if(alpha_diff < alpha_tol && logw_diff < logw_tol){
@@ -444,7 +463,7 @@ public:
 			auto update_end = std::chrono::system_clock::now();
 			elapsed = update_end - inner_start;
 			tracker.push_interim_iter_update(count, i_hyps, i_logw, alpha_diff,
-                                             elapsed, updateAlphaMu_time, calc_logw_time);
+                                             elapsed, updateAlphaMu_time, calc_logw_time, hty_counter);
 		}
 
 		if(!std::isfinite(i_logw)){
@@ -466,10 +485,10 @@ public:
 			tracker.logw_updates_list[ii] = logw_updates;
 			tracker.alpha_diff_list[ii] = alpha_diff_updates;
 		}
-		tracker.push_interim_output(ii, main_loop);
+		tracker.push_interim_output(ii);
 	}
 
-	void updateHyps(Hyps& i_hyps, FreeParameters& i_par, std::uint32_t L){
+	void updateHyps(Hyps& i_hyps, const FreeParameters& i_par, const std::uint32_t L){
 		i_hyps.lam_b   = 0.0;
 		i_hyps.lam_g   = 0.0;
 		i_hyps.sigma_b = 0.0;
@@ -505,32 +524,40 @@ public:
 		}
 	}
 
-	void updateAlphaMu(std::vector< std::uint32_t > iter, std::uint32_t L,
-                       Hyps i_hyps, FreeParameters& i_par){
+	void updateAlphaMu(const std::vector< std::uint32_t >& iter,
+                       const std::uint32_t L,
+                       const Hyps& i_hyps,
+                       FreeParameters& i_par,
+                       long int& hty_updates){
 		std::uint32_t kk;
-		double rr_k, ff_k;
+		double rr_k, ff_k, rr_k_diff;
 		Eigen::VectorXd X_kk(n_samples);
-		for(std::uint32_t jj = 0; jj < L; jj++){
-			kk = iter[jj];
-			assert(kk < L);
 
+		double bbb_b, bbb_g;
+		bbb_b = std::log(i_hyps.lam_b / (1.0 - i_hyps.lam_b) + eps) - std::log(i_hyps.sigma_b * i_hyps.sigma) / 2.0;
+		bbb_g = std::log(i_hyps.lam_g / (1.0 - i_hyps.lam_g) + eps) - std::log(i_hyps.sigma_g * i_hyps.sigma) / 2.0;
+		hty_updates = 0;
+		for(std::uint32_t kk : iter ){
 			rr_k = i_par.alpha(kk) * i_par.mu(kk);
 			X_kk = X.col(kk);
+
 			// Update mu (eq 9); faster to take schur product with aa inside genotype_matrix
 			i_par.mu(kk) = i_par.s_sq[kk] * (Hty(kk) - i_par.Hr.dot(X_kk) + dHtH(kk) * rr_k) / i_hyps.sigma;
 
 			// Update alpha (eq 10)  TODO: check syntax / i_  / sigmoid here!
 			if (kk < n_var){
-				ff_k = std::log(i_hyps.lam_b / (1.0 - i_hyps.lam_b) + eps) + std::log(i_par.s_sq[kk] / i_hyps.sigma_b / i_hyps.sigma + eps) / 2.0;
-				ff_k += i_par.mu(kk) * i_par.mu(kk) / i_par.s_sq[kk] / 2.0;
+				ff_k = bbb_b + (std::log(i_par.s_sq[kk]) + i_par.mu(kk) * i_par.mu(kk) / i_par.s_sq[kk]) / 2.0;
 			} else {
-				ff_k = std::log(i_hyps.lam_g / (1.0 - i_hyps.lam_g) + eps) + std::log(i_par.s_sq[kk] / i_hyps.sigma_g / i_hyps.sigma + eps) / 2.0;
-				ff_k += i_par.mu(kk) * i_par.mu(kk) / i_par.s_sq[kk] / 2.0;
+				ff_k = bbb_g + (std::log(i_par.s_sq[kk]) + i_par.mu(kk) * i_par.mu(kk) / i_par.s_sq[kk]) / 2.0;
 			}
 			i_par.alpha(kk) = sigmoid(ff_k);
 
-			// Update i_Hr; faster to take schur product with aa inside genotype_matrix
-			i_par.Hr = i_par.Hr + (i_par.alpha(kk)*i_par.mu(kk) - rr_k) * (X_kk);
+			// Update i_Hr; only if coeff is large enough to matter
+			rr_k_diff = (i_par.alpha(kk)*i_par.mu(kk) - rr_k);
+			if(std::abs(rr_k_diff) > 1e-8){
+				hty_updates++;
+				i_par.Hr += rr_k_diff * X_kk;
+			}
 		}
 	}
 
