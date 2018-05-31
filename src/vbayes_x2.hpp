@@ -175,7 +175,7 @@ public:
 		Hty       << (X.transpose_vector_multiply(Y)), (X.transpose_vector_multiply(Y.cwiseProduct(aa)));
 
 		Eigen::VectorXd dXtX(n_var), dZtZ(n_var), col_j;
-		for (std::size_t jj; jj < n_var; jj++){
+		for (std::size_t jj = 0; jj < n_var; jj++){
 			col_j = X.col(jj);
 			dXtX[jj] = col_j.dot(col_j);
 			dZtZ[jj] = col_j.cwiseProduct(a_sq).dot(col_j);
@@ -263,8 +263,11 @@ public:
 			// Write inits to file
 			std::string ofile_inits = fstream_init(outf_inits, "", "_inits");
 			std::cout << "Writing start points for alpha and mu to " << ofile_inits << std::endl;
-			outf_inits << "alpha mu" << std::endl;
+			outf_inits << "chr pos rsid a0 a1 alpha mu" << std::endl;
 			for (std::uint32_t kk = 0; kk < n_var2; kk++){
+				std::uint32_t kk1 = kk % n_var;
+				outf_inits << X.chromosome[kk1] << " " << X.position[kk1] << " " << X.rsid[kk1];
+				outf_inits << " " << X.al_0[kk1] << " " << X.al_1[kk1] << " ";
 				outf_inits << alpha_init[kk] << " " << mu_init[kk] << std::endl;
 			}
 		}

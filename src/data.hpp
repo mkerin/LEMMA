@@ -312,10 +312,10 @@ class Data
 					}
 				}
 				sigma = std::sqrt(sigma/(valid_count - 1.0));
-				std::cout << "d1: " << d1 << std::endl;
-				std::cout << "valid_count: " << valid_count << std::endl;
-				std::cout << "mean: " << mu << std::endl;
-				std::cout << "sigma: " << sigma << std::endl << std::endl;
+				// std::cout << "d1: " << d1 << std::endl;
+				// std::cout << "valid_count: " << valid_count << std::endl;
+				// std::cout << "mean: " << mu << std::endl;
+				// std::cout << "sigma: " << sigma << std::endl << std::endl;
 				if(sigma < 1e-9){
 					n_constant_variance++;
 					continue;
@@ -344,15 +344,23 @@ class Data
 			for( std::size_t ii = 0; ii < probs.size(); ++ii ) {
 				if (incomplete_cases.count(ii) == 0) {
 					dosage = 0.0;
+					check = 0.0;
 
 					for( std::size_t kk = 0; kk < probs[ii].size(); ++kk ) {
 						x = probs[ii][kk];
 						dosage += x * kk;
+						check += x;
 					}
 
 					if(params.geno_check){
-						if(invalid_count.count(ii) == 0){
+						// if(invalid_count.count(ii) == 0){
+						if(check > 0.9999 && check < 1.0001){
 							G.assign_index(ii_obs, jj, dosage);
+						} else if(check > 0){
+							std::cout << "Unexpected sum of allele probs: ";
+							std::cout << check << " at sample=" << ii;
+							std::cout << ", variant=" << jj << std::endl;
+							throw std::logic_error("Allele probs expected to sum to 1 or 0");
 						} else {
 							missing_genos[ii_obs] = 1;
 							G.assign_index(ii_obs, jj, std::nan(""));

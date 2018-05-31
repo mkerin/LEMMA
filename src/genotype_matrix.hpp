@@ -241,10 +241,14 @@ public:
 			offset = vec.sum();
 		} else {
 			jj -= PP;
-			for(Index ii = 0; ii < NN; ii++){
-				tmp += aa[ii] * vec[ii] * M(ii, jj);
-			}
-			offset = aa.dot(vec);
+			Eigen::VectorXd bb(vec.rows());
+			bb = aa.cwiseProduct(bb);
+			
+			// for(Index ii = 0; ii < NN; ii++){
+			// 	tmp += aa[ii] * vec[ii] * M(ii, jj);
+			// }
+			tmp = bb.dot(M.col(jj).cast<double>());
+			offset = bb.sum();
 		}
 
 		res = intervalWidth * tmp + offset * (intervalWidth * 0.5 - compressed_dosage_means[jj]);
