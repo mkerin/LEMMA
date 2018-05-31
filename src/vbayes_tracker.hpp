@@ -1,8 +1,10 @@
-
+#ifndef VBAYES_TRACKER_HPP
+#define VBAYES_TRACKER_HPP
 #include <chrono>      // start/end time info
 #include <ctime>       // start/end time info
 #include <iostream>
 #include <stdexcept>
+#include <string>
 #include <limits>
 #include <vector>
 #include "tools/eigen3.3/Dense"
@@ -72,7 +74,8 @@ public:
                                   const double c_alpha_diff,
                                   const std::chrono::duration<double> elapsed,
                                   const std::chrono::duration<double> alpha_time,
-                                  const std::chrono::duration<double> logw_time){
+                                  const std::chrono::duration<double> logw_time,
+                                  const long int hty_counter){
 		outf_iter << i_hyps.sigma << "\t";
 		outf_iter << i_hyps.sigma_b << "\t";
 		outf_iter << i_hyps.sigma_g << "\t";
@@ -83,10 +86,11 @@ public:
 		outf_iter << c_alpha_diff << "\t";
 		outf_iter << elapsed.count() << "\t";
 		outf_iter << alpha_time.count() << "\t";
-		outf_iter << logw_time.count() << std::endl;
+		outf_iter << logw_time.count() << "\t";
+		outf_iter << hty_counter << std::endl;
 	}
 
-	void push_interim_output(int ii, bool main_loop){
+	void push_interim_output(int ii){
 		// Assumes that infomration for all measures that we track have between
 		// added to VbTracker at index ii.
 
@@ -96,24 +100,20 @@ public:
 		outf_weights << counts_list[ii] << " ";
 		outf_weights << elapsed_time_list[ii] << std::endl;
 
-		if(!main_loop){
-			for (std::uint32_t kk = 0; kk < alpha_list[ii].size(); kk++){
-				outf_inits << alpha_list[ii][kk] << " " << mu_list[ii][kk] << std::endl;
-			}
+		for (std::uint32_t kk = 0; kk < alpha_list[ii].size(); kk++){
+			outf_inits << alpha_list[ii][kk] << " " << mu_list[ii][kk] << std::endl;
 		}
 	}
 
 	void interim_output_init(const int ii,
-                             const bool main_loop){
+                             const int round_index){
 		if(!allow_interim_push){
 			throw std::runtime_error("Internal error; interim push not expected");
 		}
 
 		// Create directories
 		std::string ss = "interim_files/grid_point_" + std::to_string(ii);
-		if(!main_loop){
-			ss = "r1_" + ss;
-		}
+		ss = "r" + std::to_string(round_index) + "_" + ss;
 		boost::filesystem::path interim_ext(ss), p(main_out_file), dir;
 		dir = p.parent_path() / interim_ext;
 		boost::filesystem::create_directories(dir);
@@ -124,15 +124,13 @@ public:
 		outf_weights << "weights logw log_prior count time" << std::endl;
 		outf_iter    << "sigma\tsigma_b\tsigma_g\tlambda_b\tlambda_g\t";
 		outf_iter    << "count\telbo\talpha_diff\tseconds\tupdate_step\t";
-		outf_iter    << "logw_step" << std::endl;
+		outf_iter    << "logw_step\tHty_hits" << std::endl;
 
 		// Precision
 		outf_iter       << std::setprecision(4) << std::fixed;
 
-		if(!main_loop){
-			ofile_inits     = fstream_init(outf_inits, dir, "_inits", true);
-			outf_inits << "alpha mu" << std::endl;
-		}
+		ofile_inits     = fstream_init(outf_inits, dir, "_inits", true);
+		outf_inits << "alpha mu" << std::endl;
 	}
 
 	std::string fstream_init(boost_io::filtering_ostream& my_outf,
@@ -194,3 +192,5 @@ public:
 		hyps_list[ii]         = other_tracker.hyps_list[ii];
 	}
 };
+
+#endif
