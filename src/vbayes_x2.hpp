@@ -263,10 +263,10 @@ public:
 			// Write inits to file
 			std::string ofile_inits = fstream_init(outf_inits, "", "_inits");
 			std::cout << "Writing start points for alpha and mu to " << ofile_inits << std::endl;
-			outf_inits << "chr pos rsid a0 a1 alpha mu" << std::endl;
+			outf_inits << "chr rsid pos a0 a1 alpha mu" << std::endl;
 			for (std::uint32_t kk = 0; kk < n_var2; kk++){
 				std::uint32_t kk1 = kk % n_var;
-				outf_inits << X.chromosome[kk1] << " " << X.position[kk1] << " " << X.rsid[kk1];
+				outf_inits << X.chromosome[kk1] << " " << X.rsid[kk1]<< " " << X.position[kk1];
 				outf_inits << " " << X.al_0[kk1] << " " << X.al_1[kk1] << " ";
 				outf_inits << alpha_init[kk] << " " << mu_init[kk] << std::endl;
 			}
@@ -426,6 +426,18 @@ public:
 				tracker.push_interim_iter_update(count, i_hyps, i_logw, alpha_diff,
                                                  elapsed, updateAlphaMu_time, calc_logw_time, hty_counter);
 				updateHyps(i_hyps, i_par, L);
+
+				// Update s_sq
+				i_par.s_sq.resize(n_var2);
+				for (std::uint32_t kk = 0; kk < n_var; kk++){
+					i_par.s_sq[kk] = i_hyps.sigma_b * i_hyps.sigma / (i_hyps.sigma_b * dHtH(kk) + 1.0);
+				}
+				for (std::uint32_t kk = n_var; kk < L; kk++){
+					i_par.s_sq[kk] = i_hyps.sigma_g * i_hyps.sigma / (i_hyps.sigma_g * dHtH(kk) + 1.0);
+				}
+				for (std::uint32_t kk = L; kk < n_var2; kk++){
+					i_par.s_sq[kk] = 0.0;
+				}
 			}
 
 			// New elbo
@@ -488,7 +500,7 @@ public:
 			tracker.logw_updates_list[ii] = logw_updates;
 			tracker.alpha_diff_list[ii] = alpha_diff_updates;
 		}
-		tracker.push_interim_output(ii);
+		tracker.push_interim_output(ii, i_par.s_sq, X.chromosome, X.rsid, X.position, X.al_0, X.al_1, n_var);
 	}
 
 	void updateHyps(Hyps& i_hyps, const FreeParameters& i_par, const std::uint32_t L){
@@ -717,7 +729,7 @@ public:
 		}
 
 		// Headers
-		outf << "chr pos rsid a0 a1 post_alpha post_mu post_beta" << std::endl;
+		outf << "chr rsid pos a0 a1 post_alpha post_mu post_beta" << std::endl;
 		outf_weights << "weights logw log_prior count time sigma sigma_b ";
 		outf_weights << "sigma_g lambda_b lambda_g" << std::endl;
 	}
@@ -770,7 +782,7 @@ public:
 		std::uint32_t kk1;
 		for (std::uint32_t kk = 0; kk < n_var2; kk++){
 			kk1 = kk % n_var;
-			outf << X.chromosome[kk1] << " " << X.position[kk1] << " " << X.rsid[kk1];
+			outf << X.chromosome[kk1] << " " << X.rsid[kk1] << " " << X.position[kk1];
 			outf << " " << X.al_0[kk1] << " " << X.al_1[kk1] << " " << post_alpha[kk];
  			outf << " " << post_mu[kk] << " " << post_beta[kk] << std::endl;
 		}

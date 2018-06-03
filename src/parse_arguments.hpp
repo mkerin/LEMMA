@@ -76,6 +76,7 @@ void parse_arguments(parameters &p, int argc, char *argv[]) {
 		"--low_mem",
 		"--keep_constant_variants",
 		"--force_round1",
+		"--scale_phenotypes"
 	};
 
 	std::set<std::string>::iterator set_it;
@@ -168,6 +169,11 @@ void parse_arguments(parameters &p, int argc, char *argv[]) {
 
 			if(strcmp(in_str, "--low_mem") == 0) {
 				p.low_mem = true;
+				i += 0;
+			}
+
+			if(strcmp(in_str, "--scale_phenotypes") == 0) {
+				p.scale_pheno = true;
 				i += 0;
 			}
 

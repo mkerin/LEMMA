@@ -203,7 +203,10 @@ class Data
 	void standardise_non_genetic_data(){
 		// Step 3; Center phenos, normalise covars
 		center_matrix( Y, n_pheno );
-		// scale_matrix( Y, n_pheno, pheno_names );
+		if(params.scale_pheno){
+			std::cout << "Scaling phenotype" << std::endl;
+			scale_matrix( Y, n_pheno, pheno_names );
+		}
 		if(params.covar_file != "NULL"){
 			center_matrix( W, n_covar );
 			scale_matrix( W, n_covar, covar_names );
@@ -276,7 +279,7 @@ class Data
 						f1 += x * kk * kk;
 						check += x;
 					}
-					if(check > 0.9999 && check < 1.0001){
+					if(std::abs(check - 1.0) < 1e-6){
 						d1 += dosage;   // dosage mean
 						f2 += (f1 - dosage * dosage);
 						valid_count++;
@@ -300,23 +303,21 @@ class Data
 			// check non-zero variance
 			double mu = d1 / valid_count;
 			if(!params.keep_constant_variants){
-				double val, sigma = 0;
+				double val, sigma = 0, count = 0;
 				for(std::size_t ii = 0; ii < probs.size(); ++ii){
-					if ((incomplete_cases.count(ii) == 0) && (invalid_count.count(ii) == 0)) {
+					// if ((incomplete_cases.count(ii) == 0) && (invalid_count.count(ii) == 0)) {
+					if (incomplete_cases.count(ii) == 0){
 						val = 0.0;
 						for( std::size_t kk = 0; kk < probs[ii].size(); ++kk ) {
 							val += x * probs[ii][kk];
 						}
 						val -= mu;
 						sigma += val * val;
+						count += 1;
 					}
 				}
-				sigma = std::sqrt(sigma/(valid_count - 1.0));
-				// std::cout << "d1: " << d1 << std::endl;
-				// std::cout << "valid_count: " << valid_count << std::endl;
-				// std::cout << "mean: " << mu << std::endl;
-				// std::cout << "sigma: " << sigma << std::endl << std::endl;
-				if(sigma < 1e-9){
+				sigma = std::sqrt(sigma/(count - 1.0));
+				if(sigma <= 1e-12){
 					n_constant_variance++;
 					continue;
 				}
@@ -631,7 +632,7 @@ class Data
 				}
 				ss.clear();
 				ss.str(line);
-				if(n_cols == 2){
+				if(n_cols < 7){
 					for (int k = 0; k < n_cols; k++) {
 						std::string s;
 						ss >> s;
@@ -650,7 +651,7 @@ class Data
 						ss >> s;
 						if(k == 0){
 							key_i += s + "~";
-						} else if (k == 1){
+						} else if (k == 2){
 							key_i += s + "~";
 							// init_pos.push_back(std::stoull(s));
 						} else if (k == 3){
@@ -664,6 +665,8 @@ class Data
 							M(i, k) = stod(s);
 						}
 					}
+				} else {
+					throw std::runtime_error("Unexpected number of columns.");
 				}
 				i++; // loop should end at i == n_grid
 			}
@@ -960,19 +963,24 @@ class Data
 
 		std::vector< std::string > vb_init_colnames;
 		std::vector< std::string > cols_check1 = {"alpha", "mu"};
-		std::vector<std::string> cols_check2 = {"chr", "pos", "rsid", "a0", "a1", "beta", "gamma"};
+		std::vector<std::string> cols_check2 = {"chr", "rsid", "pos", "a_0", "a_1", "beta", "gamma"};
 
 		if ( params.vb_init_file != "NULL" ) {
 			std::cout << "Reading initialisation for alpha from file" << std::endl;
 			read_vb_init_file(params.vb_init_file, vb_init_mat, vb_init_colnames,
                               init_key);
 
-			assert(vb_init_mat.cols() == 2 || vb_init_mat.cols() == 7);
-			assert(vb_init_colnames == cols_check1 || vb_init_colnames == cols_check2);
-			if(vb_init_mat.cols() == 2){
+			if(vb_init_mat.cols() < 7){
+				if(!std::includes(vb_init_colnames.begin(), vb_init_colnames.end(), cols_check1.begin(), cols_check1.end())){
+					throw std::runtime_error("First 2 columns of --vb_init should be alpha mu ");
+				}
 				alpha_init = Eigen::Map<Eigen::VectorXd>(vb_init_mat.col(0).data(), vb_init_mat.rows());
 				mu_init = Eigen::Map<Eigen::VectorXd>(vb_init_mat.col(1).data(), vb_init_mat.rows());
 			} else {
+				for(int aa = 0; aa < 7; aa++){
+					std::cout << vb_init_colnames[aa] << std::endl;
+				}
+				assert(vb_init_colnames == cols_check2);
 				std::cout << "--vb_init file with contextual information detected" << std::endl;
 				std::cout << "Warning: This will be O(PL) where L = " << vb_init_mat.rows();
 				std::cout << " is the number of lines in file given to --vb_init." << std::endl;

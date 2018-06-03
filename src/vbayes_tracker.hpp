@@ -95,8 +95,14 @@ public:
 		outf_iter << hty_counter << std::endl;
 	}
 
-	void push_interim_output(int ii){
-		// Assumes that infomration for all measures that we track have between
+	void push_interim_output(int ii, const std::vector< double >& s_sq,
+                             const std::vector< int >& chromosome,
+                             const std::vector< std::string >& rsid,
+                             const std::vector< std::uint32_t >& position,
+                             const std::vector< std::string >& al_0,
+                             const std::vector< std::string >& al_1,
+                             const std::uint32_t n_var){
+		// Assumes that information for all measures that we track have between
 		// added to VbTracker at index ii.
 
 		// Write output to file
@@ -106,7 +112,11 @@ public:
 		outf_weights << elapsed_time_list[ii] << std::endl;
 
 		for (std::uint32_t kk = 0; kk < alpha_list[ii].size(); kk++){
-			outf_inits << alpha_list[ii][kk] << " " << mu_list[ii][kk] << std::endl;
+			std::uint32_t kk1 = kk % n_var;
+			outf_inits << chromosome[kk1] << " " << rsid[kk1]<< " " << position[kk1];
+			outf_inits << " " << al_0[kk1] << " " << al_1[kk1] << " ";
+			outf_inits << alpha_list[ii][kk] << " " << mu_list[ii][kk];
+ 			outf_inits << " " << s_sq[kk] << std::endl;
 		}
 	}
 
@@ -132,10 +142,10 @@ public:
 		outf_iter    << "logw_step\tHty_hits" << std::endl;
 
 		// Precision
-		outf_iter       << std::setprecision(4) << std::fixed;
+		outf_iter       << std::setprecision(8) << std::fixed;
 
 		ofile_inits     = fstream_init(outf_inits, dir, "_inits", true);
-		outf_inits << "alpha mu" << std::endl;
+		outf_inits << "chr rsid pos a0 a1 alpha mu s_sq" << std::endl;
 	}
 
 	std::string fstream_init(boost_io::filtering_ostream& my_outf,
