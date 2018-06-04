@@ -62,14 +62,14 @@ public:
 	bool          run_round1;
 
 	// 
-	parameters p;
+	parameters& p;
 	std::vector< std::uint32_t > fwd_pass;
 	std::vector< std::uint32_t > back_pass;
 	std::vector< std::uint32_t > back_pass_short;
 
 	// Data
-	GenotypeMatrix X;
-	Eigen::MatrixXd Y;          // residual phenotype matrix
+	GenotypeMatrix& X;
+	Eigen::MatrixXd& Y;          // residual phenotype matrix
 	Eigen::VectorXd dXtX;       // diagonal of X^T x X
 	Eigen::VectorXd dHtH;       // diagonal of H^T x H where H = (X, Z)
 	Eigen::VectorXd Hty;		// vector of H^T x y where H = (X, Z)
