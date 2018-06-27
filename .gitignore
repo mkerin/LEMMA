@@ -16,3 +16,7 @@ bin/*
 .Rhistory
 *.Rproj
 
+# tests/ executables
+tests/tests-main.o
+tests/tests-main
+tests/tests

@@ -387,7 +387,7 @@ public:
 		// Run inner loop until convergence
 		int count = 0;
 		bool converged = false;
-		double alpha_diff, logw_diff, logw_prev;
+		double alpha_diff = 0, logw_diff, logw_prev;
 		Eigen::VectorXd alpha_prev;
 		std::vector< std::uint32_t > iter;
 		double i_logw = calc_logw(L, i_hyps, i_par);
@@ -454,7 +454,7 @@ public:
 			alpha_diff_updates.push_back(alpha_diff);
 
 			if(p.alpha_tol_set_by_user && p.elbo_tol_set_by_user){
-				if(alpha_diff < p.alpha_tol || logw_diff < p.elbo_tol){
+				if(alpha_diff < p.alpha_tol && logw_diff < p.elbo_tol){
 					converged = true;
 				}
 			} else if(p.alpha_tol_set_by_user){
@@ -569,10 +569,10 @@ public:
 
 			// Update i_Hr; only if coeff is large enough to matter
 			rr_k_diff = (i_par.alpha(kk)*i_par.mu(kk) - rr_k);
-			if(std::abs(rr_k_diff) > 1e-8){
+			// if(std::abs(rr_k_diff) > 1e-8){
 				hty_updates++;
 				i_par.Hr += rr_k_diff * X_kk;
-			}
+			// }
 		}
 	}
 
