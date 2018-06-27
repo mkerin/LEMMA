@@ -7,7 +7,7 @@
 #include "sys/types.h"
 #include "sys/sysinfo.h"
 
-long int N, P;
+long int N, P, L;
 int mode;
 
 namespace performance {
@@ -42,6 +42,9 @@ bool read(){
 	if(!(std::cin >> N)) return false;
 	std::cout << "Input P:" << std::endl;
 	if(!(std::cin >> P)) return false;
+	std::cout << "Minibatch size (-1 for all):" << std::endl;
+	if(!(std::cin >> L)) return false;
+
 	std::cout << "Mode; " << std::endl;
 	std::cout << "0 - GenotypeMatrix, normal." << std::endl;
 	std::cout << "1 - GenotypeMatrix, low-mem" << std::endl;
@@ -94,6 +97,7 @@ int main() {
 				aa[ii] = gaussian(gen_gauss);
 			}
 		}
+		int ll = 0; // minibatch start
 		std::cout << "Data initialised" << std::endl;
 
 		// call .col many times

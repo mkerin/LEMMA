@@ -1011,7 +1011,7 @@ class Data
 
 	}
 
-	void reduce_mat_to_complete_cases( Eigen::Ref<Eigen::MatrixXd> M, 
+	Eigen::MatrixXd reduce_mat_to_complete_cases( Eigen::Ref<Eigen::MatrixXd> M, 
 								   bool& matrix_reduced,
 								   int n_cols,
 								   std::map< int, bool > incomplete_cases ) {
@@ -1039,8 +1039,8 @@ class Data
 		}
 
 		// Assign new values to reference variables
-		M = M_tmp;
 		matrix_reduced = true;
+		return M_tmp;
 	}
 
 	void regress_out_covars() {
@@ -1064,10 +1064,10 @@ class Data
 		incomplete_cases.insert(missing_covars.begin(), missing_covars.end());
 		incomplete_cases.insert(missing_phenos.begin(), missing_phenos.end());
 		if(params.pheno_file != "NULL"){
-			reduce_mat_to_complete_cases( Y, Y_reduced, n_pheno, incomplete_cases );
+			Y = reduce_mat_to_complete_cases( Y, Y_reduced, n_pheno, incomplete_cases );
 		}
 		if(params.covar_file != "NULL"){
-			reduce_mat_to_complete_cases( W, W_reduced, n_covar, incomplete_cases );
+			W = reduce_mat_to_complete_cases( W, W_reduced, n_covar, incomplete_cases );
 		}
 		n_samples -= incomplete_cases.size();
 		missing_phenos.clear();
