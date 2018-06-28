@@ -75,6 +75,7 @@ void parse_arguments(parameters &p, int argc, char *argv[]) {
 		"--threads",
 		"--low_mem",
 		"--keep_constant_variants",
+		"--effects_prior_mog",
 		"--force_round1",
 		"--scale_phenotypes"
 	};
@@ -139,6 +140,11 @@ void parse_arguments(parameters &p, int argc, char *argv[]) {
 
 			if(strcmp(in_str, "--joint_model") == 0) {
 				p.mode_joint_model = true;
+				i += 0;
+			}
+
+			if(strcmp(in_str, "--effects_prior_mog") == 0) {
+				p.mode_mog_prior = true;
 				i += 0;
 			}
 

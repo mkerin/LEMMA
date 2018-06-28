@@ -14,6 +14,7 @@
 #include <boost/iostreams/device/file.hpp>
 #include <boost/iostreams/filter/gzip.hpp>
 #include <boost/filesystem.hpp>
+#include "class.h"
 
 
 namespace boost_io = boost::iostreams;
@@ -25,6 +26,10 @@ struct Hyps{
 	double sigma_g;
 	double lam_b;
 	double lam_g;
+
+	// For use in mode_mog_prior
+	double sigma_b_spike;
+	double sigma_g_spike;
 };
 
 
@@ -38,6 +43,8 @@ public:
 	std::vector< double >          logw_list;                // best logw at each ii
 	std::vector< double >          elapsed_time_list;        // time to compute grid point
 	std::vector< Hyps >            hyps_list;                // hyps values at end of VB inference.
+
+	parameters p;
 
 	// For writing interim output
 	boost_io::filtering_ostream outf_elbo, outf_alpha_diff, outf_weights, outf_inits, outf_iter;
@@ -83,7 +90,9 @@ public:
                                   const long int hty_counter){
 		outf_iter << i_hyps.sigma << "\t";
 		outf_iter << i_hyps.sigma_b << "\t";
+		if (p.mode_mog_prior) outf_iter << i_hyps.sigma_b_spike << "\t";
 		outf_iter << i_hyps.sigma_g << "\t";
+		if (p.mode_mog_prior) outf_iter << i_hyps.sigma_g_spike << "\t";
 		outf_iter << i_hyps.lam_b << "\t";
 		outf_iter << i_hyps.lam_g << "\t";
 		outf_iter << cnt << "\t";
@@ -95,7 +104,7 @@ public:
 		outf_iter << hty_counter << std::endl;
 	}
 
-	void push_interim_output(int ii, const std::vector< double >& s_sq,
+	void push_interim_output(int ii, const Eigen::Ref<const Eigen::MatrixXd>& s_sq,
                              const std::vector< int >& chromosome,
                              const std::vector< std::string >& rsid,
                              const std::vector< std::uint32_t >& position,
@@ -116,7 +125,7 @@ public:
 			outf_inits << chromosome[kk1] << " " << rsid[kk1]<< " " << position[kk1];
 			outf_inits << " " << al_0[kk1] << " " << al_1[kk1] << " ";
 			outf_inits << alpha_list[ii][kk] << " " << mu_list[ii][kk];
- 			outf_inits << " " << s_sq[kk] << std::endl;
+ 			outf_inits << " " << s_sq(kk, 0) << std::endl;
 		}
 	}
 
@@ -129,15 +138,19 @@ public:
 		// Create directories
 		std::string ss = "interim_files/grid_point_" + std::to_string(ii);
 		ss = "r" + std::to_string(round_index) + "_" + ss;
-		boost::filesystem::path interim_ext(ss), p(main_out_file), dir;
-		dir = p.parent_path() / interim_ext;
+		boost::filesystem::path interim_ext(ss), path(main_out_file), dir;
+		dir = path.parent_path() / interim_ext;
 		boost::filesystem::create_directories(dir);
 
 		std::string ofile_weights, ofile_inits, ofile_iter;
 		ofile_weights    = fstream_init(outf_weights, dir, "_hyps", false);
 		ofile_iter       = fstream_init(outf_iter, dir, "_iter_updates", false);
 		outf_weights << "weights logw log_prior count time" << std::endl;
-		outf_iter    << "sigma\tsigma_b\tsigma_g\tlambda_b\tlambda_g\t";
+		if(p.mode_mog_prior){
+			outf_iter    << "sigma\tsigma_b\tsigma_b_spike\tsigma_g\tsigma_g_spike\tlambda_b\tlambda_g\t";
+		} else {
+			outf_iter    << "sigma\tsigma_b\tsigma_g\tlambda_b\tlambda_g\t";
+		}
 		outf_iter    << "count\telbo\talpha_diff\tseconds\tupdate_step\t";
 		outf_iter    << "logw_step\tHty_hits" << std::endl;
 
