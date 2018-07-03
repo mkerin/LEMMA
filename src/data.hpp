@@ -113,7 +113,7 @@ class Data
 	// 	filters_applied = false;
 	// }
 
-	Data( const parameters& p ) : params(p), G(p.low_mem) {
+	explicit Data( const parameters& p ) : params(p), G(p.low_mem) {
 		// system time at start
 		start = std::chrono::system_clock::now();
 		std::time_t start_time = std::chrono::system_clock::to_time_t(start);
@@ -125,6 +125,15 @@ class Data
 		n_samples = bgenView->number_of_samples();
 		n_var_parsed = 0;
 		filters_applied = false;
+
+		// Explicit initial values to eliminate linter errors..
+		n_pheno   = -1;
+		n_effects = -1;
+		n_covar   = -1;
+		n_snps    = -1;
+		n_var     = -1;
+		Y_reduced = false;
+		W_reduced = false;
 	}
 
 	~Data() {

@@ -79,8 +79,6 @@ int main( int argc, char** argv ) {
 
 				// Run inference
 				VB.run();
-
-				VB.run_inference(2, VB.hyps_grid);
 				// VB.output_results();
 			}
 		}
@@ -89,7 +87,7 @@ int main( int argc, char** argv ) {
 			throw std::runtime_error("Gutted from programme. See other branch.");
 		}
 
-		if(p.mode_joint_model){
+		if (p.mode_joint_model){
 			throw std::runtime_error("Gutted from programme. See other branch.");
 		}
 

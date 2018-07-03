@@ -91,6 +91,7 @@ public:
 	MyTimer t_elbo;
 	MyTimer t_readXk;
 	MyTimer t_updateHyps;
+	MyTimer t_InnerLoop;
 
 	explicit VBayesX2( Data& dat ) : X( dat.G ),
                             Y( dat.Y ),
@@ -98,7 +99,8 @@ public:
                             t_updateAlphaMu("updateAlphaMu: %ts \n"),
                             t_elbo("calcElbo: %ts \n"),
                             t_readXk("read_X_kk: %ts \n"),
-                            t_updateHyps("updateHyps: %ts \n") {
+                            t_updateHyps("updateHyps: %ts \n"),
+														t_InnerLoop("runInnerLoop: %ts \n") {
 		assert(std::includes(dat.hyps_names.begin(), dat.hyps_names.end(), hyps_names.begin(), hyps_names.end()));
 		assert(p.interaction_analysis);
 
@@ -222,7 +224,6 @@ public:
 		}
 
 		// Allocate memory for trackers
-		trackers.resize(p.n_thread);
 		for (int ch = 0; ch < p.n_thread; ch++){
 			trackers[ch].resize(n_grid);
 			trackers[ch].set_main_filepath(p.out_file);
@@ -252,6 +253,7 @@ public:
 		// Round 1; looking for best start point
 		if(run_round1){
 			std::vector< VbTracker > trackers;
+			trackers.resize(p.n_thread);
 			int r1_n_grid = r1_hyps_grid.rows();
 			run_inference(r1_hyps_grid, true, 1, trackers);
 
@@ -265,8 +267,7 @@ public:
 			for (int ii = 0; ii < r1_n_grid; ii++){
 				int tr_index     = (ii % p.n_thread);
 				double logw      = trackers[tr_index].logw_list[ii];
-				double sigma_g   = r1_hyps_grid(ii, sigma_g_ind);
-				if(std::isfinite(logw) && logw > logw_best && sigma_g > 0){
+				if(std::isfinite(logw) && logw > logw_best){
 					vp_init      = trackers[tr_index].vp_list[ii];
 					logw_best    = logw;
 					init_not_set = false;
@@ -310,6 +311,7 @@ public:
 		}
 
 		std::vector< VbTracker > trackers;
+		trackers.resize(p.n_thread);
 		run_inference(hyps_grid, false, 2, trackers);
 
 		write_trackers_to_file("", trackers, hyps_grid, probs_grid);
@@ -379,6 +381,7 @@ public:
                       const int round_index,
                       Hyps hyps,
                       VbTracker& tracker){
+		t_InnerLoop.resume();
 		// minimise KL Divergence and assign elbo estimate
 		// Assumes vp_init already exist
 		VariationalParameters vp;
@@ -414,29 +417,35 @@ public:
 				iter = back_pass;
 			}
 
-			// Update i_mu, i_alpha, i_Hr
+			// Update variational_parameters alpha, mu
+			count++;
 			updateAlphaMu(iter, hyps, vp, hty_counter);
+
+			// Log updates
+			i_logw     = calc_logw(hyps, vp);
+
+			double alpha_diff = (alpha_prev - vp.alpha).abs().maxCoeff();
+			alpha_diff_updates.push_back(alpha_diff);
+
+			tracker.push_interim_iter_update(count, hyps, i_logw, alpha_diff,
+																			 t_updateAlphaMu.get_lap_seconds(), hty_counter);
 
 			// Update hyps
 			if(round_index > 1 && p.mode_empirical_bayes){
-				i_logw     = calc_logw(hyps, vp);
-
-				tracker.push_interim_iter_update(count, hyps, i_logw, alpha_diff,
-                                         t_updateAlphaMu.get_lap_seconds(), hty_counter);
+				t_updateHyps.resume();
 				updateHyps(hyps, vp);
 				updateSSq(hyps, vp);
-			}
 
-			// New elbo
-			i_logw     = calc_logw(hyps, vp);
+				i_logw     = calc_logw(hyps, vp);
+				t_updateHyps.stop();
+
+				tracker.push_interim_iter_update(count, hyps, i_logw, 0.0,
+					t_updateHyps.get_lap_seconds(), -1);
+			}
+			logw_updates.push_back(i_logw);
 
 			// Diagnose convergence
-			count++;
 			double logw_diff  = i_logw - logw_prev;
-			double alpha_diff = (alpha_prev - vp.alpha).abs().maxCoeff();
-			logw_updates.push_back(i_logw);
-			alpha_diff_updates.push_back(alpha_diff);
-
 			if(p.alpha_tol_set_by_user && p.elbo_tol_set_by_user){
 				if(alpha_diff < p.alpha_tol && logw_diff < p.elbo_tol){
 					converged = true;
@@ -457,10 +466,6 @@ public:
 					converged = true;
 				}
 			}
-
-			// Log updates
-			tracker.push_interim_iter_update(count, hyps, i_logw, alpha_diff,
-                                       t_updateAlphaMu.get_lap_seconds(), hty_counter);
 		}
 
 		if(!std::isfinite(i_logw)){
@@ -468,10 +473,11 @@ public:
 		}
 
 		// Log all things that we want to track
+		t_InnerLoop.stop();
 		tracker.logw_list[ii] = i_logw;
 		tracker.counts_list[ii] = count;
 		tracker.vp_list[ii] = vp.convert_to_lite();
-		tracker.elapsed_time_list[ii] = elapsed.count();
+		tracker.elapsed_time_list[ii] = t_InnerLoop.get_lap_seconds();
 		tracker.hyps_list[ii] = hyps;
 		if(p.verbose){
 			logw_updates.push_back(i_logw);  // adding converged estimate
@@ -508,8 +514,6 @@ public:
 
 	void updateHyps(Hyps& hyps,
                     const VariationalParameters& vp){
-		t_updateHyps.resume();
-
 		// max sigma
 		Eigen::ArrayXd varB;
  		calcVarqBeta(hyps, vp, varB);
@@ -539,8 +543,6 @@ public:
 		hyps.sigma_g       = hyps.slab_relative_var(1);
 		hyps.sigma_g_spike = hyps.spike_relative_var(0);
 		hyps.sigma_g_spike = hyps.spike_relative_var(1);
-
-		t_updateHyps.stop();
 	}
 
 	void updateAlphaMu(const std::vector< std::uint32_t >& iter,
@@ -555,7 +557,7 @@ public:
 		// double bbb_b, bbb_g;
 		// bbb_b = std::log(hyps.lam_b / (1.0 - hyps.lam_b) + eps) - std::log(hyps.sigma_b * hyps.sigma) / 2.0;
 		// bbb_g = std::log(hyps.lam_g / (1.0 - hyps.lam_g) + eps) - std::log(hyps.sigma_g * hyps.sigma) / 2.0;
-		alpha_cnst = std::log(hyps.lambda / (1.0 - hyps.lambda) + eps) - std::log(hyps.slab_var) / 2.0;
+		alpha_cnst = (hyps.lambda / (1.0 - hyps.lambda) + eps).log() - hyps.slab_var.log() / 2.0;
 		hty_updates = 0;
 		for(std::uint32_t kk : iter ){
 			int ee            = kk / n_var;
@@ -604,7 +606,7 @@ public:
 		// bbb_g  = std::log(hyps.lam_g / (1.0 - hyps.lam_g) + eps);
 		// bbb_g -= (std::log(hyps.sigma_g) - std::log(hyps.sigma_g_spike)) / 2.0;
 		Eigen::ArrayXd alpha_cnst;
-		alpha_cnst  = std::log(hyps.lambda / (1.0 - hyps.lambda) + eps);
+		alpha_cnst  = (hyps.lambda / (1.0 - hyps.lambda) + eps).log();
 		alpha_cnst -= (hyps.slab_var.log() - hyps.spike_var.log()) / 2.0;
 
 		hty_updates = 0;
@@ -875,9 +877,9 @@ public:
 		}
 
 		// Extract posterior values from tracker
-		Eigen::ArrayXf post_alpha(n_var, n_effects) = Eigen::ArrayXf::Zero(n_var, n_effects);
-		Eigen::ArrayXf post_mu(n_var, n_effects) = Eigen::ArrayXf::Zero(n_var, n_effects);
-		Eigen::ArrayXf post_beta(n_var, n_effects) = Eigen::ArrayXf::Zero(n_var, n_effects);
+		Eigen::ArrayXd post_alpha = Eigen::ArrayXd::Zero(n_var, n_effects);
+		Eigen::ArrayXd post_mu = Eigen::ArrayXd::Zero(n_var, n_effects);
+		Eigen::ArrayXd post_beta = Eigen::ArrayXd::Zero(n_var, n_effects);
 		for (int ii = 0; ii < my_n_grid; ii++){
 			for (std::uint32_t kk = 0; kk < n_var; kk++){
 				for (int ee = 0; ee < n_effects; ee++){

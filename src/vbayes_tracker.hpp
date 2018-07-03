@@ -1,8 +1,6 @@
 #ifndef VBAYES_TRACKER_HPP
 #define VBAYES_TRACKER_HPP
 
-#include <chrono>      // start/end time info
-#include <ctime>       // start/end time info
 #include <iostream>
 #include <iomanip>
 #include <stdexcept>
@@ -12,23 +10,24 @@
 #include "variational_parameters.hpp"
 #include "tools/eigen3.3/Dense"
 #include <boost/iostreams/filtering_stream.hpp>
+#include <boost/iostreams/device/file_descriptor.hpp>
 #include <boost/iostreams/device/file.hpp>
 #include <boost/iostreams/filter/gzip.hpp>
 #include <boost/filesystem.hpp>
 #include "class.h"
 
 
-namespace boost_io = boost::iostreams;
+namespace io = boost::iostreams;
 
 
 class Hyps{
+	int sigma_ind   = 0;
+	int sigma_b_ind = 1;
+	int sigma_g_ind = 2;
+	int lam_b_ind   = 3;
+	int lam_g_ind   = 4;
 public:
-	const int sigma_ind   = 0;
-	const int sigma_b_ind = 1;
-	const int sigma_g_ind = 2;
-	const int lam_b_ind   = 3;
-	const int lam_g_ind   = 4;
-	
+
 	double sigma;
 	double sigma_b;
 	double sigma_g;
@@ -39,11 +38,13 @@ public:
 	double sigma_b_spike;
 	double sigma_g_spike;
 
-	Eigen::VectorXd slab_var;
-	Eigen::VectorXd spike_var;
-	Eigen::VectorXd slab_relative_var;
-	Eigen::VectorXd spike_relative_var;
-	Eigen::VectorXd lambda;
+	Eigen::ArrayXd slab_var;
+	Eigen::ArrayXd spike_var;
+	Eigen::ArrayXd slab_relative_var;
+	Eigen::ArrayXd spike_relative_var;
+	Eigen::ArrayXd lambda;
+
+	Hyps();
 
 	Hyps(const Eigen::Ref<const Eigen::MatrixXd>& hyps_grid, int ii, int n_effects){
 		sigma   = hyps_grid(ii, sigma_ind);
@@ -87,7 +88,7 @@ public:
 	parameters p;
 
 	// For writing interim output
-	boost_io::filtering_ostream outf_elbo, outf_alpha_diff, outf_weights, outf_inits, outf_iter;
+	io::filtering_ostream outf_elbo, outf_alpha_diff, outf_weights, outf_inits, outf_iter;
 	std::string main_out_file;
 	bool allow_interim_push;
 
@@ -95,7 +96,7 @@ public:
 		allow_interim_push = false;
 	}
 
-	explicit VbTracker(const std::string& ofile) : main_out_file(ofile){
+	VbTracker(const std::string& ofile) : main_out_file(ofile){
 		allow_interim_push = true;
 	}
 
@@ -113,8 +114,7 @@ public:
 		allow_interim_push = true;
 	}
 
-	~VbTracker() {
-	}
+	~VbTracker();
 
 	void set_main_filepath(const std::string &ofile){
 		main_out_file = ofile;
@@ -207,7 +207,7 @@ public:
 		outf_inits << std::endl;
 	}
 
-	void fstream_init(boost_io::filtering_ostream& my_outf,
+	void fstream_init(io::filtering_ostream& my_outf,
                              const boost::filesystem::path& dir,
                              const std::string& file_suffix,
                              const bool& allow_gzip){
@@ -224,9 +224,9 @@ public:
 		std::string ofile      = dir.string() + "/" + stem + file_suffix + ext;
 
 		if (ext.find(".gz") != std::string::npos) {
-			my_outf.push(boost_io::gzip_compressor());
+			my_outf.push(io::gzip_compressor());
 		}
-		my_outf.push(boost_io::file_sink(ofile.c_str()));
+		my_outf.push(io::file_sink(ofile.c_str()));
 	}
 
 	void resize(int n_list){

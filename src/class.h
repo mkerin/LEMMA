@@ -22,23 +22,22 @@ class parameters {
 		bool keep_constant_variants, user_requests_round1, scale_pheno, mode_mog_prior;
 		double min_maf, min_info, elbo_tol, alpha_tol;
 		std::vector < std::string > incl_sample_ids, gconf;
-	
-	// constructors/destructors	
-	parameters() {
-		bgen_file = "NULL";
+
+	// constructors/destructors
+	parameters() : bgen_file("NULL"),
+		out_file("NULL"),
+		pheno_file("NULL"),
+		covar_file("NULL"),
+		bgi_file("NULL"),
+		r1_hyps_grid_file("NULL"),
+		r1_probs_grid_file("NULL"),
+		hyps_grid_file("NULL"),
+		hyps_probs_file("NULL"),
+		vb_init_file("NULL"),
+		incl_sids_file("NULL"),
+		incl_rsids_file("NULL"),
+		x_param_name("NULL") {
 		bgen_wildcard = false;
-		bgi_file = "NULL";
-		pheno_file = "NULL";
-		covar_file = "NULL";
-		out_file = "NULL";
-		r1_hyps_grid_file = "NULL";
-		r1_probs_grid_file = "NULL";
-		hyps_grid_file = "NULL";
-		hyps_probs_file = "NULL";
-		vb_init_file = "NULL";
-		incl_sids_file = "NULL";
-		incl_rsids_file = "NULL";
-		x_param_name = "NULL";
 		n_thread = 1;
 		interaction_analysis = false;
 		chunk_size = 256;
