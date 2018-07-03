@@ -9,9 +9,10 @@ INCLUDES = -Ibuild/genfile/include/ -I3rd_party/zstd-1.1.0/lib/ \
            -Ibuild/db/include/ -I3rd_party/sqlite3 -I3rd_party/boost_1_55_0
 LIBS =     -Lbuild/ -Lbuild/3rd_party/zstd-1.1.0 -Lbuild/db -Lbuild/3rd_party/sqlite3 \
            -Lbuild/3rd_party/boost_1_55_0 -lbgen -ldb -lsqlite3 -lboost -lz -ldl -lrt -lpthread -lzstd
-FLAGS := -std=c++11 -Wno-deprecated $(LIBS) $(INCLUDES)
 
-HEADERS := parse_arguments.hpp data.hpp class.h bgen_parser.hpp vbayes.hpp utils.hpp vbayes_x2.hpp genotype_matrix.hpp vbayes_tracker.hpp
+HEADERS := vbayes_x2.hpp genotype_matrix.hpp vbayes_tracker.hpp \
+           parse_arguments.hpp data.hpp class.h bgen_parser.hpp utils.hpp \
+					 variational_parameters.hpp
 HEADERS := $(addprefix $(SRCDIR)/,$(HEADERS))
 
 rescomp: CXX = /apps/well/gcc/7.2.0/bin/g++
@@ -40,6 +41,8 @@ laptop: LD_LIBRARY_PATH = $(ls -d /usr/local/Cellar/gcc/* | tail -n1)/lib
 laptop: FLAGS += -g3 -lbgen -ldb -lsqlite3 -lboost -ldl -lpthread -lzstd -L$(LD_LIBRARY_PATH)
 laptop: $(TARGET)
 
+FLAGS += -std=c++11 -Wno-deprecated $(LIBS) $(INCLUDES)
+
 $(TARGET) lastest_compile_branch.txt : $(SRCDIR)/bgen_prog.cpp $(HEADERS)
 	$(info $$CXX is [${CXX}])
 	$(info $$CFLAGS is [${CFLAGS}])
@@ -61,7 +64,7 @@ file_parse : file_parse.cpp
 # Note: this uses the Catch library to Unit Test the cpp source code. If we want
 # to test input/output of the executable we do that directly with the Makefile
 # and `diff` command.
-# UNITTESTS := test-data.cpp tests-parse-arguments.cpp 
+# UNITTESTS := test-data.cpp tests-parse-arguments.cpp
 # UNITTESTS := $(addprefix tests/,$(UNITTESTS))
 
 testUNIT: tests/tests-main
@@ -72,10 +75,18 @@ tests/tests-main: tests/tests-main.o
 tests/tests-main.o: tests/tests-main.cpp $(SRCDIR)/bgen_prog.cpp $(HEADERS)
 	$(CXX) tests/tests-main.cpp -c -o $@ $(FLAGS)
 
+# Examples
+examples/test_updates: examples/test_updates.cpp
+	$(CXX) $< -o $@ $(FLAGS) -I /homes/kerin/local/boost_1_67_0 -L /homes/kerin/local/boost_1_67_0/stage/lib
+
+examples/check_my_timer: examples/check_my_timer.cpp
+	$(CXX) $< -o $@ $(FLAGS) -I /homes/kerin/local/boost_1_67_0 -L /homes/kerin/local/boost_1_67_0/stage/lib
+
+
 # IO Tests
 # Files in data/out are regarded as 'true', and we check that the equivalent
 # file in data/io_test is identical after making changes to the executable.
-# IOfiles := t1_range t2_lm t3_lm_two_chunks t4_lm_2dof t5_joint_model t6_lm2 
+# IOfiles := t1_range t2_lm t3_lm_two_chunks t4_lm_2dof t5_joint_model t6_lm2
 IOfiles :=           t7_varbvs_constrained t8_varbvs t10_varbvs_without_init
 IOfiles := $(addprefix data/io_test/,$(addsuffix /attempt.out,$(IOfiles)))
 # IOfiles += $(addprefix data/io_test/t2_lm/attempt, $(addsuffix .out,B C D))
@@ -88,7 +99,7 @@ testIO: $(IOfiles)
 # data/io_test/t1_range/attempt.out: data/io_test/example.v11.bgen ./bin/bgen_prog
 # 	./bin/bgen_prog --convert_to_vcf --bgen $< --range 01 1 3000 --out $@
 # 	diff $(dir $@)answer.out $@
-# 
+#
 # # Test of --incl_rsids on same test case
 # data/io_test/t1_range/attemptB.out: data/io_test/example.v11.bgen ./bin/bgen_prog
 # 	./bin/bgen_prog --convert_to_vcf --bgen $< --incl_rsids $(dir $@)t1_variants.txt --out $@
@@ -264,7 +275,7 @@ $(t8_dir)/answer.rds: R/vbayes_x_tests/run_VBayesR.R $(t8_dir)/hyperpriors_gxage
 # 	    --out $@
 # 	$(RSCRIPT) R/vbayes_x_tests/check_output.R $(dir $@) > $(dir $@)attempt.log
 # 	diff $(dir $@)answer.log $(dir $@)attempt.log
-# 
+#
 # $(t9_dir)/answer.rds: R/t9/t9_run_vbayesr.R $(t9_dir)/hyperpriors_gxage.txt
 # 	$(RSCRIPT) $< $(dir $@)
 

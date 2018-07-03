@@ -32,7 +32,7 @@ void read_directory(const std::string& name, std::vector<std::string>& v);
 
 // Efficiency changes:
 // 1) Use --range to edit query before reading bgen file
-// 2) Is there an option to skip sample ids? 
+// 2) Is there an option to skip sample ids?
 //    If so we could fill n_samples at start
 //    - read_covar() & read_pheno()
 //    - then edit query with incomplete cases before reading bgen
@@ -79,16 +79,9 @@ int main( int argc, char** argv ) {
 
 				// Run inference
 				VB.run();
+
+				VB.run_inference(2, VB.hyps_grid);
 				// VB.output_results();
-			} else {
-				vbayes VB(data);
-
-				VB.check_inputs();
-
-				// Run inference
-				std::cout << "Starting to run variational inference" << std::endl;
-				VB.run();
-				VB.write_to_file( p.out_file );
 			}
 		}
 

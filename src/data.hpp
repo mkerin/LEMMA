@@ -43,7 +43,7 @@ inline Eigen::VectorXd getCol(const Eigen::MatrixXd &A, size_t col);
 inline Eigen::MatrixXd solve(const Eigen::MatrixXd &A, const Eigen::MatrixXd &b);
 
 
-class Data 
+class Data
 {
 	public :
 	parameters params;
@@ -51,10 +51,11 @@ class Data
 	std::vector< std::string > chromosome, rsid;
 	std::vector< uint32_t > position;
 	std::vector< std::vector< std::string > > alleles;
-	
+
 	int n_pheno; // number of phenotypes
 	int n_covar; // number of covariates
-	int n_samples; // number of samples
+	int n_effects;   // number of environmental interactions
+	long int n_samples; // number of samples
 	long int n_snps; // number of snps
 	bool bgen_pass;
 	int n_var;
@@ -92,7 +93,7 @@ class Data
 	Eigen::MatrixXd r1_hyps_grid, r1_probs_grid, hyps_grid, imprt_grid;
 	Eigen::VectorXd alpha_init, mu_init;
 
-	
+
 	// constructors/destructors
 	// data() : bgenView( "NULL" ) {
 	// 	bgen_pass = false; // No bgen file set; read_bgen_chunk won't run.
@@ -104,7 +105,7 @@ class Data
 	// 	std::time_t start_time = std::chrono::system_clock::to_time_t(start);
 	// 	std::cout << "Starting analysis at " << std::ctime(&start_time) << std::endl;
 	// 	std::cout << "Compiled from git branch: master" << std::endl;
-	// 
+	//
 	// 	bgenView = genfile::bgen::View::create(filename);
 	// 	bgen_pass = true;
 	// 	n_samples = bgenView->number_of_samples();
@@ -125,7 +126,7 @@ class Data
 		n_var_parsed = 0;
 		filters_applied = false;
 	}
-	
+
 	~Data() {
 		// system time at end
 		auto end = std::chrono::system_clock::now();
@@ -184,6 +185,12 @@ class Data
 		// Read in covariates if present
 		if(params.covar_file != "NULL"){
 			read_covar();
+		}
+
+		if(params.interaction_analysis){
+			n_effects = 2;  // 1 more than actually present... n_effects?
+		} else {
+			n_effects = 1;
 		}
 
 		// Exclude samples with missing values in phenos / covars / filters
@@ -251,7 +258,7 @@ class Data
 		alleles.clear();
 
 		// Resize genotype matrix
-		G.resize(n_samples, params.chunk_size);
+		G.resize(n_samples, params.chunk_size, n_effects);
 		// Eigen::VectorXd dosage_j(n_samples);
 
 		long int n_constant_variance = 0;
@@ -337,7 +344,7 @@ class Data
 			G.position.push_back(pos_j);
 			std::string key_j = chr_j + "~" + std::to_string(pos_j) + "~" + alleles_j[0] + "~" + alleles_j[1];
 			G.SNPKEY.push_back(key_j);
-			
+
 			// filters passed; write dosage to G
 			// Note that we only write dosage for valid sample ids
 			std::size_t ii_obs = 0;
@@ -390,7 +397,7 @@ class Data
 
 		// need to resize G whilst retaining existing coefficients if while
 		// loop exits early due to EOF.
-		G.conservativeResize(n_samples, jj);
+		G.conservativeResize(n_samples, jj, n_effects);
 		assert( rsid.size() == jj );
 		assert( chromosome.size() == jj );
 		assert( position.size() == jj );
@@ -797,7 +804,7 @@ class Data
 			}
 
 			sigma = sqrt(sigma/(count - 1));
-			if (sigma > 1e-12) {  
+			if (sigma > 1e-12) {
 				for (int i = 0; i < n_samples; i++) {
 					M(i, k) /= sigma;
 				}
@@ -814,7 +821,7 @@ class Data
 				std::cout << reject_names[kk] << std::endl;
 			}
 			M = getCols(M, keep);
-			
+
 			n_cols = keep.size();
 			col_names = keep_names;
 		}
@@ -842,7 +849,7 @@ class Data
 			}
 
 			sigma = sqrt(sigma/(count - 1));
-			if (sigma > 1e-12) {  
+			if (sigma > 1e-12) {
 				for (int i = 0; i < n_samples; i++) {
 					M(i, k) /= sigma;
 				}
@@ -853,7 +860,7 @@ class Data
 		if (keep.size() != n_cols) {
 			std::cout << " Removing " << (n_cols - keep.size())  << " columns with zero variance." << std::endl;
 			M = getCols(M, keep);
-			
+
 			n_cols = keep.size();
 		}
 
@@ -879,7 +886,7 @@ class Data
 			}
 
 			sigma = sqrt(sigma/(count - 1));
-			if (sigma > 1e-12) {  
+			if (sigma > 1e-12) {
 				for (int i = 0; i < n_samples; i++) {
 					M(i, k) /= sigma;
 				}
@@ -1011,7 +1018,7 @@ class Data
 
 	}
 
-	Eigen::MatrixXd reduce_mat_to_complete_cases( Eigen::Ref<Eigen::MatrixXd> M, 
+	Eigen::MatrixXd reduce_mat_to_complete_cases( Eigen::Ref<Eigen::MatrixXd> M,
 								   bool& matrix_reduced,
 								   int n_cols,
 								   std::map< int, bool > incomplete_cases ) {
@@ -1046,7 +1053,7 @@ class Data
 	void regress_out_covars() {
 		std::cout << "Regressing out covars:" << std::endl;
 		for(int cc = 0; cc < n_covar; cc++){
-			std::cout << ( cc > 0 ? ", " : "" ) << covar_names[cc]; 
+			std::cout << ( cc > 0 ? ", " : "" ) << covar_names[cc];
 		}
 		std::cout << std::endl;
 

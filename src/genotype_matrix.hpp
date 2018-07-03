@@ -8,7 +8,7 @@ Useful links:
 Outline
 	Basically a wrapper around an Eigen matrix of unsigned ints.
 
-To compress dosage entries I split the interval [0,2) into 2^n segments (dosage 
+To compress dosage entries I split the interval [0,2) into 2^n segments (dosage
 matrix assumed to be standardised). For each dosage value I store the index of
 the segment that it falls into, and return the midpoint of the segment when decompressing.
 
@@ -76,8 +76,10 @@ public:
 	Eigen::VectorXd compressed_dosage_means;
 	Eigen::VectorXd compressed_dosage_sds;
 	Eigen::VectorXd compressed_dosage_inv_sds;  // 1 / col-wise sd
-	Eigen::VectorXd aa;  // vector of ages
+	// Eigen::VectorXd aa;  // vector of ages
+	Eigen::MatrixXd E;
 	std::size_t NN, PP;
+	int n_effects;
 
 	// Interface type of Eigen indices -> see eigen3/Eigen/src/Core/EigenBase.h
 	typedef Eigen::Index Index;
@@ -85,9 +87,13 @@ public:
 	// Constructors
 	GenotypeMatrix(bool use_compression) : low_mem(use_compression){
 		scaling_performed = false;
+		NN = 0;
+		PP = 0;
+		n_effects = 0;
 	};
 
-	GenotypeMatrix(bool use_compression, const long int n, const long int p) : low_mem(use_compression){
+	GenotypeMatrix(bool use_compression, const long int n,
+		             const long int p, const int my_n_effects) : low_mem(use_compression){
 		if(low_mem){
 			M.resize(n, p);
 		} else {
@@ -95,12 +101,15 @@ public:
 		}
 		NN = n;
 		PP = p;
+		n_effects = my_n_effects;
 
 		compressed_dosage_means.resize(p);
 		compressed_dosage_sds.resize(p);
 		compressed_dosage_inv_sds.resize(p);
 		missing_genos.resize(p);
-		aa.resize(n);
+		if(n_effects > 1){
+			E.resize(n, n_effects-1);
+		}
 
 		scaling_performed = false;
 	};
@@ -115,7 +124,7 @@ public:
 		if(low_mem){
 			if(std::isnan(x)){
 				throw std::runtime_error("ERROR: missing values not yet compatible in low-mem mode");
-			} 
+			}
 			M(ii, jj) = CompressDosage(x);
 		} else {
 			if(std::isnan(x)){
@@ -180,7 +189,8 @@ public:
 				vec = vec.array() + (0.5 * intervalWidth - compressed_dosage_means[jj]) * compressed_dosage_inv_sds[jj];
 
 			} else {
-				jj -= PP;
+				int ee = jj / PP;
+				jj %= PP;
 				//for (Index ii = 0; ii < NN; ii++){
 				//	vec[ii] = aa[ii] * (DecompressDosage(M(ii, jj)) - compressed_dosage_means[jj]) * compressed_dosage_inv_sds[jj];
 				//}
@@ -188,14 +198,15 @@ public:
 				vec = M.cast<double>().col(jj);
 				vec *= (intervalWidth * compressed_dosage_inv_sds[jj]);
  				vec = vec.array() + (0.5 * intervalWidth - compressed_dosage_means[jj]) * compressed_dosage_inv_sds[jj];
-				vec = vec.cwiseProduct(aa);
+				vec = vec.cwiseProduct(E.col(ee-1));
 			}
 		} else {
 			if(jj < PP){
 				vec = G.col(jj);
 			} else {
-				jj -= PP;
-				vec = G.col(jj).cwiseProduct(aa);
+				int ee = jj / PP;
+				jj %= PP;
+				vec = G.col(jj).cwiseProduct(E.col(ee-1));
 			}
 		}
 		return vec;
@@ -214,17 +225,19 @@ public:
 					vec[ii] = (DecompressDosage(M(ii, jj)) - compressed_dosage_means[jj]) * compressed_dosage_inv_sds[jj];
 				}
 			} else {
-				jj -= PP;
+				int ee = jj / PP;
+				jj %= PP;
 				for (Index ii = 0; ii < NN; ii++){
-					vec[ii] = aa[ii] * (DecompressDosage(M(ii, jj)) - compressed_dosage_means[jj]) * compressed_dosage_inv_sds[jj];
+					vec[ii] = E(ii, ee-1) * (DecompressDosage(M(ii, jj)) - compressed_dosage_means[jj]) * compressed_dosage_inv_sds[jj];
 				}
 			}
 		} else {
 			if(jj < PP){
 				vec = G.col(jj);
 			} else {
-				jj -= PP;
-				vec = G.col(jj).cwiseProduct(aa);
+				int ee = jj / PP;
+				jj %= PP;
+				vec = G.col(jj).cwiseProduct(E.col(ee-1));
 			}
 		}
 	}
@@ -240,10 +253,11 @@ public:
 			tmp = vec.dot(M.col(jj).cast<double>());
 			offset = vec.sum();
 		} else {
-			jj -= PP;
+			int ee = jj / PP;
+			jj %= PP;
 			Eigen::VectorXd bb(vec.rows());
-			bb = aa.cwiseProduct(bb);
-			
+			bb = bb.cwiseProduct(E.col(ee-1));
+
 			// for(Index ii = 0; ii < NN; ii++){
 			// 	tmp += aa[ii] * vec[ii] * M(ii, jj);
 			// }
@@ -287,7 +301,7 @@ public:
 		if(low_mem){
 			assert(lhs.rows() == M.rows());
 			double offset = lhs.sum();
-			
+
 			res = (lhs.transpose() * M.cast<double>()).array() + 0.5 * offset;
 			res *= intervalWidth;
 			res -= (offset * compressed_dosage_means);
@@ -305,14 +319,14 @@ public:
 	// 	if(!scaling_performed){
 	// 		calc_scaled_values();
 	// 	}
-	// 
+	//
 	// 	Eigen::VectorXd res;
 	// 	if(low_mem){
 	// 		assert(lhs.rows() == M.rows());
 	// 		assert(std::abs(lhs.sum()) < 1e-9);
-	// 
+	//
 	// 		res = lhs.transpose() * M.cast<double>();
-	// 
+	//
 	// 		return res.cwiseProduct(compressed_dosage_inv_sds) * intervalWidth;
 	// 	} else {
 	// 		return lhs.transpose() * G;
@@ -389,7 +403,7 @@ public:
 				}
 
 				sigma = sqrt(sigma/(count - 1));
-				if (sigma > 1e-12) {  
+				if (sigma > 1e-12) {
 					for (std::size_t i = 0; i < NN; i++) {
 						G(i, k) /= sigma;
 					}
@@ -403,8 +417,8 @@ public:
 
 	inline Index cols() const { return PP; }
 
-	template <typename T, typename T2>
-	void resize(const T& n, const T2& p){
+	template <typename T, typename T2, typename T3>
+	void resize(const T& n, const T2& p, const T3& my_n_effects){
 		if(low_mem){
 			M.resize(n, p);
 		} else {
@@ -414,13 +428,14 @@ public:
 		compressed_dosage_sds.resize(p);
 		compressed_dosage_inv_sds.resize(p);
 		missing_genos.resize(p);
-		aa.resize(n);
+		E.resize(n, my_n_effects);
 		NN = n;
 		PP = p;
+		n_effects = my_n_effects;
 	}
 
-	template <typename T, typename T2>
-	void conservativeResize(const T& n, const T2& p){
+	template <typename T, typename T2, typename T3>
+	void conservativeResize(const T& n, const T2& p, const T3& my_n_effects){
 		if(low_mem){
 			M.conservativeResize(n, p);
 		} else {
@@ -429,13 +444,14 @@ public:
 		compressed_dosage_means.conservativeResize(p);
 		compressed_dosage_sds.conservativeResize(p);
 		compressed_dosage_inv_sds.conservativeResize(p);
-		aa.conservativeResize(n);
+		E.conservativeResize(n, my_n_effects);
 		missing_genos.resize(p);
 		NN = n;
 		PP = p;
+		n_effects = my_n_effects;
 	}
 
-	friend std::ostream &operator<<( std::ostream &output, const GenotypeMatrix &gg ) { 
+	friend std::ostream &operator<<( std::ostream &output, const GenotypeMatrix &gg ) {
 		output << gg.M;
 		return output;
 	}

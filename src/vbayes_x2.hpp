@@ -10,13 +10,15 @@
 #include <iostream>
 #include <limits>
 #include <random>
-#include <thread> 
+#include <thread>
 #include "sys/types.h"
 #include "sys/sysinfo.h"
 #include "class.h"
 #include "vbayes_tracker.hpp"
 #include "data.hpp"
 #include "utils.hpp"  // sigmoid
+#include "my_timer.hpp"
+#include "variational_parameters.hpp"
 #include "tools/eigen3.3/Dense"
 #include <boost/iostreams/filtering_stream.hpp>
 #include <boost/iostreams/device/file.hpp>
@@ -27,13 +29,6 @@ template <typename T>
 inline std::vector<int> validate_grid(const Eigen::MatrixXd &grid, const T n_var);
 inline Eigen::MatrixXd subset_matrix(const Eigen::MatrixXd &orig, const std::vector<int> &valid_points);
 inline std::size_t find_covar_index( std::string colname, std::vector< std::string > col_names );
-
-struct FreeParameters {
-	Eigen::MatrixXd s_sq;
-	Eigen::VectorXd alpha;
-	Eigen::MatrixXd mu;
-	Eigen::VectorXd Hr;
-}; 
 
 class VBayesX2 {
 public:
@@ -46,23 +41,24 @@ public:
 	int print_interval;              // print time every x grid points
 
 	// Column order of hyperparameters in grid
-	const int sigma_ind   = 0;
-	const int sigma_b_ind = 1;
-	const int sigma_g_ind = 2;
-	const int lam_b_ind   = 3;
-	const int lam_g_ind   = 4;
+	// const int sigma_ind   = 0;
+	// const int sigma_b_ind = 1;
+	// const int sigma_g_ind = 2;
+	// const int lam_b_ind   = 3;
+	// const int lam_g_ind   = 4;
 	const std::vector< std::string > hyps_names = {"sigma", "sigma_b", "sigma_g",
 												   "lambda_b", "lambda_g"};
 
 	// sizes
 	int           n_grid;            // size of hyperparameter grid
+	int           n_effects;             // no. interaction variables + 1
 	std::uint32_t n_samples;
 	std::uint32_t n_var;
 	std::uint32_t n_var2;
 	bool          random_params_init;
 	bool          run_round1;
 
-	// 
+	//
 	parameters& p;
 	std::vector< std::uint32_t > fwd_pass;
 	std::vector< std::uint32_t > back_pass;
@@ -71,34 +67,41 @@ public:
 	// Data
 	GenotypeMatrix& X;
 	Eigen::MatrixXd& Y;          // residual phenotype matrix
-	Eigen::VectorXd dXtX;       // diagonal of X^T x X
-	Eigen::VectorXd dHtH;       // diagonal of H^T x H where H = (X, Z)
-	Eigen::VectorXd Hty;		// vector of H^T x y where H = (X, Z)
-	Eigen::VectorXd aa;         // column vector of participant ages
+	Eigen::ArrayXd dXtX;       // diagonal of X^T x X
+	Eigen::ArrayXd Hty;         // vector of H^T x y where H = (X, Z)
+	Eigen::MatrixXd E;          // matrix of environmental variables
 	Eigen::MatrixXd r1_hyps_grid;
 	Eigen::MatrixXd r1_probs_grid;
 	Eigen::MatrixXd hyps_grid;
 	Eigen::MatrixXd probs_grid; // prob of each point in grid under hyps
 
+	Eigen::ArrayXd dHtH;       // P x (E+1); dHtH_ij = X_i^T * diag(e_j) * X_i
+
 	// Init points
-	Eigen::VectorXd alpha_init; // column vector of participant ages
-	Eigen::VectorXd mu_init;    // column vector of participant ages
-	Eigen::VectorXd Hr_init;    // column vector of participant ages
-	Eigen::VectorXd Xr_init;    // column vector of participant ages
+	VariationalParametersLite vp_init;
 
 	// boost fstreams
 	boost_io::filtering_ostream outf, outf_weights, outf_elbo, outf_alpha_diff, outf_inits;
 	boost_io::filtering_ostream outf_mus, outf_alphas;
 
-	// time monitoring
+	// Monitoring
 	std::chrono::system_clock::time_point time_check;
 
-	VBayesX2( Data& dat ) : X( dat.G ),
-							Y( dat.Y ), 
-							p( dat.params ) {
+	MyTimer t_updateAlphaMu;
+	MyTimer t_elbo;
+	MyTimer t_readXk;
+	MyTimer t_updateHyps;
+
+	explicit VBayesX2( Data& dat ) : X( dat.G ),
+                            Y( dat.Y ),
+                            p( dat.params ),
+                            t_updateAlphaMu("updateAlphaMu: %ts \n"),
+                            t_elbo("calcElbo: %ts \n"),
+                            t_readXk("read_X_kk: %ts \n"),
+                            t_updateHyps("updateHyps: %ts \n") {
 		assert(std::includes(dat.hyps_names.begin(), dat.hyps_names.end(), hyps_names.begin(), hyps_names.end()));
 		assert(p.interaction_analysis);
-		std::cout << "Version with X_kk" << std::endl;
+
 		// Data size params
 		n_var =          dat.n_var;
 		n_var2 =         2 * dat.n_var;
@@ -106,11 +109,7 @@ public:
 		n_grid =         dat.hyps_grid.rows();
 		print_interval = std::max(1, n_grid / 10);
 
-		// Allocate memory - vb
-		alpha_init.resize(n_var2);
-		mu_init.resize(n_var2);
-		Hr_init.resize(n_samples);
-		Xr_init.resize(n_samples);
+		// Allocate memory - fwd/back pass vectors
 		for(std::uint32_t kk = 0; kk < n_var2; kk++){
 			fwd_pass.push_back(kk);
 			back_pass.push_back(n_var2 - kk - 1);
@@ -120,34 +119,28 @@ public:
 		}
 
 		// Allocate memory - genetic
-		Hty.resize(n_var2);
-		dHtH.resize(n_var2);
-		dXtX.resize(n_var);
+		Hty.resize(n_var, n_effects);
+		dHtH.resize(n_var, n_effects);
 
-		// Set covariable vector aa
+		// Read environmental variables
 		if(p.x_param_name != "NULL"){
 			std::size_t x_col = find_covar_index(p.x_param_name, dat.covar_names);
-			aa                = dat.W.col(x_col);
+			E                = dat.W.col(x_col);
 		} else {
-			aa                = dat.W.col(0);
+			E                = dat.W.col(0);
 		}
-		X.aa = aa;  // WARNING: Required to be able to call X.col(jj) with jj > P
+		X.E = E;  // WARNING: Required to be able to call X.col(jj) with jj > P
 
 		// non random initialisation
 		if(p.vb_init_file != "NULL"){
-			alpha_init         = dat.alpha_init;
-			mu_init            = dat.mu_init;
-
-			if(alpha_init.rows() != n_var2){
-				std::cout << n_var2 << " rows expected in alpha_init, ";
- 				std::cout << alpha_init.rows() << " found." << std::endl;
-				assert(alpha_init.rows() == n_var2);
+			vp_init.alpha         = dat.alpha_init;
+			vp_init.mu            = dat.mu_init;
+			if(p.mode_mog_prior){
+				vp_init.mup   = Eigen::ArrayXd::Zero(n_var, n_effects);
 			}
-			assert(mu_init.rows() == n_var2);
+
 			// Gen Hr_init
-			Eigen::VectorXd rr = alpha_init.cwiseProduct(mu_init);
-			Hr_init << (X * rr.segment(0, n_var) + (X * rr.segment(n_var, n_var)).cwiseProduct(aa));
-			Xr_init << X * rr.segment(0, n_var);
+			calcHr(vp_init);
 
 			random_params_init = false;
 			run_round1         = false;
@@ -172,16 +165,33 @@ public:
 		}
 
 		// Assign data - genetic
-		Eigen::VectorXd a_sq = aa.cwiseProduct(aa);
-		Hty       << (X.transpose_vector_multiply(Y)), (X.transpose_vector_multiply(Y.cwiseProduct(aa)));
+		Hty.col(0) = X.transpose_vector_multiply(Y).array();
+		for (int ee = 1; ee < n_effects; ee++){
+			Hty.col(ee) = X.transpose_vector_multiply(Y.cwiseProduct(E.col(ee-1))).array();
+		}
 
-		Eigen::VectorXd dXtX(n_var), dZtZ(n_var), col_j;
+		//
+		// Eigen::VectorXd dXtX(n_var), dZtZ(n_var), col_j;
+		// for (std::size_t jj = 0; jj < n_var; jj++){
+		// 	col_j = X.col(jj);
+		// 	dXtX[jj] = col_j.dot(col_j);
+		// 	dZtZ[jj] = col_j.cwiseProduct(a_sq).dot(col_j);
+		// }
+		// dHtH                   << dXtX, dZtZ;
+
+		Eigen::VectorXd e_k_sq;
+		Eigen::VectorXd col_j;
 		for (std::size_t jj = 0; jj < n_var; jj++){
 			col_j = X.col(jj);
-			dXtX[jj] = col_j.dot(col_j);
-			dZtZ[jj] = col_j.cwiseProduct(a_sq).dot(col_j);
+			dHtH(jj, 0) = col_j.dot(col_j);
 		}
-		dHtH                   << dXtX, dZtZ;
+		for (int ee = 1; ee < n_effects; ee++){
+			e_k_sq = E.col(ee-1).cwiseProduct(E.col(ee-1));
+			for (std::size_t jj = 0; jj < n_var; jj++){
+				col_j = X.col(jj);
+				dHtH(jj, ee) = col_j.cwiseProduct(e_k_sq).dot(col_j);
+			}
+		}
 	}
 
 	~VBayesX2(){
@@ -196,6 +206,42 @@ public:
 		time_check = now;
 	}
 
+	void run_inference(const Eigen::Ref<const Eigen::MatrixXd>& hyps_grid,
+                     const bool random_init,
+                     const int round_index,
+                     std::vector<VbTracker>& trackers){
+		// Writes results from inference to trackers
+
+		int n_grid = hyps_grid.rows();
+
+		// Divide grid of hyperparameters into chunks for multithreading
+		std::vector< std::vector< int > > chunks(p.n_thread);
+		for (int ii = 0; ii < n_grid; ii++){
+			int ch_index = (ii % p.n_thread);
+			chunks[ch_index].push_back(ii);
+		}
+
+		// Allocate memory for trackers
+		trackers.resize(p.n_thread);
+		for (int ch = 0; ch < p.n_thread; ch++){
+			trackers[ch].resize(n_grid);
+			trackers[ch].set_main_filepath(p.out_file);
+			trackers[ch].p = p;
+		}
+
+		// Assign set of start points to each thread & run
+		std::thread t2[p.n_thread];
+		for (int ch = 1; ch < p.n_thread; ch++){
+			t2[ch] = std::thread( [this, round_index, hyps_grid, n_grid, chunks, ch, random_init, &trackers] {
+				runOuterLoop(round_index, hyps_grid, n_grid, chunks[ch], random_init, trackers[ch]);
+			} );
+		}
+		runOuterLoop(round_index, hyps_grid, n_grid, chunks[0], random_init, trackers[0]);
+		for (int ch = 1; ch < p.n_thread; ch++){
+			t2[ch].join();
+		}
+	}
+
 	void run(){
 		std::cout << "Starting variational inference" << std::endl;
 		time_check = std::chrono::system_clock::now();
@@ -205,37 +251,12 @@ public:
 
 		// Round 1; looking for best start point
 		if(run_round1){
+			std::vector< VbTracker > trackers;
 			int r1_n_grid = r1_hyps_grid.rows();
-
-			// Round 1; Divide grid of hyperparameters into chunks for multithreading
-			std::vector< std::vector< int > > chunks(p.n_thread);
-			for (int ii = 0; ii < r1_n_grid; ii++){
-				int ch_index = (ii % p.n_thread);
-				chunks[ch_index].push_back(ii);
-			}
-
-			// Round 1; Allocate memory for trackers
-			std::vector< VbTracker > trackers(p.n_thread);
-			for (int ch = 0; ch < p.n_thread; ch++){
-				trackers[ch].resize(r1_n_grid);
-				trackers[ch].set_main_filepath(p.out_file);
-				trackers[ch].p = p;
-			}
-
-			std::thread t1[p.n_thread];
-			for (int ch = 1; ch < p.n_thread; ch++){
-				t1[ch] = std::thread( [this, r1_n_grid, chunks, ch, &trackers] {
-					runOuterLoop(1, r1_hyps_grid, r1_n_grid, chunks[ch], random_params_init, trackers[ch]); 
-				} );
-			}
-			runOuterLoop(1, r1_hyps_grid, r1_n_grid, chunks[0], random_params_init, trackers[0]);
-
-			for (int ch = 1; ch < p.n_thread; ch++){
-				t1[ch].join();
-			}
+			run_inference(r1_hyps_grid, true, 1, trackers);
 
 			if(p.verbose){
-				write_trackers_to_file("round1_", trackers, r1_n_grid, r1_probs_grid);
+				write_trackers_to_file("round1_", trackers, r1_hyps_grid, r1_probs_grid);
 			}
 
 			// Find best init
@@ -246,8 +267,7 @@ public:
 				double logw      = trackers[tr_index].logw_list[ii];
 				double sigma_g   = r1_hyps_grid(ii, sigma_g_ind);
 				if(std::isfinite(logw) && logw > logw_best && sigma_g > 0){
-					alpha_init   = trackers[tr_index].alpha_list[ii];
-					mu_init      = trackers[tr_index].mu_list[ii];
+					vp_init      = trackers[tr_index].vp_list[ii];
 					logw_best    = logw;
 					init_not_set = false;
 				}
@@ -258,54 +278,71 @@ public:
 			}
 
 			// gen Hr_init
-			Eigen::VectorXd rr = alpha_init.cwiseProduct(mu_init);
-			Hr_init << (X * rr.segment(0, n_var) + (X * rr.segment(n_var, n_var)).cwiseProduct(aa));
-			Xr_init << (X * rr.segment(0, n_var));
+			calcHr(vp_init);
 
 			// Write inits to file
 			std::string ofile_inits = fstream_init(outf_inits, "", "_inits");
 			std::cout << "Writing start points for alpha and mu to " << ofile_inits << std::endl;
-			outf_inits << "chr rsid pos a0 a1 alpha mu" << std::endl;
-			for (std::uint32_t kk = 0; kk < n_var2; kk++){
-				std::uint32_t kk1 = kk % n_var;
-				outf_inits << X.chromosome[kk1] << " " << X.rsid[kk1]<< " " << X.position[kk1];
-				outf_inits << " " << X.al_0[kk1] << " " << X.al_1[kk1] << " ";
-				outf_inits << alpha_init[kk] << " " << mu_init[kk] << std::endl;
+			// outf_inits << "chr rsid pos a0 a1 alpha mu" << std::endl;
+			// for (std::uint32_t kk = 0; kk < n_var2; kk++){
+			// 	std::uint32_t kk1 = kk % n_var;
+			// 	outf_inits << X.chromosome[kk1] << " " << X.rsid[kk1]<< " " << X.position[kk1];
+			// 	outf_inits << " " << X.al_0[kk1] << " " << X.al_1[kk1] << " ";
+			// 	outf_inits << vp_init.alpha[kk] << " " << vp_init.mu[kk] << std::endl;
+			// }
+
+			outf_inits << "chr rsid pos a0 a1";
+			for (int ee = 0; ee < n_effects; ee++){
+				outf_inits << " alpha" << ee << " mu" << ee;
 			}
+			outf_inits << std::endl;
+			for (std::uint32_t kk = 0; kk < n_var; kk++){
+				outf_inits << X.chromosome[kk] << " " << X.rsid[kk] << " " << X.position[kk];
+				outf_inits << " " << X.al_0[kk] << " " << X.al_1[kk];
+				for (int ee = 0; ee < n_effects; ee++){
+					outf_inits << " " << vp_init.alpha(kk, ee);
+					outf_inits << " " << vp_init.mu(kk, ee);
+				}
+				outf_inits << std::endl;
+			}
+
+			print_time_check();
 		}
 
-		// Round 2; Divide grid of hyperparameters into chunks for multithreading
-		std::vector< std::vector< int > > chunks(p.n_thread);
-		for (int ii = 0; ii < n_grid; ii++){
-			int ch_index = (ii % p.n_thread);
-			chunks[ch_index].push_back(ii);
-		}
+		std::vector< VbTracker > trackers;
+		run_inference(hyps_grid, false, 2, trackers);
 
-		// Round 2; Allocate memory for trackers
-		std::vector< VbTracker > trackers(p.n_thread);
-		for (int ch = 0; ch < p.n_thread; ch++){
-			trackers[ch].resize(n_grid);
-			trackers[ch].set_main_filepath(p.out_file);
-			trackers[ch].p = p;
-		}
-
-		// Round 2; initial values already assigned to alpha_init, mu_init
-		std::cout << "Starting Round 2 (resetting timecheck)" << std::endl;
-		time_check = std::chrono::system_clock::now();
-		std::thread t2[p.n_thread];
-		for (int ch = 1; ch < p.n_thread; ch++){
-			t2[ch] = std::thread( [this, chunks, ch, &trackers] {
-				runOuterLoop(2, hyps_grid, n_grid, chunks[ch], false, trackers[ch]); 
-			} );
-		}
-		runOuterLoop(2, hyps_grid, n_grid, chunks[0], false, trackers[0]);
-		for (int ch = 1; ch < p.n_thread; ch++){
-			t2[ch].join();
-		}
-
-		write_trackers_to_file("", trackers, n_grid, probs_grid);
+		write_trackers_to_file("", trackers, hyps_grid, probs_grid);
 
 		std::cout << "Variational inference finished" << std::endl;
+	}
+
+	void calcHr(VariationalParameters& vp){
+		Eigen::ArrayXd rr;
+		if(p.mode_mog_prior){
+			rr = vp.alpha * (vp.mu - vp.mup) + vp.mup;
+		} else {
+			rr = vp.alpha * vp.mu;
+		}
+
+		vp.Hr = X * rr.col(0).matrix();
+		for (int ee = 1; ee < n_effects; ee++){
+			vp.Hr += X * (rr.col(ee).matrix().cwiseProduct(E.col(ee-1)));
+		}
+	}
+
+	void calcHr(VariationalParametersLite& vp){
+		Eigen::ArrayXd rr;
+		if(p.mode_mog_prior){
+			rr = vp.alpha * (vp.mu - vp.mup) + vp.mup;
+		} else {
+			rr = vp.alpha * vp.mu;
+		}
+
+		vp.Hr = X * rr.col(0).matrix();
+		for (int ee = 1; ee < n_effects; ee++){
+			vp.Hr += X * (rr.col(ee).matrix().cwiseProduct(E.col(ee-1)));
+		}
 	}
 
 	void runOuterLoop(const int round_index,
@@ -314,8 +351,6 @@ public:
                       std::vector<int> grid_index_list,
                       const bool random_init,
                       VbTracker& tracker){
-		Hyps i_hyps;
-		std::uint32_t L;
 
 		for (auto ii : grid_index_list){
 			if((ii + 1) % print_interval == 0){
@@ -324,118 +359,81 @@ public:
 			}
 
 			// Unpack hyperparams
-			i_hyps.sigma   = outer_hyps_grid(ii, sigma_ind);
-			i_hyps.sigma_b = outer_hyps_grid(ii, sigma_b_ind);
-			i_hyps.sigma_g = outer_hyps_grid(ii, sigma_g_ind);
-			i_hyps.lam_b   = outer_hyps_grid(ii, lam_b_ind);
-			i_hyps.lam_g   = outer_hyps_grid(ii, lam_g_ind);
-
-			// If h_g == 0 then set free parameters approximating interaction
-			// coefficients to zero.
-			if (i_hyps.sigma_g < 0.000000001){
-				L = n_var;
-			} else {
-				L = n_var2;
-			}
+			Hyps i_hyps(hyps_grid, ii, n_effects);
+			// i_hyps.sigma   = outer_hyps_grid(ii, sigma_ind);
+			// i_hyps.sigma_b = outer_hyps_grid(ii, sigma_b_ind);
+			// i_hyps.sigma_g = outer_hyps_grid(ii, sigma_g_ind);
+			// i_hyps.lam_b   = outer_hyps_grid(ii, lam_b_ind);
+			// i_hyps.lam_g   = outer_hyps_grid(ii, lam_g_ind);
+			//
+			// i_hyps.sigma_b_spike = outer_hyps_grid(ii, sigma_b_ind) / 100.0;
+			// i_hyps.sigma_g_spike = outer_hyps_grid(ii, sigma_g_ind) / 100.0;
 
 			// Run outer loop - don't update trackers
-			runInnerLoop(ii, random_init, round_index, L, i_hyps, tracker);
+			runInnerLoop(ii, random_init, round_index, i_hyps, tracker);
 		}
 	}
 
 	void runInnerLoop(const int ii,
                       const bool random_init,
                       const int round_index,
-                      const std::uint32_t L,
-                      Hyps i_hyps, 
+                      Hyps hyps,
                       VbTracker& tracker){
 		// minimise KL Divergence and assign elbo estimate
-		// Assumes alpha_init, mu_init and Hr_init already exist
-		FreeParameters i_par;
-		auto inner_start = std::chrono::system_clock::now();
-		std::chrono::duration<double> elapsed;
+		// Assumes vp_init already exist
+		VariationalParameters vp;
 		long int hty_counter;
-		std::chrono::system_clock::time_point calc_logw_start, calc_logw_end;
-		std::chrono::duration<double> calc_logw_time;
 
 		// Assign initial values
 		if (random_init) {
-			random_alpha_mu_init(L, i_par);
+			initRandomAlphaMu(vp);
 		} else {
-			i_par.alpha = alpha_init;
-			if(p.mode_mog_prior){
-				i_par.mu = Eigen::MatrixXd::Zero(n_var2, 2);
-			}
-			i_par.mu.col(0) = mu_init;
-			if(L == n_var2){
-				i_par.Hr = Hr_init;
-			} else {
-				i_par.Hr = Xr_init;
-				for(std::uint32_t kk = L; kk < n_var2; kk++){
-					i_par.alpha[kk] = 0.0;
-					i_par.mu(kk) = 0.0;
-				}
-			}
+			vp.init_from_lite(vp_init);
 		}
 
 		// Update s_sq
-		updateSSq(i_hyps, i_par, L);
+		updateSSq(hyps, vp);
 
 		// Run inner loop until convergence
 		int count = 0;
 		bool converged = false;
-		double alpha_diff = 0, logw_diff, logw_prev;
-		Eigen::VectorXd alpha_prev;
+		Eigen::ArrayXd alpha_prev;
 		std::vector< std::uint32_t > iter;
-		double i_logw = calc_logw(L, i_hyps, i_par);
+		double i_logw = calc_logw(hyps, vp);
 		std::vector< double > logw_updates, alpha_diff_updates;
 		logw_updates.push_back(i_logw);
-		tracker.interim_output_init(ii, round_index);
+		tracker.interim_output_init(ii, round_index, n_effects);
 		while(!converged  && count < iter_max){
-			alpha_prev = i_par.alpha;
-			logw_prev = i_logw;
+			alpha_prev = vp.alpha;
+			double logw_prev = i_logw;
 
 			// Alternate between back and fwd passes
 			if(count % 2 == 0){
 				iter = fwd_pass;
-			} else if(L == n_var){
-				iter = back_pass_short;
 			} else {
 				iter = back_pass;
 			}
 
 			// Update i_mu, i_alpha, i_Hr
-			auto updateAlpha_start = std::chrono::system_clock::now();
-			updateAlphaMu(iter, L, i_hyps, i_par, hty_counter);
-			auto updateAlpha_end = std::chrono::system_clock::now();
-			std::chrono::duration<double> updateAlphaMu_time = updateAlpha_end - updateAlpha_start;
+			updateAlphaMu(iter, hyps, vp, hty_counter);
 
 			// Update hyps
 			if(round_index > 1 && p.mode_empirical_bayes){
-				auto update_end = std::chrono::system_clock::now();
-				elapsed = update_end - inner_start;
+				i_logw     = calc_logw(hyps, vp);
 
-				calc_logw_start = std::chrono::system_clock::now();
-				i_logw     = calc_logw(L, i_hyps, i_par);
-				calc_logw_end = std::chrono::system_clock::now();
-				calc_logw_time = calc_logw_end - calc_logw_start;
-
-				tracker.push_interim_iter_update(count, i_hyps, i_logw, alpha_diff,
-                                                 elapsed, updateAlphaMu_time, calc_logw_time, hty_counter);
-				updateHyps(i_hyps, i_par, L);
-				updateSSq(i_hyps, i_par, L);
+				tracker.push_interim_iter_update(count, hyps, i_logw, alpha_diff,
+                                         t_updateAlphaMu.get_lap_seconds(), hty_counter);
+				updateHyps(hyps, vp);
+				updateSSq(hyps, vp);
 			}
 
 			// New elbo
-			calc_logw_start = std::chrono::system_clock::now();
-			i_logw     = calc_logw(L, i_hyps, i_par);
-			calc_logw_end = std::chrono::system_clock::now();
-			calc_logw_time = calc_logw_end - calc_logw_start;
+			i_logw     = calc_logw(hyps, vp);
 
 			// Diagnose convergence
 			count++;
-			logw_diff  = i_logw - logw_prev;
-			alpha_diff = (alpha_prev - i_par.alpha).cwiseAbs().maxCoeff();
+			double logw_diff  = i_logw - logw_prev;
+			double alpha_diff = (alpha_prev - vp.alpha).abs().maxCoeff();
 			logw_updates.push_back(i_logw);
 			alpha_diff_updates.push_back(alpha_diff);
 
@@ -461,10 +459,8 @@ public:
 			}
 
 			// Log updates
-			auto update_end = std::chrono::system_clock::now();
-			elapsed = update_end - inner_start;
-			tracker.push_interim_iter_update(count, i_hyps, i_logw, alpha_diff,
-                                             elapsed, updateAlphaMu_time, calc_logw_time, hty_counter);
+			tracker.push_interim_iter_update(count, hyps, i_logw, alpha_diff,
+                                       t_updateAlphaMu.get_lap_seconds(), hty_counter);
 		}
 
 		if(!std::isfinite(i_logw)){
@@ -472,187 +468,181 @@ public:
 		}
 
 		// Log all things that we want to track
-		auto inner_end = std::chrono::system_clock::now();
-		elapsed = inner_end - inner_start;
-
 		tracker.logw_list[ii] = i_logw;
 		tracker.counts_list[ii] = count;
-		tracker.alpha_list[ii] = i_par.alpha;
-		tracker.mu_list[ii] = i_par.mu;
+		tracker.vp_list[ii] = vp.convert_to_lite();
 		tracker.elapsed_time_list[ii] = elapsed.count();
-		tracker.hyps_list[ii] = i_hyps;
+		tracker.hyps_list[ii] = hyps;
 		if(p.verbose){
 			logw_updates.push_back(i_logw);  // adding converged estimate
 			tracker.logw_updates_list[ii] = logw_updates;
 			tracker.alpha_diff_list[ii] = alpha_diff_updates;
 		}
-		tracker.push_interim_output(ii, i_par.s_sq, X.chromosome, X.rsid, X.position, X.al_0, X.al_1, n_var);
+		tracker.push_interim_output(ii, X.chromosome, X.rsid, X.position, X.al_0, X.al_1, n_var, n_effects);
 	}
 
-	void updateSSq(const Hyps& i_hyps, FreeParameters& i_par, const std::uint32_t L){
+	void updateSSq(const Hyps& hyps,
+                   VariationalParameters& vp){
 		// Update s_sq
+		vp.s_sq.resize(n_var, n_effects);
 		if(p.mode_mog_prior){
-			i_par.s_sq.resize(n_var2, 2);
-		} else {
-			i_par.s_sq.resize(n_var2, 1);
+			vp.sp_sq.resize(n_var, n_effects);
 		}
 
-		for (std::uint32_t kk = 0; kk < n_var; kk++){
-			i_par.s_sq(kk) = i_hyps.sigma_b * i_hyps.sigma / (i_hyps.sigma_b * dHtH(kk) + 1.0);
-		}
-		for (std::uint32_t kk = n_var; kk < L; kk++){
-			i_par.s_sq(kk) = i_hyps.sigma_g * i_hyps.sigma / (i_hyps.sigma_g * dHtH(kk) + 1.0);
-		}
-		for (std::uint32_t kk = L; kk < n_var2; kk++){
-			i_par.s_sq(kk) = 0.0;
-		}
-
-		if(p.mode_mog_prior){
+		for (int ee = 0; ee < n_effects; ee++){
 			for (std::uint32_t kk = 0; kk < n_var; kk++){
-				i_par.s_sq(kk, 1) = i_hyps.sigma_b_spike * i_hyps.sigma / (i_hyps.sigma_b_spike * dHtH(kk) + 1.0);
+				vp.s_sq(kk, ee)  = hyps.slab_var(ee);
+				vp.s_sq(kk, ee) /= (hyps.slab_relative_var(ee) * dHtH(kk, ee) + 1.0);
 			}
-			for (std::uint32_t kk = n_var; kk < L; kk++){
-				i_par.s_sq(kk, 1) = i_hyps.sigma_g_spike * i_hyps.sigma / (i_hyps.sigma_g_spike * dHtH(kk) + 1.0);
-			}
-			for (std::uint32_t kk = L; kk < n_var2; kk++){
-				i_par.s_sq(kk, 1) = 0.0;
+		}
+
+		if(p.mode_mog_prior){
+			for (int ee = 0; ee < n_effects; ee++){
+				for (std::uint32_t kk = 0; kk < n_var; kk++){
+					vp.sp_sq(kk, ee)  = hyps.spike_var(ee);
+					vp.sp_sq(kk, ee) /= (hyps.spike_relative_var(ee) * dHtH(kk, ee) + 1.0);
+				}
 			}
 		}
 	}
 
-	void updateHyps(Hyps& i_hyps, const FreeParameters& i_par, const std::uint32_t L){
-		i_hyps.lam_b   = 0.0;
-		i_hyps.lam_g   = 0.0;
-		i_hyps.sigma_b = 0.0;
-		i_hyps.sigma_g = 0.0;
-		i_hyps.sigma   = (Y - i_par.Hr).squaredNorm();
-
-		if(p.mode_mog_prior){
-			i_hyps.sigma_b_spike = 0.0;
-			i_hyps.sigma_g_spike = 0.0;
-		}
+	void updateHyps(Hyps& hyps,
+                    const VariationalParameters& vp){
+		t_updateHyps.resume();
 
 		// max sigma
-		Eigen::VectorXd varB;
- 		calcVarqBeta(L, i_hyps, i_par, varB);
-		i_hyps.sigma += dHtH.dot(varB);
-		i_hyps.sigma /= n_samples;
+		Eigen::ArrayXd varB;
+ 		calcVarqBeta(hyps, vp, varB);
+		hyps.sigma  = (Y - vp.Hr).squaredNorm();
+		hyps.sigma += (dHtH * varB).sum();
+		hyps.sigma /= n_samples;
 
-		// max lambda_b & sigma_b
-		for (std::uint32_t kk = 0; kk < n_var; kk++){
-			i_hyps.lam_b   += i_par.alpha[kk];
-			i_hyps.sigma_b += i_par.alpha[kk] * (i_par.s_sq(kk) + i_par.mu(kk) * i_par.mu(kk));
-		}
-		if(p.mode_mog_prior){
-			for (std::uint32_t kk = 0; kk < n_var; kk++){
-				i_hyps.sigma_b_spike += i_par.alpha[kk] * i_par.s_sq(kk, 1);
- 				i_hyps.sigma_b_spike += i_par.alpha[kk] * i_par.mu(kk, 1) * i_par.mu(kk, 1);
-			}
-		}
-		i_hyps.sigma_b       /= (i_hyps.lam_b * i_hyps.sigma);
-		i_hyps.sigma_b_spike /= (i_hyps.lam_b * i_hyps.sigma);
-		i_hyps.lam_b         /= n_var;
+		// max lambda
+		hyps.lambda = vp.alpha.colwise().sum();
 
-		// max lambda_g & sigma_g
-		for (std::uint32_t kk = n_var; kk < L; kk++){
-			i_hyps.lam_g   += i_par.alpha[kk];
-			i_hyps.sigma_g += i_par.alpha[kk] * (i_par.s_sq(kk) + i_par.mu(kk) * i_par.mu(kk));
-		}
+		// max spike & slab variances
+		hyps.slab_var  = (vp.alpha * (vp.s_sq + vp.mu.square())).colwise().sum();
+		hyps.slab_var /= hyps.lambda;
+		hyps.slab_relative_var = hyps.slab_var / hyps.sigma;
 		if(p.mode_mog_prior){
-			for (std::uint32_t kk = n_var; kk < L; kk++){
-				i_hyps.sigma_g_spike += i_par.alpha[kk] * i_par.s_sq(kk, 1);
- 				i_hyps.sigma_g_spike += i_par.alpha[kk] * i_par.mu(kk, 1) * i_par.mu(kk, 1);
-			}
+			hyps.spike_var  = ((1.0 - vp.alpha) * (vp.sp_sq + vp.mup.square())).colwise().sum();
+			hyps.spike_var /= ( (double)n_var - hyps.lambda);
+			hyps.spike_relative_var = hyps.spike_var / hyps.sigma;
 		}
-		if(L == n_var2){
-			i_hyps.sigma_g       /= (i_hyps.lam_g * i_hyps.sigma);
-			i_hyps.sigma_g_spike /= (i_hyps.lam_g * i_hyps.sigma);
-			i_hyps.lam_g         /= n_var;
-		}
+
+		// finish max lambda
+		hyps.lambda /= n_var;
+
+		hyps.lam_b         = hyps.lambda(0);
+		hyps.lam_g         = hyps.lambda(1);
+		hyps.sigma_b       = hyps.slab_relative_var(0);
+		hyps.sigma_g       = hyps.slab_relative_var(1);
+		hyps.sigma_g_spike = hyps.spike_relative_var(0);
+		hyps.sigma_g_spike = hyps.spike_relative_var(1);
+
+		t_updateHyps.stop();
 	}
 
 	void updateAlphaMu(const std::vector< std::uint32_t >& iter,
-                       const std::uint32_t L,
-                       const Hyps& i_hyps,
-                       FreeParameters& i_par,
+                       const Hyps& hyps,
+                       VariationalParameters& vp,
                        long int& hty_updates){
-		std::uint32_t kk;
-		double rr_k, ff_k, rr_k_diff;
+		// TODO: Easy to use slab_var() here
+		t_updateAlphaMu.resume();
 		Eigen::VectorXd X_kk(n_samples);
 
-		double bbb_b, bbb_g;
-		bbb_b = std::log(i_hyps.lam_b / (1.0 - i_hyps.lam_b) + eps) - std::log(i_hyps.sigma_b * i_hyps.sigma) / 2.0;
-		bbb_g = std::log(i_hyps.lam_g / (1.0 - i_hyps.lam_g) + eps) - std::log(i_hyps.sigma_g * i_hyps.sigma) / 2.0;
+		Eigen::ArrayXd alpha_cnst;
+		// double bbb_b, bbb_g;
+		// bbb_b = std::log(hyps.lam_b / (1.0 - hyps.lam_b) + eps) - std::log(hyps.sigma_b * hyps.sigma) / 2.0;
+		// bbb_g = std::log(hyps.lam_g / (1.0 - hyps.lam_g) + eps) - std::log(hyps.sigma_g * hyps.sigma) / 2.0;
+		alpha_cnst = std::log(hyps.lambda / (1.0 - hyps.lambda) + eps) - std::log(hyps.slab_var) / 2.0;
 		hty_updates = 0;
 		for(std::uint32_t kk : iter ){
-			rr_k = i_par.alpha(kk) * i_par.mu(kk);
-			X_kk = X.col(kk);
+			int ee            = kk / n_var;
+			std::uint32_t jj = (kk % n_var);
 
-			// Update mu (eq 9); faster to take schur product with aa inside genotype_matrix
-			i_par.mu(kk) = i_par.s_sq(kk) * (Hty(kk) - i_par.Hr.dot(X_kk) + dHtH(kk) * rr_k) / i_hyps.sigma;
+			t_readXk.resume();
+			X_kk = X.col(jj);
+			t_readXk.stop();
+
+			double rr_k = vp.alpha(jj, ee) * vp.mu(jj, ee);
+
+			// Update mu (eq 9); faster to take schur product inside genotype_matrix
+			vp.mu(jj, ee) = vp.s_sq(jj, ee) * (Hty(kk) - vp.Hr.dot(X_kk) + dHtH(kk) * rr_k) / hyps.sigma;
 
 			// Update alpha (eq 10)  TODO: check syntax / i_  / sigmoid here!
-			if (kk < n_var){
-				ff_k = bbb_b + (std::log(i_par.s_sq(kk)) + i_par.mu(kk) * i_par.mu(kk) / i_par.s_sq(kk)) / 2.0;
-			} else {
-				ff_k = bbb_g + (std::log(i_par.s_sq(kk)) + i_par.mu(kk) * i_par.mu(kk) / i_par.s_sq(kk)) / 2.0;
-			}
-			i_par.alpha(kk) = sigmoid(ff_k);
+			double ff_k = (std::log(vp.s_sq(jj, ee)) + vp.mu(jj, ee) * vp.mu(jj, ee) / vp.s_sq(jj, ee)) / 2.0;
+			// if (kk < n_var){
+			// 	ff_k = bbb_b + (std::log(vp.s_sq(jj, ee)) + vp.mu(jj, ee) * vp.mu(jj, ee) / vp.s_sq(jj, ee)) / 2.0;
+			// } else {
+			// 	ff_k = bbb_g + (std::log(vp.s_sq(jj, ee)) + vp.mu(jj, ee) * vp.mu(jj, ee) / vp.s_sq(jj, ee)) / 2.0;
+			// }
+			vp.alpha(jj, ee) = sigmoid(ff_k + alpha_cnst(ee));
 
 			// Update i_Hr; only if coeff is large enough to matter
-			rr_k_diff = (i_par.alpha(kk)*i_par.mu(kk) - rr_k);
+			double rr_k_diff = (vp.alpha(jj, ee)*vp.mu(jj, ee) - rr_k);
 			// if(std::abs(rr_k_diff) > 1e-8){
 				hty_updates++;
-				i_par.Hr += rr_k_diff * X_kk;
+				vp.Hr += rr_k_diff * X_kk;
 			// }
 		}
+		t_updateAlphaMu.stop();
 	}
 
 	void updateAlphaMuMoG(const std::vector< std::uint32_t >& iter,
-                       const std::uint32_t L,
-                       const Hyps& i_hyps,
-                       FreeParameters& i_par,
+                       const Hyps& hyps,
+                       VariationalParameters& vp,
                        long int& hty_updates){
 		// When we use Mixture of gaussians for effects prior
-		std::uint32_t kk;
-		double rr_k, ff_k, rr_k_diff, rr_k_new;
+		// TODO: Easy to use slab_var() here
+		t_updateAlphaMu.resume();
 		Eigen::VectorXd X_kk(n_samples);
 
-		double bbb_b, bbb_g;
-		bbb_b  = std::log(i_hyps.lam_b / (1.0 - i_hyps.lam_b) + eps);
-		bbb_b -= (std::log(i_hyps.sigma_b) - std::log(i_hyps.sigma_b_spike)) / 2.0;
-		bbb_g  = std::log(i_hyps.lam_g / (1.0 - i_hyps.lam_g) + eps);
-		bbb_g -= (std::log(i_hyps.sigma_g) - std::log(i_hyps.sigma_g_spike)) / 2.0;
+		// double bbb_b, bbb_g;
+		// bbb_b  = std::log(hyps.lam_b / (1.0 - hyps.lam_b) + eps);
+		// bbb_b -= (std::log(hyps.sigma_b) - std::log(hyps.sigma_b_spike)) / 2.0;
+		// bbb_g  = std::log(hyps.lam_g / (1.0 - hyps.lam_g) + eps);
+		// bbb_g -= (std::log(hyps.sigma_g) - std::log(hyps.sigma_g_spike)) / 2.0;
+		Eigen::ArrayXd alpha_cnst;
+		alpha_cnst  = std::log(hyps.lambda / (1.0 - hyps.lambda) + eps);
+		alpha_cnst -= (hyps.slab_var.log() - hyps.spike_var.log()) / 2.0;
 
 		hty_updates = 0;
 		for(std::uint32_t kk : iter ){
-			rr_k = i_par.alpha(kk) * i_par.mu(kk, 0) + (1 - i_par.alpha(kk)) * i_par.mu(kk, 1);
-			X_kk = X.col(kk);
+			int ee            = kk / n_var;
+			std::uint32_t jj = (kk % n_var);
 
-			// Update mu (eq 9); faster to take schur product with aa inside genotype_matrix
-			double A        = Hty(kk) - i_par.Hr.dot(X_kk) + dHtH(kk) * rr_k;
-			i_par.mu(kk, 0) = i_par.s_sq(kk, 0) * A / i_hyps.sigma;
-			i_par.mu(kk, 1) = i_par.s_sq(kk, 1) * A / i_hyps.sigma;
+			// rr_k = vp.alpha(jj, ee) * vp.mu(kk, ee) + (1 - vp.alpha(jj, ee)) * vp.mup(jj, ee);
+			double rr_k = vp.alpha(jj, ee) * (vp.mu(kk, ee) - vp.mup(jj, ee)) + vp.mup(jj, ee);
+			t_readXk.resume();
+			X_kk = X.col(kk);
+			t_readXk.stop();
+
+			// Update mu (eq 9); faster to take schur product inside genotype_matrix
+			double A       = Hty(jj, ee) - vp.Hr.dot(X_kk) + dHtH(jj, ee) * rr_k;
+			vp.mu(jj, ee)  = vp.s_sq(jj, ee) * A / hyps.sigma;
+			vp.mup(jj, ee) = vp.sp_sq(jj, ee) * A / hyps.sigma;
 
 			// Update alpha (eq 10)  TODO: check syntax / i_  / sigmoid here!
-			ff_k  = i_par.mu(kk, 0) * i_par.mu(kk, 0) / i_par.s_sq(kk, 0)  / 2.0;
-			ff_k -= i_par.mu(kk, 1) * i_par.mu(kk, 1) / i_par.s_sq(kk, 1) / 2.0;
-			ff_k += (std::log(i_par.s_sq(kk, 0)) - std::log(i_par.s_sq(kk, 1))) / 2.0;
-			if (kk < n_var){
-				ff_k += bbb_b;
-			} else {
-				ff_k += bbb_g;
-			}
-			i_par.alpha(kk) = sigmoid(ff_k);
+			double ff_k  = vp.mu(jj, ee) * vp.mu(jj, ee) / vp.s_sq(jj, ee)  / 2.0;
+			ff_k -= vp.mup(jj, ee) * vp.mup(jj, ee) / vp.sp_sq(jj, ee) / 2.0;
+			ff_k += (std::log(vp.s_sq(jj, ee)) - std::log(vp.sp_sq(jj, ee))) / 2.0;
+			// if (kk < n_var){
+			// 	ff_k += bbb_b;
+			// } else {
+			// 	ff_k += bbb_g;
+			// }
+			vp.alpha(jj, ee) = sigmoid(ff_k + alpha_cnst(ee));
 
 			// Update i_Hr; only if coeff is large enough to matter
-			rr_k_new  = i_par.alpha(kk) * i_par.mu(kk, 0) + (1 - i_par.alpha(kk)) * i_par.mu(kk, 1);
-			rr_k_diff = rr_k_new - rr_k;
+			double rr_k_new  = vp.alpha(jj, ee) * (vp.mu(jj, ee) - vp.mup(jj, ee)) + vp.mup(jj, ee);
+			double rr_k_diff = rr_k_new - rr_k;
 			// if(std::abs(rr_k_diff) > 1e-8){
 				hty_updates++;
-				i_par.Hr += rr_k_diff * X_kk;
+				vp.Hr += rr_k_diff * X_kk;
 			// }
 		}
+		t_updateAlphaMu.stop();
 	}
 
 	void normaliseLogWeights(std::vector< double >& my_weights){
@@ -676,197 +666,133 @@ public:
 		}
 	}
 
-	void random_alpha_mu_init(std::uint32_t L,
-                              FreeParameters& par){
-		// par.alpha a uniform simplex, par.mu standard gaussian
-		// Also sets par.Hr
+	void initRandomAlphaMu(VariationalParameters& vp){
+		// vp.alpha a uniform simplex, vp.mu standard gaussian
+		// Also sets vp.Hr
 		std::default_random_engine gen_gauss, gen_unif;
 		std::normal_distribution<double> gaussian(0.0,1.0);
 		std::uniform_real_distribution<double> uniform(0.0,1.0);
-		double my_sum = 0;
 
 		// Allocate memory
+		vp.mu.resize(n_var, n_effects);
+		vp.alpha.resize(n_var, n_effects);
 		if(p.mode_mog_prior){
-			par.mu.resize(n_var2, 2);
-		} else {
-			par.mu.resize(n_var2, 1);
+			vp.mup = Eigen::ArrayXd::Zero(n_var, n_effects);
 		}
-		par.alpha.resize(n_var2);
-		par.Hr.resize(n_samples);
 
 		// Random initialisation of alpha, mu
-		for (std::uint32_t kk = 0; kk < L; kk++){
-			par.alpha(kk) = uniform(gen_unif);
-			par.mu(kk, 0) = gaussian(gen_gauss);
-			if(p.mode_mog_prior){
-				par.mu(kk, 1) = gaussian(gen_gauss);
-			}
-			my_sum += par.alpha(kk);
-		}
-		for (std::uint32_t kk = L; kk < n_var2; kk++){
-			par.alpha(kk) = 0.0;
-			par.mu(kk, 0) = 0.0;
-			if(p.mode_mog_prior){
-				par.mu(kk, 1) = 0.0;
+		for (int ee = 0; ee < n_effects; ee++){
+			for (std::uint32_t kk = 0; kk < n_var; 	kk++){
+				vp.alpha(kk, ee) = uniform(gen_unif);
+				vp.mu(kk, ee)    = gaussian(gen_gauss);
 			}
 		}
 
 		// Convert alpha to simplex. Why?
-		for (std::uint32_t kk = 0; kk < L; kk++){
-			par.alpha(kk) /= my_sum;
-		}
-
-		// rr; the expected genetic effect sizes
-		Eigen::VectorXd rr;
-		if(p.mode_mog_prior){
-			rr = par.alpha.cwiseProduct(par.mu.col(0));
-			for (std::uint32_t kk = 0; kk < L; kk++){
-				rr(kk) += (1 - par.alpha(kk)) * par.mu(kk, 1);
-			}
-		} else {
-			rr = par.alpha.cwiseProduct(par.mu);
-		}
+		vp.alpha /= vp.alpha.colwise().sum();
 
 		// Gen Hr.
-		if(L == n_var2){
-			par.Hr << (X * rr.segment(0, n_var) + (X * rr.segment(n_var, n_var)).cwiseProduct(aa));
-		} else {
-			par.Hr << (X * rr.segment(0, n_var));
-		}
+		calcHr(vp);
 	}
 
-	double calc_logw(const std::uint32_t L, const Hyps& i_hyps,
-                     const FreeParameters& i_par){
-		// Using dHtH, Y, Hr and i_* variables
-		double res, int_linear = 0, int_gamma = 0, int_klbeta = 0;
+	double calc_logw(const Hyps& hyps,
+                     const VariationalParameters& vp){
+		t_elbo.resume();
 
 		// Expectation of linear regression log-likelihood
-		int_linear = calcIntLinear(L, i_hyps, i_par);
+		double int_linear = calcIntLinear(hyps, vp);
 
 		// gamma
-		for (std::uint32_t kk = 0; kk < n_var; kk++){
-			int_gamma += i_par.alpha(kk) * std::log(i_hyps.lam_b + eps);
-			int_gamma += (1.0 - i_par.alpha(kk)) * std::log(1.0 - i_hyps.lam_b + eps);
-		}
-		for (std::uint32_t kk = n_var; kk < L; kk++){
-			int_gamma += i_par.alpha(kk) * std::log(i_hyps.lam_g + eps);
-			int_gamma += (1.0 - i_par.alpha(kk)) * std::log(1.0 - i_hyps.lam_g + eps);
+		Eigen::ArrayXd col_sums = vp.alpha.colwise().sum();
+		double int_gamma = 0;
+		for (int ee = 0; ee < n_effects; ee++){
+			int_gamma += col_sums(ee) * std::log(hyps.lambda(ee) + eps);
+			int_gamma -= col_sums(ee) * std::log(1.0 - hyps.lambda(ee) + eps);
+			int_gamma += (double) n_var *  std::log(hyps.lambda(ee) + eps);
 		}
 
 		// kl-beta
-		int_klbeta = calcIntKLBeta(L, i_hyps, i_par);
+		double int_klbeta = calcIntKLBeta(hyps, vp);
 
-		res = int_linear + int_gamma + int_klbeta;
+		double res = int_linear + int_gamma + int_klbeta;
+
+		t_elbo.stop();
 		return res;
 	}
 
-	void calcVarqBeta(const std::uint32_t L, const Hyps& i_hyps,
-                      const FreeParameters& i_par,
-                      Eigen::Ref<Eigen::VectorXd> varB){
+	void calcVarqBeta(const Hyps& hyps,
+                      const VariationalParameters& vp,
+                      Eigen::Ref<Eigen::ArrayXd> varB){
 		// Variance of effect size beta under approximating distribution q(u, beta)
-		double alpha;
+		varB.resize(n_var, n_effects);
 
-		varB.resize(n_var2);
+		varB = vp.alpha * (vp.s_sq + (1.0 - vp.alpha) * vp.mu.square());
 		if(p.mode_mog_prior){
-			for (std::uint32_t kk = 0; kk < L; kk++){
-				alpha = i_par.alpha(kk);
-
-				varB(kk)  = alpha * i_par.s_sq(kk);
-				varB(kk) += alpha * (1 - alpha) * i_par.mu(kk) * i_par.mu(kk);
-				varB(kk) += (1 - alpha) * i_par.s_sq(kk, 1);
-				varB(kk) += alpha * (1 - alpha) * i_par.mu(kk, 1) * i_par.mu(kk, 1);
-				varB(kk) -= 2 * alpha * (1 - alpha) * i_par.mu(kk) * i_par.mu(kk, 1);
-			}
-		} else {
-			for (std::uint32_t kk = 0; kk < L; kk++){
-				alpha = i_par.alpha(kk);
-
-				varB(kk)  = alpha * i_par.s_sq(kk);
-				varB(kk) += alpha * (1 - alpha) * i_par.mu(kk) * i_par.mu(kk);
-			}
-		}
-		for (std::uint32_t kk = L; kk < n_var2; kk++){
-			varB(kk) = 0.0;
+			varB += (1.0 - vp.alpha) * (vp.sp_sq + (vp.alpha) * vp.mup.square());
+			varB -= 2.0 * vp.alpha * (1.0 - vp.alpha) * vp.mu * vp.mup;
 		}
 	}
 
-	double calcIntLinear(const std::uint32_t L, const Hyps& i_hyps,
-                         const FreeParameters& i_par){
+	double calcIntLinear(const Hyps& hyps,
+                         const VariationalParameters& vp){
 		// Expectation of linear regression log-likelihood
-		double alpha, int_linear; 
-		Eigen::VectorXd varB;
- 		calcVarqBeta(L, i_hyps, i_par, varB);
+		double int_linear = 0;
+		Eigen::ArrayXd varB;
+ 		calcVarqBeta(hyps, vp, varB);
 
 		// Expectation of linear regression log-likelihood
-		int_linear -= ((double) n_samples) * std::log(2.0 * PI * i_hyps.sigma) / 2.0;
-		int_linear -= (Y - i_par.Hr).squaredNorm() / 2.0 / i_hyps.sigma;
-		int_linear -= 0.5 * (dHtH.dot(varB)) / i_hyps.sigma;
+		int_linear -= ((double) n_samples) * std::log(2.0 * PI * hyps.sigma) / 2.0;
+		int_linear -= (Y - vp.Hr).squaredNorm() / 2.0 / hyps.sigma;
+		int_linear -= 0.5 * (dHtH * varB).sum() / hyps.sigma;
 
 		return int_linear;
 	}
 
-	double calcIntKLBeta(const std::uint32_t L, const Hyps& i_hyps,
-                         const FreeParameters& i_par){
+	double calcIntKLBeta(const Hyps& hyps,
+                         const VariationalParameters& vp){
 		// KL Divergence of log[ p(beta | u, theta) / q(u, beta) ]
-
-		double tmp, alpha, int_klbeta = 0;
-		double var_b      = i_hyps.sigma * i_hyps.sigma_b;
-		double var_g      = i_hyps.sigma * i_hyps.sigma_g;
+		double col_sum, int_klbeta;
 
 		if(p.mode_mog_prior){
-			double var_b_spike = i_hyps.sigma * i_hyps.sigma_b_spike;
-			double var_g_spike = i_hyps.sigma * i_hyps.sigma_g_spike;
+			int_klbeta  = n_var * n_effects / 2.0;
 
-			int_klbeta  = L / 2.0;
-			int_klbeta -= std::log(var_b)       * i_par.alpha.segment(0, n_var).sum() / 2.0;
-			int_klbeta -= std::log(var_g)       * i_par.alpha.segment(n_var, L - n_var).sum() / 2.0;
+			int_klbeta -= ((vp.alpha * (vp.mu.square() + vp.s_sq)).colwise().sum() / 2.0 / hyps.slab_var).sum();
+			int_klbeta += (vp.alpha * vp.s_sq.log()).sum() / 2.0;
 
-			int_klbeta -= std::log(var_b_spike) * (1.0 - i_par.alpha.segment(0, n_var).array()).sum() / 2.0;
-			int_klbeta -= std::log(var_g_spike) * (1.0 - i_par.alpha.segment(n_var, L - n_var).array()).sum() / 2.0;
+			int_klbeta -= (((1.0 - vp.alpha) * (vp.mup.square() + vp.sp_sq)).colwise().sum() / 2.0 / hyps.spike_var).sum();
+			int_klbeta += ((1.0 - vp.alpha) * vp.sp_sq.log()).sum() / 2.0;
 
-			for (std::uint32_t kk = 0; kk < n_var; kk++){
-				alpha = i_par.alpha(kk);
-				tmp  = alpha * std::log(i_par.s_sq(kk));
-				tmp -= alpha * (i_par.s_sq(kk) + i_par.mu(kk) * i_par.mu(kk)) / var_b;
-
-				tmp += (1 - alpha) * std::log(i_par.s_sq(kk, 1) / var_b_spike);
-				tmp -= (1 - alpha) * i_par.s_sq(kk, 1) / var_b_spike;
-				tmp -= (1 - alpha) * i_par.mu(kk, 1) * i_par.mu(kk, 1) / var_b_spike;
-				int_klbeta += tmp / 2.0;
-			}
-			for (std::uint32_t kk = n_var; kk < L; kk++){
-				alpha = i_par.alpha(kk);
-				tmp  = alpha * std::log(i_par.s_sq(kk));
-				tmp -= alpha * (i_par.s_sq(kk) + i_par.mu(kk) * i_par.mu(kk)) / var_g;
-
-				tmp += (1 - alpha) * std::log(i_par.s_sq(kk, 1)) / var_g_spike;
-				tmp -= (1 - alpha) * i_par.s_sq(kk, 1) / var_g_spike;
-				tmp -= (1 - alpha) * i_par.mu(kk, 1) * i_par.mu(kk, 1) / var_g_spike;
-				int_klbeta += tmp / 2.0;
+			for (int ee = 0; ee < n_effects; ee++){
+				col_sum = vp.alpha.col(ee).sum();
+				int_klbeta -= std::log(hyps.slab_var(ee))  * col_sum / 2.0;
+				int_klbeta -= std::log(hyps.spike_var(ee)) * (n_var - col_sum) / 2.0;
 			}
 		} else {
-			for (std::uint32_t kk = 0; kk < n_var; kk++){
-				int_klbeta += i_par.alpha(kk) * (1.0 + std::log(i_par.s_sq(kk) / var_b) -
-									(i_par.s_sq(kk) + i_par.mu(kk) * i_par.mu(kk)) / var_b) / 2.0;
-			}
-			for (std::uint32_t kk = n_var; kk < L; kk++){
-				int_klbeta += i_par.alpha(kk) * (1.0 + std::log(i_par.s_sq(kk) / var_g) -
-									(i_par.s_sq(kk) + i_par.mu(kk) * i_par.mu(kk)) / var_g) / 2.0;
+			int_klbeta  = (vp.alpha * vp.s_sq).sum();
+			int_klbeta -= ((vp.alpha * (vp.mu.square() + vp.s_sq)).colwise().sum() / 2.0 / hyps.slab_var).sum();
+
+			for (int ee = 0; ee < n_effects; ee++){
+				col_sum = vp.alpha.col(ee).sum();
+				int_klbeta += col_sum * (1 - std::log(hyps.slab_var(ee))) / 2.0;
 			}
 		}
 
-		for (std::uint32_t kk = 0; kk < L; kk++){
-			int_klbeta -= i_par.alpha[kk] * std::log(i_par.alpha[kk] + eps);
-			int_klbeta -= (1 - i_par.alpha[kk]) * std::log(1 - i_par.alpha[kk] + eps);
+		for (int ee = 0; ee < n_effects; ee++){
+			for (std::uint32_t kk = 0; kk < n_var; kk++){
+				int_klbeta -= vp.alpha(kk, ee) * std::log(vp.alpha(kk, ee) + eps);
+				int_klbeta -= (1 - vp.alpha(kk, ee)) * std::log(1 - vp.alpha(kk, ee) + eps);
+			}
 		}
 		return int_klbeta;
 	}
 
 	void write_trackers_to_file(const std::string& file_prefix,
                                 const std::vector< VbTracker >& trackers,
-                                const int my_n_grid,
+                                const Eigen::Ref<const Eigen::MatrixXd>& hyps_grid,
                                 const Eigen::Ref<const Eigen::VectorXd>& my_probs_grid){
 		// Stitch trackers back together if using multithreading
+		int my_n_grid = hyps_grid.rows();
+		assert(my_n_grid == my_probs_grid.rows());
 		VbTracker stitched_tracker;
 		stitched_tracker.resize(my_n_grid);
 		for (int ii = 0; ii < my_n_grid; ii++){
@@ -883,7 +809,7 @@ public:
 		// posteriors to ofile
 		// weights and logw weights to ofile_weights
 		// (verbose) elbo updates to ofile_elbo
-		// (random_params_init) alpha_init/mu_init to ofile_init
+		// (random_params_init) initial alpha/mu to ofile_init
 		std::string ofile, ofile_weights;
 
 		ofile = fstream_init(outf, file_prefix, "");
@@ -907,7 +833,11 @@ public:
 		}
 
 		// Headers
-		outf << "chr rsid pos a0 a1 post_alpha post_mu post_beta" << std::endl;
+		outf << "chr rsid pos a0 a1";
+		for (int ee = 0; ee < n_effects; ee++){
+			outf << " alpha" << ee << " mu" << ee << " beta" << ee;
+		}
+		outf << std::endl;
 		outf_weights << "weights logw log_prior count time sigma sigma_b ";
 		if(p.mode_mog_prior){
 			outf_weights << "sigma_b_spike sigma_g sigma_g_spike lambda_b lambda_g" << std::endl;
@@ -922,6 +852,7 @@ public:
 		// posteriors to ofile
 		// weights / logw / log_priors / counts to ofile_weights
 		// (verbose) elbo updates to ofile_elbo
+		// TODO: Condence output.. MAP, niave mean, weighted mean. Then don't both outputting alphas, mus.
 
 		// Compute normalised weights using finite elbo
 		std::vector< double > weights(my_n_grid);
@@ -934,20 +865,26 @@ public:
 			weights[0] = 1;
 		}
 
-		// Extract posterior values from tracker
+		// TODO: Set infinite weights to zero
 		int nonfinite_count = 0;
-		std::vector< double > post_alpha(n_var2);
-		std::vector< double > post_mu(n_var2);
-		std::vector< double > post_beta(n_var2);
 		for (int ii = 0; ii < my_n_grid; ii++){
-			if(std::isfinite(weights[ii])){
-				for (std::uint32_t kk = 0; kk < n_var2; kk++){
-					post_alpha[kk] += weights[ii] * stitched_tracker.alpha_list[ii](kk);
-					post_mu[kk] += weights[ii] * stitched_tracker.mu_list[ii](kk);
-					post_beta[kk] += weights[ii] * stitched_tracker.mu_list[ii](kk) * stitched_tracker.alpha_list[ii](kk);
-				}
-			} else {
+			if(!std::isfinite(weights[ii])){
+				weights[ii] = 0;
 				nonfinite_count++;
+			}
+		}
+
+		// Extract posterior values from tracker
+		Eigen::ArrayXf post_alpha(n_var, n_effects) = Eigen::ArrayXf::Zero(n_var, n_effects);
+		Eigen::ArrayXf post_mu(n_var, n_effects) = Eigen::ArrayXf::Zero(n_var, n_effects);
+		Eigen::ArrayXf post_beta(n_var, n_effects) = Eigen::ArrayXf::Zero(n_var, n_effects);
+		for (int ii = 0; ii < my_n_grid; ii++){
+			for (std::uint32_t kk = 0; kk < n_var; kk++){
+				for (int ee = 0; ee < n_effects; ee++){
+					post_alpha(kk, ee) += weights[ii] * stitched_tracker.vp_list[ii].alpha(kk, ee);
+					post_mu(kk, ee) += weights[ii] * stitched_tracker.vp_list[ii].mu(kk, ee);
+					post_beta(kk, ee) += weights[ii] * stitched_tracker.vp_list[ii].mu(kk, ee) * stitched_tracker.vp_list[ii].alpha(kk, ee);
+				}
 			}
 		}
 
@@ -961,12 +898,14 @@ public:
 		outf_alpha_diff << std::setprecision(4) << std::fixed;
 
 		// Write results of main inference to file
-		std::uint32_t kk1;
-		for (std::uint32_t kk = 0; kk < n_var2; kk++){
-			kk1 = kk % n_var;
-			outf << X.chromosome[kk1] << " " << X.rsid[kk1] << " " << X.position[kk1];
-			outf << " " << X.al_0[kk1] << " " << X.al_1[kk1] << " " << post_alpha[kk];
- 			outf << " " << post_mu[kk] << " " << post_beta[kk] << std::endl;
+		for (std::uint32_t kk = 0; kk < n_var; kk++){
+			outf << X.chromosome[kk] << " " << X.rsid[kk] << " " << X.position[kk];
+			outf << " " << X.al_0[kk] << " " << X.al_1[kk];
+			for (int ee = 0; ee < n_effects; ee++){
+				outf << " " << post_alpha(kk, ee);
+ 				outf << " " << post_mu(kk, ee) << " " << post_beta(kk, ee);
+			}
+			outf << std::endl;
 		}
 
 		// Write hyperparams weights to file
@@ -1001,13 +940,15 @@ public:
 
 			// Writing optimised alpha and mu from each grid point to file
 			// 1 col per gridpoint
-			for (std::uint32_t kk = 0; kk < n_var2; kk++){
-				for (int ii = 0; ii < my_n_grid; ii++){
-					outf_alphas << stitched_tracker.alpha_list[ii][kk] << " ";
-					outf_mus << stitched_tracker.mu_list[ii][kk] << " ";
+			for (std::uint32_t kk = 0; kk < n_var; kk++){
+				for (int ee = 0; ee < n_effects; ee++){
+					for (int ii = 0; ii < my_n_grid; ii++){
+						outf_alphas << stitched_tracker.vp_list[ii].alpha(kk, ee) << " ";
+						outf_mus << stitched_tracker.vp_list[ii].mu(kk, ee) << " ";
+					}
+					outf_alphas << std::endl;
+					outf_mus << std::endl;
 				}
-				outf_alphas << std::endl;
-				outf_mus << std::endl;
 			}
 		}
 	}
@@ -1111,19 +1052,17 @@ inline std::vector<int> validate_grid(const Eigen::MatrixXd &grid, const T n_var
 	const int sigma_g_ind = 2;
 	const int lam_b_ind   = 3;
 	const int lam_g_ind   = 4;
-	double lam_b, lam_g;
-	bool chck_lam_b, chck_lam_g, chck_sigma_b, chck_sigma_g, chck_sigma;
 
 	std::vector<int> valid_points;
 	for (int ii = 0; ii < grid.rows(); ii++){
-		lam_b = grid(ii, lam_b_ind);
-		lam_g = grid(ii, lam_g_ind);
+		double lam_b = grid(ii, lam_b_ind);
+		double lam_g = grid(ii, lam_g_ind);
 
-		chck_sigma   = (grid(ii, sigma_ind)   >  0.0);
-		chck_sigma_b = (grid(ii, sigma_b_ind) >  0.0);
-		chck_sigma_g = (grid(ii, sigma_g_ind) >= 0.0);
-		chck_lam_b   = (lam_b >= 1.0 / (double) n_var) && (lam_b < 1.0);
-		chck_lam_g   = (lam_g >= 1.0 / (double) n_var) && (lam_g < 1.0);
+		bool chck_sigma   = (grid(ii, sigma_ind)   >  0.0);
+		bool chck_sigma_b = (grid(ii, sigma_b_ind) >  0.0);
+		bool chck_sigma_g = (grid(ii, sigma_g_ind) >= 0.0);
+		bool chck_lam_b   = (lam_b >= 1.0 / (double) n_var) && (lam_b < 1.0);
+		bool chck_lam_g   = (lam_g >= 1.0 / (double) n_var) && (lam_g < 1.0);
 		if(chck_lam_b && chck_lam_g && chck_sigma && chck_sigma_g && chck_sigma_b){
 			valid_points.push_back(ii);
 		}
