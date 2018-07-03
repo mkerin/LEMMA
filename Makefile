@@ -82,6 +82,8 @@ examples/test_updates: examples/test_updates.cpp
 examples/check_my_timer: examples/check_my_timer.cpp
 	$(CXX) $< -o $@ $(FLAGS) -I /homes/kerin/local/boost_1_67_0 -L /homes/kerin/local/boost_1_67_0/stage/lib
 
+examples/check_nested_classes: examples/check_nested_classes.cpp
+	$(CXX) -o $@ $< $(FLAGS)
 
 # IO Tests
 # Files in data/out are regarded as 'true', and we check that the equivalent

@@ -41,11 +41,11 @@ public:
 	int print_interval;              // print time every x grid points
 
 	// Column order of hyperparameters in grid
-	// const int sigma_ind   = 0;
-	// const int sigma_b_ind = 1;
-	// const int sigma_g_ind = 2;
-	// const int lam_b_ind   = 3;
-	// const int lam_g_ind   = 4;
+	const int sigma_ind   = 0;
+	const int sigma_b_ind = 1;
+	const int sigma_g_ind = 2;
+	const int lam_b_ind   = 3;
+	const int lam_g_ind   = 4;
 	const std::vector< std::string > hyps_names = {"sigma", "sigma_b", "sigma_g",
 												   "lambda_b", "lambda_g"};
 
@@ -197,6 +197,7 @@ public:
 	}
 
 	~VBayesX2(){
+		// TODO:: close all ostreams! & report all timers
 	}
 
 	void print_time_check(){
@@ -252,8 +253,7 @@ public:
 
 		// Round 1; looking for best start point
 		if(run_round1){
-			std::vector< VbTracker > trackers;
-			trackers.resize(p.n_thread);
+			std::vector< VbTracker > trackers(p.n_thread);
 			int r1_n_grid = r1_hyps_grid.rows();
 			run_inference(r1_hyps_grid, true, 1, trackers);
 
@@ -310,8 +310,7 @@ public:
 			print_time_check();
 		}
 
-		std::vector< VbTracker > trackers;
-		trackers.resize(p.n_thread);
+		std::vector< VbTracker > trackers(p.n_thread);
 		run_inference(hyps_grid, false, 2, trackers);
 
 		write_trackers_to_file("", trackers, hyps_grid, probs_grid);
@@ -361,15 +360,34 @@ public:
 			}
 
 			// Unpack hyperparams
-			Hyps i_hyps(hyps_grid, ii, n_effects);
-			// i_hyps.sigma   = outer_hyps_grid(ii, sigma_ind);
-			// i_hyps.sigma_b = outer_hyps_grid(ii, sigma_b_ind);
-			// i_hyps.sigma_g = outer_hyps_grid(ii, sigma_g_ind);
-			// i_hyps.lam_b   = outer_hyps_grid(ii, lam_b_ind);
-			// i_hyps.lam_g   = outer_hyps_grid(ii, lam_g_ind);
-			//
-			// i_hyps.sigma_b_spike = outer_hyps_grid(ii, sigma_b_ind) / 100.0;
-			// i_hyps.sigma_g_spike = outer_hyps_grid(ii, sigma_g_ind) / 100.0;
+			// Hyps i_hyps(n_effects,
+			// 	outer_hyps_grid(ii, sigma_ind),
+			// 	outer_hyps_grid(ii, sigma_b_ind),
+			// 	outer_hyps_grid(ii, sigma_g_ind),
+			// 	outer_hyps_grid(ii, lam_b_ind),
+			// 	outer_hyps_grid(ii, lam_g_ind));
+
+			double sigma = outer_hyps_grid(ii, sigma_ind);
+			double sigma_b = outer_hyps_grid(ii, sigma_b_ind);
+			double sigma_g = outer_hyps_grid(ii, sigma_g_ind);
+			double lam_b = outer_hyps_grid(ii, lam_b_ind);
+			double lam_g = outer_hyps_grid(ii, lam_g_ind);
+
+				// Hyps(int n_effects, double my_sigma, double sigma_b, double sigma_g, double lam_b, double lam_g){
+			Hyps i_hyps;
+			i_hyps.slab_var.resize(n_effects);
+			i_hyps.spike_var.resize(n_effects);
+			i_hyps.slab_relative_var.resize(n_effects);
+			i_hyps.spike_relative_var.resize(n_effects);
+			i_hyps.lambda.resize(n_effects);
+				//
+			i_hyps.sigma = sigma;
+			i_hyps.slab_var           << sigma * sigma_b, sigma * sigma_g;
+			i_hyps.spike_var          << sigma * sigma_b / 100.0, sigma * sigma_g / 100.0;
+			i_hyps.slab_relative_var  << sigma_b, sigma_g;
+			i_hyps.spike_relative_var << sigma_b, sigma_g;
+			i_hyps.lambda             << lam_b, lam_g;
+				// }
 
 			// Run outer loop - don't update trackers
 			runInnerLoop(ii, random_init, round_index, i_hyps, tracker);
@@ -428,7 +446,7 @@ public:
 			alpha_diff_updates.push_back(alpha_diff);
 
 			tracker.push_interim_iter_update(count, hyps, i_logw, alpha_diff,
-																			 t_updateAlphaMu.get_lap_seconds(), hty_counter);
+																			 t_updateAlphaMu.get_lap_seconds(), hty_counter, n_effects);
 
 			// Update hyps
 			if(round_index > 1 && p.mode_empirical_bayes){
@@ -440,7 +458,7 @@ public:
 				t_updateHyps.stop();
 
 				tracker.push_interim_iter_update(count, hyps, i_logw, 0.0,
-					t_updateHyps.get_lap_seconds(), -1);
+					t_updateHyps.get_lap_seconds(), -1, n_effects);
 			}
 			logw_updates.push_back(i_logw);
 
@@ -478,7 +496,7 @@ public:
 		tracker.counts_list[ii] = count;
 		tracker.vp_list[ii] = vp.convert_to_lite();
 		tracker.elapsed_time_list[ii] = t_InnerLoop.get_lap_seconds();
-		tracker.hyps_list[ii] = hyps;
+		// tracker.hyps_list[ii] = hyps;
 		if(p.verbose){
 			logw_updates.push_back(i_logw);  // adding converged estimate
 			tracker.logw_updates_list[ii] = logw_updates;
@@ -537,12 +555,12 @@ public:
 		// finish max lambda
 		hyps.lambda /= n_var;
 
-		hyps.lam_b         = hyps.lambda(0);
-		hyps.lam_g         = hyps.lambda(1);
-		hyps.sigma_b       = hyps.slab_relative_var(0);
-		hyps.sigma_g       = hyps.slab_relative_var(1);
-		hyps.sigma_g_spike = hyps.spike_relative_var(0);
-		hyps.sigma_g_spike = hyps.spike_relative_var(1);
+		// hyps.lam_b         = hyps.lambda(0);
+		// hyps.lam_g         = hyps.lambda(1);
+		// hyps.sigma_b       = hyps.slab_relative_var(0);
+		// hyps.sigma_g       = hyps.slab_relative_var(1);
+		// hyps.sigma_g_spike = hyps.spike_relative_var(0);
+		// hyps.sigma_g_spike = hyps.spike_relative_var(1);
 	}
 
 	void updateAlphaMu(const std::vector< std::uint32_t >& iter,
@@ -554,9 +572,6 @@ public:
 		Eigen::VectorXd X_kk(n_samples);
 
 		Eigen::ArrayXd alpha_cnst;
-		// double bbb_b, bbb_g;
-		// bbb_b = std::log(hyps.lam_b / (1.0 - hyps.lam_b) + eps) - std::log(hyps.sigma_b * hyps.sigma) / 2.0;
-		// bbb_g = std::log(hyps.lam_g / (1.0 - hyps.lam_g) + eps) - std::log(hyps.sigma_g * hyps.sigma) / 2.0;
 		alpha_cnst = (hyps.lambda / (1.0 - hyps.lambda) + eps).log() - hyps.slab_var.log() / 2.0;
 		hty_updates = 0;
 		for(std::uint32_t kk : iter ){
@@ -572,13 +587,8 @@ public:
 			// Update mu (eq 9); faster to take schur product inside genotype_matrix
 			vp.mu(jj, ee) = vp.s_sq(jj, ee) * (Hty(kk) - vp.Hr.dot(X_kk) + dHtH(kk) * rr_k) / hyps.sigma;
 
-			// Update alpha (eq 10)  TODO: check syntax / i_  / sigmoid here!
-			double ff_k = (std::log(vp.s_sq(jj, ee)) + vp.mu(jj, ee) * vp.mu(jj, ee) / vp.s_sq(jj, ee)) / 2.0;
-			// if (kk < n_var){
-			// 	ff_k = bbb_b + (std::log(vp.s_sq(jj, ee)) + vp.mu(jj, ee) * vp.mu(jj, ee) / vp.s_sq(jj, ee)) / 2.0;
-			// } else {
-			// 	ff_k = bbb_g + (std::log(vp.s_sq(jj, ee)) + vp.mu(jj, ee) * vp.mu(jj, ee) / vp.s_sq(jj, ee)) / 2.0;
-			// }
+			// Update alpha (eq 10)
+			double ff_k      = (std::log(vp.s_sq(jj, ee)) + vp.mu(jj, ee) * vp.mu(jj, ee) / vp.s_sq(jj, ee)) / 2.0;
 			vp.alpha(jj, ee) = sigmoid(ff_k + alpha_cnst(ee));
 
 			// Update i_Hr; only if coeff is large enough to matter
@@ -600,11 +610,6 @@ public:
 		t_updateAlphaMu.resume();
 		Eigen::VectorXd X_kk(n_samples);
 
-		// double bbb_b, bbb_g;
-		// bbb_b  = std::log(hyps.lam_b / (1.0 - hyps.lam_b) + eps);
-		// bbb_b -= (std::log(hyps.sigma_b) - std::log(hyps.sigma_b_spike)) / 2.0;
-		// bbb_g  = std::log(hyps.lam_g / (1.0 - hyps.lam_g) + eps);
-		// bbb_g -= (std::log(hyps.sigma_g) - std::log(hyps.sigma_g_spike)) / 2.0;
 		Eigen::ArrayXd alpha_cnst;
 		alpha_cnst  = (hyps.lambda / (1.0 - hyps.lambda) + eps).log();
 		alpha_cnst -= (hyps.slab_var.log() - hyps.spike_var.log()) / 2.0;
@@ -626,14 +631,9 @@ public:
 			vp.mup(jj, ee) = vp.sp_sq(jj, ee) * A / hyps.sigma;
 
 			// Update alpha (eq 10)  TODO: check syntax / i_  / sigmoid here!
-			double ff_k  = vp.mu(jj, ee) * vp.mu(jj, ee) / vp.s_sq(jj, ee)  / 2.0;
-			ff_k -= vp.mup(jj, ee) * vp.mup(jj, ee) / vp.sp_sq(jj, ee) / 2.0;
-			ff_k += (std::log(vp.s_sq(jj, ee)) - std::log(vp.sp_sq(jj, ee))) / 2.0;
-			// if (kk < n_var){
-			// 	ff_k += bbb_b;
-			// } else {
-			// 	ff_k += bbb_g;
-			// }
+			double ff_k      = vp.mu(jj, ee) * vp.mu(jj, ee) / vp.s_sq(jj, ee)  / 2.0;
+			ff_k            -= vp.mup(jj, ee) * vp.mup(jj, ee) / vp.sp_sq(jj, ee) / 2.0;
+			ff_k            += (std::log(vp.s_sq(jj, ee)) - std::log(vp.sp_sq(jj, ee))) / 2.0;
 			vp.alpha(jj, ee) = sigmoid(ff_k + alpha_cnst(ee));
 
 			// Update i_Hr; only if coeff is large enough to matter
@@ -840,12 +840,15 @@ public:
 			outf << " alpha" << ee << " mu" << ee << " beta" << ee;
 		}
 		outf << std::endl;
-		outf_weights << "weights logw log_prior count time sigma sigma_b ";
-		if(p.mode_mog_prior){
-			outf_weights << "sigma_b_spike sigma_g sigma_g_spike lambda_b lambda_g" << std::endl;
-		} else {
-			outf_weights << "sigma_g lambda_b lambda_g" << std::endl;
+		outf_weights << "weight logw log_prior count time sigma";
+		for (int ee = 0; ee < n_effects; ee++){
+			outf_weights << " sigma" << ee;
+			if(p.mode_mog_prior){
+				outf_weights << " sigma_spike" << ee;
+			}
+			outf_weights << " lambda" << ee;
 		}
+		outf_weights << std::endl;
 	}
 
 	void output_results(const VbTracker& stitched_tracker, const int my_n_grid,
@@ -917,12 +920,14 @@ public:
 			outf_weights << stitched_tracker.counts_list[ii] << " ";
 			outf_weights << stitched_tracker.elapsed_time_list[ii] <<  " ";
 			outf_weights << stitched_tracker.hyps_list[ii].sigma << " ";
-			outf_weights << stitched_tracker.hyps_list[ii].sigma_b << " ";
-			if(p.mode_mog_prior) outf_weights << stitched_tracker.hyps_list[ii].sigma_b_spike << " ";
-			outf_weights << stitched_tracker.hyps_list[ii].sigma_g << " ";
-			if(p.mode_mog_prior) outf_weights << stitched_tracker.hyps_list[ii].sigma_g_spike << " ";
-			outf_weights << stitched_tracker.hyps_list[ii].lam_b << " ";
-			outf_weights << stitched_tracker.hyps_list[ii].lam_g << std::endl;
+			for (int ee = 0; ee < n_effects; ee++){
+				outf_weights << stitched_tracker.hyps_list[ii].slab_relative_var(ee) << " ";
+				if(p.mode_mog_prior){
+					outf_weights << stitched_tracker.hyps_list[ii].spike_relative_var(ee) << " ";
+				}
+				outf_weights << stitched_tracker.hyps_list[ii].lambda(ee);
+			}
+			outf_weights << std::endl;
 		}
 
 		if(p.verbose){

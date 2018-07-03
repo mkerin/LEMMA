@@ -20,56 +20,31 @@
 namespace io = boost::iostreams;
 
 
-class Hyps{
-	int sigma_ind   = 0;
-	int sigma_b_ind = 1;
-	int sigma_g_ind = 2;
-	int lam_b_ind   = 3;
-	int lam_g_ind   = 4;
-public:
-
+struct Hyps{
+// public:
 	double sigma;
-	double sigma_b;
-	double sigma_g;
-	double lam_b;
-	double lam_g;
-
-	// For use in mode_mog_prior
-	double sigma_b_spike;
-	double sigma_g_spike;
-
 	Eigen::ArrayXd slab_var;
 	Eigen::ArrayXd spike_var;
 	Eigen::ArrayXd slab_relative_var;
 	Eigen::ArrayXd spike_relative_var;
 	Eigen::ArrayXd lambda;
 
-	Hyps();
+	// Hyps();
 
-	Hyps(const Eigen::Ref<const Eigen::MatrixXd>& hyps_grid, int ii, int n_effects){
-		sigma   = hyps_grid(ii, sigma_ind);
-		sigma_b = hyps_grid(ii, sigma_b_ind);
-		sigma_g = hyps_grid(ii, sigma_g_ind);
-		lam_b   = hyps_grid(ii, lam_b_ind);
-		lam_g   = hyps_grid(ii, lam_g_ind);
-
-		sigma_b_spike = hyps_grid(ii, sigma_b_ind) / 100.0;
-		sigma_g_spike = hyps_grid(ii, sigma_g_ind) / 100.0;
-
-		slab_var.resize(n_effects);
-		spike_var.resize(n_effects);
-		slab_relative_var.resize(n_effects);
-		spike_relative_var.resize(n_effects);
-		lambda.resize(n_effects);
-
-		slab_var           << sigma * sigma_b, sigma * sigma_g;
-		spike_var          << sigma * sigma_b_spike, sigma * sigma_g_spike;
-		slab_relative_var  << sigma_b, sigma_g;
-		spike_relative_var << sigma_b, sigma_g;
-		lambda             << lam_b, lam_g;
-	}
-
-	~Hyps(){};
+	// Hyps(int n_effects, double my_sigma, double sigma_b, double sigma_g, double lam_b, double lam_g){
+	// 	slab_var.resize(n_effects);
+	// 	spike_var.resize(n_effects);
+	// 	slab_relative_var.resize(n_effects);
+	// 	spike_relative_var.resize(n_effects);
+	// 	lambda.resize(n_effects);
+	//
+	// 	sigma = my_sigma;
+	// 	slab_var           << sigma * sigma_b, sigma * sigma_g;
+	// 	spike_var          << sigma * sigma_b / 100.0, sigma * sigma_g / 100.0;
+	// 	slab_relative_var  << sigma_b, sigma_g;
+	// 	spike_relative_var << sigma_b, sigma_g;
+	// 	lambda             << lam_b, lam_g;
+	// }
 };
 
 
@@ -114,7 +89,7 @@ public:
 		allow_interim_push = true;
 	}
 
-	~VbTracker();
+	~VbTracker(){};
 
 	void set_main_filepath(const std::string &ofile){
 		main_out_file = ofile;
@@ -126,15 +101,17 @@ public:
                                   const double c_logw,
                                   const double c_alpha_diff,
                                   const double lap_seconds,
-                                  const long int hty_counter){
+                                  const long int hty_counter,
+																const int n_effects){
 		outf_iter << cnt << "\t";
 		outf_iter << i_hyps.sigma << "\t";
-		outf_iter << i_hyps.sigma_b << "\t";
-		if (p.mode_mog_prior) outf_iter << i_hyps.sigma_b_spike << "\t";
-		outf_iter << i_hyps.sigma_g << "\t";
-		if (p.mode_mog_prior) outf_iter << i_hyps.sigma_g_spike << "\t";
-		outf_iter << i_hyps.lam_b << "\t";
-		outf_iter << i_hyps.lam_g << "\t";
+		for (int ee = 0; ee < n_effects; ee++){
+			outf_weights << i_hyps.slab_relative_var(ee) << " ";
+			if(p.mode_mog_prior){
+				outf_weights << i_hyps.spike_relative_var(ee) << " ";
+			}
+			outf_weights << i_hyps.lambda(ee);
+		}
 		outf_iter << c_logw << "\t";
 		outf_iter << c_alpha_diff << "\t";
 		outf_iter << lap_seconds << "\t";
