@@ -11,11 +11,11 @@
 #include <regex>
 #include <stdexcept>
 
-void check_counts(std::string in_str, int i, int num, int argc);
+void check_counts(const std::string& in_str, int i, int num, int argc);
 void parse_arguments(parameters &p, int argc, char *argv[]);
 void check_file_exists(const std::string& filename);
 
-void check_counts(std::string in_str, int i, int num, int argc) {
+void check_counts(const std::string& in_str, int i, int num, int argc) {
 	// Stop overflow from argv
 	if (i + num >= argc) {
 		if (num == 1) {
@@ -89,14 +89,14 @@ void parse_arguments(parameters &p, int argc, char *argv[]) {
 
 	if (argc == 1) {
 		std::cout << "======-----"<< std::endl;
-		std::cout << "Matt's BGEN PROG" << std::endl; 
+		std::cout << "Matt's BGEN PROG" << std::endl;
 		std::cout << "======-----" << std::endl << std::endl;
 		std::exit(EXIT_SUCCESS);
 	}
 
 	// read in and check option flags
 	for (i = 0; i < argc; i++) {
-		in_str = argv[i];	
+		in_str = argv[i];
 		if (strcmp(in_str, "--version") == 0 || strcmp(in_str, "--help") == 0) {
 			std::cout << "ERROR: flag '" << in_str << "' cannot be used with any other flags." << std::endl;
 			std::exit(EXIT_FAILURE);
@@ -108,7 +108,7 @@ void parse_arguments(parameters &p, int argc, char *argv[]) {
 
 	for(i = 0; i < argc; i++){
 		if(*argv[i] == '-'){
-			in_str = argv[i];	
+			in_str = argv[i];
 			set_it = option_list.find(in_str);
 
 			if(set_it == option_list.end()) {
@@ -118,7 +118,7 @@ void parse_arguments(parameters &p, int argc, char *argv[]) {
 
 				exit(EXIT_FAILURE);
 			}
-	
+
 			// flags with parameters should eat their arguments
 			// & also make sure they don't go over argc
 

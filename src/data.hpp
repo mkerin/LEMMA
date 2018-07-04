@@ -91,7 +91,7 @@ class Data
 	// grid things for vbayes
 	std::vector< std::string > hyps_names, imprt_names;
 	Eigen::MatrixXd r1_hyps_grid, r1_probs_grid, hyps_grid, imprt_grid;
-	Eigen::VectorXd alpha_init, mu_init;
+	Eigen::ArrayXXd alpha_init, mu_init;
 
 
 	// constructors/destructors
@@ -990,8 +990,8 @@ class Data
 				if(!std::includes(vb_init_colnames.begin(), vb_init_colnames.end(), cols_check1.begin(), cols_check1.end())){
 					throw std::runtime_error("First 2 columns of --vb_init should be alpha mu ");
 				}
-				alpha_init = Eigen::Map<Eigen::VectorXd>(vb_init_mat.col(0).data(), vb_init_mat.rows());
-				mu_init = Eigen::Map<Eigen::VectorXd>(vb_init_mat.col(1).data(), vb_init_mat.rows());
+				alpha_init = Eigen::Map<Eigen::ArrayXXd>(vb_init_mat.col(0).data(), n_var, n_effects);
+				mu_init = Eigen::Map<Eigen::ArrayXXd>(vb_init_mat.col(1).data(), n_var, n_effects);
 			} else {
 				for(int aa = 0; aa < 7; aa++){
 					std::cout << vb_init_colnames[aa] << std::endl;
@@ -1000,8 +1000,10 @@ class Data
 				std::cout << "--vb_init file with contextual information detected" << std::endl;
 				std::cout << "Warning: This will be O(PL) where L = " << vb_init_mat.rows();
 				std::cout << " is the number of lines in file given to --vb_init." << std::endl;
-				alpha_init = Eigen::VectorXd::Zero(2*n_var);
-				mu_init    = Eigen::VectorXd::Zero(2*n_var);
+				// alpha_init = Eigen::VectorXd::Zero(2*n_var);
+				// mu_init    = Eigen::VectorXd::Zero(2*n_var);
+				alpha_init = Eigen::MatrixXd::Zero(n_var, n_effects);
+				mu_init    = Eigen::MatrixXd::Zero(n_var, n_effects);
 
 				std::vector<std::string>::iterator it;
 				std::uint32_t index_kk;
@@ -1013,10 +1015,10 @@ class Data
 					} else {
 						index_kk = it - G.SNPKEY.begin();
 
-						alpha_init[index_kk]         = 1.0;
-						alpha_init[index_kk + n_var] = 1.0;
-						mu_init[index_kk]            = vb_init_mat(kk, 0);
-						mu_init[index_kk + n_var]    = vb_init_mat(kk, 1);
+						alpha_init(index_kk, 0)      = 1.0;
+						alpha_init(index_kk, 1)      = 1.0;
+						mu_init(index_kk, 0)         = vb_init_mat(kk, 1);
+						mu_init(index_kk, 1)         = vb_init_mat(kk + n_var, 1);
 					}
 				}
 			}

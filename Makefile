@@ -85,6 +85,9 @@ examples/check_my_timer: examples/check_my_timer.cpp
 examples/check_nested_classes: examples/check_nested_classes.cpp
 	$(CXX) -o $@ $< $(FLAGS)
 
+examples/check_eigen: examples/check_eigen.cpp
+	$(CXX) -o $@ $< $(FLAGS)
+
 # IO Tests
 # Files in data/out are regarded as 'true', and we check that the equivalent
 # file in data/io_test is identical after making changes to the executable.
@@ -189,6 +192,7 @@ t7_context := $(t7_dir)/hyperpriors_gxage.txt $(t7_dir)/answer.rds
 data/io_test/t7_varbvs_constrained/attempt.out: data/io_test/n50_p100.bgen ./bin/bgen_prog $(t7_context)
 	./bin/bgen_prog --mode_vb --verbose \
 	    --keep_constant_variants \
+	    --scale_phenotypes \
 	    --bgen $< \
 	    --interaction x \
 	    --covar $(dir $@)age.txt \
@@ -221,6 +225,7 @@ t8_context := $(t8_dir)/hyperpriors_gxage.txt $(t8_dir)/answer.rds
 data/io_test/t8_varbvs/attempt.out: data/io_test/n50_p100.bgen ./bin/bgen_prog $(t8_context)
 	./bin/bgen_prog --mode_vb --verbose \
 	    --keep_constant_variants \
+	    --scale_phenotypes \
 	    --bgen $< \
 	    --interaction x \
 	    --covar $(dir $@)age.txt \
@@ -235,6 +240,7 @@ data/io_test/t8_varbvs/attempt.out: data/io_test/n50_p100.bgen ./bin/bgen_prog $
 data/io_test/t8_varbvs/attempt_low_mem.out: data/io_test/n50_p100.bgen ./bin/bgen_prog $(t8_context)
 	./bin/bgen_prog --mode_vb --verbose --low_mem \
 	    --keep_constant_variants \
+	    --scale_phenotypes \
 	    --bgen $< \
 	    --interaction x \
 	    --covar $(dir $@)age.txt \
@@ -288,6 +294,7 @@ t10_context := $(t10_dir)/hyperpriors_gxage.txt
 $(t10_dir)/attempt.out: $(t10_dir)/n50_p100.bgen ./bin/bgen_prog $(t10_context)
 	./bin/bgen_prog --mode_vb --verbose \
 	    --keep_constant_variants \
+	    --scale_phenotypes \
 	    --bgen $< \
 	    --interaction x \
 	    --covar $(dir $@)age.txt \
@@ -318,6 +325,7 @@ t11_context := $(t11_dir)/hyperpriors_gxage.txt $(t11_dir)/answer.rds
 $(t11_dir)/attempt.out: $(t11_dir)/n50_p100.bgen ./bin/bgen_prog $(t11_context)
 	./bin/bgen_prog --mode_vb --verbose \
 	    --keep_constant_variants \
+	    --scale_phenotypes \
 	    --bgen $< \
 	    --interaction x \
 	    --covar $(dir $@)age.txt \
@@ -349,6 +357,7 @@ $(t11_dir)/answer.rds: R/vbayes_x_tests/run_VBayesR.R $(t11_dir)/hyperpriors_gxa
 data/io_test/t12_varbvs/answer.out: data/io_test/n50_p100.bgen ./bin/bgen_prog
 	./bin/bgen_prog --mode_vb --verbose --low_mem \
 	    --keep_constant_variants \
+	    --scale_phenotypes \
 	    --bgen $< \
 	    --interaction x \
 	    --covar $(dir $@)age.txt \
@@ -361,6 +370,7 @@ data/io_test/t12_varbvs/answer.out: data/io_test/n50_p100.bgen ./bin/bgen_prog
 data/io_test/t12_varbvs/attempt_scrambled.out: data/io_test/n50_p100.bgen ./bin/bgen_prog data/io_test/t12_varbvs/attempt1.out
 	./bin/bgen_prog --mode_vb --verbose --low_mem \
 	    --keep_constant_variants \
+	    --scale_phenotypes \
 	    --bgen $< \
 	    --interaction x \
 	    --covar $(dir $@)age.txt \

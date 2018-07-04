@@ -11,14 +11,14 @@ struct VariationalParametersLite {
 	Eigen::VectorXd Hr;    // N x 1
 
 	// Variational parameters for slab
-	Eigen::ArrayXd alpha; // P x (E+1)
-	Eigen::ArrayXd mu;    // P x (E+1)
+	Eigen::ArrayXXd alpha; // P x (E+1)
+	Eigen::ArrayXXd mu;    // P x (E+1)
 
 	// Variational parameters for spike (MoG prior mode)
-	Eigen::ArrayXd mup;    // P x (E+1)
+	Eigen::ArrayXXd mup;    // P x (E+1)
 
 	// Variational parameters for covariate main effects
-	Eigen::ArrayXd muc;    // C x 1
+	Eigen::ArrayXXd muc;    // C x 1
 };
 
 class VariationalParameters {
@@ -26,17 +26,17 @@ public:
 	Eigen::VectorXd Hr;    // N x 1
 
 	// Variational parameters for slab
-	Eigen::ArrayXd s_sq;  // P x (E+1)
-	Eigen::ArrayXd alpha; // P x (E+1)
-	Eigen::ArrayXd mu;    // P x (E+1)
+	Eigen::ArrayXXd s_sq;  // P x (E+1)
+	Eigen::ArrayXXd alpha; // P x (E+1)
+	Eigen::ArrayXXd mu;    // P x (E+1)
 
 	// Variational parameters for spike (MoG prior mode)
-	Eigen::ArrayXd sp_sq;  // P x (E+1)
-	Eigen::ArrayXd mup;    // P x (E+1)
+	Eigen::ArrayXXd sp_sq;  // P x (E+1)
+	Eigen::ArrayXXd mup;    // P x (E+1)
 
 	// Variational parameters for covariate main effects
-	Eigen::ArrayXd muc;    // C x 1
-	Eigen::ArrayXd sc_sq;  // C x 1
+	Eigen::ArrayXXd muc;    // C x 1
+	Eigen::ArrayXXd sc_sq;  // C x 1
 
 	VariationalParameters(){};
 	~VariationalParameters(){};
