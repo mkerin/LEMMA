@@ -62,7 +62,7 @@ class parameters {
 		elbo_tol_set_by_user = false;
 		keep_constant_variants = false;
 		user_requests_round1 = false;
-		scale_pheno = false;
+		scale_pheno = true;
 	}
 
 	~parameters() {

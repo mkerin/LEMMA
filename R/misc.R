@@ -350,18 +350,14 @@ readCppOutput = function(inference_path){
     # Formatting filepaths
     prefix          = tools::file_path_sans_ext(inference_path)
     suffix          = tools::file_ext(inference_path)
-    path.weights    = paste0(prefix, "_hyps.", suffix)
+    path.weights    = paste0(inference_path)
     path.elbo       = paste0(prefix, "_elbo.", suffix)
     path.grid.hyps  = paste0(dirname(inference_path), "/hyperpriors_gxage_v1.txt")
     path.grid.probs = paste0(dirname(inference_path), "/hyperpriors_gxage_v1_probs.txt")
-    path.mus        = paste0(prefix, "_mus.", suffix)
-    path.alphas     = paste0(prefix, "_alphas.", suffix)
 
     # Read data from file
-    df.inf          = read.table(inference_path, header = T)
+    df.map          = read.table(paste0(prefix, "_map_snp_stats.", suffix), header = T)
     df.weights      = read.table(path.weights, header = T)
-    df.alphas       = read.table(path.alphas, header = F)
-    df.mus          = read.table(path.mus, header = F)
     
     if(file.exists(path.grid.hyps) & file.exists(path.grid.probs)){
         df.grid     = read.table(path.grid.hyps, header = T)
@@ -377,13 +373,12 @@ readCppOutput = function(inference_path){
             as.numeric(unlist(strsplit(as.character(daf[ii,1]), " ")))
         }, df.elbo)
     
-    res = list(weights           = df.weights$weights,
+    res = list(weights           = df.weights$weight,
                logw.vec          = df.weights$logw,
-               mu.post           = df.inf$post_mu,
-               beta.post         = df.inf$post_beta,
-               alpha.post        = df.inf$post_alpha,
-               alpha.list        = as.list(df.alphas),
-               mu.list           = as.list(df.mus),
+               beta.post         = df.map$beta0,
+               alpha.post        = df.map$alpha0,
+               beta.post         = df.map$beta1,
+               alpha.post        = df.map$alpha1,
                counts.vec        = df.weights$count,
                logw.updates.list = logw.updates.list,
                grid.hyps         = df.grid,

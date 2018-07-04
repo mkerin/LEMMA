@@ -77,7 +77,7 @@ void parse_arguments(parameters &p, int argc, char *argv[]) {
 		"--keep_constant_variants",
 		"--effects_prior_mog",
 		"--force_round1",
-		"--scale_phenotypes"
+		"--raw_phenotypes"
 	};
 
 	std::set<std::string>::iterator set_it;
@@ -178,8 +178,8 @@ void parse_arguments(parameters &p, int argc, char *argv[]) {
 				i += 0;
 			}
 
-			if(strcmp(in_str, "--scale_phenotypes") == 0) {
-				p.scale_pheno = true;
+			if(strcmp(in_str, "--raw_phenotypes") == 0) {
+				p.scale_pheno = false;
 				i += 0;
 			}
 

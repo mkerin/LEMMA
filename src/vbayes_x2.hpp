@@ -8,6 +8,7 @@
 #include <ctime>       // start/end time info
 #include <cstdint>    // uint32_t
 #include <iostream>
+#include <iterator>
 #include <limits>
 #include <random>
 #include <thread>
@@ -81,17 +82,17 @@ public:
 	VariationalParametersLite vp_init;
 
 	// boost fstreams
-	boost_io::filtering_ostream outf, outf_weights, outf_elbo, outf_alpha_diff, outf_inits;
-	boost_io::filtering_ostream outf_mus, outf_alphas;
+	boost_io::filtering_ostream outf, outf_map, outf_wmean, outf_nmean, outf_inits;
+	boost_io::filtering_ostream outf_elbo, outf_alpha_diff;
 
 	// Monitoring
 	std::chrono::system_clock::time_point time_check;
 
-	MyTimer t_updateAlphaMu;
-	MyTimer t_elbo;
-	MyTimer t_readXk;
-	MyTimer t_updateHyps;
-	MyTimer t_InnerLoop;
+	// MyTimer t_updateAlphaMu;
+	// MyTimer t_elbo;
+	// MyTimer t_readXk;
+	// MyTimer t_updateHyps;
+	// MyTimer t_InnerLoop;
 
 	explicit VBayesX2( Data& dat ) : X( dat.G ),
                             Y( dat.Y ),
@@ -100,7 +101,7 @@ public:
                             t_elbo("calcElbo: %ts \n"),
                             t_readXk("read_X_kk: %ts \n"),
                             t_updateHyps("updateHyps: %ts \n"),
-														t_InnerLoop("runInnerLoop: %ts \n") {
+                            t_InnerLoop("runInnerLoop: %ts \n") {
 		assert(std::includes(dat.hyps_names.begin(), dat.hyps_names.end(), hyps_names.begin(), hyps_names.end()));
 		assert(p.interaction_analysis);
 
@@ -200,12 +201,12 @@ public:
 	~VBayesX2(){
 		// Close all ostreams
 		io::close(outf);
-		io::close(outf_weights);
+		io::close(outf_map);
+		io::close(outf_wmean);
+		io::close(outf_nmean);
 		io::close(outf_elbo);
 		io::close(outf_alpha_diff);
 		io::close(outf_inits);
-		io::close(outf_mus);
-		io::close(outf_alphas);
 
 		// Report all timers
 		t_updateAlphaMu.report();
@@ -681,6 +682,18 @@ public:
 		for (int ii = 0; ii < nn; ii++){
 			my_weights[ii] /= my_sum;
 		}
+
+		int nonfinite_count = 0;
+		for (int ii = 0; ii < nn; ii++){
+			if(!std::isfinite(my_weights[ii])){
+				nonfinite_count++;
+			}
+		}
+
+		if(nonfinite_count > 0){
+			std::cout << "WARNING: " << nonfinite_count << " grid points returned non-finite ELBO.";
+			std::cout << "Skipping these when producing posterior estimates.";
+		}
 	}
 
 	void initRandomAlphaMu(VariationalParameters& vp){
@@ -824,129 +837,173 @@ public:
 
 	void output_init(const std::string& file_prefix){
 		// Initialise files ready to write;
-		// posteriors to ofile
-		// weights and logw weights to ofile_weights
-		// (verbose) elbo updates to ofile_elbo
-		// (random_params_init) initial alpha/mu to ofile_init
-		std::string ofile, ofile_weights;
 
-		ofile = fstream_init(outf, file_prefix, "");
-		ofile_weights = fstream_init(outf_weights, file_prefix, "_hyps");
-		std::cout << "Writing posterior PIP and beta probabilities to " << ofile << std::endl;
-		std::cout << "Writing posterior hyperparameter probabilities to " << ofile_weights << std::endl;
+		std::string ofile       = fstream_init(outf, file_prefix, "");
+		std::string ofile_map   = fstream_init(outf_map, file_prefix, "_map_snp_stats");
+		std::string ofile_wmean = fstream_init(outf_wmean, file_prefix, "_weighted_mean_snp_stats");
+		std::string ofile_nmean = fstream_init(outf_nmean, file_prefix, "_niave_mean_snp_stats");
+		std::cout << "Writing converged hyperparameter values to " << ofile << std::endl;
+		std::cout << "Writing MAP snp stats to " << ofile_map << std::endl;
+		std::cout << "Writing (weighted) average snp stats to " << ofile_wmean << std::endl;
+		std::cout << "Writing (niave) average snp stats to " << ofile_nmean << std::endl;
 
 		if(p.verbose){
-			std::string ofile_elbo, ofile_alphas, ofile_mus, ofile_alpha_diff;
-			ofile_elbo = fstream_init(outf_elbo, file_prefix, "_elbo");
+			std::string ofile_elbo = fstream_init(outf_elbo, file_prefix, "_elbo");
 			std::cout << "Writing ELBO from each VB iteration to " << ofile_elbo << std::endl;
 
-			ofile_alpha_diff = fstream_init(outf_alpha_diff, file_prefix, "_alpha_diff");
+			std::string ofile_alpha_diff = fstream_init(outf_alpha_diff, file_prefix, "_alpha_diff");
 			std::cout << "Writing max change in alpha from each VB iteration to " << ofile_alpha_diff << std::endl;
-
-			ofile_alphas = fstream_init(outf_alphas, file_prefix, "_alphas");
-			std::cout << "Writing optimised alpha from each grid point to " << ofile_alphas << std::endl;
-
-			ofile_mus = fstream_init(outf_mus, file_prefix, "_mus");
-			std::cout << "Writing optimised mu from each grid point to " << ofile_mus << std::endl;
 		}
-
-		// Headers
-		outf << "chr rsid pos a0 a1";
-		for (int ee = 0; ee < n_effects; ee++){
-			outf << " alpha" << ee << " mu" << ee << " beta" << ee;
-		}
-		outf << std::endl;
-		outf_weights << "weight logw log_prior count time sigma";
-		for (int ee = 0; ee < n_effects; ee++){
-			outf_weights << " sigma" << ee;
-			if(p.mode_mog_prior){
-				outf_weights << " sigma_spike" << ee;
-			}
-			outf_weights << " lambda" << ee;
-		}
-		outf_weights << std::endl;
 	}
 
 	void output_results(const VbTracker& stitched_tracker, const int my_n_grid,
 						const Eigen::Ref<const Eigen::VectorXd>& my_probs_grid){
 		// Write;
-		// posteriors to ofile
-		// weights / logw / log_priors / counts to ofile_weights
-		// (verbose) elbo updates to ofile_elbo
-		// TODO: Condence output.. MAP, niave mean, weighted mean. Then don't both outputting alphas, mus.
+		// main output; weights logw converged_hyps counts time (currently no prior)
+		// snps;
+		// - map (outf_map) / elbo weighted mean (outf_wmean) / niave mean + sds (outf_nmean)
+		// (verbose);
+		// - elbo trajectories (inside the interim files?)
+		// - hyp trajectories (inside the interim files)
 
 		// Compute normalised weights using finite elbo
 		std::vector< double > weights(my_n_grid);
 		if(n_grid > 1){
 			for (int ii = 0; ii < my_n_grid; ii++){
-				weights[ii] = stitched_tracker.logw_list[ii] + std::log(my_probs_grid(ii,0) + eps);
+				if(p.mode_empirical_bayes){
+					weights[ii] = stitched_tracker.logw_list[ii];
+				} else {
+					weights[ii] = stitched_tracker.logw_list[ii] + std::log(my_probs_grid(ii,0) + eps);
+				}
 			}
 			normaliseLogWeights(weights);
 		} else {
 			weights[0] = 1;
 		}
 
-		// TODO: Set infinite weights to zero
-		int nonfinite_count = 0;
-		for (int ii = 0; ii < my_n_grid; ii++){
-			if(!std::isfinite(weights[ii])){
-				weights[ii] = 0;
-				nonfinite_count++;
+		// Write hyperparams weights to file
+		outf << "weight logw";
+		if(!p.mode_empirical_bayes){
+			outf << " log_prior";
+		}
+		outf << " count time sigma";
+		for (int ee = 0; ee < n_effects; ee++){
+			outf << " sigma" << ee;
+			if(p.mode_mog_prior){
+				outf << " sigma_spike" << ee;
 			}
+			outf << " lambda" << ee;
 		}
+		outf << std::endl;
 
-		// Extract posterior values from tracker
-		Eigen::ArrayXXd post_alpha = Eigen::ArrayXXd::Zero(n_var, n_effects);
-		Eigen::ArrayXXd post_mu = Eigen::ArrayXXd::Zero(n_var, n_effects);
-		Eigen::ArrayXXd post_beta = Eigen::ArrayXXd::Zero(n_var, n_effects);
 		for (int ii = 0; ii < my_n_grid; ii++){
-			for (std::uint32_t kk = 0; kk < n_var; kk++){
-				for (int ee = 0; ee < n_effects; ee++){
-					post_alpha(kk, ee) += weights[ii] * stitched_tracker.vp_list[ii].alpha(kk, ee);
-					post_mu(kk, ee) += weights[ii] * stitched_tracker.vp_list[ii].mu(kk, ee);
-					post_beta(kk, ee) += weights[ii] * stitched_tracker.vp_list[ii].mu(kk, ee) * stitched_tracker.vp_list[ii].alpha(kk, ee);
-				}
+			outf << std::setprecision(4) << weights[ii] << " ";
+			outf << stitched_tracker.logw_list[ii] << " ";
+			if(!p.mode_empirical_bayes){
+				outf << std::log(my_probs_grid(ii,0) + eps) << " ";
 			}
-		}
+			outf << stitched_tracker.counts_list[ii] << " ";
+			outf << stitched_tracker.elapsed_time_list[ii] <<  " ";
+			outf << stitched_tracker.hyps_list[ii].sigma;
 
-		if(nonfinite_count > 0){
-			std::cout << "WARNING: " << nonfinite_count << " grid points returned non-finite ELBO.";
-			std::cout << "Skipping these when producing posterior estimates.";
-		}
-
-		// Set Precision
-		outf_elbo << std::setprecision(4) << std::fixed;
-		outf_alpha_diff << std::setprecision(4) << std::fixed;
-
-		// Write results of main inference to file
-		for (std::uint32_t kk = 0; kk < n_var; kk++){
-			outf << X.chromosome[kk] << " " << X.rsid[kk] << " " << X.position[kk];
-			outf << " " << X.al_0[kk] << " " << X.al_1[kk];
+			outf << std::setprecision(8) << std::fixed;
 			for (int ee = 0; ee < n_effects; ee++){
-				outf << " " << post_alpha(kk, ee);
- 				outf << " " << post_mu(kk, ee) << " " << post_beta(kk, ee);
+				outf << " " << stitched_tracker.hyps_list[ii].slab_relative_var(ee);
+				if(p.mode_mog_prior){
+					outf << " " << stitched_tracker.hyps_list[ii].spike_relative_var(ee);
+				}
+				outf << " " << stitched_tracker.hyps_list[ii].lambda(ee);
 			}
 			outf << std::endl;
 		}
 
-		// Write hyperparams weights to file
+		// Extract snp-stats averaged over runs
+		Eigen::ArrayXXd wmean_alpha = Eigen::ArrayXXd::Zero(n_var, n_effects);
+		Eigen::ArrayXXd wmean_beta  = Eigen::ArrayXXd::Zero(n_var, n_effects);
+		Eigen::ArrayXXd nmean_alpha = Eigen::ArrayXXd::Zero(n_var, n_effects);
+		Eigen::ArrayXXd nmean_beta  = Eigen::ArrayXXd::Zero(n_var, n_effects);
 		for (int ii = 0; ii < my_n_grid; ii++){
-			outf_weights << weights[ii] << " " << stitched_tracker.logw_list[ii] << " ";
-			outf_weights << std::log(my_probs_grid(ii,0) + eps) << " ";
-			outf_weights << stitched_tracker.counts_list[ii] << " ";
-			outf_weights << stitched_tracker.elapsed_time_list[ii] <<  " ";
-			outf_weights << stitched_tracker.hyps_list[ii].sigma;
-			for (int ee = 0; ee < n_effects; ee++){
-				outf_weights << " " << stitched_tracker.hyps_list[ii].slab_relative_var(ee);
-				if(p.mode_mog_prior){
-					outf_weights << " " << stitched_tracker.hyps_list[ii].spike_relative_var(ee);
-				}
-				outf_weights << " " << stitched_tracker.hyps_list[ii].lambda(ee);
+			if(std::isfinite(weights[ii])){
+				wmean_alpha += weights[ii] * stitched_tracker.vp_list[ii].alpha;
+				wmean_beta  += weights[ii] * stitched_tracker.vp_list[ii].alpha * stitched_tracker.vp_list[ii].mu;
+				nmean_alpha += stitched_tracker.vp_list[ii].alpha;
+				nmean_beta  += stitched_tracker.vp_list[ii].alpha * stitched_tracker.vp_list[ii].mu;
 			}
-			outf_weights << std::endl;
+		}
+		nmean_alpha /= (double) my_n_grid;
+		nmean_beta  /= (double) my_n_grid;
+
+		Eigen::ArrayXXd nmean_alpha_sd = Eigen::ArrayXXd::Zero(n_var, n_effects);
+		Eigen::ArrayXXd nmean_beta_sd  = Eigen::ArrayXXd::Zero(n_var, n_effects);
+		for (int ii = 0; ii < my_n_grid; ii++){
+			if(std::isfinite(weights[ii])){
+				nmean_alpha_sd += (stitched_tracker.vp_list[ii].alpha - nmean_alpha).square();
+				nmean_beta_sd  += (stitched_tracker.vp_list[ii].alpha * stitched_tracker.vp_list[ii].mu - nmean_beta).square();
+			}
+		}
+		nmean_alpha_sd /= (double) (my_n_grid - 1);
+		nmean_beta_sd  /= (double) (my_n_grid - 1);
+
+		// MAP snp-stats to file
+		outf_map << "chr rsid pos a0 a1";
+		for (int ee = 0; ee < n_effects; ee++){
+			outf_map << " alpha" << ee << " beta" << ee;
+		}
+		outf_map << std::endl;
+
+		outf_map << std::setprecision(9) << std::fixed;
+		int ii_map = std::distance(weights.begin(), std::max_element(weights.begin(), weights.end()));
+		for (std::uint32_t kk = 0; kk < n_var; kk++){
+			outf_map << X.chromosome[kk] << " " << X.rsid[kk] << " " << X.position[kk];
+			outf_map << " " << X.al_0[kk] << " " << X.al_1[kk];
+			for (int ee = 0; ee < n_effects; ee++){
+				outf_map << " " << stitched_tracker.vp_list[ii_map].alpha(kk, ee);
+ 				outf_map << " " << stitched_tracker.vp_list[ii_map].alpha(kk, ee) * stitched_tracker.vp_list[ii_map].mu(kk, ee);
+			}
+			outf_map << std::endl;
+		}
+
+		// Weighted mean snp-stats to file
+		outf_wmean << "chr rsid pos a0 a1";
+		for (int ee = 0; ee < n_effects; ee++){
+			outf_wmean << " alpha" << ee << " beta" << ee;
+		}
+		outf_wmean << std::endl;
+
+		outf_wmean << std::setprecision(9) << std::fixed;
+		for (std::uint32_t kk = 0; kk < n_var; kk++){
+			outf_wmean << X.chromosome[kk] << " " << X.rsid[kk] << " " << X.position[kk];
+			outf_wmean << " " << X.al_0[kk] << " " << X.al_1[kk];
+			for (int ee = 0; ee < n_effects; ee++){
+				outf_wmean << " " << wmean_alpha(kk, ee);
+ 				outf_wmean << " " << wmean_beta(kk, ee);
+			}
+			outf_wmean << std::endl;
+		}
+
+		// Niave mean snp-stats to file
+		outf_nmean << "chr rsid pos a0 a1";
+		for (int ee = 0; ee < n_effects; ee++){
+			outf_nmean << " alpha" << ee << " alpha" << ee << "_sd";
+			outf_nmean << " beta" << ee << " beta" << ee << "_sd";
+		}
+		outf_nmean << std::endl;
+
+		outf_nmean << std::setprecision(9) << std::fixed;
+		for (std::uint32_t kk = 0; kk < n_var; kk++){
+			outf_nmean << X.chromosome[kk] << " " << X.rsid[kk] << " " << X.position[kk];
+			outf_nmean << " " << X.al_0[kk] << " " << X.al_1[kk];
+			for (int ee = 0; ee < n_effects; ee++){
+				outf_nmean << " " << nmean_alpha(kk, ee);
+				outf_nmean << " " << nmean_alpha_sd(kk, ee);
+ 				outf_nmean << " " << nmean_beta(kk, ee);
+				outf_nmean << " " << nmean_beta_sd(kk, ee);
+			}
+			outf_nmean << std::endl;
 		}
 
 		if(p.verbose){
+			outf_elbo << std::setprecision(4) << std::fixed;
 			for (int ii = 0; ii < my_n_grid; ii++){
 				for (int cc = 0; cc < stitched_tracker.logw_updates_list[ii].size(); cc++){
 					outf_elbo << stitched_tracker.logw_updates_list[ii][cc] << " ";
@@ -954,24 +1011,12 @@ public:
 				outf_elbo << std::endl;
 			}
 
+			outf_alpha_diff << std::setprecision(4) << std::fixed;
 			for (int ii = 0; ii < my_n_grid; ii++){
 				for (int cc = 0; cc < stitched_tracker.alpha_diff_list[ii].size(); cc++){
 					outf_alpha_diff << stitched_tracker.alpha_diff_list[ii][cc] << " ";
 				}
 				outf_alpha_diff << std::endl;
-			}
-
-			// Writing optimised alpha and mu from each grid point to file
-			// 1 col per gridpoint
-			for (std::uint32_t kk = 0; kk < n_var; kk++){
-				for (int ee = 0; ee < n_effects; ee++){
-					for (int ii = 0; ii < my_n_grid; ii++){
-						outf_alphas << stitched_tracker.vp_list[ii].alpha(kk, ee) << " ";
-						outf_mus << stitched_tracker.vp_list[ii].mu(kk, ee) << " ";
-					}
-					outf_alphas << std::endl;
-					outf_mus << std::endl;
-				}
 			}
 		}
 	}
