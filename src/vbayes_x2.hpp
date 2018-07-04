@@ -88,11 +88,11 @@ public:
 	// Monitoring
 	std::chrono::system_clock::time_point time_check;
 
-	// MyTimer t_updateAlphaMu;
-	// MyTimer t_elbo;
-	// MyTimer t_readXk;
-	// MyTimer t_updateHyps;
-	// MyTimer t_InnerLoop;
+	MyTimer t_updateAlphaMu;
+	MyTimer t_elbo;
+	MyTimer t_readXk;
+	MyTimer t_updateHyps;
+	MyTimer t_InnerLoop;
 
 	explicit VBayesX2( Data& dat ) : X( dat.G ),
                             Y( dat.Y ),
@@ -209,11 +209,11 @@ public:
 		io::close(outf_inits);
 
 		// Report all timers
-		t_updateAlphaMu.report();
-		t_elbo.report();
-		t_readXk.report();
-		t_updateHyps.report();
-		t_InnerLoop.report();
+		// t_updateAlphaMu.report();
+		// t_elbo.report();
+		// t_readXk.report();
+		// t_updateHyps.report();
+		// t_InnerLoop.report();
 	}
 
 	void print_time_check(){
