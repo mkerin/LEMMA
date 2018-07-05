@@ -587,9 +587,16 @@ public:
                        long int& hty_updates){
 		t_updateAlphaMu.resume();
 		Eigen::VectorXd X_kk(n_samples);
+		Eigen::VectorXd Z_kk(n_samples);
 
 		Eigen::ArrayXd alpha_cnst;
-		alpha_cnst = (hyps.lambda / (1.0 - hyps.lambda) + eps).log() - hyps.slab_var.log() / 2.0;
+		if(p.mode_mog_prior){
+			alpha_cnst  = (hyps.lambda / (1.0 - hyps.lambda) + eps).log();
+			alpha_cnst -= (hyps.slab_var.log() - hyps.spike_var.log()) / 2.0;
+		} else {
+			alpha_cnst = (hyps.lambda / (1.0 - hyps.lambda) + eps).log() - hyps.slab_var.log() / 2.0;
+		}
+
 		hty_updates = 0;
 		for(std::uint32_t kk : iter ){
 			int ee            = kk / n_var;
@@ -599,73 +606,31 @@ public:
 			X_kk = X.col(kk);
 			t_readXk.stop();
 
-			double rr_k = vp.alpha(jj, ee) * vp.mu(jj, ee);
-
-			// Update mu (eq 9); faster to take schur product inside genotype_matrix
-			vp.mu(jj, ee) = vp.s_sq(jj, ee) * (Hty(jj, ee) - vp.Hr.dot(X_kk) + dHtH(jj, ee) * rr_k) / hyps.sigma;
-
-			// Update alpha (eq 10)
-			double ff_k      = (std::log(vp.s_sq(jj, ee)) + vp.mu(jj, ee) * vp.mu(jj, ee) / vp.s_sq(jj, ee)) / 2.0;
-			vp.alpha(jj, ee) = sigmoid(ff_k + alpha_cnst(ee));
-
-			// Update i_Hr; only if coeff is large enough to matter
-			double rr_k_diff = (vp.alpha(jj, ee)*vp.mu(jj, ee) - rr_k);
-			if(p.mode_approximate_residuals && std::abs(rr_k_diff) > p.min_residuals_diff){
-				hty_updates++;
-				vp.Hr += rr_k_diff * X_kk;
-			}
+			_internal_updateAlphaMu(X_kk, ee, jj, hty_updates, vp, hyps, alpha_cnst);
 
 			if(p.mode_alternating_updates){
-				Eigen::VectorXd Z_kk(n_samples);
 				for(int ee = 1; ee < n_effects; ee++){
 					Z_kk = X_kk.cwiseProduct(E.col(ee-1));
-
-					double rr_k = vp.alpha(jj, ee) * vp.mu(jj, ee);
-
-					// Update mu (eq 9); faster to take schur product inside genotype_matrix
-					vp.mu(jj, ee) = vp.s_sq(jj, ee) * (Hty(jj, ee) - vp.Hr.dot(Z_kk) + dHtH(jj, ee) * rr_k) / hyps.sigma;
-
-					// Update alpha (eq 10)
-					double ff_k      = (std::log(vp.s_sq(jj, ee)) + vp.mu(jj, ee) * vp.mu(jj, ee) / vp.s_sq(jj, ee)) / 2.0;
-					vp.alpha(jj, ee) = sigmoid(ff_k + alpha_cnst(ee));
-
-					// Update i_Hr; only if coeff is large enough to matter
-					double rr_k_diff = vp.alpha(jj, ee) * vp.mu(jj, ee) - rr_k;
-					if(p.mode_approximate_residuals && std::abs(rr_k_diff) > p.min_residuals_diff){
-						hty_updates++;
-						vp.Hr += rr_k_diff * Z_kk;
-					}
+					_internal_updateAlphaMu(Z_kk, ee, jj, hty_updates, vp, hyps, alpha_cnst);
 				}
 			}
 		}
 		t_updateAlphaMu.stop();
 	}
 
-	void updateAlphaMuMoG(const std::vector< std::uint32_t >& iter,
-                       const Hyps& hyps,
-                       VariationalParameters& vp,
-                       long int& hty_updates){
-		// When we use Mixture of gaussians for effects prior
-		t_updateAlphaMu.resume();
-		Eigen::VectorXd X_kk(n_samples);
+	void _internal_updateAlphaMu(const Eigen::Ref<const Eigen::VectorXd>& H_kk,
+								 const int& ee, std::uint32_t jj, long int& hty_updates,
+								 VariationalParameters& vp,
+								 const Hyps& hyps,
+								 const Eigen::Ref<const Eigen::ArrayXd>& alpha_cnst) __attribute__ ((hot)){
+		 //
+		 double rr_k_diff;
 
-		Eigen::ArrayXd alpha_cnst;
-		alpha_cnst  = (hyps.lambda / (1.0 - hyps.lambda) + eps).log();
-		alpha_cnst -= (hyps.slab_var.log() - hyps.spike_var.log()) / 2.0;
-
-		hty_updates = 0;
-		for(std::uint32_t kk : iter ){
-			int ee            = kk / n_var;
-			std::uint32_t jj = (kk % n_var);
-
-			// rr_k = vp.alpha(jj, ee) * vp.mu(kk, ee) + (1 - vp.alpha(jj, ee)) * vp.mup(jj, ee);
-			double rr_k = vp.alpha(jj, ee) * (vp.mu(kk, ee) - vp.mup(jj, ee)) + vp.mup(jj, ee);
-			t_readXk.resume();
-			X_kk = X.col(kk);
-			t_readXk.stop();
+		 if(p.mode_mog_prior){
+			double rr_k = vp.alpha(jj, ee) * (vp.mu(jj, ee) - vp.mup(jj, ee)) + vp.mup(jj, ee);
 
 			// Update mu (eq 9); faster to take schur product inside genotype_matrix
-			double A       = Hty(jj, ee) - vp.Hr.dot(X_kk) + dHtH(jj, ee) * rr_k;
+			double A       = Hty(jj, ee) - vp.Hr.dot(H_kk) + dHtH(jj, ee) * rr_k;
 			vp.mu(jj, ee)  = vp.s_sq(jj, ee) * A / hyps.sigma;
 			vp.mup(jj, ee) = vp.sp_sq(jj, ee) * A / hyps.sigma;
 
@@ -677,18 +642,29 @@ public:
 
 			// Update i_Hr; only if coeff is large enough to matter
 			double rr_k_new  = vp.alpha(jj, ee) * (vp.mu(jj, ee) - vp.mup(jj, ee)) + vp.mup(jj, ee);
-			double rr_k_diff = rr_k_new - rr_k;
-			if(p.mode_approximate_residuals && std::abs(rr_k_diff) > p.min_residuals_diff){
-				hty_updates++;
-				vp.Hr += rr_k_diff * X_kk;
-			}
+			rr_k_diff        = rr_k_new - rr_k;
+		} else {
 
-			if(p.mode_alternating_updates){
-				Eigen::VectorXd Z_kk(n_samples);
-			}
+			double rr_k = vp.alpha(jj, ee) * vp.mu(jj, ee);
+
+			// Update mu (eq 9); faster to take schur product inside genotype_matrix
+			vp.mu(jj, ee) = vp.s_sq(jj, ee) * (Hty(jj, ee) - vp.Hr.dot(H_kk) + dHtH(jj, ee) * rr_k) / hyps.sigma;
+
+			// Update alpha (eq 10)
+			double ff_k      = (std::log(vp.s_sq(jj, ee)) + vp.mu(jj, ee) * vp.mu(jj, ee) / vp.s_sq(jj, ee)) / 2.0;
+			vp.alpha(jj, ee) = sigmoid(ff_k + alpha_cnst(ee));
+
+			// Update i_Hr; only if coeff is large enough to matter
+			rr_k_diff        = vp.alpha(jj, ee) * vp.mu(jj, ee) - rr_k;
 		}
-		t_updateAlphaMu.stop();
-	}
+		if(!p.mode_approximate_residuals){
+			hty_updates++;
+			vp.Hr += rr_k_diff * H_kk;
+		} else if (p.mode_approximate_residuals && std::abs(rr_k_diff) > p.min_residuals_diff){
+			hty_updates++;
+			vp.Hr += rr_k_diff * H_kk;
+		}
+	 }
 
 	void normaliseLogWeights(std::vector< double >& my_weights){
 		// Safer to normalise log-weights than niavely convert to weights
@@ -746,7 +722,7 @@ public:
 		}
 
 		// Convert alpha to simplex. Why?
-		vp.alpha /= vp.alpha.colwise().sum();
+		vp.alpha.rowwise() /= vp.alpha.colwise().sum();
 
 		// Gen Hr.
 		calcHr(vp);

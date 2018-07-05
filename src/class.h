@@ -20,7 +20,8 @@ class parameters {
 		bool select_rsid, interaction_analysis, verbose, low_mem;
 		bool elbo_tol_set_by_user, alpha_tol_set_by_user, mode_empirical_bayes;
 		bool keep_constant_variants, user_requests_round1, scale_pheno, mode_mog_prior;
-		double min_maf, min_info, elbo_tol, alpha_tol;
+		bool mode_alternating_updates, mode_approximate_residuals;
+		double min_maf, min_info, elbo_tol, alpha_tol, min_residuals_diff;
 		std::vector < std::string > incl_sample_ids, gconf;
 
 	// constructors/destructors
@@ -49,6 +50,9 @@ class parameters {
 		mode_lm2 = false;
 		mode_vcf = false;
 		mode_empirical_bayes = false;
+		mode_alternating_updates = false;
+		mode_approximate_residuals = false;
+		min_residuals_diff = 1e-9;
 		low_mem = false;
 		mode_joint_model = false;
 		mode_vb = false;

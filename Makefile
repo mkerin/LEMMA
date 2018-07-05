@@ -77,7 +77,7 @@ tests/tests-main.o: tests/tests-main.cpp $(SRCDIR)/bgen_prog.cpp $(HEADERS)
 
 # Examples
 examples/test_updates: examples/test_updates.cpp
-	$(CXX) $< -o $@ $(FLAGS) -I /homes/kerin/local/boost_1_67_0 -L /homes/kerin/local/boost_1_67_0/stage/lib
+	$(CXX) $< -o $@ $(FLAGS) -Ofast -I /homes/kerin/local/boost_1_67_0 -L /homes/kerin/local/boost_1_67_0/stage/lib
 
 examples/check_my_timer: examples/check_my_timer.cpp
 	$(CXX) $< -o $@ $(FLAGS) -I /homes/kerin/local/boost_1_67_0 -L /homes/kerin/local/boost_1_67_0/stage/lib
@@ -92,9 +92,9 @@ examples/check_eigen: examples/check_eigen.cpp
 # Files in data/out are regarded as 'true', and we check that the equivalent
 # file in data/io_test is identical after making changes to the executable.
 # IOfiles := t1_range t2_lm t3_lm_two_chunks t4_lm_2dof t5_joint_model t6_lm2
-IOfiles :=           t7_varbvs t8_varbvs t10_varbvs_without_init
+IOfiles := t7_varbvs t8_mog_prior
 IOfiles := $(addprefix data/io_test/,$(addsuffix /attempt.out,$(IOfiles)))
-# IOfiles += $(addprefix data/io_test/t2_lm/attempt, $(addsuffix .out,B C D))
+IOfiles += $(addprefix data/io_test/t7_varbvs/attempt, $(addsuffix .out,_multithread _alt_updates))
 # IOfiles += $(addprefix data/io_test/t1_range/attempt, $(addsuffix .out,B))
 
 testIO: $(IOfiles)
@@ -132,6 +132,21 @@ data/io_test/t7_varbvs/attempt_multithread.out: data/io_test/n50_p100.bgen ./bin
 	$(RSCRIPT) R/vbayes_x_tests/check_output.R $(dir $@) > $(dir $@)attempt_multithread.log
 	diff $(dir $@)answer.log $(dir $@)attempt_multithread.log
 
+data/io_test/t7_varbvs/attempt_alt_updates.out: data/io_test/n50_p100.bgen ./bin/bgen_prog $(t7_context)
+	./bin/bgen_prog --mode_vb --verbose \
+	    --keep_constant_variants \
+	    --mode_alternating_updates \
+	    --bgen $< \
+	    --interaction x \
+	    --covar $(dir $@)age.txt \
+	    --pheno $(dir $@)pheno.txt \
+	    --hyps_grid $(dir $@)hyperpriors_gxage.txt \
+	    --hyps_probs $(dir $@)hyperpriors_gxage_probs.txt \
+	    --vb_init $(dir $@)answer_init.txt \
+	    --out $@
+	$(RSCRIPT) R/vbayes_x_tests/check_output.R $(dir $@) $(notdir $@) > $(dir $@)attempt_alt_updates.log
+	diff $(dir $@)answer.log $(dir $@)attempt_alt_updates.log
+
 $(t7_dir)/hyperpriors_gxage.txt: R/t7/gen_hyps.R
 	$(RSCRIPT) $<
 
@@ -146,7 +161,7 @@ $(t7_dir)/answer.rds: R/vbayes_x_tests/run_VBayesR.R $(t7_dir)/hyperpriors_gxage
 	  --hyps_probs $(dir $@)hyperpriors_gxage_probs.txt \
 	  --vb_init $(dir $@)answer_init.txt
 
-# TEST 8; TODO: check hyps not rescricted
+# TEST 8;
 t8_dir     := data/io_test/t8_mog_prior
 t8_context := $(t8_dir)/hyperpriors_gxage.txt
 data/io_test/t8_mog_prior/attempt.out: data/io_test/n50_p100.bgen ./bin/bgen_prog $(t8_context)
@@ -161,8 +176,7 @@ data/io_test/t8_mog_prior/attempt.out: data/io_test/n50_p100.bgen ./bin/bgen_pro
 	    --hyps_probs $(dir $@)hyperpriors_gxage_probs.txt \
 	    --vb_init $(dir $@)answer_init.txt \
 	    --out $@
-	$(RSCRIPT) R/vbayes_x_tests/check_output.R $(dir $@) > $(dir $@)attempt.log
-	diff $(dir $@)answer.log $(dir $@)attempt.log
+	diff $(dir $@)answer.out $(dir $@)attempt.out
 
 # TEST 8
 # Unrestricted model; comparison with R implementation

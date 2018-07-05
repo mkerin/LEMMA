@@ -1,4 +1,5 @@
 #include <iostream>
+#include "../src/variational_parameters.hpp"
 #include "../src/vbayes_tracker.hpp"
 #include "../src/genotype_matrix.hpp"
 #include "../src/tools/eigen3.3/Dense"
@@ -13,23 +14,7 @@
 
 long int N, P;
 int mode;
-
-struct FreeParameters {
-	Eigen::VectorXd Hr;    // N x 1
-
-	// Variational parameters for slab
-	Eigen::MatrixXd s_sq;  // P x (E+1)
-	Eigen::VectorXd alpha; // P x (E+1)
-	Eigen::MatrixXd mu;    // P x (E+1)
-
-	// Variational parameters for spike (MoG prior mode)
-	Eigen::MatrixXd sp_sq;  // P x (E+1)
-	Eigen::MatrixXd mup;    // P x (E+1)
-
-	// Variational parameters for covariate main effects
-	Eigen::VectorXd muc;    // C x 1
-	Eigen::VectorXd sc_sq;  // C x 1
-}; 
+int n_effects = 2;
 
 
 bool read(){
@@ -50,104 +35,166 @@ bool read(){
 class PlaceHolder {
 public:
 	GenotypeMatrix X;
-	Eigen::VectorXd dHtH;
-	Eigen::VectorXd Hty;
+	Eigen::MatrixXd E;
+	Eigen::ArrayXXd dHtH;
+	Eigen::ArrayXXd Hty;
 	const double eps = std::numeric_limits<double>::min();
 	std::uint32_t n_var;
 	long int n_samples;
 
 	PlaceHolder(bool use_compression) : X(use_compression) {};
-	
+
 
 	void updateAlphaMu(const std::vector< std::uint32_t >& iter,
-	                    const std::uint32_t& L,
-	                    const Hyps& i_hyps,
-	                    FreeParameters& i_par){
-		std::uint32_t kk;
-		double rr_k, ff_k, rr_k_diff;
-		Eigen::VectorXd X_kk(X.NN);
+                       const Hyps& hyps,
+                       VariationalParameters& vp){
+		Eigen::VectorXd X_kk(n_samples);
 
-		double bbb_b, bbb_g;
-		bbb_b = std::log(i_hyps.lam_b / (1.0 - i_hyps.lam_b) + eps) - std::log(i_hyps.sigma_b * i_hyps.sigma) / 2.0;
-		bbb_g = std::log(i_hyps.lam_g / (1.0 - i_hyps.lam_g) + eps) - std::log(i_hyps.sigma_g * i_hyps.sigma) / 2.0;
-
+		Eigen::ArrayXd alpha_cnst;
+		alpha_cnst = (hyps.lambda / (1.0 - hyps.lambda) + eps).log() - hyps.slab_var.log() / 2.0;
 		for(std::uint32_t kk : iter ){
-			rr_k = i_par.alpha(kk) * i_par.mu(kk);
+			int ee            = kk / n_var;
+			std::uint32_t jj = (kk % n_var);
+
 			X_kk = X.col(kk);
 
-			// Update mu (eq 9); faster to take schur product with aa inside genotype_matrix
-			i_par.mu(kk) = i_par.s_sq(kk) * (Hty(kk) - i_par.Hr.dot(X_kk) + dHtH(kk) * rr_k) / i_hyps.sigma;
-	
-			// Update alpha (eq 10)  TODO: check syntax / i_  / sigmoid here!
-			if (kk < n_var){
-				ff_k = bbb_b + (std::log(i_par.s_sq(kk)) + i_par.mu(kk) * i_par.mu(kk) / i_par.s_sq(kk)) / 2.0;
-			} else {
-				ff_k = bbb_g + (std::log(i_par.s_sq(kk)) + i_par.mu(kk) * i_par.mu(kk) / i_par.s_sq(kk)) / 2.0;
-			}
-			i_par.alpha(kk) = sigmoid(ff_k);
-	
-			// Update i_Hr; faster to take schur product with aa inside genotype_matrix
-			// rr_k_diff = (i_par.alpha(kk)*i_par.mu(kk) - rr_k);
-			// if(std::abs(rr_k_diff) > 1e-9){
-			// if(kk < n_var / 5){
-				i_par.Hr += (i_par.alpha(kk)*i_par.mu(kk) - rr_k) * X_kk;
+			double rr_k = vp.alpha(jj, ee) * vp.mu(jj, ee);
+
+			// Update mu (eq 9); faster to take schur product inside genotype_matrix
+			vp.mu(jj, ee) = vp.s_sq(jj, ee) * (Hty(jj, ee) - vp.Hr.dot(X_kk) + dHtH(jj, ee) * rr_k) / hyps.sigma;
+
+			// Update alpha (eq 10)
+			double ff_k      = (std::log(vp.s_sq(jj, ee)) + vp.mu(jj, ee) * vp.mu(jj, ee) / vp.s_sq(jj, ee)) / 2.0;
+			vp.alpha(jj, ee) = sigmoid(ff_k + alpha_cnst(ee));
+
+			// Update i_Hr; only if coeff is large enough to matter
+			double rr_k_diff = (vp.alpha(jj, ee)*vp.mu(jj, ee) - rr_k);
+			// if(p.mode_approximate_residuals && std::abs(rr_k_diff) > p.min_residuals_diff){
+				// hty_updates++;
+				vp.Hr += rr_k_diff * X_kk;
 			// }
 		}
 	}
 
 	void updateAlphaMu2(const std::vector< std::uint32_t >& iter,
-	                    const std::uint32_t& L,
-	                    const Hyps& i_hyps,
-	                    FreeParameters& i_par){
-		std::uint32_t kk;
-		double rr_k, ff_k, rr_k_diff;
-		Eigen::VectorXd X_kk(X.NN);
+					   const Hyps& hyps,
+					   VariationalParameters& vp){
+		Eigen::VectorXd X_kk(n_samples);
 
-		double bbb_b, bbb_g;
-		bbb_b = std::log(i_hyps.lam_b / (1.0 - i_hyps.lam_b) + eps) - std::log(i_hyps.sigma_b * i_hyps.sigma) / 2.0;
-		bbb_g = std::log(i_hyps.lam_g / (1.0 - i_hyps.lam_g) + eps) - std::log(i_hyps.sigma_g * i_hyps.sigma) / 2.0;
-
+		Eigen::ArrayXd alpha_cnst;
+		alpha_cnst = (hyps.lambda / (1.0 - hyps.lambda) + eps).log() - hyps.slab_var.log() / 2.0;
 		for(std::uint32_t kk : iter ){
-			if(kk >= n_var) continue;
+			int ee            = kk / n_var;
+			std::uint32_t jj = (kk % n_var);
 
-			rr_k = i_par.alpha(kk) * i_par.mu(kk);
 			X_kk = X.col(kk);
 
-			// Update mu (eq 9); faster to take schur product with aa inside genotype_matrix
-			i_par.mu(kk) = i_par.s_sq(kk) * (Hty(kk) - i_par.Hr.dot(X_kk) + dHtH(kk) * rr_k) / i_hyps.sigma;
-	
-			// Update alpha (eq 10)  TODO: check syntax / i_  / sigmoid here!
-			if (kk < n_var){
-				ff_k = bbb_b + (std::log(i_par.s_sq(kk)) + i_par.mu(kk) * i_par.mu(kk) / i_par.s_sq(kk)) / 2.0;
-			} else {
-				ff_k = bbb_g + (std::log(i_par.s_sq(kk)) + i_par.mu(kk) * i_par.mu(kk) / i_par.s_sq(kk)) / 2.0;
+			double rr_k = vp.alpha(jj, ee) * vp.mu(jj, ee);
+
+			// Update mu (eq 9); faster to take schur product inside genotype_matrix
+			vp.mu(jj, ee) = vp.s_sq(jj, ee) * (Hty(jj, ee) - vp.Hr.dot(X_kk) + dHtH(jj, ee) * rr_k) / hyps.sigma;
+
+			// Update alpha (eq 10)
+			double ff_k      = (std::log(vp.s_sq(jj, ee)) + vp.mu(jj, ee) * vp.mu(jj, ee) / vp.s_sq(jj, ee)) / 2.0;
+			vp.alpha(jj, ee) = sigmoid(ff_k + alpha_cnst(ee));
+
+			// Update i_Hr; only if coeff is large enough to matter
+			double rr_k_diff = (vp.alpha(jj, ee)*vp.mu(jj, ee) - rr_k);
+			// if(p.mode_approximate_residuals && std::abs(rr_k_diff) > p.min_residuals_diff){
+				// hty_updates++;
+				vp.Hr += rr_k_diff * X_kk;
+			// }
+
+			// if(p.mode_alternating_updates){
+			Eigen::VectorXd Z_kk(n_samples);
+			for(int ee = 1; ee < n_effects; ee++){
+				Z_kk = X_kk.cwiseProduct(E.col(ee-1));
+
+				double rr_k = vp.alpha(jj, ee) * vp.mu(jj, ee);
+
+				// Update mu (eq 9); faster to take schur product inside genotype_matrix
+				vp.mu(jj, ee) = vp.s_sq(jj, ee) * (Hty(jj, ee) - vp.Hr.dot(Z_kk) + dHtH(jj, ee) * rr_k) / hyps.sigma;
+
+				// Update alpha (eq 10)
+				double ff_k      = (std::log(vp.s_sq(jj, ee)) + vp.mu(jj, ee) * vp.mu(jj, ee) / vp.s_sq(jj, ee)) / 2.0;
+				vp.alpha(jj, ee) = sigmoid(ff_k + alpha_cnst(ee));
+
+				// Update i_Hr; only if coeff is large enough to matter
+				double rr_k_diff = vp.alpha(jj, ee) * vp.mu(jj, ee) - rr_k;
+				vp.Hr += rr_k_diff * Z_kk;
 			}
-			i_par.alpha(kk) = sigmoid(ff_k);
-	
-			// Update i_Hr; faster to take schur product with aa inside genotype_matrix
-			i_par.Hr += (i_par.alpha(kk)*i_par.mu(kk) - rr_k) * X_kk;
-
-			// Then do the interaction with column already in mem.
-			kk += n_var;
-
-
-			X_kk = X_kk.cwiseProduct(X.aa);
-			// X_kk = X.col(kk);
-			rr_k = i_par.alpha(kk) * i_par.mu(kk);
-			// Update mu (eq 9); faster to take schur product with aa inside genotype_matrix
-			i_par.mu(kk) = i_par.s_sq(kk) * (Hty(kk) - i_par.Hr.dot(X_kk) + dHtH(kk) * rr_k) / i_hyps.sigma;
-	
-			// Update alpha (eq 10)  TODO: check syntax / i_  / sigmoid here!
-			if (kk < n_var){
-				ff_k = bbb_b + (std::log(i_par.s_sq(kk)) + i_par.mu(kk) * i_par.mu(kk) / i_par.s_sq(kk)) / 2.0;
-			} else {
-				ff_k = bbb_g + (std::log(i_par.s_sq(kk)) + i_par.mu(kk) * i_par.mu(kk) / i_par.s_sq(kk)) / 2.0;
-			}
-			i_par.alpha(kk) = sigmoid(ff_k);
-	
-			// Update i_Hr; faster to take schur product with aa inside genotype_matrix
-			i_par.Hr += (i_par.alpha(kk)*i_par.mu(kk) - rr_k) * X_kk;
 		}
+	}
+
+	void updateAlphaMu3(const std::vector< std::uint32_t >& iter,
+					   const Hyps& hyps,
+					   VariationalParameters& vp){
+		Eigen::VectorXd X_kk(n_samples);
+
+		Eigen::ArrayXd alpha_cnst;
+		alpha_cnst = (hyps.lambda / (1.0 - hyps.lambda) + eps).log() - hyps.slab_var.log() / 2.0;
+		for(std::uint32_t kk : iter ){
+			int ee            = kk / n_var;
+			std::uint32_t jj = (kk % n_var);
+
+			X_kk = X.col(kk);
+
+			_internal_updateAlphaMu(X_kk, ee, jj, vp, hyps, alpha_cnst);
+
+			// if(p.mode_alternating_updates){
+			Eigen::VectorXd Z_kk(n_samples);
+			for(int ee = 1; ee < n_effects; ee++){
+				Z_kk = X_kk.cwiseProduct(E.col(ee-1));
+
+				_internal_updateAlphaMu(Z_kk, ee, jj, vp, hyps, alpha_cnst);
+			}
+		}
+	}
+
+	void _internal_updateAlphaMu(const Eigen::Ref<const Eigen::VectorXd>& H_kk,
+	                             const int& ee, std::uint32_t jj,
+	                             VariationalParameters& vp,
+	                             const Hyps& hyps,
+	                             const Eigen::Ref<const Eigen::ArrayXd>& alpha_cnst) __attribute__ ((hot)){
+	 	//
+		double rr_k_diff;
+
+		if(false){
+			double rr_k = vp.alpha(jj, ee) * (vp.mu(jj, ee) - vp.mup(jj, ee)) + vp.mup(jj, ee);
+
+			// Update mu (eq 9); faster to take schur product inside genotype_matrix
+			double A       = Hty(jj, ee) - vp.Hr.dot(H_kk) + dHtH(jj, ee) * rr_k;
+			vp.mu(jj, ee)  = vp.s_sq(jj, ee) * A / hyps.sigma;
+			vp.mup(jj, ee) = vp.sp_sq(jj, ee) * A / hyps.sigma;
+
+			// Update alpha (eq 10)  TODO: check syntax / i_  / sigmoid here!
+			double ff_k      = vp.mu(jj, ee) * vp.mu(jj, ee) / vp.s_sq(jj, ee)  / 2.0;
+			ff_k            -= vp.mup(jj, ee) * vp.mup(jj, ee) / vp.sp_sq(jj, ee) / 2.0;
+			ff_k            += (std::log(vp.s_sq(jj, ee)) - std::log(vp.sp_sq(jj, ee))) / 2.0;
+			vp.alpha(jj, ee) = sigmoid(ff_k + alpha_cnst(ee));
+
+			// Update i_Hr; only if coeff is large enough to matter
+			double rr_k_new  = vp.alpha(jj, ee) * (vp.mu(jj, ee) - vp.mup(jj, ee)) + vp.mup(jj, ee);
+			rr_k_diff        = rr_k_new - rr_k;
+		} else {
+
+			double rr_k = vp.alpha(jj, ee) * vp.mu(jj, ee);
+
+			// Update mu (eq 9); faster to take schur product inside genotype_matrix
+			vp.mu(jj, ee) = vp.s_sq(jj, ee) * (Hty(jj, ee) - vp.Hr.dot(H_kk) + dHtH(jj, ee) * rr_k) / hyps.sigma;
+
+			// Update alpha (eq 10)
+			double ff_k      = (std::log(vp.s_sq(jj, ee)) + vp.mu(jj, ee) * vp.mu(jj, ee) / vp.s_sq(jj, ee)) / 2.0;
+			vp.alpha(jj, ee) = sigmoid(ff_k + alpha_cnst(ee));
+
+			// Update i_Hr; only if coeff is large enough to matter
+			rr_k_diff        = vp.alpha(jj, ee) * vp.mu(jj, ee) - rr_k;
+		}
+		// if(p.mode_approximate_residuals && std::abs(rr_k_diff) > p.min_residuals_diff){
+		// 	hty_updates++;
+		// 	vp.Hr += rr_k_diff * X_kk;
+		// }
+		vp.Hr += rr_k_diff * H_kk;
 	}
 };
 
@@ -170,51 +217,67 @@ int main() {
 		}
 
 		// Constants
+		std::uint32_t n_var = P;
 		PlaceHolder vb_obj((bool) mode);
 		vb_obj.n_samples = N;
 		vb_obj.n_var = P;
-		vb_obj.dHtH = Eigen::VectorXd::Random(2*P);
-		vb_obj.Hty  = Eigen::VectorXd::Random(2*P);
+		vb_obj.dHtH = Eigen::ArrayXXd::Random(n_var, n_effects);
+		vb_obj.Hty  = Eigen::ArrayXXd::Random(n_var, n_effects);
 		Hyps hyps;
-		hyps.lam_g = 0.001;
-		hyps.lam_b = 0.005;
-		hyps.sigma_g = 2.1;
-		hyps.sigma_b = 1.9;
+		hyps.lambda.resize(2);
+		hyps.lambda << 0.005, 0.001;
+		hyps.slab_var.resize(2);
+		hyps.slab_var << 1.9, 2.1;
+		hyps.slab_relative_var.resize(2);
+		hyps.slab_relative_var << 1.9, 2.1;
 		hyps.sigma = 1.0;
+		std::cout << "Hyps initialised" << std::endl;
 
 		// Eigen::MatrixXd G;
 		// GenotypeMatrix X((bool) mode); // 0 -> false, else true
-		Eigen::VectorXd aa(N);
-		vb_obj.X.resize(N, P);
+		Eigen::MatrixXd E(N, 1);
+		vb_obj.X.resize(N, P, n_effects);
 		for (long int ii = 0; ii < N; ii++){
 			for (long int jj = 0; jj < P; jj++){
 				vb_obj.X.assign_index(ii, jj, uniform(gen_unif));
 			}
-			aa[ii] = gaussian(gen_gauss);
+			E(ii, 0) = gaussian(gen_gauss);
 		}
-		vb_obj.X.aa = aa;
+		vb_obj.X.E = E;
+		vb_obj.E = E;
 		vb_obj.X.calc_scaled_values();
+		std::cout << "vb_obj initialised" << std::endl;
 
 		// Free params
-		FreeParameters i_par;
-		i_par.Hr = Eigen::VectorXd::Random(N);
-		i_par.alpha.resize(2*P);
-		i_par.mu.resize(2*P, 1);
-		i_par.s_sq.resize(2*P, 1);
-		for (long int jj = 0; jj < 2*P; jj++){
-			i_par.alpha(jj) = standard_uniform(gen_unif);
-			i_par.mu(jj) = standard_uniform(gen_gauss);
+		VariationalParameters vp;
+		vp.Hr = Eigen::VectorXd::Random(N);
+		std::cout << "vp.Hr initialised" << std::endl;
+		vp.mu.resize(n_var, n_effects);
+		vp.alpha.resize(n_var, n_effects);
+		for (int ee = 0; ee < n_effects; ee++){
+			for (std::uint32_t kk = 0; kk < n_var; 	kk++){
+				vp.alpha(kk, ee) = uniform(gen_unif);
+				vp.mu(kk, ee)    = gaussian(gen_gauss);
+			}
 		}
-		for (std::uint32_t kk = 0; kk < P; kk++){
-			i_par.s_sq(kk) = hyps.sigma_b * hyps.sigma / (hyps.sigma_b * vb_obj.dHtH(kk) + 1.0);
-		}
-		for (std::uint32_t kk = P; kk < 2*P; kk++){
-			i_par.s_sq(kk) = hyps.sigma_g * hyps.sigma / (hyps.sigma_g * vb_obj.dHtH(kk) + 1.0);
+		vp.alpha.rowwise() /= vp.alpha.colwise().sum();
+		std::cout << "vp.alpha vp.mu initialised" << std::endl;
+
+		vp.s_sq.resize(n_var, n_effects);
+		for (int ee = 0; ee < n_effects; ee++){
+			for (std::uint32_t kk = 0; kk < n_var; kk++){
+				vp.s_sq(kk, ee)  = hyps.slab_var(ee);
+				vp.s_sq(kk, ee) /= (hyps.slab_relative_var(ee) * vb_obj.dHtH(kk, ee) + 1.0);
+			}
 		}
 
 		std::vector<std::uint32_t > iter;
-		for(std::uint32_t kk = 0; kk < 2*P; kk++){
+		for(std::uint32_t kk = 0; kk < n_effects * P; kk++){
 			iter.push_back(kk);
+		}
+		std::vector<std::uint32_t > iter2;
+		for(std::uint32_t kk = 0; kk < P; kk++){
+			iter2.push_back(kk);
 		}
 
 		std::cout << "Data initialised" << std::endl;
@@ -224,7 +287,7 @@ int main() {
 		double secs;
 		boost::timer::auto_cpu_timer t1(5, "\nCurrent implementation: %ts \n");
 
-		vb_obj.updateAlphaMu(iter, 2*P, hyps, i_par);
+		vb_obj.updateAlphaMu(iter, hyps, vp);
 
 		t1.stop();
 		t1.report();
@@ -235,12 +298,22 @@ int main() {
 
 		boost::timer::auto_cpu_timer t2(5, "\nProposed implementation: %ts \n");
 
-		vb_obj.updateAlphaMu2(iter, 2*P, hyps, i_par);
+		vb_obj.updateAlphaMu2(iter2, hyps, vp);
 
 		t2.stop();
 		t2.report();
 		boost::timer::cpu_times cpu_time2(t2.elapsed());
 		secs = (cpu_time2.user + cpu_time2.system) / 1000.0/1000.0/1000.0;
+		std::cout << "Est. update time for P = 640k: " << secs / (double) P * 640000.0 << std::endl;
+
+		boost::timer::auto_cpu_timer t3(5, "\nProposed implementation2: %ts \n");
+
+		vb_obj.updateAlphaMu3(iter2, hyps, vp);
+
+		t3.stop();
+		t3.report();
+		boost::timer::cpu_times cpu_time3(t3.elapsed());
+		secs = (cpu_time3.user + cpu_time3.system) / 1000.0/1000.0/1000.0;
 		std::cout << "Est. update time for P = 640k: " << secs / (double) P * 640000.0 << std::endl;
 	}
 

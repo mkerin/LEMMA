@@ -12,7 +12,7 @@ test.dir = args[[1]]
 
 r.res = readROutput(file.path(test.dir, "answer.rds"))
 if(length(args) > 1){
-	cpp.res = readCppOutput(args[[2]])
+	cpp.res = readCppOutput(file.path(test.dir, args[[2]]))
 } else {
 	cpp.res = readCppOutput(file.path(test.dir, "attempt.out"))
 }
