@@ -63,7 +63,6 @@ public:
 	parameters& p;
 	std::vector< std::uint32_t > fwd_pass;
 	std::vector< std::uint32_t > back_pass;
-	std::vector< std::uint32_t > back_pass_short;
 
 	// Data
 	GenotypeMatrix& X;
@@ -114,12 +113,15 @@ public:
 		print_interval = std::max(1, n_grid / 10);
 
 		// Allocate memory - fwd/back pass vectors
-		for(std::uint32_t kk = 0; kk < n_var2; kk++){
+		std::uint32_t L;
+		if(p.mode_alternating_updates){
+			L = n_var;
+		} else {
+			L = n_var * n_effects;
+		}
+		for(std::uint32_t kk = 0; kk < L; kk++){
 			fwd_pass.push_back(kk);
 			back_pass.push_back(n_var2 - kk - 1);
-		}
-		for(std::uint32_t kk = 0; kk < n_var; kk++){
-			back_pass_short.push_back(n_var - kk - 1);
 		}
 
 		// Allocate memory - genetic
@@ -583,7 +585,6 @@ public:
                        const Hyps& hyps,
                        VariationalParameters& vp,
                        long int& hty_updates){
-		// TODO: Easy to use slab_var() here
 		t_updateAlphaMu.resume();
 		Eigen::VectorXd X_kk(n_samples);
 
@@ -609,10 +610,33 @@ public:
 
 			// Update i_Hr; only if coeff is large enough to matter
 			double rr_k_diff = (vp.alpha(jj, ee)*vp.mu(jj, ee) - rr_k);
-			// if(std::abs(rr_k_diff) > 1e-8){
+			if(p.mode_approximate_residuals && std::abs(rr_k_diff) > p.min_residuals_diff){
 				hty_updates++;
 				vp.Hr += rr_k_diff * X_kk;
-			// }
+			}
+
+			if(p.mode_alternating_updates){
+				Eigen::VectorXd Z_kk(n_samples);
+				for(int ee = 1; ee < n_effects; ee++){
+					Z_kk = X_kk.cwiseProduct(E.col(ee-1));
+
+					double rr_k = vp.alpha(jj, ee) * vp.mu(jj, ee);
+
+					// Update mu (eq 9); faster to take schur product inside genotype_matrix
+					vp.mu(jj, ee) = vp.s_sq(jj, ee) * (Hty(jj, ee) - vp.Hr.dot(Z_kk) + dHtH(jj, ee) * rr_k) / hyps.sigma;
+
+					// Update alpha (eq 10)
+					double ff_k      = (std::log(vp.s_sq(jj, ee)) + vp.mu(jj, ee) * vp.mu(jj, ee) / vp.s_sq(jj, ee)) / 2.0;
+					vp.alpha(jj, ee) = sigmoid(ff_k + alpha_cnst(ee));
+
+					// Update i_Hr; only if coeff is large enough to matter
+					double rr_k_diff = vp.alpha(jj, ee) * vp.mu(jj, ee) - rr_k;
+					if(p.mode_approximate_residuals && std::abs(rr_k_diff) > p.min_residuals_diff){
+						hty_updates++;
+						vp.Hr += rr_k_diff * Z_kk;
+					}
+				}
+			}
 		}
 		t_updateAlphaMu.stop();
 	}
@@ -622,7 +646,6 @@ public:
                        VariationalParameters& vp,
                        long int& hty_updates){
 		// When we use Mixture of gaussians for effects prior
-		// TODO: Easy to use slab_var() here
 		t_updateAlphaMu.resume();
 		Eigen::VectorXd X_kk(n_samples);
 
@@ -655,10 +678,14 @@ public:
 			// Update i_Hr; only if coeff is large enough to matter
 			double rr_k_new  = vp.alpha(jj, ee) * (vp.mu(jj, ee) - vp.mup(jj, ee)) + vp.mup(jj, ee);
 			double rr_k_diff = rr_k_new - rr_k;
-			// if(std::abs(rr_k_diff) > 1e-8){
+			if(p.mode_approximate_residuals && std::abs(rr_k_diff) > p.min_residuals_diff){
 				hty_updates++;
 				vp.Hr += rr_k_diff * X_kk;
-			// }
+			}
+
+			if(p.mode_alternating_updates){
+				Eigen::VectorXd Z_kk(n_samples);
+			}
 		}
 		t_updateAlphaMu.stop();
 	}
