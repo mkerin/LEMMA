@@ -231,7 +231,10 @@ class Data
 
 	void read_full_bgen(){
 		params.chunk_size = bgenView->number_of_variants();
+		MyTimer t_readFullBgen("BGEN parsed in %ts \n");
+		t_readFullBgen.resume();
 		read_bgen_chunk();
+		t_readFullBgen.stop();
 	}
 
 	bool read_bgen_chunk() {
@@ -600,7 +603,7 @@ class Data
                            std::vector< std::string >& init_key){
 		// Used in mode_vb only.
 		// Need custom function to deal with variable input. Sometimes
-		// we have string columns with rsid / a_0 etc
+		// we have string columns with rsid / a0 etc
 		// init_chr, init_pos, init_a0, init_a1;
 
 		boost_io::filtering_istream fg;
@@ -979,7 +982,7 @@ class Data
 
 		std::vector< std::string > vb_init_colnames;
 		std::vector< std::string > cols_check1 = {"alpha", "mu"};
-		std::vector<std::string> cols_check2 = {"chr", "rsid", "pos", "a_0", "a_1", "beta", "gamma"};
+		std::vector<std::string> cols_check2 = {"chr", "rsid", "pos", "a0", "a1", "beta", "gamma"};
 
 		if ( params.vb_init_file != "NULL" ) {
 			std::cout << "Reading initialisation for alpha from file" << std::endl;
@@ -1017,8 +1020,8 @@ class Data
 
 						alpha_init(index_kk, 0)      = 1.0;
 						alpha_init(index_kk, 1)      = 1.0;
-						mu_init(index_kk, 0)         = vb_init_mat(kk, 1);
-						mu_init(index_kk, 1)         = vb_init_mat(kk + n_var, 1);
+						mu_init(index_kk, 0)         = vb_init_mat(kk, 5);
+						mu_init(index_kk, 1)         = vb_init_mat(kk, 6);
 					}
 				}
 			}

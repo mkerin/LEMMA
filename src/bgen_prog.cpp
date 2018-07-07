@@ -12,12 +12,12 @@
 #include <stdexcept>
 #include <memory>
 #include "parse_arguments.hpp"
+#include "my_timer.hpp"
 #include "class.h"
 #include "data.hpp"
 #include "genfile/bgen/bgen.hpp"
 #include "genfile/bgen/View.hpp"
 #include "bgen_parser.hpp"
-#include "vbayes.hpp"
 #include "vbayes_x2.hpp"
 #include "version.h"
 
@@ -55,53 +55,29 @@ int main( int argc, char** argv ) {
 		// Summary info
 		data.bgenView->summarise(std::cout);
 
-		if (p.mode_vb){
-			// Simple approach for the moment; don't bother about covariates etc
+		// Simple approach for the moment; don't bother about covariates etc
 
-			data.read_non_genetic_data();
-			data.standardise_non_genetic_data();
+		data.read_non_genetic_data();
+		data.standardise_non_genetic_data();
 
-			if(p.covar_file != "NULL"){
-				// std::cout << "WARNING: regress out covars done upstream" << std::endl;
-				data.regress_out_covars();
-			}
-			data.read_full_bgen();
-			if(p.vb_init_file != "NULL"){
-				data.read_alpha_mu();
-			}
-
-			// Pass data to VBayes object
-			if(p.interaction_analysis){
-				VBayesX2 VB(data);
-
-				VB.check_inputs();
-				// VB.output_init();
-
-				// Run inference
-				VB.run();
-				// VB.output_results();
-			}
+		if(p.covar_file != "NULL" && !p.use_vb_on_covars){
+			// std::cout << "WARNING: regress out covars done upstream" << std::endl;
+			data.regress_out_covars();
+		}
+		data.read_full_bgen();
+		if(p.vb_init_file != "NULL"){
+			data.read_alpha_mu();
 		}
 
-		if (p.mode_vcf){
-			throw std::runtime_error("Gutted from programme. See other branch.");
-		}
+		// Pass data to VBayes object
+		VBayesX2 VB(data);
 
-		if (p.mode_joint_model){
-			throw std::runtime_error("Gutted from programme. See other branch.");
-		}
+		VB.check_inputs();
+		// VB.output_init();
 
-		if(p.mode_lm){
-			throw std::runtime_error("Gutted from programme. See other branch.");
-		}
-
-		if (p.mode_lm2){
-			throw std::runtime_error("Gutted from programme. See other branch.");
-		}
-
-		if (p.mode_joint_model){
-			throw std::runtime_error("Gutted from programme. See other branch.");
-		}
+		// Run inference
+		VB.run();
+		// VB.output_results();
 
 		return 0 ;
 	}

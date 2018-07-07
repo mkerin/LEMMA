@@ -15,8 +15,8 @@ class parameters {
 		long int chunk_size;
 		int missing_code, n_gconf, n_thread;
 		uint32_t start, end;
-		bool range, maf_lim, info_lim, mode_vcf, mode_lm, test_2dof, select_snps;
-		bool geno_check, mode_joint_model, bgen_wildcard, mode_lm2, mode_vb;
+		bool range, maf_lim, info_lim, test_2dof, select_snps, xtra_verbose;
+		bool geno_check, bgen_wildcard, mode_vb, use_vb_on_covars;
 		bool select_rsid, interaction_analysis, verbose, low_mem;
 		bool elbo_tol_set_by_user, alpha_tol_set_by_user, mode_empirical_bayes;
 		bool keep_constant_variants, user_requests_round1, scale_pheno, mode_mog_prior;
@@ -46,15 +46,11 @@ class parameters {
 		range = false;
 		maf_lim = false;
 		info_lim = false;
-		mode_lm = false;
-		mode_lm2 = false;
-		mode_vcf = false;
 		mode_empirical_bayes = false;
 		mode_alternating_updates = false;
 		mode_approximate_residuals = false;
 		min_residuals_diff = 1e-9;
 		low_mem = false;
-		mode_joint_model = false;
 		mode_vb = false;
 		mode_mog_prior = false;
 		test_2dof = true;
@@ -62,6 +58,8 @@ class parameters {
 		select_rsid = false;
 		geno_check = true; // check allele probs sum to 1 by default
 		verbose = false;
+		xtra_verbose = false;
+		use_vb_on_covars = false;
 		alpha_tol_set_by_user = false;
 		elbo_tol_set_by_user = false;
 		keep_constant_variants = false;

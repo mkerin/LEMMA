@@ -53,12 +53,12 @@ void parse_arguments(parameters &p, int argc, char *argv[]) {
 		"--maf",
 		"--info",
 		"--out",
-		"--convert_to_vcf",
-		"--lm",
-		"--full_lm",
-		"--joint_model",
 		"--mode_vb",
 		"--mode_empirical_bayes",
+		"--effects_prior_mog",
+		"--use_vb_on_covars",
+		"--threads",
+		"--low_mem",
 		"--interaction",
 		"--incl_sample_ids",
 		"--incl_rsids",
@@ -73,10 +73,8 @@ void parse_arguments(parameters &p, int argc, char *argv[]) {
 		"--hyps_probs",
 		"--vb_init",
 		"--verbose",
-		"--threads",
-		"--low_mem",
+		"--xtra_verbose",
 		"--keep_constant_variants",
-		"--effects_prior_mog",
 		"--force_round1",
 		"--raw_phenotypes",
 		"--mode_alternating_updates",
@@ -127,23 +125,8 @@ void parse_arguments(parameters &p, int argc, char *argv[]) {
 			// & also make sure they don't go over argc
 
 			// Modes - a variety of different functionalities now included
-			if(strcmp(in_str, "--convert_to_vcf") == 0) {
-				p.mode_vcf = true;
-				i += 0;
-			}
-
-			if(strcmp(in_str, "--full_lm") == 0) {
-				p.mode_lm2 = true;
-				i += 0;
-			}
-
-			if(strcmp(in_str, "--lm") == 0) {
-				p.mode_lm = true;
-				i += 0;
-			}
-
-			if(strcmp(in_str, "--joint_model") == 0) {
-				p.mode_joint_model = true;
+			if(strcmp(in_str, "--mode_vb") == 0) {
+				p.mode_vb = true;
 				i += 0;
 			}
 
@@ -152,8 +135,8 @@ void parse_arguments(parameters &p, int argc, char *argv[]) {
 				i += 0;
 			}
 
-			if(strcmp(in_str, "--mode_vb") == 0) {
-				p.mode_vb = true;
+			if(strcmp(in_str, "--use_vb_on_covars") == 0) {
+				p.use_vb_on_covars = true;
 				i += 0;
 			}
 
@@ -189,6 +172,12 @@ void parse_arguments(parameters &p, int argc, char *argv[]) {
 
 			if(strcmp(in_str, "--verbose") == 0) {
 				p.verbose = true;
+				i += 0;
+			}
+
+			if(strcmp(in_str, "--xtra_verbose") == 0) {
+				p.verbose = true;
+				p.xtra_verbose = true;
 				i += 0;
 			}
 
@@ -399,75 +388,6 @@ void parse_arguments(parameters &p, int argc, char *argv[]) {
 	}
 
 	// Sanity checks here
-	int mode_count = 0;
-	mode_count += (p.mode_lm ? 1 : 0);
-	mode_count += (p.mode_lm2 ? 1 : 0);
-	mode_count += (p.mode_vb ? 1 : 0);
-	mode_count += (p.mode_vcf ? 1 : 0);
-	mode_count += (p.mode_joint_model ? 1 : 0);
-	if(mode_count != 1){
-		std::cout << "ERROR: exactly one of flags --lm, --mode_vb, --full_lm, ";
-		std::cout << "--joint_model or --convert_to_vcf should be present." << std::endl;
-		std::exit(EXIT_FAILURE);
-	}
-	if(p.mode_lm){
-		bool has_bgen = p.bgen_file != "NULL";
-		bool has_out = p.out_file != "NULL";
-		bool has_pheno = p.pheno_file != "NULL";
-		bool has_covar = p.covar_file != "NULL";
-		bool has_all = (has_covar && has_pheno && has_out && has_bgen);
-		if(!has_all){
-			std::cout << "ERROR: bgen, covar, pheno and out files should all be ";
-			std::cout << "provided in conjunction with --lm." << std::endl;
-			std::exit(EXIT_FAILURE);
-		}
-		if(p.bgen_wildcard){
-			std::cout << "ERROR: bgen wildcard input only works with --joint_model." << std::endl;
-			throw std::runtime_error("Wrong input; check manual.");
-		}
-	}
-	if(p.mode_lm2){
-		bool has_bgen = p.bgen_file != "NULL";
-		bool has_out = p.out_file != "NULL";
-		bool has_pheno = p.pheno_file != "NULL";
-		bool has_covar = p.covar_file != "NULL";
-		bool has_all = (has_covar && has_pheno && has_out && has_bgen);
-		if(!has_all){
-			std::cout << "ERROR: bgen, covar, pheno and out files should all be ";
-			std::cout << "provided in conjunction with --lm." << std::endl;
-			std::exit(EXIT_FAILURE);
-		}
-		if(p.bgen_wildcard){
-			std::cout << "ERROR: bgen wildcard input only works with --joint_model." << std::endl;
-			throw std::runtime_error("Wrong input; check manual.");
-		}
-	}
-	if(p.mode_joint_model){
-		bool has_bgen = p.bgen_file != "NULL";
-		bool has_out = p.out_file != "NULL";
-		bool has_pheno = p.pheno_file != "NULL";
-		bool has_covar = p.covar_file != "NULL";
-		bool has_all = (has_covar && has_pheno && has_out && has_bgen);
-		if(!has_all){
-			std::cout << "ERROR: bgen, covar, pheno and out files should all be ";
-			std::cout << "provided in conjunction with --joint_model." << std::endl;
-			std::exit(EXIT_FAILURE);
-		}
-	}
-	if(p.mode_vcf){
-		bool has_bgen = p.bgen_file != "NULL";
-		bool has_out = p.out_file != "NULL";
-		bool has_all = (has_out && has_bgen);
-		if(!has_all){
-			std::cout << "ERROR: bgen and out files should all be provided ";
-			std::cout << "in conjunction with --convert_to_vcf." << std::endl;
-			std::exit(EXIT_FAILURE);
-		}
-		if(p.bgen_wildcard){
-			std::cout << "ERROR: bgen wildcard input only works with --joint_model." << std::endl;
-			throw std::runtime_error("Wrong input; check manual.");
-		}
-	}
 	if(p.range || p.select_snps){
 		struct stat buf;
 		p.bgi_file = p.bgen_file + ".bgi";
@@ -476,39 +396,26 @@ void parse_arguments(parameters &p, int argc, char *argv[]) {
 			throw std::runtime_error("ERROR: file does not exist");
 		}
 	}
-	if(p.gconf.size() > 0 && !p.mode_lm2){
-		throw std::runtime_error("--genetic_confounders should only be used with --full_lm.");
-	}
 
 	// mode_vb specific options
-	if(p.mode_vb){
-		bool has_bgen = p.bgen_file != "NULL";
-		bool has_out = p.out_file != "NULL";
-		bool has_pheno = p.pheno_file != "NULL";
-		bool has_all = (has_pheno && has_out && has_bgen);
-		if(!has_all){
-			std::cout << "ERROR: bgen, pheno and out filepaths should all be ";
-			std::cout << "provided in conjunction with --mode_vb." << std::endl;
-			std::exit(EXIT_FAILURE);
-		}
-		bool has_hyps = p.hyps_grid_file != "NULL";
-		if(!has_hyps){
-			std::cout << "ERROR: search grids for hyperparameter values";
-			std::cout << "should be provided in conjunction with --mode_vb." << std::endl;
-			std::exit(EXIT_FAILURE);
-		}
-
-		if(p.interaction_analysis && p.covar_file == "NULL"){
-			throw std::runtime_error("ERROR: --covar must be provided if --interaction analysis is being run.");
-		}
+	bool has_bgen = p.bgen_file != "NULL";
+	bool has_out = p.out_file != "NULL";
+	bool has_pheno = p.pheno_file != "NULL";
+	bool has_all = (has_pheno && has_out && has_bgen);
+	if(!has_all){
+		std::cout << "ERROR: bgen, pheno and out filepaths should all be ";
+		std::cout << "provided in conjunction with --mode_vb." << std::endl;
+		std::exit(EXIT_FAILURE);
 	}
-	if(!p.mode_vb){
-		if(p.hyps_grid_file != "NULL"){
-			throw std::runtime_error("--hyps_grid should only be used with --mode_vb");
-		}
-		if(p.hyps_probs_file != "NULL"){
-			throw std::runtime_error("--hyps_probs should only be used with --mode_vb");
-		}
+	bool has_hyps = p.hyps_grid_file != "NULL";
+	if(!has_hyps){
+		std::cout << "ERROR: search grids for hyperparameter values";
+		std::cout << "should be provided in conjunction with --mode_vb." << std::endl;
+		std::exit(EXIT_FAILURE);
+	}
+
+	if(p.interaction_analysis && p.covar_file == "NULL"){
+		throw std::runtime_error("ERROR: --covar must be provided if --interaction analysis is being run.");
 	}
 
 }

@@ -91,8 +91,8 @@ examples/check_eigen: examples/check_eigen.cpp
 # IO Tests
 # Files in data/out are regarded as 'true', and we check that the equivalent
 # file in data/io_test is identical after making changes to the executable.
-# IOfiles := t1_range t2_lm t3_lm_two_chunks t4_lm_2dof t5_joint_model t6_lm2
-IOfiles := t7_varbvs t8_mog_prior
+# IOfiles := t8_mog_prior
+IOfiles := t7_varbvs  t9_vb_covar_update t12_custom_init
 IOfiles := $(addprefix data/io_test/,$(addsuffix /attempt.out,$(IOfiles)))
 IOfiles += $(addprefix data/io_test/t7_varbvs/attempt, $(addsuffix .out,_multithread _alt_updates))
 # IOfiles += $(addprefix data/io_test/t1_range/attempt, $(addsuffix .out,B))
@@ -176,74 +176,30 @@ data/io_test/t8_mog_prior/attempt.out: data/io_test/n50_p100.bgen ./bin/bgen_pro
 	    --hyps_probs $(dir $@)hyperpriors_gxage_probs.txt \
 	    --vb_init $(dir $@)answer_init.txt \
 	    --out $@
-	diff $(dir $@)answer.out $(dir $@)attempt.out
+	cut -f2 -d" " $(dir $@)answer.out > $(dir $@)answer_reformated.out
+	cut -f2 -d" " $(dir $@)attempt.out> $(dir $@)attempt_reformated.out
+	diff $(dir $@)answer_reformated.out $(dir $@)attempt_reformated.out
 
-# TEST 8
-# Unrestricted model; comparison with R implementation
-t8_dir     := data/io_test/t8_mog_prior
-t8_context := $(t8_dir)/hyperpriors_gxage.txt $(t8_dir)/answer.rds
-data/io_test/t8_varbvs/attempt.out: data/io_test/n50_p100.bgen ./bin/bgen_prog $(t8_context)
+# TEST 9;
+t9_dir     := data/io_test/t9_vb_covar_update
+t9_context := data/io_test/hyperpriors_gxage.txt
+data/io_test/t9_vb_covar_update/attempt.out: data/io_test/n50_p100.bgen ./bin/bgen_prog $(t9_context)
 	./bin/bgen_prog --mode_vb --verbose \
 	    --keep_constant_variants \
+	    --use_vb_on_covars \
 	    --bgen $< \
 	    --interaction x \
-	    --covar $(dir $@)age.txt \
-	    --pheno $(dir $@)pheno.txt \
-	    --hyps_grid $(dir $@)hyperpriors_gxage.txt \
-	    --hyps_probs $(dir $@)hyperpriors_gxage_probs.txt \
-	    --vb_init $(dir $@)answer_init.txt \
+	    --covar data/io_test/age.txt \
+	    --pheno data/io_test/pheno.txt \
+	    --hyps_grid data/io_test/hyperpriors_gxage.txt \
+	    --hyps_probs data/io_test/hyperpriors_gxage_probs.txt \
+	    --vb_init data/io_test/answer_init.txt \
 	    --out $@
-	$(RSCRIPT) R/vbayes_x_tests/check_output.R $(dir $@) > $(dir $@)attempt.log
-	diff $(dir $@)answer.log $(dir $@)attempt.log
+	cut -f2 -d" " $(dir $@)answer.out > $(dir $@)answer_reformated.out
+	cut -f2 -d" " $(dir $@)attempt.out> $(dir $@)attempt_reformated.out
 
-data/io_test/t8_varbvs/attempt_low_mem.out: data/io_test/n50_p100.bgen ./bin/bgen_prog $(t8_context)
-	./bin/bgen_prog --mode_vb --verbose --low_mem \
-	    --keep_constant_variants \
-	    --bgen $< \
-	    --interaction x \
-	    --covar $(dir $@)age.txt \
-	    --pheno $(dir $@)pheno.txt \
-	    --hyps_grid $(dir $@)hyperpriors_gxage.txt \
-	    --hyps_probs $(dir $@)hyperpriors_gxage_probs.txt \
-	    --vb_init $(dir $@)answer_init.txt \
-	    --out $@
-	$(RSCRIPT) R/vbayes_x_tests/check_output.R $(dir $@) $@ > $(basename $@).log
-	diff $(dir $@)answer_low_mem.log $(basename $@).log
+# diff $(dir $@)answer_reformated.out $(dir $@)attempt_reformated.out
 
-$(t8_dir)/hyperpriors_gxage.txt: R/t8/gen_hyps.R
-	$(RSCRIPT) $<
-
-$(t8_dir)/answer.rds: R/vbayes_x_tests/run_VBayesR.R $(t8_dir)/hyperpriors_gxage.txt
-	# $(RSCRIPT) $< $(dir $@)
-	Rscript R/vbayesr_commandline.R run \
-	  --pheno $(dir $@)pheno.txt \
-	  --covar $(dir $@)age.txt \
-	  --vcf $(dir $@)n50_p100.vcf.gz \
-	  --out $(dir $@)answer.rds \
-	  --hyps_grid $(dir $@)hyperpriors_gxage.txt \
-	  --hyps_probs $(dir $@)hyperpriors_gxage_probs.txt \
-	  --vb_init $(dir $@)answer_init.txt
-
-# NEED TO MAKE THIS RUN WITH VBAYESR IS WANT TO KEEP
-# TEST 9
-# Tests when h_g is zero (ie collapse down to original carbonetto model on X)
-# t9_dir     := data/io_test/t9_varbvs_zero_hg
-# t9_context := $(t9_dir)/hyperpriors_gxage.txt $(t9_dir)/answer.rds
-# data/io_test/t9_varbvs_zero_hg/attempt.out: data/io_test/n50_p100.bgen ./bin/bgen_prog $(t9_context)
-# 	./bin/bgen_prog --mode_vb --verbose \
-# 	    --bgen $< \
-# 	    --interaction x \
-# 	    --covar $(dir $@)age.txt \
-# 	    --pheno $(dir $@)pheno.txt \
-# 	    --hyps_grid $(dir $@)hyperpriors_gxage.txt \
-# 	    --hyps_probs $(dir $@)hyperpriors_gxage_probs.txt \
-# 	    --vb_init $(dir $@)answer_init.txt \
-# 	    --out $@
-# 	$(RSCRIPT) R/vbayes_x_tests/check_output.R $(dir $@) > $(dir $@)attempt.log
-# 	diff $(dir $@)answer.log $(dir $@)attempt.log
-#
-# $(t9_dir)/answer.rds: R/t9/t9_run_vbayesr.R $(t9_dir)/hyperpriors_gxage.txt
-# 	$(RSCRIPT) $< $(dir $@)
 
 # TEST 10
 # Test when runnign from random start point.. this may be unstable
@@ -308,32 +264,34 @@ $(t11_dir)/answer.rds: R/vbayes_x_tests/run_VBayesR.R $(t11_dir)/hyperpriors_gxa
 	  --hyps_probs $(dir $@)hyperpriors_gxage_probs.txt \
 	  --vb_init $(dir $@)answer_init.txt
 
-# TEST 11
+# TEST 12
 # custom start;
-data/io_test/t12_varbvs/answer.out: data/io_test/n50_p100.bgen ./bin/bgen_prog
+data/io_test/t12_custom_init/answer.out: data/io_test/n50_p100.bgen ./bin/bgen_prog
 	./bin/bgen_prog --mode_vb --verbose --low_mem \
 	    --keep_constant_variants \
 	    --bgen $< \
 	    --interaction x \
-	    --covar $(dir $@)age.txt \
-	    --pheno $(dir $@)pheno.txt \
-	    --hyps_grid $(dir $@)hyperpriors_gxage.txt \
-	    --hyps_probs $(dir $@)hyperpriors_gxage_probs.txt \
-	    --vb_init $(dir $@)vb_init.txt \
+	    --covar data/io_test/age.txt \
+	    --pheno data/io_test/pheno.txt \
+	    --hyps_grid data/io_test/hyperpriors_gxage.txt \
+	    --hyps_probs data/io_test/hyperpriors_gxage_probs.txt \
+	    --vb_init data/io_test/t12_custom_init/vb_init.txt \
 	    --out $@
 
-data/io_test/t12_varbvs/attempt_scrambled.out: data/io_test/n50_p100.bgen ./bin/bgen_prog data/io_test/t12_varbvs/attempt1.out
+data/io_test/t12_custom_init/attempt.out: data/io_test/n50_p100.bgen ./bin/bgen_prog data/io_test/t12_custom_init/answer.out
 	./bin/bgen_prog --mode_vb --verbose --low_mem \
 	    --keep_constant_variants \
 	    --bgen $< \
 	    --interaction x \
-	    --covar $(dir $@)age.txt \
-	    --pheno $(dir $@)pheno.txt \
-	    --hyps_grid $(dir $@)hyperpriors_gxage.txt \
-	    --hyps_probs $(dir $@)hyperpriors_gxage_probs.txt \
-	    --vb_init $(dir $@)vb_init_scrambled.txt \
+	    --covar data/io_test/age.txt \
+	    --pheno data/io_test/pheno.txt \
+	    --hyps_grid data/io_test/hyperpriors_gxage.txt \
+	    --hyps_probs data/io_test/hyperpriors_gxage_probs.txt \
+	    --vb_init data/io_test/t12_custom_init/vb_init_scrambled.txt \
 	    --out $@
-	diff $@ data/io_test/t12_varbvs/answer.out
+	cut -f2 -d" " $(dir $@)answer.out > $(dir $@)answer_reformated.out
+	cut -f2 -d" " $(dir $@)attempt.out> $(dir $@)attempt_reformated.out
+	diff $(dir $@)answer_reformated.out $(dir $@)attempt_reformated.out
 
 
 

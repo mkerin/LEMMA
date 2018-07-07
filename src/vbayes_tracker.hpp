@@ -23,6 +23,7 @@ namespace io = boost::iostreams;
 struct Hyps{
 // public:
 	double sigma;
+	double sigma_c;
 	Eigen::ArrayXd slab_var;
 	Eigen::ArrayXd spike_var;
 	Eigen::ArrayXd slab_relative_var;
@@ -63,7 +64,7 @@ public:
 	parameters p;
 
 	// For writing interim output
-	io::filtering_ostream outf_elbo, outf_alpha_diff, outf_weights, outf_inits, outf_iter;
+	io::filtering_ostream outf_elbo, outf_alpha_diff, outf_weights, outf_inits, outf_iter, outf_alpha;
 	std::string main_out_file;
 	bool allow_interim_push;
 
@@ -89,20 +90,62 @@ public:
 		allow_interim_push = true;
 	}
 
-	~VbTracker(){};
+	~VbTracker(){
+		io::close(outf_elbo);
+		io::close(outf_alpha_diff);
+		io::close(outf_weights);
+		io::close(outf_inits);
+		io::close(outf_iter);
+	};
 
 	void set_main_filepath(const std::string &ofile){
 		main_out_file = ofile;
 		allow_interim_push = true;
 	}
 
-	void push_interim_iter_update(const int cnt,
+	void push_interim_iter_update(const int& cnt,
                                   const Hyps& i_hyps,
-                                  const double c_logw,
-                                  const double c_alpha_diff,
-                                  const double lap_seconds,
+                                  const double& c_logw,
+                                  const double& c_alpha_diff,
+                                  const double& lap_seconds,
                                   const long int hty_counter,
-																const int n_effects){
+                                  const int& n_effects,
+                                  const int& n_var,
+                                  const VariationalParameters& vp){
+		outf_iter << cnt << "\t";
+		outf_iter << i_hyps.sigma << "\t";
+		for (int ee = 0; ee < n_effects; ee++){
+			outf_weights << i_hyps.slab_relative_var(ee) << " ";
+			if(p.mode_mog_prior){
+				outf_weights << i_hyps.spike_relative_var(ee) << " ";
+			}
+			outf_weights << i_hyps.lambda(ee);
+		}
+		outf_iter << c_logw << "\t";
+		outf_iter << c_alpha_diff << "\t";
+		outf_iter << lap_seconds << "\t";
+		outf_iter << hty_counter << std::endl;
+
+		if(p.xtra_verbose){
+			for (int ee = 0; ee < n_effects; ee++){
+				for (std::uint32_t kk = 0; kk < n_var; kk++){
+					outf_alpha << vp.alpha(kk, ee);
+ 					if(ee < n_effects-1 || kk < n_var-1){
+						outf_alpha << " ";
+					}
+				}
+			}
+			outf_alpha << std::endl;
+		}
+	}
+
+	void push_interim_iter_update(const int& cnt,
+                                  const Hyps& i_hyps,
+                                  const double& c_logw,
+                                  const double& c_alpha_diff,
+                                  const double& lap_seconds,
+                                  const long int hty_counter,
+                                  const int& n_effects){
 		outf_iter << cnt << "\t";
 		outf_iter << i_hyps.sigma << "\t";
 		for (int ee = 0; ee < n_effects; ee++){
@@ -117,6 +160,7 @@ public:
 		outf_iter << lap_seconds << "\t";
 		outf_iter << hty_counter << std::endl;
 	}
+
 
 	void push_interim_output(int ii,
                              const std::vector< int >& chromosome,
@@ -164,6 +208,9 @@ public:
 		fstream_init(outf_weights, dir, "_hyps", false);
 		fstream_init(outf_iter, dir, "_iter_updates", false);
 		fstream_init(outf_inits, dir, "_inits", true);
+		if(p.xtra_verbose){
+			fstream_init(outf_alpha, dir, "_alpha", true);
+		}
 
 		outf_weights << "weights logw log_prior count time" << std::endl;
 		outf_iter    << "count\t";
