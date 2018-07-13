@@ -928,17 +928,27 @@ public:
 		// Compute heritability
 		Eigen::ArrayXXd pve(my_n_grid, n_effects);
 		Eigen::ArrayXXd pve_large(my_n_grid, n_effects);
+		Eigen::ArrayXd s_x = dHtH.colwise().sum() / ((double) n_samples - 1.0);
+		std::cout << "s_x" << std::endl << s_x << std::endl;
+		std::cout << "n_var: " << n_var << std::endl;
+		for(int jj = 0; jj < n_var; jj++){
+			std::cout << jj << " " << dHtH(jj, 0) << std::endl;
+		}
+
 		for (int ii = 0; ii < my_n_grid; ii++){
+			std::cout << std::endl << std::endl << ii << std::endl;
 			Hyps hyps = stitched_tracker.hyps_list[ii];
 			Eigen::ArrayXd pve_i(n_effects);
-			Eigen::ArrayXd s_x = dHtH.colwise().sum().transpose();
 			pve_i = hyps.lambda * hyps.slab_relative_var * s_x;
+			std::cout << pve_i << std::endl;
 			if(p.mode_mog_prior){
 				pve_large.row(ii) = pve_i;
 				pve_i += (1 - hyps.lambda) * hyps.spike_relative_var * s_x;
+				std::cout << pve_i << std::endl;
 				pve_large.row(ii) /= (pve_i.sum() + 1.0);
 			}
 			pve_i /= (pve_i.sum() + 1.0);
+			std::cout << pve_i << std::endl;
 			pve.row(ii) = pve_i;
 		}
 
