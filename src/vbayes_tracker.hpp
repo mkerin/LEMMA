@@ -96,6 +96,7 @@ public:
 		io::close(outf_weights);
 		io::close(outf_inits);
 		io::close(outf_iter);
+		io::close(outf_alpha);
 	};
 
 	void set_main_filepath(const std::string &ofile){
@@ -112,16 +113,16 @@ public:
                                   const int& n_effects,
                                   const int& n_var,
                                   const VariationalParameters& vp){
-		outf_iter << cnt << "\t";
-		outf_iter << i_hyps.sigma << "\t";
+		outf_iter << cnt << "\t" << std::setprecision(3) << std::fixed;
+		outf_iter << i_hyps.sigma << "\t" << std::setprecision(8) << std::fixed;
 		for (int ee = 0; ee < n_effects; ee++){
-			outf_weights << i_hyps.slab_relative_var(ee) << " ";
+			outf_iter << i_hyps.slab_relative_var(ee) << "\t";
 			if(p.mode_mog_prior){
-				outf_weights << i_hyps.spike_relative_var(ee) << " ";
+				outf_iter << i_hyps.spike_relative_var(ee) << "\t";
 			}
-			outf_weights << i_hyps.lambda(ee);
+			outf_iter << i_hyps.lambda(ee) << "\t";
 		}
-		outf_iter << c_logw << "\t";
+		outf_iter << std::setprecision(3) << std::fixed << c_logw << "\t";
 		outf_iter << c_alpha_diff << "\t";
 		outf_iter << lap_seconds << "\t";
 		outf_iter << hty_counter << std::endl;
@@ -130,7 +131,7 @@ public:
 			for (int ee = 0; ee < n_effects; ee++){
 				for (std::uint32_t kk = 0; kk < n_var; kk++){
 					outf_alpha << vp.alpha(kk, ee);
- 					if(ee < n_effects-1 || kk < n_var-1){
+ 					if(!(ee == n_effects-1 && kk == n_var-1)){
 						outf_alpha << " ";
 					}
 				}
@@ -138,29 +139,6 @@ public:
 			outf_alpha << std::endl;
 		}
 	}
-
-	void push_interim_iter_update(const int& cnt,
-                                  const Hyps& i_hyps,
-                                  const double& c_logw,
-                                  const double& c_alpha_diff,
-                                  const double& lap_seconds,
-                                  const long int hty_counter,
-                                  const int& n_effects){
-		outf_iter << cnt << "\t";
-		outf_iter << i_hyps.sigma << "\t";
-		for (int ee = 0; ee < n_effects; ee++){
-			outf_weights << i_hyps.slab_relative_var(ee) << " ";
-			if(p.mode_mog_prior){
-				outf_weights << i_hyps.spike_relative_var(ee) << " ";
-			}
-			outf_weights << i_hyps.lambda(ee);
-		}
-		outf_iter << c_logw << "\t";
-		outf_iter << c_alpha_diff << "\t";
-		outf_iter << lap_seconds << "\t";
-		outf_iter << hty_counter << std::endl;
-	}
-
 
 	void push_interim_output(int ii,
                              const std::vector< int >& chromosome,
@@ -213,16 +191,15 @@ public:
 		}
 
 		outf_weights << "weights logw log_prior count time" << std::endl;
-		outf_iter    << "count\t";
-		if(p.mode_mog_prior){
-			outf_iter    << "sigma\tsigma_b\tsigma_b_spike\tsigma_g\tsigma_g_spike\tlambda_b\tlambda_g\t";
-		} else {
-			outf_iter    << "sigma\tsigma_b\tsigma_g\tlambda_b\tlambda_g\t";
+		outf_iter    << "count\tsigma";
+		for (int ee = 0; ee < n_effects; ee++){
+			outf_iter << "\tsigma" << ee;
+			if(p.mode_mog_prior){
+				outf_iter << "\tsigma_spike" << ee;
+			}
+			outf_iter << "\tlambda" << ee;
 		}
-		outf_iter    << "elbo\talpha_diff\tseconds\tHty_hits" << std::endl;
-
-		// Precision
-		outf_iter       << std::setprecision(8) << std::fixed;
+		outf_iter    << "\telbo\tmax_alpha_diff\tseconds\tHty_hits" << std::endl;
 
 		outf_inits << "chr rsid pos a0 a1";
 		for(int ee = 0; ee < n_effects; ee++){

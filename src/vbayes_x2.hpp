@@ -491,7 +491,7 @@ public:
 				t_updateHyps.stop();
 
 				tracker.push_interim_iter_update(count, hyps, i_logw, 0.0,
-					t_updateHyps.get_lap_seconds(), -1, n_effects);
+					t_updateHyps.get_lap_seconds(), -1, n_effects, n_var, vp);
 			}
 			logw_updates.push_back(i_logw);
 
@@ -925,6 +925,23 @@ public:
 			weights[0] = 1;
 		}
 
+		// Compute heritability
+		Eigen::ArrayXXd pve(my_n_grid, n_effects);
+		Eigen::ArrayXXd pve_large(my_n_grid, n_effects);
+		for (int ii = 0; ii < my_n_grid; ii++){
+			Hyps hyps = stitched_tracker.hyps_list[ii];
+			Eigen::ArrayXd pve_i(n_effects);
+			Eigen::ArrayXd s_x = dHtH.colwise().sum().transpose();
+			pve_i = hyps.lambda * hyps.slab_relative_var * s_x;
+			if(p.mode_mog_prior){
+				pve_large.row(ii) = pve_i;
+				pve_i += (1 - hyps.lambda) * hyps.spike_relative_var * s_x;
+				pve_large.row(ii) /= (pve_i.sum() + 1.0);
+			}
+			pve_i /= (pve_i.sum() + 1.0);
+			pve.row(ii) = pve_i;
+		}
+
 		// Write hyperparams weights to file
 		outf << "weight logw";
 		if(!p.mode_empirical_bayes){
@@ -932,6 +949,10 @@ public:
 		}
 		outf << " count time sigma";
 		for (int ee = 0; ee < n_effects; ee++){
+			outf << " pve" << ee;
+			if(p.mode_mog_prior){
+				outf << " pve_large" << ee;
+ 			}
 			outf << " sigma" << ee;
 			if(p.mode_mog_prior){
 				outf << " sigma_spike" << ee;
@@ -952,6 +973,10 @@ public:
 
 			outf << std::setprecision(8) << std::fixed;
 			for (int ee = 0; ee < n_effects; ee++){
+				outf << " " << pve(ii, ee);
+				if(p.mode_mog_prior){
+					outf << " " << pve_large(ii, ee);
+				}
 				outf << " " << stitched_tracker.hyps_list[ii].slab_relative_var(ee);
 				if(p.mode_mog_prior){
 					outf << " " << stitched_tracker.hyps_list[ii].spike_relative_var(ee);
