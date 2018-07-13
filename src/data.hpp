@@ -336,7 +336,7 @@ class Data
 					}
 				}
 				sigma = std::sqrt(sigma/(count - 1.0));
-				if(sigma <= 1e-12){
+				if(sigma <= 1e-12 || (double) n_samples * theta < 1.0){
 					n_constant_variance++;
 					continue;
 				}
