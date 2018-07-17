@@ -87,7 +87,7 @@ public:
 
 	// boost fstreams
 	boost_io::filtering_ostream outf, outf_map, outf_wmean, outf_nmean, outf_inits;
-	boost_io::filtering_ostream outf_elbo, outf_alpha_diff;
+	boost_io::filtering_ostream outf_elbo, outf_alpha_diff, outf_map_pred;
 
 	// Monitoring
 	std::chrono::system_clock::time_point time_check;
@@ -886,10 +886,12 @@ public:
 		std::string ofile_map   = fstream_init(outf_map, file_prefix, "_map_snp_stats");
 		std::string ofile_wmean = fstream_init(outf_wmean, file_prefix, "_weighted_mean_snp_stats");
 		std::string ofile_nmean = fstream_init(outf_nmean, file_prefix, "_niave_mean_snp_stats");
+		std::string ofile_map_yhat = fstream_init(outf_map_pred, file_prefix, "_map_yhat");
 		std::cout << "Writing converged hyperparameter values to " << ofile << std::endl;
 		std::cout << "Writing MAP snp stats to " << ofile_map << std::endl;
 		std::cout << "Writing (weighted) average snp stats to " << ofile_wmean << std::endl;
 		std::cout << "Writing (niave) average snp stats to " << ofile_nmean << std::endl;
+		std::cout << "Writing yhat from map to " << ofile_map_yhat << std::endl;
 
 		if(p.verbose){
 			std::string ofile_elbo = fstream_init(outf_elbo, file_prefix, "_elbo");
@@ -1080,6 +1082,14 @@ public:
 				outf_nmean << " " << nmean_beta_sd(kk, ee);
 			}
 			outf_nmean << std::endl;
+		}
+
+		// Predicted effects to file
+		outf_map_pred << "pred" << std::endl;
+		VariationalParametersLite vp_map = stitched_tracker.vp_list[ii_map];
+		calcHr(vp_map);
+		for (std::uint32_t ii = 0; ii < n_samples; ii++ ){
+			outf_map_pred << -(vp_map.Hr(ii) - Y(ii, 0)) << std::endl;
 		}
 
 		if(p.verbose){

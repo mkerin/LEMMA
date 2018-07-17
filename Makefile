@@ -108,11 +108,11 @@ data/io_test/t7_varbvs/attempt.out: data/io_test/n50_p100.bgen ./bin/bgen_prog $
 	    --keep_constant_variants \
 	    --bgen $< \
 	    --interaction x \
-	    --covar $(dir $@)age.txt \
-	    --pheno $(dir $@)pheno.txt \
-	    --hyps_grid $(dir $@)hyperpriors_gxage.txt \
-	    --hyps_probs $(dir $@)hyperpriors_gxage_probs.txt \
-	    --vb_init $(dir $@)answer_init.txt \
+	    --covar data/io_test/age.txt \
+	    --pheno data/io_test/pheno.txt \
+	    --hyps_grid data/io_test/hyperpriors_gxage.txt \
+	    --hyps_probs data/io_test/hyperpriors_gxage_probs.txt \
+	    --vb_init data/io_test/answer_init.txt \
 	    --out $@
 	$(RSCRIPT) R/vbayes_x_tests/check_output.R $(dir $@) > $(dir $@)attempt.log
 	diff $(dir $@)answer.log $(dir $@)attempt.log
@@ -123,11 +123,11 @@ data/io_test/t7_varbvs/attempt_multithread.out: data/io_test/n50_p100.bgen ./bin
 	    --threads 2 \
 	    --bgen $< \
 	    --interaction x \
-	    --covar $(dir $@)age.txt \
-	    --pheno $(dir $@)pheno.txt \
-	    --hyps_grid $(dir $@)hyperpriors_gxage.txt \
-	    --hyps_probs $(dir $@)hyperpriors_gxage_probs.txt \
-	    --vb_init $(dir $@)answer_init.txt \
+	    --covar data/io_test/age.txt \
+	    --pheno data/io_test/pheno.txt \
+	    --hyps_grid data/io_test/hyperpriors_gxage.txt \
+	    --hyps_probs data/io_test/hyperpriors_gxage_probs.txt \
+	    --vb_init data/io_test/answer_init.txt \
 	    --out $@
 	$(RSCRIPT) R/vbayes_x_tests/check_output.R $(dir $@) > $(dir $@)attempt_multithread.log
 	diff $(dir $@)answer.log $(dir $@)attempt_multithread.log
@@ -138,11 +138,11 @@ data/io_test/t7_varbvs/attempt_alt_updates.out: data/io_test/n50_p100.bgen ./bin
 	    --mode_alternating_updates \
 	    --bgen $< \
 	    --interaction x \
-	    --covar $(dir $@)age.txt \
-	    --pheno $(dir $@)pheno.txt \
-	    --hyps_grid $(dir $@)hyperpriors_gxage.txt \
-	    --hyps_probs $(dir $@)hyperpriors_gxage_probs.txt \
-	    --vb_init $(dir $@)answer_init.txt \
+	    --covar data/io_test/age.txt \
+	    --pheno data/io_test/pheno.txt \
+	    --hyps_grid data/io_test/hyperpriors_gxage.txt \
+	    --hyps_probs data/io_test/hyperpriors_gxage_probs.txt \
+	    --vb_init data/io_test/answer_init.txt \
 	    --out $@
 	$(RSCRIPT) R/vbayes_x_tests/check_output.R $(dir $@) $(notdir $@) > $(dir $@)attempt_alt_updates.log
 	diff $(dir $@)answer.log $(dir $@)attempt_alt_updates.log
@@ -153,13 +153,13 @@ $(t7_dir)/hyperpriors_gxage.txt: R/t7/gen_hyps.R
 $(t7_dir)/answer.rds: R/vbayes_x_tests/run_VBayesR.R $(t7_dir)/hyperpriors_gxage.txt
 	# $(RSCRIPT) $< $(dir $@)
 	Rscript R/vbayesr_commandline.R run \
-	  --pheno $(dir $@)pheno.txt \
-	  --covar $(dir $@)age.txt \
+	  --pheno data/io_test/pheno.txt \
+	  --covar data/io_test/age.txt \
 	  --vcf $(dir $@)n50_p100.vcf.gz \
 	  --out $@ \
-	  --hyps_grid $(dir $@)hyperpriors_gxage.txt \
-	  --hyps_probs $(dir $@)hyperpriors_gxage_probs.txt \
-	  --vb_init $(dir $@)answer_init.txt
+	  --hyps_grid data/io_test/hyperpriors_gxage.txt \
+	  --hyps_probs data/io_test/hyperpriors_gxage_probs.txt \
+	  --vb_init data/io_test/answer_init.txt
 
 # TEST 8;
 t8_dir     := data/io_test/t8_mog_prior
@@ -170,11 +170,11 @@ data/io_test/t8_mog_prior/attempt.out: data/io_test/n50_p100.bgen ./bin/bgen_pro
 	    --effects_prior_mog \
 	    --bgen $< \
 	    --interaction x \
-	    --covar $(dir $@)age.txt \
-	    --pheno $(dir $@)pheno.txt \
-	    --hyps_grid $(dir $@)hyperpriors_gxage.txt \
-	    --hyps_probs $(dir $@)hyperpriors_gxage_probs.txt \
-	    --vb_init $(dir $@)answer_init.txt \
+	    --covar data/io_test/age.txt \
+	    --pheno data/io_test/pheno.txt \
+	    --hyps_grid data/io_test/hyperpriors_gxage.txt \
+	    --hyps_probs data/io_test/hyperpriors_gxage_probs.txt \
+	    --vb_init data/io_test/answer_init.txt \
 	    --out $@
 	cut -f2 -d" " $(dir $@)answer.out > $(dir $@)answer_reformated.out
 	cut -f2 -d" " $(dir $@)attempt.out> $(dir $@)attempt_reformated.out
@@ -210,21 +210,21 @@ $(t10_dir)/attempt.out: $(t10_dir)/n50_p100.bgen ./bin/bgen_prog $(t10_context)
 	    --keep_constant_variants \
 	    --bgen $< \
 	    --interaction x \
-	    --covar $(dir $@)age.txt \
-	    --pheno $(dir $@)pheno.txt \
-	    --hyps_grid $(dir $@)hyperpriors_gxage.txt \
-	    --hyps_probs $(dir $@)hyperpriors_gxage_probs.txt \
+	    --covar data/io_test/age.txt \
+	    --pheno data/io_test/pheno.txt \
+	    --hyps_grid data/io_test/hyperpriors_gxage.txt \
+	    --hyps_probs data/io_test/hyperpriors_gxage_probs.txt \
 	    --out $@
 	$(CP) $(t10_dir)/attempt_inits.out $(t10_dir)/answer_init.txt
 	# $(RSCRIPT) R/vbayes_x_tests/run_VBayesR.R $(dir $@)
 	$(RSCRIPT) R/vbayesr_commandline.R run \
-	  --pheno $(dir $@)pheno.txt \
-	  --covar $(dir $@)age.txt \
+	  --pheno data/io_test/pheno.txt \
+	  --covar data/io_test/age.txt \
 	  --vcf $(dir $@)n50_p100.vcf.gz \
 	  --out $(dir $@)answer.rds \
-	  --hyps_grid $(dir $@)hyperpriors_gxage.txt \
-	  --hyps_probs $(dir $@)hyperpriors_gxage_probs.txt \
-	  --vb_init $(dir $@)answer_init.txt
+	  --hyps_grid data/io_test/hyperpriors_gxage.txt \
+	  --hyps_probs data/io_test/hyperpriors_gxage_probs.txt \
+	  --vb_init data/io_test/answer_init.txt
 	$(RSCRIPT) R/t10/check_output.R $(dir $@) > $(dir $@)attempt.log
 	diff $(dir $@)answer.log $(dir $@)attempt.log
 
@@ -240,11 +240,11 @@ $(t11_dir)/attempt.out: $(t11_dir)/n50_p100.bgen ./bin/bgen_prog $(t11_context)
 	    --keep_constant_variants \
 	    --bgen $< \
 	    --interaction x \
-	    --covar $(dir $@)age.txt \
-	    --pheno $(dir $@)pheno.txt \
-	    --hyps_grid $(dir $@)hyperpriors_gxage.txt \
-	    --hyps_probs $(dir $@)hyperpriors_gxage_probs.txt \
-	    --vb_init $(dir $@)answer_init.txt \
+	    --covar data/io_test/age.txt \
+	    --pheno data/io_test/pheno.txt \
+	    --hyps_grid data/io_test/hyperpriors_gxage.txt \
+	    --hyps_probs data/io_test/hyperpriors_gxage_probs.txt \
+	    --vb_init data/io_test/answer_init.txt \
 	    --threads 2 \
 	    --out $@
 	$(RSCRIPT) R/vbayes_x_tests/check_output.R $(dir $@) > $(dir $@)attempt.log
@@ -256,13 +256,13 @@ $(t11_dir)/hyperpriors_gxage.txt: R/t8/gen_hyps.R
 $(t11_dir)/answer.rds: R/vbayes_x_tests/run_VBayesR.R $(t11_dir)/hyperpriors_gxage.txt
 	# $(RSCRIPT) $< $(dir $@)
 	$(RSCRIPT) R/vbayesr_commandline.R run \
-	  --pheno $(dir $@)pheno.txt \
-	  --covar $(dir $@)age.txt \
+	  --pheno data/io_test/pheno.txt \
+	  --covar data/io_test/age.txt \
 	  --vcf $(dir $@)n50_p100.vcf.gz \
 	  --out $(dir $@)answer.rds \
-	  --hyps_grid $(dir $@)hyperpriors_gxage.txt \
-	  --hyps_probs $(dir $@)hyperpriors_gxage_probs.txt \
-	  --vb_init $(dir $@)answer_init.txt
+	  --hyps_grid data/io_test/hyperpriors_gxage.txt \
+	  --hyps_probs data/io_test/hyperpriors_gxage_probs.txt \
+	  --vb_init data/io_test/answer_init.txt
 
 # TEST 12
 # custom start;
