@@ -36,6 +36,7 @@ Questions:
 #include <limits>
 #include <cstdint>               // uint32_t
 #include <cmath>
+#include <random>
 #include <vector>
 #include <map>
 #include "tools/eigen3.3/Dense"
@@ -84,6 +85,11 @@ public:
 	// Interface type of Eigen indices -> see eigen3/Eigen/src/Core/EigenBase.h
 	typedef Eigen::Index Index;
 
+	// When using stochastic gradient descent
+	bool mode_sgd;
+	long int nBatch;
+	long int batch_start;
+
 	// Constructors
 	GenotypeMatrix(bool use_compression) : low_mem(use_compression){
 		scaling_performed = false;
@@ -115,6 +121,16 @@ public:
 	};
 	~GenotypeMatrix(){
 	};
+
+	// sgd
+	void draw_minibatch(long int my_nBatch){
+		std::default_random_engine generator;
+		std::uniform_int_distribution<long int> distribution(0,NN - my_nBatch);
+
+		batch_start = distribution(generator);
+		nBatch = my_nBatch;
+		mode_sgd = true;
+	}
 
 	/********** Input / Write access methods ************/
 
@@ -180,33 +196,47 @@ public:
 
 		if(low_mem){
 			if(jj < PP){
-				//for (Index ii = 0; ii < NN; ii++){
-				//	vec[ii] = (DecompressDosage(M(ii, jj)) - compressed_dosage_means[jj]) * compressed_dosage_inv_sds[jj];
-				//}
-
-				vec = M.cast<double>().col(jj);
+				if(mode_sgd){
+					vec = M.cast<double>().block(batch_start, jj, nBatch, 1);
+				} else {
+					vec = M.cast<double>().col(jj);
+				}
 				vec *= (intervalWidth * compressed_dosage_inv_sds[jj]);
 				vec = vec.array() + (0.5 * intervalWidth - compressed_dosage_means[jj]) * compressed_dosage_inv_sds[jj];
 
 			} else {
 				int ee = jj / PP;
 				jj %= PP;
-				//for (Index ii = 0; ii < NN; ii++){
-				//	vec[ii] = aa[ii] * (DecompressDosage(M(ii, jj)) - compressed_dosage_means[jj]) * compressed_dosage_inv_sds[jj];
-				//}
 
-				vec = M.cast<double>().col(jj);
+				if(mode_sgd){
+					vec = M.cast<double>().block(batch_start, jj, nBatch, 1);
+				} else {
+					vec = M.cast<double>().col(jj);
+				}
 				vec *= (intervalWidth * compressed_dosage_inv_sds[jj]);
  				vec = vec.array() + (0.5 * intervalWidth - compressed_dosage_means[jj]) * compressed_dosage_inv_sds[jj];
-				vec = vec.cwiseProduct(E.col(ee-1));
+
+				if(mode_sgd){
+					vec = vec.cwiseProduct(E.block(batch_start, ee-1, nBatch, 1));
+				} else {
+					vec = vec.cwiseProduct(E.col(ee-1));
+				}
 			}
 		} else {
 			if(jj < PP){
-				vec = G.col(jj);
+				if(mode_sgd){
+					vec = G.block(batch_start, jj, nBatch, 1);
+				} else {
+					vec = G.col(jj);
+				}
 			} else {
 				int ee = jj / PP;
 				jj %= PP;
-				vec = G.col(jj).cwiseProduct(E.col(ee-1));
+				if(mode_sgd){
+					vec = G.block(batch_start, jj, nBatch, 1).cwiseProduct(E.block(batch_start, ee-1, nBatch, 1));
+				} else {
+					vec = G.col(jj).cwiseProduct(E.col(ee-1));
+				}
 			}
 		}
 		return vec;

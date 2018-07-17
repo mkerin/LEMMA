@@ -38,6 +38,9 @@ public:
 	Eigen::ArrayXXd muc;    // C x 1
 	Eigen::ArrayXXd sc_sq;  // C x 1
 
+	// sgd
+	long int count;
+
 	VariationalParameters(){};
 	~VariationalParameters(){};
 
@@ -47,6 +50,8 @@ public:
 		mu    = init.mu;
 		mup   = init.mup;
 		muc   = init.muc;
+
+		count = 0;
 	}
 
 	VariationalParametersLite convert_to_lite(){

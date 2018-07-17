@@ -98,6 +98,9 @@ public:
 	MyTimer t_updateHyps;
 	MyTimer t_InnerLoop;
 
+	// sgd
+	double minibatch_adjust;
+
 	explicit VBayesX2( Data& dat ) : X( dat.G ),
                             Y( dat.Y ),
                             W( dat.W ),
@@ -208,6 +211,17 @@ public:
 				col_j = X.col(jj);
 				dHtH(jj, ee) = col_j.cwiseProduct(e_k_sq).dot(col_j);
 			}
+		}
+
+		// sgd
+		if(p.mode_sgd){
+			minibatch_adjust = (double) n_samples / p.sgd_minibatch_size;
+			std::cout << "Using SVI with:" << std::endl;
+			std::cout << "delay: " << p.sgd_delay << std::endl;
+			std::cout << "minibatch size:" << p.sgd_minibatch_size << std::endl;
+			std::cout << "decay:" << p.sgd_forgetting_rate << std::endl;
+		} else {
+			minibatch_adjust = 1.0;
 		}
 	}
 
@@ -457,6 +471,13 @@ public:
 			double logw_prev = i_logw;
 			long int hty_update_counter = 0;
 
+			// sgd - draw samples and recompute Hr
+			if(p.mode_sgd){
+				X.draw_minibatch(p.sgd_minibatch_size);
+				calcHr(vp);
+				vp.Hr = vp.Hr.block(X.batch_start, 0, X.nBatch, 1);
+			}
+
 			// Alternate between back and fwd passes
 			if(count % 2 == 0){
 				iter = fwd_pass;
@@ -470,9 +491,13 @@ public:
 
 			// Update variational_parameters alpha, mu
 			count++;
+			vp.count++;
 			updateAlphaMu(iter, hyps, vp, hty_update_counter);
 
 			// Log updates
+			if(p.mode_sgd){
+				calcHr(vp); // sgd; elbo computed on full dataset
+			}
 			i_logw     = calc_logw(hyps, vp);
 
 			double alpha_diff = (alpha_prev - vp.alpha).abs().maxCoeff();
@@ -484,7 +509,7 @@ public:
 			// Update hyps
 			if(round_index > 1 && p.mode_empirical_bayes){
 				t_updateHyps.resume();
-				updateHyps(hyps, vp);
+				wrapUpdateHyps(hyps, vp);
 				updateSSq(hyps, vp);
 
 				i_logw     = calc_logw(hyps, vp);
@@ -644,12 +669,12 @@ public:
 			double rr_k = vp.alpha(jj, ee) * (vp.mu(jj, ee) - vp.mup(jj, ee)) + vp.mup(jj, ee);
 
 			// Update mu (eq 9); faster to take schur product inside genotype_matrix
-			double A       = Hty(jj, ee) - vp.Hr.dot(H_kk) + dHtH(jj, ee) * rr_k;
-			vp.mu(jj, ee)  = vp.s_sq(jj, ee) * A / hyps.sigma;
-			vp.mup(jj, ee) = vp.sp_sq(jj, ee) * A / hyps.sigma;
+			double A       = Hty(jj, ee) - minibatch_adjust * vp.Hr.dot(H_kk) + dHtH(jj, ee) * rr_k;
+			vp.mu(jj, ee)  = _update_param(vp.mu(jj, ee),  vp.s_sq(jj, ee)  * A / hyps.sigma, vp);
+			vp.mup(jj, ee) = _update_param(vp.mup(jj, ee), vp.sp_sq(jj, ee) * A / hyps.sigma, vp);
 
 			// Update alpha (eq 10)  TODO: check syntax / i_  / sigmoid here!
-			double ff_k      = vp.mu(jj, ee) * vp.mu(jj, ee) / vp.s_sq(jj, ee)  / 2.0;
+			double ff_k      = vp.mu(jj, ee)  * vp.mu(jj, ee) / vp.s_sq(jj, ee)  / 2.0;
 			ff_k            -= vp.mup(jj, ee) * vp.mup(jj, ee) / vp.sp_sq(jj, ee) / 2.0;
 			ff_k            += (std::log(vp.s_sq(jj, ee)) - std::log(vp.sp_sq(jj, ee))) / 2.0;
 			vp.alpha(jj, ee) = sigmoid(ff_k + alpha_cnst(ee));
@@ -662,7 +687,8 @@ public:
 			double rr_k = vp.alpha(jj, ee) * vp.mu(jj, ee);
 
 			// Update mu (eq 9); faster to take schur product inside genotype_matrix
-			vp.mu(jj, ee) = vp.s_sq(jj, ee) * (Hty(jj, ee) - vp.Hr.dot(H_kk) + dHtH(jj, ee) * rr_k) / hyps.sigma;
+			double A      = Hty(jj, ee) - minibatch_adjust * vp.Hr.dot(H_kk) + dHtH(jj, ee) * rr_k;
+			vp.mu(jj, ee) = _update_param(vp.mu(jj, ee), vp.s_sq(jj, ee) * A / hyps.sigma, vp);
 
 			// Update alpha (eq 10)
 			double ff_k      = (std::log(vp.s_sq(jj, ee)) + vp.mu(jj, ee) * vp.mu(jj, ee) / vp.s_sq(jj, ee)) / 2.0;
@@ -1189,6 +1215,43 @@ public:
 		}
 		fclose(file);
 		return result;
+	}
+
+	// SGD functions
+	void wrapUpdateHyps(Hyps& hyps, const VariationalParameters& vp){
+		// if(p.mode_sgd){
+		// 	Hyps t_hyps;
+		// 	updateHyps(t_hyps, vp);
+		// 	hyps.sigma = _update_param(hyps.sigma, t_hyps.sigma, vp);
+		// 	hyps.lambda = _update_param(hyps.lambda, t_hyps.lambda, vp);
+		// 	hyps.spike_var = _update_param(hyps.spike_var, t_hyps.spike_var, vp);
+		// 	hyps.slab_var = _update_param(hyps.slab_var, t_hyps.slab_var, vp);
+		// 	hyps.spike_relative_var = _update_param(hyps.spike_relative_var, t_hyps.spike_relative_var, vp);
+		// 	hyps.slab_relative_var = _update_param(hyps.slab_relative_var, t_hyps.slab_relative_var, vp);
+		// } else {
+			updateHyps(hyps, vp);
+		// }
+	}
+
+	double _update_param(double p_old, double p_new, const VariationalParameters& vp){
+		double res, rho = std::pow(vp.count + p.sgd_delay, -p.sgd_forgetting_rate);
+		if(p.mode_sgd){
+			res = (1 - rho) * p_old + rho * p_new;
+		} else {
+			res = p_new;
+		}
+		return(res);
+	}
+
+	Eigen::ArrayXd _update_param(Eigen::ArrayXd p_old, Eigen::ArrayXd p_new, const VariationalParameters& vp){
+		Eigen::ArrayXd res;
+		double rho = std::pow(vp.count + p.sgd_delay, -p.sgd_forgetting_rate);
+		if(p.mode_sgd){
+			res = (1 - rho) * p_old + rho * p_new;
+		} else {
+			res = p_new;
+		}
+		return(res);
 	}
 };
 

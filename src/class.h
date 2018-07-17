@@ -20,9 +20,12 @@ class parameters {
 		bool select_rsid, interaction_analysis, verbose, low_mem;
 		bool elbo_tol_set_by_user, alpha_tol_set_by_user, mode_empirical_bayes;
 		bool keep_constant_variants, user_requests_round1, scale_pheno, mode_mog_prior;
-		bool mode_alternating_updates, mode_approximate_residuals;
+		bool mode_alternating_updates, mode_approximate_residuals, mode_sgd, sgd_delay_set, sgd_forgetting_rate_set;
+		bool sgd_minibatch_size_set;
 		double min_maf, min_info, elbo_tol, alpha_tol, min_residuals_diff;
+		double sgd_delay, sgd_forgetting_rate;
 		std::vector < std::string > incl_sample_ids, gconf;
+		long int sgd_minibatch_size;
 
 	// constructors/destructors
 	parameters() : bgen_file("NULL"),
@@ -65,6 +68,10 @@ class parameters {
 		keep_constant_variants = false;
 		user_requests_round1 = false;
 		scale_pheno = true;
+		mode_sgd = false;
+		sgd_forgetting_rate_set = false;
+		sgd_delay_set = false;
+		sgd_minibatch_size_set = false;
 	}
 
 	~parameters() {

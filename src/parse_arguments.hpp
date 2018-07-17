@@ -79,7 +79,11 @@ void parse_arguments(parameters &p, int argc, char *argv[]) {
 		"--raw_phenotypes",
 		"--mode_alternating_updates",
 		"--mode_approximate_residuals",
-		"--min_residuals_diff"
+		"--min_residuals_diff",
+		"--mode_sgd",
+		"--sgd_delay",
+		"--sgd_forgetting_rate",
+		"--sgd_minibatch_size"
 	};
 
 	std::set<std::string>::iterator set_it;
@@ -125,6 +129,29 @@ void parse_arguments(parameters &p, int argc, char *argv[]) {
 			// & also make sure they don't go over argc
 
 			// Modes - a variety of different functionalities now included
+			if(strcmp(in_str, "--mode_sgd") == 0) {
+				p.mode_sgd = true;
+				i += 0;
+			}
+
+			if(strcmp(in_str, "--sgd_delay") == 0) {
+				p.sgd_delay = std::stod(argv[i + 1]);
+				p.sgd_delay_set = true;
+				i += 1;
+			}
+
+			if(strcmp(in_str, "--sgd_forgetting_rate") == 0) {
+				p.sgd_forgetting_rate = std::stod(argv[i + 1]);
+				p.sgd_forgetting_rate_set = true;
+				i += 1;
+			}
+
+			if(strcmp(in_str, "--sgd_minibatch_size") == 0) {
+				p.sgd_minibatch_size = std::stol(argv[i + 1]);
+				p.sgd_minibatch_size_set = true;
+				i += 1;
+			}
+
 			if(strcmp(in_str, "--mode_vb") == 0) {
 				p.mode_vb = true;
 				i += 0;
@@ -418,6 +445,12 @@ void parse_arguments(parameters &p, int argc, char *argv[]) {
 		throw std::runtime_error("ERROR: --covar must be provided if --interaction analysis is being run.");
 	}
 
+	if(p.mode_sgd && !(p.sgd_delay_set && p.sgd_forgetting_rate_set && p.sgd_minibatch_size_set)){
+		throw std::runtime_error("ERROR: Must set forgetting rate, delay and minibatch size for mode sgd");
+	}
+	if(p.mode_sgd && p.sgd_minibatch_size <= 0){
+		throw std::runtime_error("ERROR: Minibatch size must be greater than zero");
+	}
 }
 
 #endif
