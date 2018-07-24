@@ -235,6 +235,8 @@ class Data
 		t_readFullBgen.resume();
 		read_bgen_chunk();
 		t_readFullBgen.stop();
+		std::cout << "Read " << n_var << " variants in:" << std::endl;
+		t_readFullBgen.report();
 	}
 
 	bool read_bgen_chunk() {
@@ -243,6 +245,7 @@ class Data
 		// Assumed that:
 		// - commandline args parsed and passed to params
 		// - bgenView initialised with correct filename
+		// - scale + centering happening internally
 
 		// Exit function if last call hit EOF.
 		if (!bgen_pass) return false;
@@ -257,7 +260,7 @@ class Data
 		ProbSetter setter( &probs );
 		std::map<int, bool> missing_genos;
 
-		double d1, theta, x, dosage, check, info_j, f1, f2, chunk_missingness;
+		double x, dosage, check, info_j, f1, chunk_missingness;
 		double dosage_mean, dosage_sigma, missing_calls = 0.0;
 		int n_var_incomplete = 0;
 
@@ -271,15 +274,13 @@ class Data
 
 		// Resize genotype matrix
 		G.resize(n_samples, params.chunk_size, n_effects);
-		// Eigen::VectorXd dosage_j(n_samples);
 
 		long int n_constant_variance = 0;
-		double valid_count;
 		std::size_t jj = 0;
 		while ( jj < params.chunk_size && bgen_pass ) {
 			bgen_pass = bgenView->read_variant( &SNPID, &rsid_j, &chr_j, &pos_j, &alleles_j );
-			n_var_parsed++;
 			if (!bgen_pass) break;
+			n_var_parsed++;
 			assert( alleles_j.size() > 0 );
 
 			// Read probs + check maf filter
@@ -287,63 +288,77 @@ class Data
 
 			// maf + info filters; computed on valid sample_ids & variants whose alleles
 			// sum to 1
-			std::map< std::size_t, bool > invalid_count;
-			d1 = f2 = valid_count = 0.0;
-			for( std::size_t ii = 0; ii < probs.size(); ++ii ) {
+			std::map<int, bool> missing_genos;
+			Eigen::ArrayXd dosage_j(n_samples);
+			double f2 = 0.0, valid_count = 0.0;
+			std::uint32_t ii_obs = 0;
+			for( std::size_t ii = 0; ii < probs.size(); ii++ ) {
 				if (incomplete_cases.count(ii) == 0) {
 					f1 = dosage = check = 0.0;
-					for( std::size_t kk = 0; kk < probs[ii].size(); ++kk ) {
+					for( std::size_t kk = 0; kk < probs[ii].size(); kk++ ) {
 						x = probs[ii][kk];
 						dosage += x * kk;
 						f1 += x * kk * kk;
 						check += x;
 					}
-					if(std::abs(check - 1.0) < 1e-6){
-						d1 += dosage;   // dosage mean
+					if(check > 0.9999 && check < 1.0001){
+						dosage_j[ii_obs] = dosage;
 						f2 += (f1 - dosage * dosage);
 						valid_count++;
 					} else {
-						invalid_count[ii] = 1;
+						missing_genos[ii_obs] = 1;
+						dosage_j[ii_obs] = 0.0;
 					}
+					ii_obs++;
 				}
 			}
-			theta = d1 / (2.0 * valid_count);
-			info_j = 1.0;
-			if(theta > 1e-10 && theta < 0.9999999999){
-				info_j -= f2 / (2.0 * valid_count * theta * (1.0 - theta));
+			assert(ii_obs == n_samples);
+
+			double d1    = dosage_j.sum();
+			double maf_j = d1 / (2.0 * valid_count);
+
+			// Flip dosage vector if maf > 0.5
+			if(maf_j > 0.5){
+				dosage_j = (2.0 - dosage_j);
+				for (std::uint32_t ii = 0; ii < n_samples; ii++){
+					if (missing_genos.count(ii) > 0){
+						dosage_j[ii] = 0.0;
+					}
+				}
+
+				f2       = 4.0 * valid_count - 4.0 * d1 + f2;
+				d1       = dosage_j.sum();
+				maf_j    = d1 / (2.0 * valid_count);
 			}
-			if (params.maf_lim && (theta < params.min_maf || theta > 1 - params.min_maf)) {
+
+			double mu    = d1 / valid_count;
+			info_j       = 1.0;
+			if(maf_j > 1e-10 && maf_j < 0.9999999999){
+				info_j -= f2 / (2.0 * valid_count * maf_j * (1.0 - maf_j));
+			}
+
+			// Compute sd
+			double sigma = (dosage_j - mu).square().sum();
+			sigma = std::sqrt(sigma/(valid_count - 1.0));
+
+			// Filters
+			if (params.maf_lim && (maf_j < params.min_maf || maf_j > 1 - params.min_maf)) {
 				continue;
 			}
 			if (params.info_lim && info_j < params.min_info) {
 				continue;
 			}
-
-			// check non-zero variance
-			double mu = d1 / valid_count;
-			if(!params.keep_constant_variants){
-				double val, sigma = 0, count = 0;
-				for(std::size_t ii = 0; ii < probs.size(); ++ii){
-					// if ((incomplete_cases.count(ii) == 0) && (invalid_count.count(ii) == 0)) {
-					if (incomplete_cases.count(ii) == 0){
-						val = 0.0;
-						for( std::size_t kk = 0; kk < probs[ii].size(); ++kk ) {
-							val += x * probs[ii][kk];
-						}
-						val -= mu;
-						sigma += val * val;
-						count += 1;
-					}
-				}
-				sigma = std::sqrt(sigma/(count - 1.0));
-				if(sigma <= 1e-12 || (double) n_samples * theta < 1.0){
-					n_constant_variance++;
-					continue;
-				}
+			if(!params.keep_constant_variants && d1 < 5.0){
+				n_constant_variance++;
+				continue;
+			}
+			if(!params.keep_constant_variants && sigma <= 1e-12){
+				n_constant_variance++;
+				continue;
 			}
 
 			// filters passed; write contextual info
-			maf.push_back(theta);
+			maf.push_back(maf_j);
 			info.push_back(info_j);
 			rsid.push_back(rsid_j);
 			chromosome.push_back(chr_j);
@@ -359,51 +374,23 @@ class Data
 
 			// filters passed; write dosage to G
 			// Note that we only write dosage for valid sample ids
-			std::size_t ii_obs = 0;
-			missing_genos.clear();
-			for( std::size_t ii = 0; ii < probs.size(); ++ii ) {
-				if (incomplete_cases.count(ii) == 0) {
-					dosage = 0.0;
-					check = 0.0;
-
-					for( std::size_t kk = 0; kk < probs[ii].size(); ++kk ) {
-						x = probs[ii][kk];
-						dosage += x * kk;
-						check += x;
-					}
-
-					if(params.geno_check){
-						// if(invalid_count.count(ii) == 0){
-						if(check > 0.9999 && check < 1.0001){
-							G.assign_index(ii_obs, jj, dosage);
-						} else if(check > 0){
-							std::cout << "Unexpected sum of allele probs: ";
-							std::cout << check << " at sample=" << ii;
-							std::cout << ", variant=" << jj << std::endl;
-							throw std::logic_error("Allele probs expected to sum to 1 or 0");
-						} else {
-							missing_genos[ii_obs] = 1;
-							G.assign_index(ii_obs, jj, std::nan(""));
-						}
-					} else {
-						G.assign_index(ii_obs, jj, dosage);
-					}
-
-					ii_obs++; // loop should end at ii_obs == n_samples
-				}
-			}
-			// G.compressed_dosage_sds[jj] = sigma;
-			// G.compressed_dosage_means[jj] = d1;
-
-			if (ii_obs < n_samples) {
-				throw std::logic_error("ERROR: Fewer non-missing genotypes than expected");
-			}
-
-			// Log number of missing entries
+			// Scale + center dosage, set missing to mean
 			if(missing_genos.size() > 0){
 				n_var_incomplete += 1;
 				missing_calls += (double) missing_genos.size();
+				for (std::uint32_t ii = 0; ii < n_samples; ii++){
+					if (missing_genos.count(ii) > 0){
+						dosage_j[ii] = mu;
+					}
+				}
 			}
+
+			for (std::uint32_t ii = 0; ii < n_samples; ii++){
+				G.assign_index(ii, jj, dosage_j[ii]);
+			}
+			// G.compressed_dosage_sds[jj] = sigma;
+			// G.compressed_dosage_means[jj] = mu;
+
 			jj++;
 		}
 
