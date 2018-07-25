@@ -42,6 +42,7 @@ public:
 	const double sigma_c = 10000;
 	int print_interval;              // print time every x grid points
 	std::vector< std::string > covar_names;
+	std::vector< std::string > env_names;
 
 	// Column order of hyperparameters in grid
 	const int sigma_ind   = 0;
@@ -63,6 +64,7 @@ public:
 	bool          random_params_init;
 	bool          run_round1;
 	double N; // (double) n_samples
+
 
 	//
 	parameters& p;
@@ -126,6 +128,8 @@ public:
 		print_interval = std::max(1, n_grid / 10);
 		covar_names    = dat.covar_names;
 		N              = (double) n_samples;
+
+		env_names = dat.env_names;
 
 		// Allocate memory - fwd/back pass vectors
 		std::uint32_t L;
@@ -1199,7 +1203,13 @@ public:
 
 		// weights to file
 		for (int ll = 0; ll < n_env; ll++){
-			outf_w << vp_map.muw(ll) << std::endl;
+			outf_w << env_names[ll];
+			if(ll + 1 < n_env) outf_w << " ";
+		}
+		outf_w << std::endl;
+		for (int ll = 0; ll < n_env; ll++){
+			outf_w << vp_map.muw(ll);
+			if(ll + 1 < n_env) outf_w << " ";
 		}
 
 		if(p.verbose){
