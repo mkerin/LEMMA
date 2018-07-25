@@ -204,14 +204,14 @@ public:
 		std::cout << "Building dZtZ array" << std::endl;
 		Eigen::ArrayXd cl_j;
 		double dztz_lmj;
-		dZtZ.resize(n_env * n_env, n_var);
+		dZtZ.resize(n_var, n_env * n_env);
 		for (std::size_t jj = 0; jj < n_var; jj++){
 			cl_j = X.col(jj);
 			for (int ll = 0; ll < n_env; ll++){
 				for (int mm = 0; mm <= ll; mm++){
 					dztz_lmj = (cl_j * E.col(ll) * E.col(mm) * cl_j).sum();
-					dZtZ(ll*n_env + mm, jj) = dztz_lmj;
-					dZtZ(mm*n_env + ll, jj) = dztz_lmj;
+					dZtZ(jj, ll*n_env + mm) = dztz_lmj;
+					dZtZ(jj, mm*n_env + ll) = dztz_lmj;
 				}
 			}
 		}
@@ -505,7 +505,7 @@ public:
 			alpha_diff_updates.push_back(alpha_diff);
 
 			tracker.push_interim_iter_update(count, hyps, i_logw, alpha_diff,
-				t_updateAlphaMu.get_lap_seconds(), hty_update_counter, n_effects, n_var, vp);
+				t_updateAlphaMu.get_lap_seconds(), hty_update_counter, n_effects, n_var, n_env, vp);
 
 			// Maximise hyps
 			if(round_index > 1 && p.mode_empirical_bayes){
@@ -517,7 +517,7 @@ public:
 				t_maximiseHyps.stop();
 
 				tracker.push_interim_iter_update(count, hyps, i_logw, 0.0,
-					t_maximiseHyps.get_lap_seconds(), -1, n_effects, n_var, vp);
+					t_maximiseHyps.get_lap_seconds(), -1, n_effects, n_var, n_env, vp);
 			}
 			logw_updates.push_back(i_logw);
 
@@ -557,7 +557,7 @@ public:
 			}
 		}
 		hyps.s_x.resize(2);
-		hyps.s_x << (double) n_var, (dZtZ.colwise() * muw_sq).sum();
+		hyps.s_x << (double) n_var, (dZtZ.rowwise() * muw_sq.transpose()).sum();
 
 		// Log all things that we want to track
 		t_InnerLoop.stop();

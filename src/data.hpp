@@ -237,6 +237,10 @@ class Data
 			center_matrix( W, n_covar );
 			scale_matrix( W, n_covar, covar_names );
 		}
+		if(params.env_file != "NULL"){
+			center_matrix( E, n_env );
+			scale_matrix( E, n_env, env_names );
+		}
 	}
 
 	void read_full_bgen(){

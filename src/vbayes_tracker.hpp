@@ -64,7 +64,7 @@ public:
 	parameters p;
 
 	// For writing interim output
-	io::filtering_ostream outf_elbo, outf_alpha_diff, outf_weights, outf_inits, outf_iter, outf_alpha;
+	io::filtering_ostream outf_elbo, outf_alpha_diff, outf_weights, outf_inits, outf_iter, outf_alpha, outf_w;
 	std::string main_out_file;
 	bool allow_interim_push;
 
@@ -97,6 +97,7 @@ public:
 		io::close(outf_inits);
 		io::close(outf_iter);
 		io::close(outf_alpha);
+		io::close(outf_w);
 	};
 
 	void set_main_filepath(const std::string &ofile){
@@ -112,6 +113,7 @@ public:
                                   const long int hty_counter,
                                   const int& n_effects,
                                   const int& n_var,
+                                  const int& n_env,
                                   const VariationalParameters& vp){
 		outf_iter << cnt << "\t" << std::setprecision(3) << std::fixed;
 		outf_iter << i_hyps.sigma << "\t" << std::setprecision(8) << std::fixed;
@@ -126,6 +128,12 @@ public:
 		outf_iter << c_alpha_diff << "\t";
 		outf_iter << lap_seconds << "\t";
 		outf_iter << hty_counter << std::endl;
+
+		for (int ll = 0; ll < n_env; ll++){
+			outf_w << vp.muw(ll);
+			if(ll < n_env - 1) outf_w << "\t";
+		}
+		outf_w << std::endl;
 
 		if(p.xtra_verbose){
 			for (int ee = 0; ee < n_effects; ee++){
@@ -185,6 +193,7 @@ public:
 		// Initialise fstreams
 		fstream_init(outf_weights, dir, "_hyps", false);
 		fstream_init(outf_iter, dir, "_iter_updates", false);
+		fstream_init(outf_w, dir, "_env_weights", false);
 		fstream_init(outf_inits, dir, "_inits", true);
 		if(p.xtra_verbose){
 			fstream_init(outf_alpha, dir, "_alpha", true);

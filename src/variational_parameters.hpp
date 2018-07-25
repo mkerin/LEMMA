@@ -77,7 +77,8 @@ public:
 		eta_sq = init.eta_sq;
 
 		// Explicit zero values from initial variance
-		sw_sq = 0.0;
+		sw_sq.resize(n_env);
+ 		sw_sq = 0.0;
 
 		calcExpDZtZ(dZtZ, n_env);
 	}
@@ -91,6 +92,7 @@ public:
 		vplite.mup   = mup;
 		vplite.muc   = muc;
 		vplite.muw   = muw;
+		vplite.eta   = eta;
 		return vplite;
 	}
 
@@ -102,7 +104,7 @@ public:
 			}
 		}
 
-		exp_dZtZ = dZtZ.colwise() * muw_sq;
+		exp_dZtZ = (dZtZ.rowwise() * muw_sq.transpose()).rowwise().sum();
 		for (int ll = 0; ll < n_env; ll++){
 			exp_dZtZ += dZtZ.col(ll * n_env + ll) * sw_sq(ll);
 		}
