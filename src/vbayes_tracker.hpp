@@ -178,7 +178,9 @@ public:
 
 	void interim_output_init(const int ii,
                            const int round_index,
-												   const int n_effects){
+                             const int n_effects,
+                             const int n_env,
+                             std::vector< std::string > env_names){
 		if(!allow_interim_push){
 			throw std::runtime_error("Internal error; interim push not expected");
 		}
@@ -198,6 +200,12 @@ public:
 		if(p.xtra_verbose){
 			fstream_init(outf_alpha, dir, "_alpha", true);
 		}
+
+		for (int ll = 0; ll < n_env; ll++){
+			outf_w << env_names[ll];
+			if(ll + 1 < n_env) outf_w << " ";
+		}
+		outf_w << std::endl;
 
 		outf_weights << "weights logw log_prior count time" << std::endl;
 		outf_iter    << "count\tsigma";

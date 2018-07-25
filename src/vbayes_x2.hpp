@@ -478,7 +478,7 @@ public:
 		double i_logw = calc_logw(hyps, vp);
 		std::vector< double > logw_updates, alpha_diff_updates;
 		logw_updates.push_back(i_logw);
-		tracker.interim_output_init(ii, round_index, n_effects);
+		tracker.interim_output_init(ii, round_index, n_effects, n_env, env_names);
 		while(!converged  && count < iter_max){
 			alpha_prev = vp.alpha;
 			double logw_prev = i_logw;
@@ -1211,6 +1211,7 @@ public:
 			outf_w << vp_map.muw(ll);
 			if(ll + 1 < n_env) outf_w << " ";
 		}
+		outf_w << std::endl;
 
 		if(p.verbose){
 			outf_elbo << std::setprecision(4) << std::fixed;
