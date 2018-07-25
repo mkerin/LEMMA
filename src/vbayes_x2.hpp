@@ -161,6 +161,7 @@ public:
 				vp_init.muc = Eigen::ArrayXd::Zero(n_covar);
 			}
 
+			vp_init.muw.resize(n_env);
 			vp_init.muw     = 1.0 / (double) n_env;
 			vp_init.eta     = E.matrix() * vp_init.muw.matrix();
 			vp_init.eta_sq  = vp_init.eta.array().square();
