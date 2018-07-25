@@ -23,12 +23,12 @@ namespace io = boost::iostreams;
 struct Hyps{
 // public:
 	double sigma;
-	double sigma_c;
 	Eigen::ArrayXd slab_var;
 	Eigen::ArrayXd spike_var;
 	Eigen::ArrayXd slab_relative_var;
 	Eigen::ArrayXd spike_relative_var;
 	Eigen::ArrayXd lambda;
+	Eigen::ArrayXd s_x;  // Not really a hyp; just storing here for convenience
 
 	// Hyps();
 

@@ -57,10 +57,12 @@ public:
 	int           n_effects;             // no. interaction variables + 1
 	std::uint32_t n_samples;
 	std::uint32_t n_covar;
+	std::uint32_t n_env;
 	std::uint32_t n_var;
 	std::uint32_t n_var2;
 	bool          random_params_init;
 	bool          run_round1;
+	double N; // (double) n_samples
 
 	//
 	parameters& p;
@@ -69,13 +71,13 @@ public:
 
 	// Data
 	GenotypeMatrix& X;
-	Eigen::MatrixXd& Y;          // residual phenotype matrix
+	Eigen::VectorXd Y;          // residual phenotype matrix
 	Eigen::ArrayXXd dXtX;       // diagonal of X^T x X
-	Eigen::ArrayXXd dHtH;       // P x (E+1); dHtH_ij = X_i^T * diag(e_j) * X_i
+	Eigen::ArrayXXd dZtZ;       // P x (E+1); dZtZ_{i, l * n_env + m} = X_i^T * diag(E_l * E_m) * X_i
 	Eigen::ArrayXXd Hty;         // vector of H^T x y where H = (X, Z)
-	Eigen::ArrayXd  Wty;         // vector of W^T x y where W the matrix of covariates
-	Eigen::MatrixXd E;          // matrix of variables used for GxE interactions
-	Eigen::MatrixXd& W;          // matrix of covariates (superset of GxE variables)
+	Eigen::ArrayXd  Cty;         // vector of W^T x y where C the matrix of covariates
+	Eigen::ArrayXXd E;          // matrix of variables used for GxE interactions
+	Eigen::MatrixXd& C;          // matrix of covariates (superset of GxE variables)
 	Eigen::MatrixXd r1_hyps_grid;
 	Eigen::MatrixXd r1_probs_grid;
 	Eigen::MatrixXd hyps_grid;
@@ -87,7 +89,7 @@ public:
 
 	// boost fstreams
 	boost_io::filtering_ostream outf, outf_map, outf_wmean, outf_nmean, outf_inits;
-	boost_io::filtering_ostream outf_elbo, outf_alpha_diff, outf_map_pred;
+	boost_io::filtering_ostream outf_elbo, outf_alpha_diff, outf_map_pred, outf_w;
 
 	// Monitoring
 	std::chrono::system_clock::time_point time_check;
@@ -95,20 +97,20 @@ public:
 	MyTimer t_updateAlphaMu;
 	MyTimer t_elbo;
 	MyTimer t_readXk;
-	MyTimer t_updateHyps;
+	MyTimer t_maximiseHyps;
 	MyTimer t_InnerLoop;
 
 	// sgd
 	double minibatch_adjust;
 
 	explicit VBayesX2( Data& dat ) : X( dat.G ),
-                            Y( dat.Y ),
-                            W( dat.W ),
+                            Y(Eigen::Map<Eigen::VectorXd>(dat.Y.data(), dat.Y.rows())),
+                            C( dat.W ),
                             p( dat.params ),
                             t_updateAlphaMu("updateAlphaMu: %ts \n"),
                             t_elbo("calcElbo: %ts \n"),
                             t_readXk("read_X_kk: %ts \n"),
-                            t_updateHyps("updateHyps: %ts \n"),
+                            t_maximiseHyps("maximiseHyps: %ts \n"),
                             t_InnerLoop("runInnerLoop: %ts \n") {
 		assert(std::includes(dat.hyps_names.begin(), dat.hyps_names.end(), hyps_names.begin(), hyps_names.end()));
 		assert(p.interaction_analysis);
@@ -116,12 +118,14 @@ public:
 		// Data size params
 		n_effects      = dat.n_effects;
 		n_var          = dat.n_var;
+		n_env          = dat.n_env;
 		n_var2         = n_effects * dat.n_var;
 		n_samples      = dat.n_samples;
 		n_covar        = dat.n_covar;
 		n_grid         = dat.hyps_grid.rows();
 		print_interval = std::max(1, n_grid / 10);
-		covar_names = dat.covar_names;
+		covar_names    = dat.covar_names;
+		N              = (double) n_samples;
 
 		// Allocate memory - fwd/back pass vectors
 		std::uint32_t L;
@@ -136,7 +140,9 @@ public:
 		}
 
 		// Read environmental variables
-		if(p.x_param_name != "NULL"){
+		if (p.env_file != "NULL"){
+			E = dat.E;
+		} else if(p.x_param_name != "NULL"){
 			std::size_t x_col = find_covar_index(p.x_param_name, dat.covar_names);
 			E                = dat.W.col(x_col);
 		} else {
@@ -155,8 +161,12 @@ public:
 				vp_init.muc = Eigen::ArrayXd::Zero(n_covar);
 			}
 
-			// Gen Hr_init
-			calcHr(vp_init);
+			vp_init.muw     = 1.0 / (double) n_env;
+			vp_init.eta     = E.matrix() * vp_init.muw.matrix();
+			vp_init.eta_sq  = vp_init.eta.array().square();
+
+			// Gen initial predicted effects
+			calcPredEffects(vp_init);
 
 			random_params_init = false;
 			run_round1         = false;
@@ -181,41 +191,33 @@ public:
 		}
 
 		// Assign data - genetic
-		Hty.matrix().resize(n_var, n_effects);
-		Hty.col(0) = X.transpose_vector_multiply(Y).array();
-		for (int ee = 1; ee < n_effects; ee++){
-			Hty.col(ee) = X.transpose_vector_multiply(Y.cwiseProduct(E.col(ee-1))).array();
-		}
-
-		Wty = W.transpose() * Y;
-
-		//
-		// Eigen::VectorXd dXtX(n_var), dZtZ(n_var), col_j;
-		// for (std::size_t jj = 0; jj < n_var; jj++){
-		// 	col_j = X.col(jj);
-		// 	dXtX[jj] = col_j.dot(col_j);
-		// 	dZtZ[jj] = col_j.cwiseProduct(a_sq).dot(col_j);
+		// Hty.matrix().resize(n_var, n_effects);
+		// Hty.col(0) = X.transpose_vector_multiply(Y).array();
+		// for (int ee = 1; ee < n_effects; ee++){
+		// 	Hty.col(ee) = X.transpose_vector_multiply(Y.cwiseProduct(E.col(ee-1))).array();
 		// }
-		// dHtH                   << dXtX, dZtZ;
 
-		dHtH.resize(n_var, n_effects);
-		Eigen::VectorXd e_k_sq;
-		Eigen::VectorXd col_j;
+		Cty = C.transpose() * Y;
+
+		// dZtZ an L^2 x P array
+		std::cout << "Building dZtZ array" << std::endl;
+		Eigen::ArrayXd cl_j;
+		double dztz_lmj;
+		dZtZ.resize(n_env * n_env, n_var);
 		for (std::size_t jj = 0; jj < n_var; jj++){
-			col_j = X.col(jj);
-			dHtH(jj, 0) = col_j.dot(col_j);
-		}
-		for (int ee = 1; ee < n_effects; ee++){
-			e_k_sq = E.col(ee-1).cwiseProduct(E.col(ee-1));
-			for (std::size_t jj = 0; jj < n_var; jj++){
-				col_j = X.col(jj);
-				dHtH(jj, ee) = col_j.cwiseProduct(e_k_sq).dot(col_j);
+			cl_j = X.col(jj);
+			for (int ll = 0; ll < n_env; ll++){
+				for (int mm = 0; mm <= ll; mm++){
+					dztz_lmj = (cl_j * E.col(ll) * E.col(mm) * cl_j).sum();
+					dZtZ(ll*n_env + mm, jj) = dztz_lmj;
+					dZtZ(mm*n_env + ll, jj) = dztz_lmj;
+				}
 			}
 		}
 
 		// sgd
 		if(p.mode_sgd){
-			minibatch_adjust = (double) n_samples / p.sgd_minibatch_size;
+			minibatch_adjust = N / p.sgd_minibatch_size;
 			std::cout << "Using SVI with:" << std::endl;
 			std::cout << "delay: " << p.sgd_delay << std::endl;
 			std::cout << "minibatch size:" << p.sgd_minibatch_size << std::endl;
@@ -239,7 +241,7 @@ public:
 		// t_updateAlphaMu.report();
 		// t_elbo.report();
 		// t_readXk.report();
-		// t_updateHyps.report();
+		// t_maximiseHyps.report();
 		// t_InnerLoop.report();
 	}
 
@@ -321,8 +323,8 @@ public:
 				throw std::runtime_error("No valid start points found (elbo estimates all non-finite?).");
 			}
 
-			// gen Hr_init
-			calcHr(vp_init);
+			// gen initial predicted effects
+			calcPredEffects(vp_init);
 
 			// Write inits to file
 			std::string ofile_inits = fstream_init(outf_inits, "", "_inits");
@@ -361,32 +363,38 @@ public:
 		std::cout << "Variational inference finished" << std::endl;
 	}
 
-	void calcHr(VariationalParameters& vp){
-		Eigen::ArrayXXd rr;
+	void calcPredEffects(VariationalParameters& vp){
+		Eigen::MatrixXd rr;
 		if(p.mode_mog_prior){
 			rr = vp.alpha * (vp.mu - vp.mup) + vp.mup;
 		} else {
 			rr = vp.alpha * vp.mu;
 		}
+		assert(rr.cols() == 2);
 
-		vp.Hr = X * rr.col(0).matrix();
-		for (int ee = 1; ee < n_effects; ee++){
-			vp.Hr += (X * rr.col(ee).matrix()).cwiseProduct(E.col(ee-1));
+		vp.ym = X * rr.col(0);
+		if(p.use_vb_on_covars){
+			vp.ym += C * vp.muc.matrix();
 		}
+
+		vp.yx = X * rr.col(1);
 	}
 
-	void calcHr(VariationalParametersLite& vp){
-		Eigen::ArrayXXd rr;
+	void calcPredEffects(VariationalParametersLite& vp){
+		Eigen::MatrixXd rr;
 		if(p.mode_mog_prior){
 			rr = vp.alpha * (vp.mu - vp.mup) + vp.mup;
 		} else {
 			rr = vp.alpha * vp.mu;
 		}
+		assert(rr.cols() == 2);
 
-		vp.Hr = X * rr.col(0).matrix();
-		for (int ee = 1; ee < n_effects; ee++){
-			vp.Hr += (X * rr.col(ee).matrix()).cwiseProduct(E.col(ee-1));
+		vp.ym = X * rr.col(0);
+		if(p.use_vb_on_covars){
+			vp.ym += C * vp.muc.matrix();
 		}
+
+		vp.yx = X * rr.col(1);
 	}
 
 	void runOuterLoop(const int round_index,
@@ -451,7 +459,7 @@ public:
 		if (random_init) {
 			initRandomAlphaMu(vp);
 		} else {
-			vp.init_from_lite(vp_init);
+			vp.init_from_lite(vp_init, dZtZ, n_env);
 		}
 
 		// Update s_sq
@@ -471,13 +479,6 @@ public:
 			double logw_prev = i_logw;
 			long int hty_update_counter = 0;
 
-			// sgd - draw samples and recompute Hr
-			if(p.mode_sgd){
-				X.draw_minibatch(p.sgd_minibatch_size);
-				calcHr(vp);
-				vp.Hr = vp.Hr.block(X.batch_start, 0, X.nBatch, 1);
-			}
-
 			// Alternate between back and fwd passes
 			if(count % 2 == 0){
 				iter = fwd_pass;
@@ -491,13 +492,12 @@ public:
 
 			// Update variational_parameters alpha, mu
 			count++;
-			vp.count++;
 			updateAlphaMu(iter, hyps, vp, hty_update_counter);
 
+			// Update env-weights
+			updateEnvWeights(hyps, vp);
+
 			// Log updates
-			if(p.mode_sgd){
-				calcHr(vp); // sgd; elbo computed on full dataset
-			}
 			i_logw     = calc_logw(hyps, vp);
 
 			double alpha_diff = (alpha_prev - vp.alpha).abs().maxCoeff();
@@ -506,17 +506,17 @@ public:
 			tracker.push_interim_iter_update(count, hyps, i_logw, alpha_diff,
 				t_updateAlphaMu.get_lap_seconds(), hty_update_counter, n_effects, n_var, vp);
 
-			// Update hyps
+			// Maximise hyps
 			if(round_index > 1 && p.mode_empirical_bayes){
-				t_updateHyps.resume();
-				wrapUpdateHyps(hyps, vp);
+				t_maximiseHyps.resume();
+				wrapMaximiseHyps(hyps, vp);
 				updateSSq(hyps, vp);
 
 				i_logw     = calc_logw(hyps, vp);
-				t_updateHyps.stop();
+				t_maximiseHyps.stop();
 
 				tracker.push_interim_iter_update(count, hyps, i_logw, 0.0,
-					t_updateHyps.get_lap_seconds(), -1, n_effects, n_var, vp);
+					t_maximiseHyps.get_lap_seconds(), -1, n_effects, n_var, vp);
 			}
 			logw_updates.push_back(i_logw);
 
@@ -548,6 +548,16 @@ public:
 			std::cout << "WARNING: non-finite elbo estimate produced" << std::endl;
 		}
 
+		// Compute s_x; sum of column variances of Z
+		Eigen::ArrayXd muw_sq(n_env * n_env);
+		for (int ll = 0; ll < n_env; ll++){
+			for (int mm = 0; mm < n_env; mm++){
+				muw_sq(mm*n_env + ll) = vp.muw(mm) * vp.muw(ll);
+			}
+		}
+		hyps.s_x.resize(2);
+		hyps.s_x << (double) n_var, (dZtZ.colwise() * muw_sq).sum();
+
 		// Log all things that we want to track
 		t_InnerLoop.stop();
 		tracker.logw_list[ii] = i_logw;
@@ -571,31 +581,34 @@ public:
 			vp.sp_sq.resize(n_var, n_effects);
 		}
 
-		for (int ee = 0; ee < n_effects; ee++){
+		// Update main
+		vp.s_sq.col(0)  = hyps.slab_var(0);
+		vp.s_sq.col(0) /= (hyps.slab_relative_var(0) * (N - 1.0) + 1.0);
+
+		for (int ee = 1; ee < n_effects; ee++){
 			for (std::uint32_t kk = 0; kk < n_var; kk++){
 				vp.s_sq(kk, ee)  = hyps.slab_var(ee);
-				vp.s_sq(kk, ee) /= (hyps.slab_relative_var(ee) * dHtH(kk, ee) + 1.0);
+				vp.s_sq(kk, ee) /= (hyps.slab_relative_var(ee) * vp.exp_dZtZ(kk, ee-1) + 1.0);
 			}
 		}
 
 		if(p.mode_mog_prior){
+			vp.sp_sq.col(0)  =  hyps.spike_var(0);
+			vp.sp_sq.col(0) /= (hyps.spike_relative_var(0) * (N - 1.0) + 1.0);
+
 			for (int ee = 0; ee < n_effects; ee++){
 				for (std::uint32_t kk = 0; kk < n_var; kk++){
 					vp.sp_sq(kk, ee)  = hyps.spike_var(ee);
-					vp.sp_sq(kk, ee) /= (hyps.spike_relative_var(ee) * dHtH(kk, ee) + 1.0);
+					vp.sp_sq(kk, ee) /= (hyps.spike_relative_var(ee) * vp.exp_dZtZ(kk, ee-1) + 1.0);
 				}
 			}
 		}
 	}
 
-	void updateHyps(Hyps& hyps,
+	void maximiseHyps(Hyps& hyps,
                     const VariationalParameters& vp){
 		// max sigma
-		Eigen::ArrayXXd varB(n_var, n_effects);
-		calcVarqBeta(hyps, vp, varB);
-		hyps.sigma  = (Y - vp.Hr).squaredNorm();
-		hyps.sigma += (dHtH * varB).sum();
-		hyps.sigma /= n_samples;
+		hyps.sigma  = calcExpLinear(hyps, vp) / N;
 
 		// max lambda
 		hyps.lambda = vp.alpha.colwise().sum();
@@ -619,6 +632,47 @@ public:
 		// hyps.sigma_g       = hyps.slab_relative_var(1);
 		// hyps.sigma_g_spike = hyps.spike_relative_var(0);
 		// hyps.sigma_g_spike = hyps.spike_relative_var(1);
+	}
+
+	void updateEnvWeights(const Hyps& hyps,
+                          VariationalParameters& vp){
+
+		Eigen::ArrayXXd varB(n_var, n_effects);
+		calcVarqBeta(hyps, vp, varB);
+
+		for (int ll = 0; ll < n_env; ll++){
+			// Log previous mean weight
+			double r_ll = vp.muw(ll);
+
+			// Update variance
+			double denom = hyps.sigma;
+			denom += (vp.yx.array() * E.col(ll)).square().sum();
+			denom += (varB.col(1) * dZtZ.col(ll*n_env + ll)).sum();
+			vp.sw_sq(ll) = hyps.sigma / denom;
+
+			// Remove dependance on current weight
+			vp.eta -= (r_ll * E.col(ll)).matrix();
+
+			Eigen::ArrayXd env_vars = Eigen::ArrayXd::Zero(n_var);
+			for (int mm = 0; mm < n_env; mm++){
+				if(mm != ll){
+					env_vars += vp.muw(mm) * dZtZ.col(ll*n_env + mm);
+				}
+			}
+
+			double eff = ((Y - vp.ym).array() * E.col(ll) * vp.yx.array()).sum();
+			eff -= (vp.yx.array() * E.col(ll) * vp.eta.array() * vp.yx.array()).sum();
+			eff -= (varB.col(1) * env_vars).sum();
+			vp.muw(ll) = vp.sw_sq(ll) * eff / hyps.sigma;
+
+			// Update eta
+			vp.eta += (vp.muw(ll) * E.col(ll)).matrix();
+		}
+
+		// Recompute eta_sq
+		vp.eta_sq  = vp.eta.array().square();
+		vp.eta_sq += E.square().matrix() * vp.sw_sq.matrix();
+		vp.calcExpDZtZ(dZtZ, n_env);
 	}
 
 	void updateAlphaMu(const std::vector< std::uint32_t >& iter,
@@ -649,15 +703,14 @@ public:
 
 			if(p.mode_alternating_updates){
 				for(int ee = 1; ee < n_effects; ee++){
-					Z_kk = X_kk.cwiseProduct(E.col(ee-1));
-					_internal_updateAlphaMu(Z_kk, ee, jj, hty_updates, vp, hyps, alpha_cnst);
+					_internal_updateAlphaMu(X_kk, ee, jj, hty_updates, vp, hyps, alpha_cnst);
 				}
 			}
 		}
 		t_updateAlphaMu.stop();
 	}
 
-	void _internal_updateAlphaMu(const Eigen::Ref<const Eigen::VectorXd>& H_kk,
+	void _internal_updateAlphaMu(const Eigen::Ref<const Eigen::VectorXd>& X_kk,
 								 const int& ee, std::uint32_t jj, long int& hty_updates,
 								 VariationalParameters& vp,
 								 const Hyps& hyps,
@@ -665,41 +718,41 @@ public:
 		//
 		double rr_k_diff;
 
-		if(p.mode_mog_prior){
-			double rr_k = vp.alpha(jj, ee) * (vp.mu(jj, ee) - vp.mup(jj, ee)) + vp.mup(jj, ee);
+		double rr_k                = vp.alpha(jj, ee) * vp.mu(jj, ee);
+		if(p.mode_mog_prior) rr_k += (1.0 - vp.alpha(jj, ee)) * vp.mup(jj, ee);
 
-			// Update mu (eq 9); faster to take schur product inside genotype_matrix
-			double A       = Hty(jj, ee) - minibatch_adjust * vp.Hr.dot(H_kk) + dHtH(jj, ee) * rr_k;
-			vp.mu(jj, ee)  = _update_param(vp.mu(jj, ee),  vp.s_sq(jj, ee)  * A / hyps.sigma, vp);
-			vp.mup(jj, ee) = _update_param(vp.mup(jj, ee), vp.sp_sq(jj, ee) * A / hyps.sigma, vp);
-
-			// Update alpha (eq 10)  TODO: check syntax / i_  / sigmoid here!
-			double ff_k      = vp.mu(jj, ee)  * vp.mu(jj, ee) / vp.s_sq(jj, ee)  / 2.0;
-			ff_k            -= vp.mup(jj, ee) * vp.mup(jj, ee) / vp.sp_sq(jj, ee) / 2.0;
-			ff_k            += (std::log(vp.s_sq(jj, ee)) - std::log(vp.sp_sq(jj, ee))) / 2.0;
-			vp.alpha(jj, ee) = sigmoid(ff_k + alpha_cnst(ee));
-
-			// Update i_Hr; only if coeff is large enough to matter
-			double rr_k_new  = vp.alpha(jj, ee) * (vp.mu(jj, ee) - vp.mup(jj, ee)) + vp.mup(jj, ee);
-			rr_k_diff        = rr_k_new - rr_k;
+		// Update mu (eq 9); faster to take schur product inside genotype_matrix
+		double A;
+		if(ee == 0){
+			A  = (Y - vp.ym - vp.yx.cwiseProduct(vp.eta)).dot(X_kk) + rr_k * (N - 1.0);
 		} else {
-
-			double rr_k = vp.alpha(jj, ee) * vp.mu(jj, ee);
-
-			// Update mu (eq 9); faster to take schur product inside genotype_matrix
-			double A      = Hty(jj, ee) - minibatch_adjust * vp.Hr.dot(H_kk) + dHtH(jj, ee) * rr_k;
-			vp.mu(jj, ee) = _update_param(vp.mu(jj, ee), vp.s_sq(jj, ee) * A / hyps.sigma, vp);
-
-			// Update alpha (eq 10)
-			double ff_k      = (std::log(vp.s_sq(jj, ee)) + vp.mu(jj, ee) * vp.mu(jj, ee) / vp.s_sq(jj, ee)) / 2.0;
-			vp.alpha(jj, ee) = sigmoid(ff_k + alpha_cnst(ee));
-
-			// Update i_Hr; only if coeff is large enough to matter
-			rr_k_diff        = vp.alpha(jj, ee) * vp.mu(jj, ee) - rr_k;
+			A  = (Y - vp.ym).cwiseProduct(vp.eta).dot(X_kk);
+			A -= (vp.yx - rr_k * X_kk).cwiseProduct(vp.eta_sq).dot(X_kk);
 		}
+
+		vp.mu(jj, ee)                       = vp.s_sq(jj, ee)  * A / hyps.sigma;
+		if(p.mode_mog_prior) vp.mup(jj, ee) = vp.sp_sq(jj, ee) * A / hyps.sigma;
+
+		// Update alpha (eq 10)
+		double ff_k;
+		ff_k                       = vp.mu(jj, ee) * vp.mu(jj, ee) / vp.s_sq(jj, ee);
+		ff_k                      += std::log(vp.s_sq(jj, ee));
+		if(p.mode_mog_prior) ff_k -= vp.mup(jj, ee) * vp.mup(jj, ee) / vp.sp_sq(jj, ee);
+		if(p.mode_mog_prior) ff_k -= std::log(vp.sp_sq(jj, ee));
+
+		vp.alpha(jj, ee)           = sigmoid(ff_k / 2.0 + alpha_cnst(ee));
+
+		// Update residuals only if coeff is large enough to matter
+		rr_k_diff                       = vp.alpha(jj, ee) * vp.mu(jj, ee) - rr_k;
+		if(p.mode_mog_prior) rr_k_diff += (1.0 - vp.alpha(jj, ee)) * vp.mup(jj, ee);
+
 		if(!p.mode_approximate_residuals || std::abs(rr_k_diff) > p.min_residuals_diff){
 			hty_updates++;
-			vp.Hr += rr_k_diff * H_kk;
+			if(ee == 0){
+				vp.ym -= rr_k_diff * X_kk;
+			} else {
+				vp.yx  += rr_k_diff * X_kk;
+			}
 		}
 	}
 
@@ -707,19 +760,18 @@ public:
                             const Hyps& hyps,
                             long int& hty_updates) __attribute__ ((hot)){
 		//
-		double N = n_samples;
-		for (int ww = 0; ww < n_covar; ww++){
-			double rr_k = vp.muc(ww);
-			double sc_sq  = hyps.sigma * sigma_c / (sigma_c * ((double) n_samples - 1.0) + 1.0);
+		for (int cc = 0; cc < n_covar; cc++){
+			double rr_k = vp.muc(cc);
+			double sc_sq  = hyps.sigma * sigma_c / (sigma_c * (N - 1.0) + 1.0);
 
 			// Update mu (eq 9); faster to take schur product inside genotype_matrix
-			vp.muc(ww) = sc_sq * (Wty(ww) - vp.Hr.dot(W.col(ww)) + (N - 1.0) * rr_k) / hyps.sigma;
+			vp.muc(cc) = sc_sq * (Cty(cc) - (vp.ym + vp.yx.cwiseProduct(vp.eta)).dot(C.col(cc)) + rr_k * (N - 1.0)) / hyps.sigma;
 
-			// Update i_Hr; only if coeff is large enough to matter
-			double rr_k_diff     = vp.muc(ww) - rr_k;
+			// Update predicted effects; only if coeff is large enough to matter
+			double rr_k_diff     = vp.muc(cc) - rr_k;
 			if(!p.mode_approximate_residuals || std::abs(rr_k_diff) > p.min_residuals_diff){
 				hty_updates++;
-				vp.Hr += rr_k_diff * W.col(ww);
+				vp.ym += rr_k_diff * C.col(cc);
 			}
 		}
 	}
@@ -759,7 +811,7 @@ public:
 
 	void initRandomAlphaMu(VariationalParameters& vp){
 		// vp.alpha a uniform simplex, vp.mu standard gaussian
-		// Also sets vp.Hr
+		// Also sets predicted effects
 		std::default_random_engine gen_gauss, gen_unif;
 		std::normal_distribution<double> gaussian(0.0,1.0);
 		std::uniform_real_distribution<double> uniform(0.0,1.0);
@@ -786,8 +838,14 @@ public:
 			vp.muc = Eigen::ArrayXd::Zero(n_covar);
 		}
 
-		// Gen Hr.
-		calcHr(vp);
+		// Gen predicted effects.
+		calcPredEffects(vp);
+
+		// Env weights
+		vp.muw     = 1.0 / (double) n_env;
+		vp.eta     = E.matrix() * vp.muw.matrix();
+		vp.eta_sq  = vp.eta.array().square();
+		vp.calcExpDZtZ(dZtZ, n_env);
 	}
 
 	double calc_logw(const Hyps& hyps,
@@ -795,7 +853,8 @@ public:
 		t_elbo.resume();
 
 		// Expectation of linear regression log-likelihood
-		double int_linear = calcIntLinear(hyps, vp);
+		double int_linear = -1.0 * calcExpLinear(hyps, vp) / 2.0 / hyps.sigma;
+		int_linear -= N * std::log(2.0 * PI * hyps.sigma) / 2.0;
 
 		// gamma
 		Eigen::ArrayXd col_sums = vp.alpha.colwise().sum();
@@ -810,11 +869,22 @@ public:
 		double int_klbeta = calcIntKLBeta(hyps, vp);
 
 		// covariates
+		double kl_covar = 0.0;
 		if(p.use_vb_on_covars){
-			// TODO: elbo should reflect covar estimates
+			kl_covar += (double) n_covar * (1.0 - hyps.sigma * sigma_c) / 2.0;
+			kl_covar += vp.sc_sq.log().sum() / 2.0;
+			kl_covar -= vp.sc_sq.sum() / 2.0 / hyps.sigma / sigma_c;
+			kl_covar -= vp.muc.square().sum() / 2.0 / hyps.sigma / sigma_c;
 		}
 
-		double res = int_linear + int_gamma + int_klbeta;
+		// weights
+		double kl_weights = 0.0;
+		kl_weights += (double) n_env / 2.0;
+		kl_weights += vp.sw_sq.log().sum() / 2.0;
+		kl_weights += vp.sw_sq.sum() / 2.0;
+		kl_weights += vp.muw.square().sum() / 2.0;
+
+		double res = int_linear + int_gamma + int_klbeta + kl_covar + kl_weights;
 
 		t_elbo.stop();
 		return res;
@@ -834,17 +904,24 @@ public:
 		}
 	}
 
-	double calcIntLinear(const Hyps& hyps,
+	double calcExpLinear(const Hyps& hyps,
                          const VariationalParameters& vp){
-		// Expectation of linear regression log-likelihood
+		// Expectation of ||Y - C tau - X beta - Z gamma||^2
 		double int_linear = 0;
 		Eigen::ArrayXXd varB(n_var, n_effects);
 		calcVarqBeta(hyps, vp, varB);
 
 		// Expectation of linear regression log-likelihood
-		int_linear -= ((double) n_samples) * std::log(2.0 * PI * hyps.sigma) / 2.0;
-		int_linear -= (Y - vp.Hr).squaredNorm() / 2.0 / hyps.sigma;
-		int_linear -= 0.5 * (dHtH * varB).sum() / hyps.sigma;
+		int_linear  = (Y - vp.ym).squaredNorm();
+		int_linear -= 2.0 * (Y - vp.ym).cwiseProduct(vp.eta).dot(vp.yx);
+		int_linear += vp.yx.cwiseProduct(vp.eta_sq).dot(vp.yx);
+
+		// variances
+		if(p.use_vb_on_covars){
+			int_linear += (N - 1.0) * vp.sc_sq.sum();
+		}
+		int_linear += (N - 1.0) * varB.col(0).sum();  // beta
+		int_linear += (vp.exp_dZtZ * varB.col(1)).sum(); // gamma
 
 		return int_linear;
 	}
@@ -913,11 +990,13 @@ public:
 		std::string ofile_wmean = fstream_init(outf_wmean, file_prefix, "_weighted_mean_snp_stats");
 		std::string ofile_nmean = fstream_init(outf_nmean, file_prefix, "_niave_mean_snp_stats");
 		std::string ofile_map_yhat = fstream_init(outf_map_pred, file_prefix, "_map_yhat");
+		std::string ofile_w = fstream_init(outf_w, file_prefix, "_env_weights");
 		std::cout << "Writing converged hyperparameter values to " << ofile << std::endl;
 		std::cout << "Writing MAP snp stats to " << ofile_map << std::endl;
 		std::cout << "Writing (weighted) average snp stats to " << ofile_wmean << std::endl;
 		std::cout << "Writing (niave) average snp stats to " << ofile_nmean << std::endl;
 		std::cout << "Writing yhat from map to " << ofile_map_yhat << std::endl;
+		std::cout << "Writing env weights to " << ofile_w << std::endl;
 
 		if(p.verbose){
 			std::string ofile_elbo = fstream_init(outf_elbo, file_prefix, "_elbo");
@@ -956,15 +1035,14 @@ public:
 		// Compute heritability
 		Eigen::ArrayXXd pve(my_n_grid, n_effects);
 		Eigen::ArrayXXd pve_large(my_n_grid, n_effects);
-		Eigen::ArrayXd s_x = dHtH.colwise().sum() / ((double) n_samples - 1.0);
 
 		for (int ii = 0; ii < my_n_grid; ii++){
 			Hyps hyps = stitched_tracker.hyps_list[ii];
 			Eigen::ArrayXd pve_i(n_effects);
-			pve_i = hyps.lambda * hyps.slab_relative_var * s_x;
+			pve_i = hyps.lambda * hyps.slab_relative_var * hyps.s_x;
 			if(p.mode_mog_prior){
 				pve_large.row(ii) = pve_i;
-				pve_i += (1 - hyps.lambda) * hyps.spike_relative_var * s_x;
+				pve_i += (1 - hyps.lambda) * hyps.spike_relative_var * hyps.s_x;
 				pve_large.row(ii) /= (pve_i.sum() + 1.0);
 			}
 			pve_i /= (pve_i.sum() + 1.0);
@@ -1113,9 +1191,14 @@ public:
 		// Predicted effects to file
 		outf_map_pred << "pred" << std::endl;
 		VariationalParametersLite vp_map = stitched_tracker.vp_list[ii_map];
-		calcHr(vp_map);
+		calcPredEffects(vp_map);
 		for (std::uint32_t ii = 0; ii < n_samples; ii++ ){
-			outf_map_pred << -(vp_map.Hr(ii) - Y(ii, 0)) << std::endl;
+			outf_map_pred << vp_map.ym(ii) + vp_map.eta(ii) * vp_map.yx(ii) << std::endl;
+		}
+
+		// weights to file
+		for (int ll = 0; ll < n_env; ll++){
+			outf_w << vp_map.muw(ll) << std::endl;
 		}
 
 		if(p.verbose){
@@ -1218,10 +1301,10 @@ public:
 	}
 
 	// SGD functions
-	void wrapUpdateHyps(Hyps& hyps, const VariationalParameters& vp){
+	void wrapMaximiseHyps(Hyps& hyps, const VariationalParameters& vp){
 		// if(p.mode_sgd){
 		// 	Hyps t_hyps;
-		// 	updateHyps(t_hyps, vp);
+		// 	maximiseHyps(t_hyps, vp);
 		// 	hyps.sigma = _update_param(hyps.sigma, t_hyps.sigma, vp);
 		// 	hyps.lambda = _update_param(hyps.lambda, t_hyps.lambda, vp);
 		// 	hyps.spike_var = _update_param(hyps.spike_var, t_hyps.spike_var, vp);
@@ -1229,7 +1312,7 @@ public:
 		// 	hyps.spike_relative_var = _update_param(hyps.spike_relative_var, t_hyps.spike_relative_var, vp);
 		// 	hyps.slab_relative_var = _update_param(hyps.slab_relative_var, t_hyps.slab_relative_var, vp);
 		// } else {
-			updateHyps(hyps, vp);
+			maximiseHyps(hyps, vp);
 		// }
 	}
 

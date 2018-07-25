@@ -48,6 +48,7 @@ void parse_arguments(parameters &p, int argc, char *argv[]) {
 		"--bgen",
 		"--pheno",
 		"--covar",
+		"--environment",
 		"--chunk",
 		"--range",
 		"--maf",
@@ -236,6 +237,14 @@ void parse_arguments(parameters &p, int argc, char *argv[]) {
 				check_counts(in_str, i, 1, argc);
 				p.pheno_file = argv[i + 1]; // pheno file
 				check_file_exists(p.pheno_file);
+				i += 1;
+			}
+
+			if(strcmp(in_str, "--environment") == 0) {
+				check_counts(in_str, i, 1, argc);
+				p.interaction_analysis = true;
+				p.env_file = argv[i + 1]; // pheno file
+				check_file_exists(p.env_file);
 				i += 1;
 			}
 

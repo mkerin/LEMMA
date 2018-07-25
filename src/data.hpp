@@ -54,6 +54,7 @@ class Data
 
 	int n_pheno; // number of phenotypes
 	int n_covar; // number of covariates
+	int n_env; // number of env variables
 	int n_effects;   // number of environmental interactions
 	long int n_samples; // number of samples
 	long int n_snps; // number of snps
@@ -63,21 +64,25 @@ class Data
 
 	bool Y_reduced;   // Variables to track whether we have already
 	bool W_reduced;   // reduced to complete cases or not.
+	bool E_reduced;
 
 	std::vector< double > info;
 	std::vector< double > maf;
 	std::vector< std::string > rsid_list;
 
+	std::map<int, bool> missing_envs;   // set of subjects missing >= 1 env variables
 	std::map<int, bool> missing_covars; // set of subjects missing >= 1 covariate
 	std::map<int, bool> missing_phenos; // set of subjects missing >= phenotype
 	std::map< int, bool > incomplete_cases; // union of samples missing data
 
 	std::vector< std::string > pheno_names;
 	std::vector< std::string > covar_names;
+	std::vector< std::string > env_names;
 
 	GenotypeMatrix G;
 	Eigen::MatrixXd Y; // phenotype matrix
 	Eigen::MatrixXd W; // covariate matrix
+	Eigen::MatrixXd E; // env matrix
 	Eigen::VectorXd Z; // interaction vector
 	genfile::bgen::View::UniquePtr bgenView;
 	std::vector< double > beta, tau, neglogP, neglogP_2dof;
@@ -130,6 +135,7 @@ class Data
 		n_pheno   = -1;
 		n_effects = -1;
 		n_covar   = -1;
+		n_env   = -1;
 		n_snps    = -1;
 		n_var     = -1;
 		Y_reduced = false;
@@ -194,6 +200,10 @@ class Data
 		// Read in covariates if present
 		if(params.covar_file != "NULL"){
 			read_covar();
+		}
+
+		if(params.env_file != "NULL"){
+			read_env_var();
 		}
 
 		if(params.interaction_analysis){
@@ -916,6 +926,16 @@ class Data
 		W_reduced = false;
 	}
 
+	void read_env_var( ){
+		// Read covariates to Eigen matrix W
+		if ( params.env_file != "NULL" ) {
+			read_txt_file( params.env_file, E, n_env, env_names, missing_envs );
+		} else {
+			throw std::logic_error( "Tried to read NULL env file." );
+		}
+		E_reduced = false;
+	}
+
 	void read_grids(){
 		// For use in vbayes object
 
@@ -1071,18 +1091,28 @@ class Data
 
 		incomplete_cases.insert(missing_covars.begin(), missing_covars.end());
 		incomplete_cases.insert(missing_phenos.begin(), missing_phenos.end());
+		if(params.env_file != "NULL"){
+			incomplete_cases.insert(missing_envs.begin(), missing_envs.end());
+		}
+
 		if(params.pheno_file != "NULL"){
 			Y = reduce_mat_to_complete_cases( Y, Y_reduced, n_pheno, incomplete_cases );
 		}
 		if(params.covar_file != "NULL"){
 			W = reduce_mat_to_complete_cases( W, W_reduced, n_covar, incomplete_cases );
 		}
+		if(params.pheno_file != "NULL"){
+			E = reduce_mat_to_complete_cases( E, E_reduced, n_env, incomplete_cases );
+		}
 		n_samples -= incomplete_cases.size();
 		missing_phenos.clear();
 		missing_covars.clear();
+		missing_envs.clear();
 
 		std::cout << "Reduced to " << n_samples << " samples with complete data";
- 		std::cout << " across covariates and phenotype." << std::endl;
+		std::cout << " across covariates";
+		if(params.env_file != "NULL") std::cout << ", env-variables" << std::endl;
+		std::cout << " and phenotype." << std::endl;
 	}
 };
 
