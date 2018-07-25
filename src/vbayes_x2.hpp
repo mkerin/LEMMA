@@ -754,9 +754,9 @@ public:
 		if(!p.mode_approximate_residuals || std::abs(rr_k_diff) > p.min_residuals_diff){
 			hty_updates++;
 			if(ee == 0){
-				vp.ym -= rr_k_diff * X_kk;
+				vp.ym += rr_k_diff * X_kk;
 			} else {
-				vp.yx  += rr_k_diff * X_kk;
+				vp.yx += rr_k_diff * X_kk;
 			}
 		}
 	}
