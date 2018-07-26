@@ -79,6 +79,12 @@ tests/tests-main.o: tests/tests-main.cpp $(SRCDIR)/bgen_prog.cpp $(HEADERS)
 examples/test_updates: examples/test_updates.cpp
 	$(CXX) $< -o $@ $(FLAGS) -Ofast -I /homes/kerin/local/boost_1_67_0 -L /homes/kerin/local/boost_1_67_0/stage/lib
 
+examples/test_compression_storage: examples/test_compression_storage.cpp
+	$(CXX) $< -o $@ $(FLAGS) -O3 -I /homes/kerin/local/boost_1_67_0 -L /homes/kerin/local/boost_1_67_0/stage/lib
+
+examples/test_vector_matrix_mult: examples/test_vector_matrix_mult.cpp
+		$(CXX) $< -o $@ $(FLAGS) -O3 -I /homes/kerin/local/boost_1_67_0 -L /homes/kerin/local/boost_1_67_0/stage/lib
+
 examples/check_my_timer: examples/check_my_timer.cpp
 	$(CXX) $< -o $@ $(FLAGS) -I /homes/kerin/local/boost_1_67_0 -L /homes/kerin/local/boost_1_67_0/stage/lib
 
