@@ -502,8 +502,8 @@ public:
 			check_monotonic_elbo(hyps, vp, count, logw_prev, "updateAlphaMu");
 
 			// Update env-weights
-			// updateEnvWeights(hyps, vp);
-			// check_monotonic_elbo(hyps, vp, count, logw_prev, "updateEnvWeights");
+			updateEnvWeights(hyps, vp);
+			check_monotonic_elbo(hyps, vp, count, logw_prev, "updateEnvWeights");
 
 			// Log updates
 			i_logw     = calc_logw(hyps, vp);
@@ -588,7 +588,8 @@ public:
                    const std::string& prev_function){
 		double i_logw     = calc_logw(hyps, vp);
 		if(i_logw < logw_prev){
-			std::cout << count << ": " << prev_function << std::endl;
+			std::cout << count << ": " << prev_function;
+ 			std::cout << " " << logw_prev << " -> " << i_logw << std::endl;
 		}
 		logw_prev = i_logw;
 	}
@@ -734,7 +735,7 @@ public:
 			std::uint32_t jj = (kk % n_var);
 
 			t_readXk.resume();
-			X_kk = X.col(kk);
+			X_kk = X.col(jj); // Only read normalised genotypes!
 			t_readXk.stop();
 
 			_internal_updateAlphaMu(X_kk, ee, jj, hty_updates, vp, hyps, alpha_cnst);
