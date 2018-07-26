@@ -180,7 +180,8 @@ public:
                            const int round_index,
                              const int n_effects,
                              const int n_env,
-                             std::vector< std::string > env_names){
+                             std::vector< std::string > env_names,
+                                  const VariationalParameters& vp){
 		if(!allow_interim_push){
 			throw std::runtime_error("Internal error; interim push not expected");
 		}
@@ -203,6 +204,11 @@ public:
 
 		for (int ll = 0; ll < n_env; ll++){
 			outf_w << env_names[ll];
+			if(ll + 1 < n_env) outf_w << " ";
+		}
+		outf_w << std::endl;
+		for (int ll = 0; ll < n_env; ll++){
+			outf_w << vp.muw(ll);
 			if(ll + 1 < n_env) outf_w << " ";
 		}
 		outf_w << std::endl;

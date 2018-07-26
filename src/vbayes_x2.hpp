@@ -478,7 +478,7 @@ public:
 		double i_logw = calc_logw(hyps, vp);
 		std::vector< double > logw_updates, alpha_diff_updates;
 		logw_updates.push_back(i_logw);
-		tracker.interim_output_init(ii, round_index, n_effects, n_env, env_names);
+		tracker.interim_output_init(ii, round_index, n_effects, n_env, env_names, vp);
 		while(!converged  && count < iter_max){
 			alpha_prev = vp.alpha;
 			double logw_prev = i_logw;
