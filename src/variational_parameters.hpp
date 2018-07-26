@@ -31,9 +31,6 @@ public:
 	Eigen::VectorXd yx;    // N x 1
 	Eigen::VectorXd ym;    // N x 1
 
-	Eigen::VectorXd yx_hat;    // N x 1
-	Eigen::VectorXd ym_hat;    // N x 1
-
 	// Variational parameters for slab
 	Eigen::ArrayXXd s_sq;  // P x (E+1)
 	Eigen::ArrayXXd alpha; // P x (E+1)

@@ -493,14 +493,17 @@ public:
 
 			if(p.use_vb_on_covars){
 				updateCovarEffects(vp, hyps, hty_update_counter);
+				check_monotonic_elbo(hyps, vp, count, logw_prev, "updateCovarEffects");
 			}
 
 			// Update variational_parameters alpha, mu
 			count++;
 			updateAlphaMu(iter, hyps, vp, hty_update_counter);
+			check_monotonic_elbo(hyps, vp, count, logw_prev, "updateAlphaMu");
 
 			// Update env-weights
-			updateEnvWeights(hyps, vp);
+			// updateEnvWeights(hyps, vp);
+			// check_monotonic_elbo(hyps, vp, count, logw_prev, "updateEnvWeights");
 
 			// Log updates
 			i_logw     = calc_logw(hyps, vp);
@@ -578,6 +581,18 @@ public:
 		tracker.push_interim_output(ii, X.chromosome, X.rsid, X.position, X.al_0, X.al_1, n_var, n_effects);
 	}
 
+	void check_monotonic_elbo(const Hyps& hyps,
+                   VariationalParameters& vp,
+                   const int count,
+                   double& logw_prev,
+                   const std::string& prev_function){
+		double i_logw     = calc_logw(hyps, vp);
+		if(i_logw < logw_prev){
+			std::cout << count << ": " << prev_function << std::endl;
+		}
+		logw_prev = i_logw;
+	}
+
 	void updateSSq(const Hyps& hyps,
                    VariationalParameters& vp){
 		// Update s_sq
@@ -607,6 +622,24 @@ public:
 					vp.sp_sq(kk, ee) /= (hyps.spike_relative_var(ee) * vp.exp_dZtZ(kk, ee-1) + 1.0);
 				}
 			}
+		}
+
+		// for covars
+		if(p.use_vb_on_covars){
+			for (int cc = 0; cc < n_covar; cc++){
+				vp.sc_sq(cc) = hyps.sigma * sigma_c / (sigma_c * (N - 1.0) + 1.0);
+			}
+		}
+
+		// for env weights (needed for accurate elbo)
+		Eigen::ArrayXXd varB(n_var, n_effects);
+		calcVarqBeta(hyps, vp, varB);
+
+		for (int ll = 0; ll < n_env; ll++){
+			double denom = hyps.sigma;
+			denom += (vp.yx.array() * E.col(ll)).square().sum();
+			denom += (varB.col(1) * dZtZ.col(ll*n_env + ll)).sum();
+			vp.sw_sq(ll) = hyps.sigma / denom;
 		}
 	}
 
@@ -767,10 +800,9 @@ public:
 		//
 		for (int cc = 0; cc < n_covar; cc++){
 			double rr_k = vp.muc(cc);
-			double sc_sq  = hyps.sigma * sigma_c / (sigma_c * (N - 1.0) + 1.0);
 
 			// Update mu (eq 9); faster to take schur product inside genotype_matrix
-			vp.muc(cc) = sc_sq * (Cty(cc) - (vp.ym + vp.yx.cwiseProduct(vp.eta)).dot(C.col(cc)) + rr_k * (N - 1.0)) / hyps.sigma;
+			vp.muc(cc) = vp.sc_sq(cc) * (Cty(cc) - (vp.ym + vp.yx.cwiseProduct(vp.eta)).dot(C.col(cc)) + rr_k * (N - 1.0)) / hyps.sigma;
 
 			// Update predicted effects; only if coeff is large enough to matter
 			double rr_k_diff     = vp.muc(cc) - rr_k;
