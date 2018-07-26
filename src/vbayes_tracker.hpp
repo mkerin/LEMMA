@@ -28,7 +28,11 @@ struct Hyps{
 	Eigen::ArrayXd slab_relative_var;
 	Eigen::ArrayXd spike_relative_var;
 	Eigen::ArrayXd lambda;
-	Eigen::ArrayXd s_x;  // Not really a hyp; just storing here for convenience
+
+	// Not hyperparameters, but things that depend on them
+	Eigen::ArrayXd s_x;
+	Eigen::ArrayXd pve;
+	Eigen::ArrayXd pve_large;
 
 	// Hyps();
 
@@ -118,6 +122,10 @@ public:
 		outf_iter << cnt << "\t" << std::setprecision(3) << std::fixed;
 		outf_iter << i_hyps.sigma << "\t" << std::setprecision(8) << std::fixed;
 		for (int ee = 0; ee < n_effects; ee++){
+			outf_iter << i_hyps.pve(ee) << "\t";
+			if(p.mode_mog_prior){
+				outf_iter << i_hyps.pve_large(ee) << "\t";
+			}
 			outf_iter << i_hyps.slab_relative_var(ee) << "\t";
 			if(p.mode_mog_prior){
 				outf_iter << i_hyps.spike_relative_var(ee) << "\t";
@@ -216,6 +224,10 @@ public:
 		outf_weights << "weights logw log_prior count time" << std::endl;
 		outf_iter    << "count\tsigma";
 		for (int ee = 0; ee < n_effects; ee++){
+			outf_iter << "\tpve" << ee;
+			if(p.mode_mog_prior){
+				outf_iter << "\tpve_large" << ee;
+ 			}
 			outf_iter << "\tsigma" << ee;
 			if(p.mode_mog_prior){
 				outf_iter << "\tsigma_spike" << ee;

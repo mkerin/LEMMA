@@ -70,6 +70,8 @@ public:
 	parameters& p;
 	std::vector< std::uint32_t > fwd_pass;
 	std::vector< std::uint32_t > back_pass;
+	std::vector< int > env_fwd_pass;
+	std::vector< int > env_back_pass;
 
 	// Data
 	GenotypeMatrix& X;
@@ -141,6 +143,10 @@ public:
 		for(std::uint32_t kk = 0; kk < L; kk++){
 			fwd_pass.push_back(kk);
 			back_pass.push_back(n_var2 - kk - 1);
+		}
+		for(int ll = 0; ll < n_env; ll++){
+			env_fwd_pass.push_back(ll);
+			env_back_pass.push_back(n_env - ll - 1);
 		}
 
 		// Read environmental variables
@@ -443,6 +449,7 @@ public:
 			i_hyps.slab_relative_var  << sigma_b, sigma_g;
 			i_hyps.spike_relative_var << sigma_b / 100.0, sigma_g / 100.0;
 			i_hyps.lambda             << lam_b, lam_g;
+			i_hyps.s_x.resize(2);
 				// }
 
 			// Run outer loop - don't update trackers
@@ -502,7 +509,8 @@ public:
 			check_monotonic_elbo(hyps, vp, count, logw_prev, "updateAlphaMu");
 
 			// Update env-weights
-			updateEnvWeights(hyps, vp);
+			updateEnvWeights(env_fwd_pass, hyps, vp);
+			updateEnvWeights(env_back_pass, hyps, vp);
 			check_monotonic_elbo(hyps, vp, count, logw_prev, "updateEnvWeights");
 
 			// Log updates
@@ -511,6 +519,7 @@ public:
 			double alpha_diff = (alpha_prev - vp.alpha).abs().maxCoeff();
 			alpha_diff_updates.push_back(alpha_diff);
 
+			compute_pve(hyps);
 			tracker.push_interim_iter_update(count, hyps, i_logw, alpha_diff,
 				t_updateAlphaMu.get_lap_seconds(), hty_update_counter, n_effects, n_var, n_env, vp);
 
@@ -523,6 +532,7 @@ public:
 				i_logw     = calc_logw(hyps, vp);
 				t_maximiseHyps.stop();
 
+				compute_pve(hyps);
 				tracker.push_interim_iter_update(count, hyps, i_logw, 0.0,
 					t_maximiseHyps.get_lap_seconds(), -1, n_effects, n_var, n_env, vp);
 			}
@@ -555,16 +565,6 @@ public:
 		if(!std::isfinite(i_logw)){
 			std::cout << "WARNING: non-finite elbo estimate produced" << std::endl;
 		}
-
-		// Compute s_x; sum of column variances of Z
-		Eigen::ArrayXd muw_sq(n_env * n_env);
-		for (int ll = 0; ll < n_env; ll++){
-			for (int mm = 0; mm < n_env; mm++){
-				muw_sq(mm*n_env + ll) = vp.muw(mm) * vp.muw(ll);
-			}
-		}
-		hyps.s_x.resize(2);
-		hyps.s_x << (double) n_var, (dZtZ.rowwise() * muw_sq.transpose()).sum();
 
 		// Log all things that we want to track
 		t_InnerLoop.stop();
@@ -673,13 +673,15 @@ public:
 		// hyps.sigma_g_spike = hyps.spike_relative_var(1);
 	}
 
-	void updateEnvWeights(const Hyps& hyps,
+	void updateEnvWeights(const std::vector< int >& iter,
+                          Hyps& hyps,
                           VariationalParameters& vp){
+		// WARNING: Updates S_x in hyps
 
 		Eigen::ArrayXXd varB(n_var, n_effects);
 		calcVarqBeta(hyps, vp, varB);
 
-		for (int ll = 0; ll < n_env; ll++){
+		for (int ll : iter){
 			// Log previous mean weight
 			double r_ll = vp.muw(ll);
 
@@ -711,7 +713,20 @@ public:
 		// Recompute eta_sq
 		vp.eta_sq  = vp.eta.array().square();
 		vp.eta_sq += E.square().matrix() * vp.sw_sq.matrix();
+
+		// Recompute expected value of dZtZ
 		vp.calcExpDZtZ(dZtZ, n_env);
+
+		// Compute s_x; sum of column variances of Z
+		Eigen::ArrayXd muw_sq(n_env * n_env);
+		for (int ll = 0; ll < n_env; ll++){
+			for (int mm = 0; mm < n_env; mm++){
+				muw_sq(mm*n_env + ll) = vp.muw(mm) * vp.muw(ll);
+			}
+		}
+		// WARNING: Hard coded limit!
+		hyps.s_x(0) = (double) n_var;
+		hyps.s_x(1) = (dZtZ.rowwise() * muw_sq.transpose()).sum() / (N - 1.0);
 	}
 
 	void updateAlphaMu(const std::vector< std::uint32_t >& iter,
@@ -1070,22 +1085,22 @@ public:
 			weights[0] = 1;
 		}
 
-		// Compute heritability
-		Eigen::ArrayXXd pve(my_n_grid, n_effects);
-		Eigen::ArrayXXd pve_large(my_n_grid, n_effects);
-
-		for (int ii = 0; ii < my_n_grid; ii++){
-			Hyps hyps = stitched_tracker.hyps_list[ii];
-			Eigen::ArrayXd pve_i(n_effects);
-			pve_i = hyps.lambda * hyps.slab_relative_var * hyps.s_x;
-			if(p.mode_mog_prior){
-				pve_large.row(ii) = pve_i;
-				pve_i += (1 - hyps.lambda) * hyps.spike_relative_var * hyps.s_x;
-				pve_large.row(ii) /= (pve_i.sum() + 1.0);
-			}
-			pve_i /= (pve_i.sum() + 1.0);
-			pve.row(ii) = pve_i;
-		}
+		// // Compute heritability
+		// Eigen::ArrayXXd pve(my_n_grid, n_effects);
+		// Eigen::ArrayXXd pve_large(my_n_grid, n_effects);
+		//
+		// for (int ii = 0; ii < my_n_grid; ii++){
+		// 	Hyps hyps = stitched_tracker.hyps_list[ii];
+		// 	Eigen::ArrayXd pve_i(n_effects);
+		// 	pve_i = hyps.lambda * hyps.slab_relative_var * hyps.s_x;
+		// 	if(p.mode_mog_prior){
+		// 		pve_large.row(ii) = pve_i;
+		// 		pve_i += (1 - hyps.lambda) * hyps.spike_relative_var * hyps.s_x;
+		// 		pve_large.row(ii) /= (pve_i.sum() + 1.0);
+		// 	}
+		// 	pve_i /= (pve_i.sum() + 1.0);
+		// 	pve.row(ii) = pve_i;
+		// }
 
 		// Write hyperparams weights to file
 		outf << "weight logw";
@@ -1118,9 +1133,9 @@ public:
 
 			outf << std::setprecision(8) << std::fixed;
 			for (int ee = 0; ee < n_effects; ee++){
-				outf << " " << pve(ii, ee);
+				outf << " " << stitched_tracker.hyps_list[ii].pve(ee);
 				if(p.mode_mog_prior){
-					outf << " " << pve_large(ii, ee);
+					outf << " " << stitched_tracker.hyps_list[ii].pve_large(ee);
 				}
 				outf << " " << stitched_tracker.hyps_list[ii].slab_relative_var(ee);
 				if(p.mode_mog_prior){
@@ -1263,6 +1278,20 @@ public:
 				outf_alpha_diff << std::endl;
 			}
 		}
+	}
+
+	void compute_pve(Hyps& hyps){
+		// Compute heritability
+		hyps.pve.resize(n_effects);
+		hyps.pve_large.resize(n_effects);
+
+		hyps.pve = hyps.lambda * hyps.slab_relative_var * hyps.s_x;
+		if(p.mode_mog_prior){
+			hyps.pve_large = hyps.pve;
+			hyps.pve += (1 - hyps.lambda) * hyps.spike_relative_var * hyps.s_x;
+			hyps.pve_large /= (hyps.pve.sum() + 1.0);
+		}
+		hyps.pve /= (hyps.pve.sum() + 1.0);
 	}
 
 	std::string fstream_init(boost_io::filtering_ostream& my_outf,
