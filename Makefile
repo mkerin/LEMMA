@@ -12,7 +12,7 @@ LIBS =     -Lbuild/ -Lbuild/3rd_party/zstd-1.1.0 -Lbuild/db -Lbuild/3rd_party/sq
 
 HEADERS := vbayes_x2.hpp genotype_matrix.hpp vbayes_tracker.hpp \
            parse_arguments.hpp data.hpp class.h bgen_parser.hpp utils.hpp \
-					 variational_parameters.hpp
+           variational_parameters.hpp
 HEADERS := $(addprefix $(SRCDIR)/,$(HEADERS))
 
 rescomp: CXX = /apps/well/gcc/7.2.0/bin/g++
