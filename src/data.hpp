@@ -1105,7 +1105,7 @@ class Data
 		if(params.covar_file != "NULL"){
 			W = reduce_mat_to_complete_cases( W, W_reduced, n_covar, incomplete_cases );
 		}
-		if(params.pheno_file != "NULL"){
+		if(params.env_file != "NULL"){
 			E = reduce_mat_to_complete_cases( E, E_reduced, n_env, incomplete_cases );
 		}
 		n_samples -= incomplete_cases.size();

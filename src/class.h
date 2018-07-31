@@ -12,7 +12,7 @@ class parameters {
 		std::string incl_sids_file, x_param_name, incl_rsids_file;
 		std::string r1_hyps_grid_file, r1_probs_grid_file, hyps_grid_file, hyps_probs_file, vb_init_file;
 		std::vector< std::string > rsid;
-		long int chunk_size;
+		long int chunk_size, vb_iter_max;
 		int missing_code, n_gconf, n_thread;
 		uint32_t start, end;
 		bool range, maf_lim, info_lim, test_2dof, select_snps, xtra_verbose;
@@ -47,6 +47,7 @@ class parameters {
 		interaction_analysis = false;
 		chunk_size = 256;
 		missing_code = -999;
+		vb_iter_max = 500;
 		range = false;
 		maf_lim = false;
 		info_lim = false;

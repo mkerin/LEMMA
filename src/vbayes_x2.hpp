@@ -1,5 +1,11 @@
-// re-implementation of variational bayes algorithm for 1D GxE
-// https://stackoverflow.com/questions/21132538/correct-usage-of-the-eigenref-class
+/* re-implementation of variational bayes algorithm for 1D GxE
+
+How to use Eigen::Ref:
+https://stackoverflow.com/questions/21132538/correct-usage-of-the-eigenref-class
+
+Building static executable:
+https://stackoverflow.com/questions/3283021/compile-a-standalone-static-executable
+*/
 #ifndef VBAYES_X2_HPP
 #define VBAYES_X2_HPP
 
@@ -34,7 +40,6 @@ inline std::size_t find_covar_index( std::string colname, std::vector< std::stri
 class VBayesX2 {
 public:
 	// Constants
-	const int    iter_max = 500;
 	const double PI = 3.1415926535897;
 	const double eps = std::numeric_limits<double>::min();
 	const double alpha_tol = 1e-4;
@@ -118,6 +123,7 @@ public:
                             t_InnerLoop("runInnerLoop: %ts \n") {
 		assert(std::includes(dat.hyps_names.begin(), dat.hyps_names.end(), hyps_names.begin(), hyps_names.end()));
 		assert(p.interaction_analysis);
+		std::cout << "Initialising vbayes object" << std::endl;
 
 		// Data size params
 		n_effects      = dat.n_effects;
@@ -225,6 +231,7 @@ public:
 				}
 			}
 		}
+		std::cout << "Built dZtZ array" << std::endl;
 
 		// sgd
 		if(p.mode_sgd){
@@ -486,7 +493,7 @@ public:
 		std::vector< double > logw_updates, alpha_diff_updates;
 		logw_updates.push_back(i_logw);
 		tracker.interim_output_init(ii, round_index, n_effects, n_env, env_names, vp);
-		while(!converged  && count < iter_max){
+		while(!converged  && count < p.vb_iter_max){
 			alpha_prev = vp.alpha;
 			double logw_prev = i_logw;
 			long int hty_update_counter = 0;
@@ -507,6 +514,11 @@ public:
 			count++;
 			updateAlphaMu(iter, hyps, vp, hty_update_counter);
 			check_monotonic_elbo(hyps, vp, count, logw_prev, "updateAlphaMu");
+
+			if(p.xtra_verbose){
+				tracker.push_interim_param_values(count, n_effects, n_var, vp,
+                         X.chromosome, X.rsid, X.al_0, X.al_1, X.position);
+			}
 
 			// Update env-weights
 			updateEnvWeights(env_fwd_pass, hyps, vp);
@@ -1084,23 +1096,6 @@ public:
 		} else {
 			weights[0] = 1;
 		}
-
-		// // Compute heritability
-		// Eigen::ArrayXXd pve(my_n_grid, n_effects);
-		// Eigen::ArrayXXd pve_large(my_n_grid, n_effects);
-		//
-		// for (int ii = 0; ii < my_n_grid; ii++){
-		// 	Hyps hyps = stitched_tracker.hyps_list[ii];
-		// 	Eigen::ArrayXd pve_i(n_effects);
-		// 	pve_i = hyps.lambda * hyps.slab_relative_var * hyps.s_x;
-		// 	if(p.mode_mog_prior){
-		// 		pve_large.row(ii) = pve_i;
-		// 		pve_i += (1 - hyps.lambda) * hyps.spike_relative_var * hyps.s_x;
-		// 		pve_large.row(ii) /= (pve_i.sum() + 1.0);
-		// 	}
-		// 	pve_i /= (pve_i.sum() + 1.0);
-		// 	pve.row(ii) = pve_i;
-		// }
 
 		// Write hyperparams weights to file
 		outf << "weight logw";

@@ -68,6 +68,7 @@ public:
 	parameters p;
 
 	// For writing interim output
+	boost::filesystem::path dir;
 	io::filtering_ostream outf_elbo, outf_alpha_diff, outf_weights, outf_inits, outf_iter, outf_alpha, outf_w;
 	std::string main_out_file;
 	bool allow_interim_push;
@@ -109,6 +110,43 @@ public:
 		allow_interim_push = true;
 	}
 
+	void push_interim_param_values(const int& cnt,
+                                  const int& n_effects,
+                                  const int& n_var,
+                                  const VariationalParameters& vp,
+                                  const std::vector< int >& chromosome,
+                                  const std::vector< std::string >& rsid,
+                                  const std::vector< std::string >& al_0,
+                                  const std::vector< std::string >& al_1,
+                                  const std::vector< std::uint32_t >& position){
+		// for (int ee = 0; ee < n_effects; ee++){
+		// 	for (std::uint32_t kk = 0; kk < n_var; kk++){
+		// 		outf_alpha << vp.alpha(kk, ee);
+			// 		if(!(ee == n_effects-1 && kk == n_var-1)){
+		// 			outf_alpha << " ";
+		// 		}
+		// 	}
+		// }
+		// outf_alpha << std::endl;
+
+		fstream_init(outf_inits, dir, "_params_iter" + std::to_string(cnt), true);
+
+		outf_inits << "chr rsid pos a0 a1";
+		for (int ee = 0; ee < n_effects; ee++){
+			outf_inits << " alpha" << ee << " mu" << ee;
+		}
+		outf_inits << std::endl;
+		for (std::uint32_t kk = 0; kk < n_var; kk++){
+			outf_inits << chromosome[kk] << " " << rsid[kk] << " " << position[kk];
+			outf_inits << " " << al_0[kk] << " " << al_1[kk];
+			for (int ee = 0; ee < n_effects; ee++){
+				outf_inits << " " << vp.alpha(kk, ee);
+				outf_inits << " " << vp.mu(kk, ee);
+			}
+			outf_inits << std::endl;
+		}
+	}
+
 	void push_interim_iter_update(const int& cnt,
                                   const Hyps& i_hyps,
                                   const double& c_logw,
@@ -142,18 +180,6 @@ public:
 			if(ll < n_env - 1) outf_w << "\t";
 		}
 		outf_w << std::endl;
-
-		if(p.xtra_verbose){
-			for (int ee = 0; ee < n_effects; ee++){
-				for (std::uint32_t kk = 0; kk < n_var; kk++){
-					outf_alpha << vp.alpha(kk, ee);
- 					if(!(ee == n_effects-1 && kk == n_var-1)){
-						outf_alpha << " ";
-					}
-				}
-			}
-			outf_alpha << std::endl;
-		}
 	}
 
 	void push_interim_output(int ii,
@@ -173,6 +199,12 @@ public:
 		outf_weights << counts_list[ii] << " ";
 		outf_weights << elapsed_time_list[ii] << std::endl;
 
+		fstream_init(outf_inits, dir, "_inits", true);
+		outf_inits << "chr rsid pos a0 a1";
+		for(int ee = 0; ee < n_effects; ee++){
+			outf_inits << " alpha" << ee << " mu" << ee;
+		}
+		outf_inits << std::endl;
 		for (std::uint32_t kk = 0; kk < n_var; kk++){
 			outf_inits << chromosome[kk] << " " << rsid[kk]<< " " << position[kk];
 			outf_inits << " " << al_0[kk] << " " << al_1[kk];
@@ -197,7 +229,7 @@ public:
 		// Create directories
 		std::string ss = "interim_files/grid_point_" + std::to_string(ii);
 		ss = "r" + std::to_string(round_index) + "_" + ss;
-		boost::filesystem::path interim_ext(ss), path(main_out_file), dir;
+		boost::filesystem::path interim_ext(ss), path(main_out_file);
 		dir = path.parent_path() / interim_ext;
 		boost::filesystem::create_directories(dir);
 
@@ -205,10 +237,10 @@ public:
 		fstream_init(outf_weights, dir, "_hyps", false);
 		fstream_init(outf_iter, dir, "_iter_updates", false);
 		fstream_init(outf_w, dir, "_env_weights", false);
-		fstream_init(outf_inits, dir, "_inits", true);
-		if(p.xtra_verbose){
-			fstream_init(outf_alpha, dir, "_alpha", true);
-		}
+		// fstream_init(outf_inits, dir, "_inits", true);
+		// if(p.xtra_verbose){
+		// 	fstream_init(outf_alpha, dir, "_alpha", true);
+		// }
 
 		for (int ll = 0; ll < n_env; ll++){
 			outf_w << env_names[ll];
@@ -236,11 +268,11 @@ public:
 		}
 		outf_iter    << "\telbo\tmax_alpha_diff\tseconds\tHty_hits" << std::endl;
 
-		outf_inits << "chr rsid pos a0 a1";
-		for(int ee = 0; ee < n_effects; ee++){
-			outf_inits << " alpha" << ee << " mu" << ee;
-		}
-		outf_inits << std::endl;
+		// outf_inits << "chr rsid pos a0 a1";
+		// for(int ee = 0; ee < n_effects; ee++){
+		// 	outf_inits << " alpha" << ee << " mu" << ee;
+		// }
+		// outf_inits << std::endl;
 	}
 
 	void fstream_init(io::filtering_ostream& my_outf,

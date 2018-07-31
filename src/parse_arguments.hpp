@@ -81,6 +81,7 @@ void parse_arguments(parameters &p, int argc, char *argv[]) {
 		"--mode_alternating_updates",
 		"--mode_approximate_residuals",
 		"--min_residuals_diff",
+		"--vb_iter_max",
 		"--mode_sgd",
 		"--sgd_delay",
 		"--sgd_forgetting_rate",
@@ -150,6 +151,11 @@ void parse_arguments(parameters &p, int argc, char *argv[]) {
 			if(strcmp(in_str, "--sgd_minibatch_size") == 0) {
 				p.sgd_minibatch_size = std::stol(argv[i + 1]);
 				p.sgd_minibatch_size_set = true;
+				i += 1;
+			}
+
+			if(strcmp(in_str, "--vb_iter_max") == 0) {
+				p.vb_iter_max = std::stol(argv[i + 1]);
 				i += 1;
 			}
 
