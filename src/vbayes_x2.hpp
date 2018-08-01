@@ -639,7 +639,7 @@ public:
 			vp.sp_sq.col(0)  =  hyps.spike_var(0);
 			vp.sp_sq.col(0) /= (hyps.spike_relative_var(0) * (N - 1.0) + 1.0);
 
-			for (int ee = 0; ee < n_effects; ee++){
+			for (int ee = 1; ee < n_effects; ee++){
 				for (std::uint32_t kk = 0; kk < n_var; kk++){
 					vp.sp_sq(kk, ee)  = hyps.spike_var(ee);
 					vp.sp_sq(kk, ee) /= (hyps.spike_relative_var(ee) * vp.exp_dZtZ(kk, ee-1) + 1.0);
