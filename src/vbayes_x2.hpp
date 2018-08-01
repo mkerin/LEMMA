@@ -106,6 +106,7 @@ public:
 	MyTimer t_updateAlphaMu;
 	MyTimer t_elbo;
 	MyTimer t_readXk;
+	MyTimer t_interimOutput;
 	MyTimer t_maximiseHyps;
 	MyTimer t_InnerLoop;
 
@@ -119,6 +120,7 @@ public:
                             t_updateAlphaMu("updateAlphaMu: %ts \n"),
                             t_elbo("calcElbo: %ts \n"),
                             t_readXk("read_X_kk: %ts \n"),
+                            t_interimOutput("interinOutput: %ts \n"),
                             t_maximiseHyps("maximiseHyps: %ts \n"),
                             t_InnerLoop("runInnerLoop: %ts \n") {
 		assert(std::includes(dat.hyps_names.begin(), dat.hyps_names.end(), hyps_names.begin(), hyps_names.end()));
@@ -139,6 +141,19 @@ public:
 
 		env_names = dat.env_names;
 
+		// Read environmental variables
+		if (p.env_file != "NULL"){
+			E = dat.E;
+		} else if(p.x_param_name != "NULL"){
+			std::size_t x_col = find_covar_index(p.x_param_name, dat.covar_names);
+			E                = dat.W.col(x_col);
+			n_env = 1;
+		} else {
+			E                = dat.W.col(0);
+			n_env = 1;
+		}
+		X.E = E;  // WARNING: Required to be able to call X.col(jj) with jj > P
+
 		// Allocate memory - fwd/back pass vectors
 		std::uint32_t L;
 		if(p.mode_alternating_updates){
@@ -154,17 +169,6 @@ public:
 			env_fwd_pass.push_back(ll);
 			env_back_pass.push_back(n_env - ll - 1);
 		}
-
-		// Read environmental variables
-		if (p.env_file != "NULL"){
-			E = dat.E;
-		} else if(p.x_param_name != "NULL"){
-			std::size_t x_col = find_covar_index(p.x_param_name, dat.covar_names);
-			E                = dat.W.col(x_col);
-		} else {
-			E                = dat.W.col(0);
-		}
-		X.E = E;  // WARNING: Required to be able to call X.col(jj) with jj > P
 
 		// non random initialisation
 		if(p.vb_init_file != "NULL"){
@@ -492,7 +496,10 @@ public:
 		double i_logw = calc_logw(hyps, vp);
 		std::vector< double > logw_updates, alpha_diff_updates;
 		logw_updates.push_back(i_logw);
+
+		t_interimOutput.resume();
 		tracker.interim_output_init(ii, round_index, n_effects, n_env, env_names, vp);
+		t_interimOutput.stop();
 		while(!converged  && count < p.vb_iter_max){
 			alpha_prev = vp.alpha;
 			double logw_prev = i_logw;
@@ -532,8 +539,10 @@ public:
 			alpha_diff_updates.push_back(alpha_diff);
 
 			compute_pve(hyps);
+			t_interimOutput.resume();
 			tracker.push_interim_iter_update(count, hyps, i_logw, alpha_diff,
 				t_updateAlphaMu.get_lap_seconds(), hty_update_counter, n_effects, n_var, n_env, vp);
+			t_interimOutput.stop();
 
 			// Maximise hyps
 			if(round_index > 1 && p.mode_empirical_bayes){
@@ -545,8 +554,10 @@ public:
 				t_maximiseHyps.stop();
 
 				compute_pve(hyps);
+				t_interimOutput.resume();
 				tracker.push_interim_iter_update(count, hyps, i_logw, 0.0,
 					t_maximiseHyps.get_lap_seconds(), -1, n_effects, n_var, n_env, vp);
+				t_interimOutput.stop();
 			}
 			logw_updates.push_back(i_logw);
 
@@ -564,9 +575,6 @@ public:
 				if(logw_diff < p.elbo_tol){
 					converged = true;
 				}
-			} else if(p.mode_empirical_bayes && logw_diff < 0) {
-				//  Monotonic trajectory no longer required under EB?
-				converged = true;
 			} else {
 				if(alpha_diff < alpha_tol && logw_diff < logw_tol){
 					converged = true;
@@ -590,7 +598,9 @@ public:
 			tracker.logw_updates_list[ii] = logw_updates;
 			tracker.alpha_diff_list[ii] = alpha_diff_updates;
 		}
+		t_interimOutput.resume();
 		tracker.push_interim_output(ii, X.chromosome, X.rsid, X.position, X.al_0, X.al_1, n_var, n_effects);
+		t_interimOutput.stop();
 	}
 
 	void check_monotonic_elbo(const Hyps& hyps,
@@ -639,6 +649,7 @@ public:
 
 		// for covars
 		if(p.use_vb_on_covars){
+			vp.sc_sq.resize(n_covar);
 			for (int cc = 0; cc < n_covar; cc++){
 				vp.sc_sq(cc) = hyps.sigma * sigma_c / (sigma_c * (N - 1.0) + 1.0);
 			}

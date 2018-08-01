@@ -9,7 +9,7 @@
 class parameters {
 	public :
 		std::string bgen_file, chr, out_file, pheno_file, env_file, covar_file, bgi_file;
-		std::string incl_sids_file, x_param_name, incl_rsids_file;
+		std::string incl_sids_file, x_param_name, incl_rsids_file, recombination_file;
 		std::string r1_hyps_grid_file, r1_probs_grid_file, hyps_grid_file, hyps_probs_file, vb_init_file;
 		std::vector< std::string > rsid;
 		long int chunk_size, vb_iter_max;
@@ -31,6 +31,7 @@ class parameters {
 	parameters() : bgen_file("NULL"),
 		out_file("NULL"),
 		pheno_file("NULL"),
+		recombination_file("NULL"),
 		covar_file("NULL"),
 		env_file("NULL"),
 		bgi_file("NULL"),

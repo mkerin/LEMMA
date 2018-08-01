@@ -48,6 +48,7 @@ void parse_arguments(parameters &p, int argc, char *argv[]) {
 		"--bgen",
 		"--pheno",
 		"--covar",
+		"--recombination_map",
 		"--environment",
 		"--chunk",
 		"--range",
@@ -243,6 +244,13 @@ void parse_arguments(parameters &p, int argc, char *argv[]) {
 				check_counts(in_str, i, 1, argc);
 				p.pheno_file = argv[i + 1]; // pheno file
 				check_file_exists(p.pheno_file);
+				i += 1;
+			}
+
+			if(strcmp(in_str, "--recombination_map") == 0) {
+				check_counts(in_str, i, 1, argc);
+				p.recombination_file = argv[i + 1]; // pheno file
+				check_file_exists(p.recombination_file);
 				i += 1;
 			}
 

@@ -84,6 +84,7 @@ class Data
 	Eigen::MatrixXd W; // covariate matrix
 	Eigen::MatrixXd E; // env matrix
 	Eigen::VectorXd Z; // interaction vector
+	Eigen::MatrixXd R; // recombination map
 	genfile::bgen::View::UniquePtr bgenView;
 	std::vector< double > beta, tau, neglogP, neglogP_2dof;
 	std::vector< std::vector< double > > gamma;
@@ -92,6 +93,9 @@ class Data
 
 	std::chrono::system_clock::time_point start;
 	bool filters_applied;
+
+	// recombination map
+	Eigen::MatrixXd R;
 
 	// grid things for vbayes
 	std::vector< std::string > hyps_names, imprt_names;
@@ -203,7 +207,7 @@ class Data
 		}
 
 		if(params.env_file != "NULL"){
-			read_env_var();
+			read_environment();
 		}
 
 		if(params.interaction_analysis){
@@ -244,13 +248,13 @@ class Data
 	}
 
 	void read_full_bgen(){
+		std::cout << "Reading in BGEN" << std::endl;
 		params.chunk_size = bgenView->number_of_variants();
 		MyTimer t_readFullBgen("BGEN parsed in %ts \n");
 		t_readFullBgen.resume();
 		read_bgen_chunk();
 		t_readFullBgen.stop();
-		std::cout << "Read " << n_var << " variants in:" << std::endl;
-		t_readFullBgen.report();
+		std::cout << "BGEN contained " << n_var << " variants." << std::endl;
 	}
 
 	bool read_bgen_chunk() {
@@ -930,7 +934,7 @@ class Data
 		W_reduced = false;
 	}
 
-	void read_env_var( ){
+	void read_environment( ){
 		// Read covariates to Eigen matrix W
 		if ( params.env_file != "NULL" ) {
 			read_txt_file( params.env_file, E, n_env, env_names, missing_envs );
@@ -938,6 +942,21 @@ class Data
 			throw std::logic_error( "Tried to read NULL env file." );
 		}
 		E_reduced = false;
+	}
+
+	void read_recombination_map( ){
+		// Read covariates to Eigen matrix W
+		int n_cols;
+		std::vector<std::string> colnames;
+		std::map<int, bool> missing_rows;
+
+		read_txt_file( params.recombination_file, R, n_cols, colnames, missing_rows );
+
+		std::vector<std::string> expected_colnames = {"position",
+                                     "COMBINED_rate(cM/Mb)", "Genetic_Map(cM)"};
+		assert(n_cols == 3);
+		assert(colnames == expected_colnames);
+
 	}
 
 	void read_grids(){
