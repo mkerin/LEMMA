@@ -148,9 +148,11 @@ public:
 			std::size_t x_col = find_covar_index(p.x_param_name, dat.covar_names);
 			E                = dat.W.col(x_col);
 			n_env = 1;
+			env_names.push_back(p.x_param_name);
 		} else {
 			E                = dat.W.col(0);
 			n_env = 1;
+			env_names.push_back("covar[0]");
 		}
 		X.E = E;  // WARNING: Required to be able to call X.col(jj) with jj > P
 

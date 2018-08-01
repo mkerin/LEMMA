@@ -217,11 +217,11 @@ public:
 	}
 
 	void interim_output_init(const int ii,
-                           const int round_index,
+                             const int round_index,
                              const int n_effects,
                              const int n_env,
                              std::vector< std::string > env_names,
-                                  const VariationalParameters& vp){
+                             const VariationalParameters& vp){
 		if(!allow_interim_push){
 			throw std::runtime_error("Internal error; interim push not expected");
 		}
