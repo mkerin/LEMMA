@@ -94,9 +94,6 @@ class Data
 	std::chrono::system_clock::time_point start;
 	bool filters_applied;
 
-	// recombination map
-	Eigen::MatrixXd R;
-
 	// grid things for vbayes
 	std::vector< std::string > hyps_names, imprt_names;
 	Eigen::MatrixXd r1_hyps_grid, r1_probs_grid, hyps_grid, imprt_grid;
