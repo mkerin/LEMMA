@@ -20,7 +20,7 @@ struct VariationalParametersLite {
 	Eigen::ArrayXXd mup;    // P x (E+1)
 
 	// Variational parameters for covariate main effects
-	Eigen::ArrayXXd muc;    // C x 1
+	Eigen::ArrayXd muc;    // C x 1
 
 	// Variational params for weights
 	Eigen::ArrayXd muw;    // n_env x 1
