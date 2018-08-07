@@ -39,6 +39,7 @@ Questions:
 #include <random>
 #include <vector>
 #include <map>
+#include "my_timer.hpp"
 #include "tools/eigen3.3/Dense"
 
 inline Eigen::MatrixXd getCols(const Eigen::MatrixXd &X, const std::vector<size_t> &cols);
@@ -89,17 +90,22 @@ public:
 	bool mode_sgd;
 	long int nBatch;
 	long int batch_start;
+	MyTimer t_readXk;
 
 	// Constructors
-	GenotypeMatrix(bool use_compression) : low_mem(use_compression){
+	GenotypeMatrix(bool use_compression) : low_mem(use_compression),
+                                           t_readXk("read_X_kk: %ts \n"){
 		scaling_performed = false;
 		NN = 0;
 		PP = 0;
 		n_effects = 0;
 	};
 
-	GenotypeMatrix(bool use_compression, const long int n,
-		             const long int p, const int my_n_effects) : low_mem(use_compression){
+	GenotypeMatrix(bool use_compression,
+                   const long int n,
+                   const long int p,
+                   const int my_n_effects) : low_mem(use_compression),
+                                             t_readXk("read_X_kk: %ts \n"){
 		if(low_mem){
 			M.resize(n, p);
 		} else {
@@ -119,6 +125,7 @@ public:
 
 		scaling_performed = false;
 	};
+
 	~GenotypeMatrix(){
 	};
 
@@ -194,6 +201,7 @@ public:
 			calc_scaled_values();
 		}
 
+		t_readXk.resume();
 		if(low_mem){
 			if(jj < PP){
 				if(mode_sgd){
@@ -239,6 +247,7 @@ public:
 				}
 			}
 		}
+		t_readXk.stop();
 		return vec;
 	}
 

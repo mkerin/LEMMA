@@ -85,6 +85,7 @@ class Data
 	Eigen::MatrixXd E; // env matrix
 	Eigen::VectorXd Z; // interaction vector
 	Eigen::MatrixXd R; // recombination map
+	Eigen::MatrixXd E_weights;
 	genfile::bgen::View::UniquePtr bgenView;
 	std::vector< double > beta, tau, neglogP, neglogP_2dof;
 	std::vector< std::vector< double > > gamma;
@@ -205,6 +206,10 @@ class Data
 
 		if(params.env_file != "NULL"){
 			read_environment();
+		}
+
+		if(params.env_weights_file != "NULL" && params.env_file != "NULL"){
+			read_environment_weights();
 		}
 
 		if(params.interaction_analysis){
@@ -939,6 +944,16 @@ class Data
 			throw std::logic_error( "Tried to read NULL env file." );
 		}
 		E_reduced = false;
+	}
+
+	void read_environment_weights( ){
+		int n_cols;
+		std::vector< std::string > col_names;
+		std::map<int, bool> missing_rows;
+		read_txt_file( params.env_file, E_weights, n_cols, col_names, missing_rows );
+
+		assert(n_cols == 1);
+		assert(missing_rows.size() == 0);
 	}
 
 	void read_recombination_map( ){
