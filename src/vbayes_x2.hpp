@@ -888,9 +888,9 @@ public:
 			double rss_alt  = (Y2 - H * tau2_j).squaredNorm();
 
 			// F-test; get neglog10 p-value
-			double f_stat   = (rss_null - rss_alt) / (double) n_var;
-			f_stat         /= rss_alt / (double) (n_samples - n_var - 1);
-			boost_m::fisher_f f_dist(n_var, n_samples - n_var);
+			double f_stat   = (rss_null - rss_alt) / (double) n_env;
+			f_stat         /= rss_alt / (double) (n_samples - n_env - 1);
+			boost_m::fisher_f f_dist(n_env, n_samples - n_env - 1);
 			double pval     = 1.0 - boost_m::cdf(f_dist, f_stat);
 
 			tau2.col(jj)    = tau2_j;
