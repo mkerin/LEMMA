@@ -50,6 +50,7 @@ void parse_arguments(parameters &p, int argc, char *argv[]) {
 		"--covar",
 		"--recombination_map",
 		"--environment",
+		"--environment_weights",
 		"--chunk",
 		"--range",
 		"--maf",
@@ -86,7 +87,12 @@ void parse_arguments(parameters &p, int argc, char *argv[]) {
 		"--mode_sgd",
 		"--sgd_delay",
 		"--sgd_forgetting_rate",
-		"--sgd_minibatch_size"
+		"--sgd_minibatch_size",
+		"--burnin_maxhyps",
+		"--env_update_repeats",
+		"--rescale_eta",
+		"--gamma_updates_thresh",
+		"--init_weights_with_snpwise_scan"
 	};
 
 	std::set<std::string>::iterator set_it;
@@ -140,6 +146,32 @@ void parse_arguments(parameters &p, int argc, char *argv[]) {
 			if(strcmp(in_str, "--sgd_delay") == 0) {
 				p.sgd_delay = std::stod(argv[i + 1]);
 				p.sgd_delay_set = true;
+				i += 1;
+			}
+
+			if(strcmp(in_str, "--burnin_maxhyps") == 0) {
+				p.burnin_maxhyps = std::stoi(argv[i + 1]);
+				i += 1;
+			}
+
+			if(strcmp(in_str, "--env_update_repeats") == 0) {
+				p.env_update_repeats = std::stoi(argv[i + 1]);
+				i += 1;
+			}
+
+			if(strcmp(in_str, "--init_weights_with_snpwise_scan") == 0) {
+				p.init_weights_with_snpwise_scan = true;
+				i += 0;
+			}
+
+			if(strcmp(in_str, "--rescale_eta") == 0) {
+				p.rescale_eta = true;
+				i += 0;
+			}
+
+			if(strcmp(in_str, "--gamma_updates_thresh") == 0) {
+				p.restrict_gamma_updates = true;
+				p.gamma_updates_thresh = std::stod(argv[i + 1]);
 				i += 1;
 			}
 
@@ -259,6 +291,13 @@ void parse_arguments(parameters &p, int argc, char *argv[]) {
 				p.interaction_analysis = true;
 				p.env_file = argv[i + 1]; // pheno file
 				check_file_exists(p.env_file);
+				i += 1;
+			}
+
+			if(strcmp(in_str, "--environment_weights") == 0) {
+				check_counts(in_str, i, 1, argc);
+				p.env_weights_file = argv[i + 1]; // pheno file
+				check_file_exists(p.env_weights_file);
 				i += 1;
 			}
 
@@ -473,6 +512,10 @@ void parse_arguments(parameters &p, int argc, char *argv[]) {
 	}
 	if(p.mode_sgd && p.sgd_minibatch_size <= 0){
 		throw std::runtime_error("ERROR: Minibatch size must be greater than zero");
+	}
+
+	if(p.env_file == "NULL" && p.env_weights_file != "NULL"){
+		std::cout << "WARNING: --environment_weights will be ignored as no --environment provided" << std::endl;
 	}
 }
 
