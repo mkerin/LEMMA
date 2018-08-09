@@ -20,37 +20,42 @@ struct VariationalParametersLite {
 	Eigen::ArrayXXd mup;    // P x (E+1)
 
 	// Variational parameters for covariate main effects
-	Eigen::ArrayXd muc;    // C x 1
+	Eigen::ArrayXd  muc;    // C x 1
 
 	// Variational params for weights
-	Eigen::ArrayXd muw;    // n_env x 1
+	Eigen::ArrayXd  muw;    // n_env x 1
 };
 
 class VariationalParameters {
 public:
-	Eigen::VectorXd yx;    // N x 1
-	Eigen::VectorXd ym;    // N x 1
+	// This stores parameters used in VB and some summary quantities that
+	// depend on those parameters.
 
 	// Variational parameters for slab
-	Eigen::ArrayXXd s_sq;  // P x (E+1)
 	Eigen::ArrayXXd alpha; // P x (E+1)
 	Eigen::ArrayXXd mu;    // P x (E+1)
+	Eigen::ArrayXXd s_sq;  // P x (E+1)
 
 	// Variational parameters for spike (MoG prior mode)
-	Eigen::ArrayXXd sp_sq;  // P x (E+1)
 	Eigen::ArrayXXd mup;    // P x (E+1)
+	Eigen::ArrayXXd sp_sq;  // P x (E+1)
 
 	// Variational parameters for covariate main effects
-	Eigen::ArrayXd muc;    // C x 1
-	Eigen::ArrayXd sc_sq;  // C x 1
+	Eigen::ArrayXd  muc;    // C x 1
+	Eigen::ArrayXd  sc_sq;  // C x 1
 
 	// Variational params for weights
-	Eigen::ArrayXd w; // weights
-	Eigen::VectorXd eta; // expected value of linear combo
-	Eigen::VectorXd eta_sq; // expected values of linear combo squared (elementwise)
-	Eigen::ArrayXd muw;    // n_env x 1
-	Eigen::ArrayXd sw_sq;    // n_env x 1
-	Eigen::ArrayXd exp_dZtZ; // expectation of the diagonal of Z^T Z
+	Eigen::ArrayXd  muw;      // n_env x 1
+	Eigen::ArrayXd  sw_sq;    // n_env x 1
+
+	// Summary quantities
+	Eigen::VectorXd yx;      // N x 1
+	Eigen::VectorXd ym;      // N x 1
+	Eigen::VectorXd eta;     // expected value of matrix product E x w
+	Eigen::VectorXd eta_sq;  // expected value (E x w) cdot (E x w)
+	Eigen::ArrayXd  EdZtZ;   // expectation of the diagonal of Z^t Z
+	Eigen::ArrayXXd varB;    // variance of beta, gamma under approximating distn
+
 
 	// sgd
 	long int count;
@@ -58,8 +63,7 @@ public:
 	VariationalParameters(){};
 	~VariationalParameters(){};
 
-	void init_from_lite(const VariationalParametersLite& init,
-                        const Eigen::Ref<const Eigen::ArrayXXd>& dZtZ, const int& n_env) {
+	void init_from_lite(const VariationalParametersLite& init) {
 		ym    = init.ym;
 		yx    = init.yx;
 		alpha = init.alpha;
@@ -72,12 +76,6 @@ public:
 
 		eta    = init.eta;
 		eta_sq = init.eta_sq;
-
-		// Explicit zero values from initial variance
-		sw_sq.resize(n_env);
- 		sw_sq = 0.0;
-
-		calcExpDZtZ(dZtZ, n_env);
 	}
 
 	VariationalParametersLite convert_to_lite(){
@@ -93,7 +91,7 @@ public:
 		return vplite;
 	}
 
-	void calcExpDZtZ(const Eigen::Ref<const Eigen::ArrayXXd>& dZtZ, const int& n_env){
+	void calcEdZtZ(const Eigen::Ref<const Eigen::ArrayXXd>& dXtEEX, const int& n_env){
 		Eigen::ArrayXd muw_sq(n_env * n_env);
 		for (int ll = 0; ll < n_env; ll++){
 			for (int mm = 0; mm < n_env; mm++){
@@ -101,9 +99,9 @@ public:
 			}
 		}
 
-		exp_dZtZ = (dZtZ.rowwise() * muw_sq.transpose()).rowwise().sum();
+		EdZtZ = (dXtEEX.rowwise() * muw_sq.transpose()).rowwise().sum();
 		for (int ll = 0; ll < n_env; ll++){
-			exp_dZtZ += dZtZ.col(ll * n_env + ll) * sw_sq(ll);
+			EdZtZ += dXtEEX.col(ll * n_env + ll) * sw_sq(ll);
 		}
 	}
 };

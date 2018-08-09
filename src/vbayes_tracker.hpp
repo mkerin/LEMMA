@@ -73,6 +73,9 @@ public:
 	std::string main_out_file;
 	bool allow_interim_push;
 
+	// Timing
+	MyTimer t_interimOutput;
+
 	VbTracker(){
 		allow_interim_push = false;
 	}
@@ -158,6 +161,8 @@ public:
                                   const int& n_var,
                                   const int& n_env,
                                   const VariationalParameters& vp){
+		t_interimOutput.resume();
+
 		outf_iter << cnt << "\t" << std::setprecision(3) << std::fixed;
 		outf_iter << i_hyps.sigma << "\t" << std::setprecision(8) << std::fixed;
 		for (int ee = 0; ee < n_effects; ee++){
@@ -181,6 +186,8 @@ public:
 			if(ll < n_env - 1) outf_w << "\t";
 		}
 		outf_w << std::endl;
+
+		t_interimOutput.stop();
 	}
 
 	void push_interim_output(int ii,
@@ -193,6 +200,7 @@ public:
 													   const std::uint32_t n_effects){
 		// Assumes that information for all measures that we track have between
 		// added to VbTracker at index ii.
+		t_interimOutput.resume();
 
 		// Write output to file
 		outf_weights << "NA" << " " << logw_list[ii] << " ";
@@ -215,6 +223,8 @@ public:
 			}
  			outf_inits << std::endl;
 		}
+
+		t_interimOutput.stop();
 	}
 
 	void interim_output_init(const int ii,
