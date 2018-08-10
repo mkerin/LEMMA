@@ -711,7 +711,7 @@ public:
 
 		// Would need vp.s_sq to compute properly, which in turn needs vp.sw_sq...
 		vp.sw_sq.resize(n_env);
-		vp.sw_sq = 0.0;
+		vp.sw_sq = eps;
 		vp.calcEdZtZ(dXtEEX, n_env);
 
 		// Update main
@@ -879,8 +879,8 @@ public:
 		double kl_weights = 0.0;
 		kl_weights += (double) n_env / 2.0;
 		kl_weights += vp.sw_sq.log().sum() / 2.0;
-		kl_weights += vp.sw_sq.sum() / 2.0;
-		kl_weights += vp.muw.square().sum() / 2.0;
+		kl_weights -= vp.sw_sq.sum() / 2.0;
+		kl_weights -= vp.muw.square().sum() / 2.0;
 
 		double res = int_linear + int_gamma + int_klbeta + kl_covar + kl_weights;
 
