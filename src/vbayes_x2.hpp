@@ -327,6 +327,32 @@ public:
 			print_time_check();
 		}
 
+		// Write inits to file
+		std::string ofile_inits = fstream_init(outf_inits, "", "_inits");
+		std::cout << "Writing start points for alpha and mu to " << ofile_inits << std::endl;
+		// outf_inits << "chr rsid pos a0 a1 alpha mu" << std::endl;
+		// for (std::uint32_t kk = 0; kk < n_var2; kk++){
+		// 	std::uint32_t kk1 = kk % n_var;
+		// 	outf_inits << X.chromosome[kk1] << " " << X.rsid[kk1]<< " " << X.position[kk1];
+		// 	outf_inits << " " << X.al_0[kk1] << " " << X.al_1[kk1] << " ";
+		// 	outf_inits << vp_init.alpha[kk] << " " << vp_init.mu[kk] << std::endl;
+		// }
+
+		outf_inits << "chr rsid pos a0 a1";
+		for (int ee = 0; ee < n_effects; ee++){
+			outf_inits << " alpha" << ee << " mu" << ee;
+		}
+		outf_inits << std::endl;
+		for (std::uint32_t kk = 0; kk < n_var; kk++){
+			outf_inits << X.chromosome[kk] << " " << X.rsid[kk] << " " << X.position[kk];
+			outf_inits << " " << X.al_0[kk] << " " << X.al_1[kk];
+			for (int ee = 0; ee < n_effects; ee++){
+				outf_inits << " " << vp_init.alpha(kk, ee);
+				outf_inits << " " << vp_init.mu(kk, ee);
+			}
+			outf_inits << std::endl;
+		}
+
 		std::vector< VbTracker > trackers(p.n_thread);
 		run_inference(hyps_grid, false, 2, trackers);
 
