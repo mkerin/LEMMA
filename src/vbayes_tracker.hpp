@@ -76,15 +76,17 @@ public:
 	// Timing
 	MyTimer t_interimOutput;
 
-	VbTracker(){
+	VbTracker(): t_interimOutput("interimOutput: %ts \n"){
 		allow_interim_push = false;
 	}
 
-	VbTracker(const std::string& ofile) : main_out_file(ofile){
+	VbTracker(const std::string& ofile) : main_out_file(ofile),
+                                          t_interimOutput("interinOutput: %ts \n"){
 		allow_interim_push = true;
 	}
 
-	VbTracker(int n_list, const std::string& ofile) : main_out_file(ofile){
+	VbTracker(int n_list, const std::string& ofile) : main_out_file(ofile),
+                                                      t_interimOutput("interinOutput: %ts \n"){
 		counts_list.resize(n_list);
 		vp_list.resize(n_list);
 		// mu_list.resize(n_list);

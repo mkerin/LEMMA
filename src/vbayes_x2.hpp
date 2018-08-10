@@ -107,7 +107,6 @@ public:
 
 	MyTimer t_updateAlphaMu;
 	MyTimer t_elbo;
-	MyTimer t_interimOutput;
 	MyTimer t_maximiseHyps;
 	MyTimer t_InnerLoop;
 	MyTimer t_snpwise_regression;
@@ -121,7 +120,6 @@ public:
                             p( dat.params ),
                             t_updateAlphaMu("updateAlphaMu: %ts \n"),
                             t_elbo("calcElbo: %ts \n"),
-                            t_interimOutput("interinOutput: %ts \n"),
                             t_maximiseHyps("maximiseHyps: %ts \n"),
                             t_InnerLoop("runInnerLoop: %ts \n"),
                             t_snpwise_regression("calc_snpwise_regression: %ts \n") {
@@ -685,6 +683,11 @@ public:
 		// We compute elbo on starting point hence need variance estimates
 		// Also resizes all variance arrays.
 
+		// Would need vp.s_sq to compute properly, which in turn needs vp.sw_sq...
+		vp.sw_sq.resize(n_env);
+		vp.sw_sq = 0.0;
+		vp.calcEdZtZ(dXtEEX, n_env);
+
 		// Update main
 		vp.s_sq.resize(n_var, n_effects);
 		vp.s_sq.col(0)  = hyps.slab_var(0);
@@ -709,6 +712,8 @@ public:
 				}
 			}
 		}
+		vp.varB.resize(n_var, n_effects);
+		calcVarqBeta(hyps, vp, vp.varB);
 
 		// for covars
 		if(p.use_vb_on_covars){
@@ -716,16 +721,6 @@ public:
 			for (int cc = 0; cc < n_covar; cc++){
 				vp.sc_sq(cc) = hyps.sigma * sigma_c / (sigma_c * (N - 1.0) + 1.0);
 			}
-		}
-
-		// env weights
-		calcVarqBeta(hyps, vp, vp.varB);
-		vp.sw_sq.resize(n_env);
-		for (int ll = 0; ll < n_env; ll++){
-			double denom = hyps.sigma;
-			denom       += (vp.yx.array() * E.col(ll)).square().sum();
-			denom       += (vp.varB.col(1) * dXtEEX.col(ll*n_env + ll)).sum();
-			vp.sw_sq(ll) = hyps.sigma / denom;
 		}
 	}
 
@@ -1020,7 +1015,8 @@ public:
 		double i_logw     = calc_logw(hyps, vp);
 		if(i_logw < logw_prev){
 			std::cout << count << ": " << prev_function;
- 			std::cout << " " << logw_prev << " -> " << i_logw << std::endl;
+ 			std::cout << " " << logw_prev << " -> " << i_logw;
+ 			std::cout << " (difference of " << i_logw - logw_prev << ")"<< std::endl;
 		}
 		logw_prev = i_logw;
 	}
