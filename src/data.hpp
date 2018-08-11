@@ -254,7 +254,7 @@ class Data
 		params.chunk_size = bgenView->number_of_variants();
 		MyTimer t_readFullBgen("BGEN parsed in %ts \n");
 
-		if(p.flip_high_maf_variants){
+		if(params.flip_high_maf_variants){
 			std::cout << "Flipping variants with MAF > 0.5" << std::endl;
 		}
 		t_readFullBgen.resume();
@@ -342,7 +342,7 @@ class Data
 			double maf_j = d1 / (2.0 * valid_count);
 
 			// Flip dosage vector if maf > 0.5
-			if(p.flip_high_maf_variants && maf_j > 0.5){
+			if(params.flip_high_maf_variants && maf_j > 0.5){
 				dosage_j = (2.0 - dosage_j);
 				for (std::uint32_t ii = 0; ii < n_samples; ii++){
 					if (missing_genos.count(ii) > 0){
