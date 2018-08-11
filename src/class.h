@@ -23,7 +23,7 @@ class parameters {
 		bool keep_constant_variants, user_requests_round1, scale_pheno, mode_mog_prior;
 		bool mode_alternating_updates, mode_approximate_residuals, mode_sgd, sgd_delay_set, sgd_forgetting_rate_set;
 		bool sgd_minibatch_size_set, rescale_eta, restrict_gamma_updates;
-		bool init_weights_with_snpwise_scan;
+		bool init_weights_with_snpwise_scan, flip_high_maf_variants;
 		double min_maf, min_info, elbo_tol, alpha_tol, min_residuals_diff, gamma_updates_thresh;
 		double sgd_delay, sgd_forgetting_rate;
 		std::vector < std::string > incl_sample_ids, gconf;
@@ -48,6 +48,7 @@ class parameters {
 		env_weights_file("NULL") {
 		bgen_wildcard = false;
 		rescale_eta = false;
+		flip_high_maf_variants = true;
 		init_weights_with_snpwise_scan = false;
 		restrict_gamma_updates = false;
 		n_thread = 1;
