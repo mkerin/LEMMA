@@ -101,6 +101,7 @@ public:
 	// boost fstreams
 	boost_io::filtering_ostream outf, outf_map, outf_wmean, outf_nmean, outf_inits;
 	boost_io::filtering_ostream outf_elbo, outf_alpha_diff, outf_map_pred, outf_w;
+	boost_io::filtering_ostream outf_scan;
 
 	// Monitoring
 	std::chrono::system_clock::time_point time_check;
@@ -404,11 +405,6 @@ public:
                       VbTracker& tracker){
 
 		for (auto ii : grid_index_list){
-			if((ii + 1) % print_interval == 0){
-				std::cout << "\rRound " << round_index << ": grid point " << ii+1 << "/" << outer_n_grid;
-				print_time_check();
-			}
-
 			// Unpack hyperparams
 			// Hyps i_hyps(n_effects,
 			// 	outer_hyps_grid(ii, sigma_ind),
@@ -442,6 +438,11 @@ public:
 
 			// Run outer loop - don't update trackers
 			runInnerLoop(ii, random_init, round_index, i_hyps, tracker);
+
+			if((ii + 1) % print_interval == 0){
+				std::cout << "\rRound " << round_index << ": grid point " << ii+1 << "/" << outer_n_grid;
+				print_time_check();
+			}
 		}
 	}
 
@@ -898,6 +899,7 @@ public:
 		- tau coefficients
 		- pvalue from f-test (tau non zero)
 		*/
+		std::cout << "Starting GWAS scan" << std::endl;
 		t_snpwise_regression.resume();
 
 		// Regress covars from Y
@@ -905,8 +907,11 @@ public:
 		Eigen::MatrixXd Y2 = Y - C * coeff;
 
 		// Snp-wise scan
-		Eigen::ArrayXd neglogp(n_var);
+		Eigen::ArrayXd  gxe_neglogp(n_var);
+		Eigen::ArrayXd  main_neglogp(n_var);
+		Eigen::ArrayXd  tau1(n_var);
 		Eigen::MatrixXd tau2(1 + n_env, n_var);
+		boost_m::fisher_f f_dist(n_env, n_samples - n_env - 1);
 		for (std::uint32_t jj = 0; jj < n_var; jj++){
 			Eigen::VectorXd X_kk = X.col(jj);
 
@@ -919,35 +924,57 @@ public:
 			double rss_null = (Y2 - X_kk * tau1_j).squaredNorm();
 			double rss_alt  = (Y2 - H * tau2_j).squaredNorm();
 
-			// F-test; get neglog10 p-value
-			double f_stat   = (rss_null - rss_alt) / (double) n_env;
-			f_stat         /= rss_alt / (double) (n_samples - n_env - 1);
-			boost_m::fisher_f f_dist(n_env, n_samples - n_env - 1);
-			double pval     = 1.0 - boost_m::cdf(f_dist, f_stat);
-			double neglogp_j = -1 * std::log10(pval);
-			if(!std::isfinite(neglogp_j)){
-				std::cout << "Warning: neglog-p = " << neglogp_j << std::endl;
-				std::cout << "Warning: p-val = " << pval << std::endl;
+			// T-test; main effect of variant j
+			boost_m::students_t t_dist(n_samples - 1);
+			double main_se_j    = rss_null / (N - 1.0);
+			double main_tstat_j = tau1_j(0, 0) / main_se_j;
+			double main_pval_j = 2 * boost_m::cdf(boost_m::complement(t_dist, fabs(main_tstat_j)));
+
+			// F-test; joint interaction effect of variant j
+			double f_stat        = (rss_null - rss_alt) / (double) n_env;
+			f_stat              /= rss_alt / (double) (n_samples - n_env - 1);
+			double gxe_pval_j    = boost_m::cdf(boost_m::complement(f_dist, f_stat));
+			double gxe_neglogp_j = -1 * std::log10(gxe_pval_j);
+			if(!std::isfinite(gxe_neglogp_j)){
+				std::cout << "Warning: neglog-p = " << gxe_neglogp_j << std::endl;
+				std::cout << "Warning: p-val = "    << gxe_pval_j << std::endl;
 				std::cout << "Warning: rss_null = " << rss_null << std::endl;
-				std::cout << "Warning: rss_alt = " << rss_alt << std::endl;
+				std::cout << "Warning: rss_alt = "  << rss_alt << std::endl;
+				std::cout << "Warning: f_stat = "   << f_stat << std::endl;
 			}
 
-			tau2.col(jj)    = tau2_j;
-			neglogp[jj]     = -1 * std::log10(pval);
+			tau1(jj)           = tau1_j(0, 0);
+			tau2.col(jj)       = tau2_j;
+			gxe_neglogp[jj]    = -1 * std::log10(gxe_pval_j);
+			main_neglogp[jj]   = -1 * std::log10(main_pval_j);
 		}
 
 		// Keep values from point with highest p-val
 		double vv = 0.0;
 		for (std::uint32_t jj = 0; jj < n_var; jj++){
-			if (neglogp(jj) > vv){
-				vv = neglogp(jj);
+			if (gxe_neglogp(jj) > vv){
+				vv = gxe_neglogp(jj);
 				vp.muw = tau2.block(1, jj, n_env, 1);
 
-				std::cout << "neglogp at variant " << jj << ": " << neglogp(jj);
+				std::cout << "neglogp at variant " << jj << ": " << gxe_neglogp(jj);
 				std::cout << std::endl << tau2.block(1, jj, n_env, 1).transpose() << std::endl;
 			}
 		}
 		t_snpwise_regression.stop();
+
+		// Write to file
+		std::string ofile_scan = fstream_init(outf_scan, "", "_snpwise_scan");
+		std::cout << "Writing snp-wise scan to file " << ofile_scan << std::endl;
+
+		outf_scan << "chr rsid pos a0 a1 main main_neglogp joint_gxe_neglogp";
+		outf_scan << std::endl;
+		for (std::uint32_t kk = 0; kk < n_var; kk++){
+			outf_scan << X.chromosome[kk] << " " << X.rsid[kk] << " " << X.position[kk];
+			outf_scan << " " << X.al_0[kk] << " " << X.al_1[kk];
+			outf_scan << " " << tau1(kk) << " " << main_neglogp(kk);
+			outf_scan << " " << gxe_neglogp(kk);
+			outf_scan << std::endl;
+		}
 	}
 
 	/********** Helper functions ************/

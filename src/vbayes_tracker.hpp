@@ -139,6 +139,9 @@ public:
 		outf_inits << "chr rsid pos a0 a1";
 		for (int ee = 0; ee < n_effects; ee++){
 			outf_inits << " alpha" << ee << " mu" << ee << " s_sq" << ee;
+			if(p.mode_mog_prior){
+				outf_inits << " mu_spike" << ee << " s_sq_spike" << ee;
+			}
 		}
 		outf_inits << std::endl;
 		for (std::uint32_t kk = 0; kk < n_var; kk++){
@@ -148,6 +151,10 @@ public:
 				outf_inits << " " << vp.alpha(kk, ee);
 				outf_inits << " " << vp.mu(kk, ee);
 				outf_inits << " " << vp.s_sq(kk, ee);
+				if(p.mode_mog_prior){
+					outf_inits << " " << vp.mup(kk, ee);
+					outf_inits << " " << vp.sp_sq(kk, ee);
+				}
 			}
 			outf_inits << std::endl;
 		}
