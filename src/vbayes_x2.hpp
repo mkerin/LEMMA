@@ -48,6 +48,7 @@ public:
 	const double alpha_tol = 1e-4;
 	const double logw_tol = 1e-2;
 	const double sigma_c = 10000;
+	const double spike_diff_factor = 100000.0; // Initial diff in variance of spike & slab
 	int print_interval;              // print time every x grid points
 	std::vector< std::string > covar_names;
 	std::vector< std::string > env_names;
@@ -429,9 +430,9 @@ public:
 				//
 			i_hyps.sigma = sigma;
 			i_hyps.slab_var           << sigma * sigma_b, sigma * sigma_g;
-			i_hyps.spike_var          << sigma * sigma_b / 100.0, sigma * sigma_g / 100.0;
+			i_hyps.spike_var          << sigma * sigma_b / spike_diff_factor, sigma * sigma_g / spike_diff_factor;
 			i_hyps.slab_relative_var  << sigma_b, sigma_g;
-			i_hyps.spike_relative_var << sigma_b / 100.0, sigma_g / 100.0;
+			i_hyps.spike_relative_var << sigma_b / spike_diff_factor, sigma_g / spike_diff_factor;
 			i_hyps.lambda             << lam_b, lam_g;
 			i_hyps.s_x.resize(2);
 				// }

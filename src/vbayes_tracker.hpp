@@ -185,6 +185,7 @@ public:
 			}
 			outf_iter << i_hyps.lambda(ee) << "\t";
 		}
+		outf_iter << i_hyps.s_x(0) << "\t" << i_hyps.s_x(1) << "\t";
 		outf_iter << std::setprecision(3) << std::fixed << c_logw << "\t";
 		outf_iter << c_alpha_diff << "\t";
 		outf_iter << lap_seconds << "\t";
@@ -286,7 +287,8 @@ public:
 			}
 			outf_iter << "\tlambda" << ee;
 		}
-		outf_iter    << "\telbo\tmax_alpha_diff\tseconds\tHty_hits" << std::endl;
+		outf_iter << "\ts_x" << "\ts_z";
+		outf_iter << "\telbo\tmax_alpha_diff\tseconds\tHty_hits" << std::endl;
 
 		// outf_inits << "chr rsid pos a0 a1";
 		// for(int ee = 0; ee < n_effects; ee++){
