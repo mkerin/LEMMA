@@ -927,9 +927,9 @@ public:
 
 			// T-test; main effect of variant j
 			boost_m::students_t t_dist(n_samples - 1);
-			double main_se_j    = rss_null / (N - 1.0);
+			double main_se_j    = std::sqrt(rss_null) / (N - 1.0);
 			double main_tstat_j = tau1_j(0, 0) / main_se_j;
-			double main_pval_j = 2 * boost_m::cdf(boost_m::complement(t_dist, fabs(main_tstat_j)));
+			double main_pval_j  = 2 * boost_m::cdf(boost_m::complement(t_dist, fabs(main_tstat_j)));
 
 			// F-test; joint interaction effect of variant j
 			double f_stat        = (rss_null - rss_alt) / (double) n_env;
