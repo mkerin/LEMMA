@@ -69,7 +69,8 @@ public:
 
 	// For writing interim output
 	boost::filesystem::path dir;
-	io::filtering_ostream outf_elbo, outf_alpha_diff, outf_weights, outf_inits, outf_iter, outf_alpha, outf_w;
+	io::filtering_ostream outf_elbo, outf_alpha_diff, outf_weights, outf_inits, outf_iter, outf_alpha;
+	io::filtering_ostream outf_w;
 	std::string main_out_file;
 	bool allow_interim_push;
 
@@ -124,16 +125,7 @@ public:
                                   const std::vector< std::string >& al_0,
                                   const std::vector< std::string >& al_1,
                                   const std::vector< std::uint32_t >& position){
-		// for (int ee = 0; ee < n_effects; ee++){
-		// 	for (std::uint32_t kk = 0; kk < n_var; kk++){
-		// 		outf_alpha << vp.alpha(kk, ee);
-			// 		if(!(ee == n_effects-1 && kk == n_var-1)){
-		// 			outf_alpha << " ";
-		// 		}
-		// 	}
-		// }
-		// outf_alpha << std::endl;
-
+		t_interimOutput.resume();
 		fstream_init(outf_inits, dir, "_params_iter" + std::to_string(cnt), true);
 
 		outf_inits << "chr rsid pos a0 a1";
@@ -158,6 +150,24 @@ public:
 			}
 			outf_inits << std::endl;
 		}
+		t_interimOutput.stop();
+	}
+
+	void push_interim_covar_values(const int& cnt,
+                                  const int& n_covar,
+                                  const VariationalParameters& vp,
+                                  const std::vector< std::string >& covar_names){
+		t_interimOutput.resume();
+		fstream_init(outf_inits, dir, "_covars_iter" + std::to_string(cnt), true);
+
+		outf_inits << "covar_name mu_covar s_sq_covar";
+		outf_inits << std::endl;
+		for (int cc = 0; cc < n_covar; cc++){
+			outf_inits << covar_names[cc] << " " << vp.muc(cc);
+			outf_inits << " " << vp.sc_sq(cc);
+			outf_inits << std::endl;
+		}
+		t_interimOutput.stop();
 	}
 
 	void push_interim_iter_update(const int& cnt,

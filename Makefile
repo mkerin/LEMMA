@@ -16,7 +16,7 @@ HEADERS := vbayes_x2.hpp genotype_matrix.hpp vbayes_tracker.hpp \
 HEADERS := $(addprefix $(SRCDIR)/,$(HEADERS))
 
 rescomp: CXX = /apps/well/gcc/7.2.0/bin/g++
-rescomp: FLAGS += -O3
+rescomp: FLAGS += -O3 -static -static-libgcc -static-libstdc++
 rescomp: $(TARGET)
 
 rescomp-optim: CXX = /apps/well/gcc/7.2.0/bin/g++

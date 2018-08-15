@@ -48,7 +48,7 @@ public:
 	const double alpha_tol = 1e-4;
 	const double logw_tol = 1e-2;
 	const double sigma_c = 10000;
-	const double spike_diff_factor = 100000.0; // Initial diff in variance of spike & slab
+	const double spike_diff_factor = 1000000.0; // Initial diff in variance of spike & slab
 	int print_interval;              // print time every x grid points
 	std::vector< std::string > covar_names;
 	std::vector< std::string > env_names;
@@ -492,6 +492,7 @@ public:
 			if(p.use_vb_on_covars){
 				updateCovarEffects(vp, hyps, hty_update_counter);
 				check_monotonic_elbo(hyps, vp, count, logw_prev, "updateCovarEffects");
+				tracker.push_interim_covar_values(count, n_covar, vp,covar_names);
 			}
 
 			// Update main & interaction effects
