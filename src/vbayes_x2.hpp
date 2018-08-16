@@ -86,7 +86,7 @@ public:
 	GenotypeMatrix& X;
 	Eigen::VectorXd Y;          // residual phenotype matrix
 	Eigen::ArrayXXd dXtX;       // diagonal of X^T x X
-	Eigen::ArrayXXd dXtEEX;     // P x n_env^2; col (l * n_env + m) is the diagonal of X^T * diag(E_l * E_m) * X
+	Eigen::ArrayXXd& dXtEEX;     // P x n_env^2; col (l * n_env + m) is the diagonal of X^T * diag(E_l * E_m) * X
 	Eigen::ArrayXd  Cty;         // vector of W^T x y where C the matrix of covariates
 	Eigen::ArrayXXd E;          // matrix of variables used for GxE interactions
 	Eigen::MatrixXd& C;          // matrix of covariates (superset of GxE variables)
@@ -119,6 +119,7 @@ public:
 	explicit VBayesX2( Data& dat ) : X( dat.G ),
                             Y(Eigen::Map<Eigen::VectorXd>(dat.Y.data(), dat.Y.rows())),
                             C( dat.W ),
+                            dXtEEX( dat.dXtEEX ),
                             p( dat.params ),
                             t_updateAlphaMu("updateAlphaMu: %ts \n"),
                             t_elbo("calcElbo: %ts \n"),
@@ -224,21 +225,25 @@ public:
 		Cty = C.transpose() * Y;
 
 		// dXtEEX an L^2 x P array
-		std::cout << "Building dXtEEX array" << std::endl;
-		Eigen::ArrayXd cl_j;
-		double dztz_lmj;
-		dXtEEX.resize(n_var, n_env * n_env);
-		for (std::size_t jj = 0; jj < n_var; jj++){
-			cl_j = X.col(jj);
-			for (int ll = 0; ll < n_env; ll++){
-				for (int mm = 0; mm <= ll; mm++){
-					dztz_lmj = (cl_j * E.col(ll) * E.col(mm) * cl_j).sum();
-					dXtEEX(jj, ll*n_env + mm) = dztz_lmj;
-					dXtEEX(jj, mm*n_env + ll) = dztz_lmj;
+		if(p.dxteex_file != "NULL"){
+			dXtEEX = dat.dXtEEX;
+		} else {
+			std::cout << "Building dXtEEX array" << std::endl;
+			Eigen::ArrayXd cl_j;
+			double dztz_lmj;
+			dXtEEX.resize(n_var, n_env * n_env);
+			for (std::size_t jj = 0; jj < n_var; jj++){
+				cl_j = X.col(jj);
+				for (int ll = 0; ll < n_env; ll++){
+					for (int mm = 0; mm <= ll; mm++){
+						dztz_lmj = (cl_j * E.col(ll) * E.col(mm) * cl_j).sum();
+						dXtEEX(jj, ll*n_env + mm) = dztz_lmj;
+						dXtEEX(jj, mm*n_env + ll) = dztz_lmj;
+					}
 				}
 			}
+			std::cout << "Built dXtEEX array" << std::endl;
 		}
-		std::cout << "Built dXtEEX array" << std::endl;
 
 		// sgd
 		if(p.mode_sgd){

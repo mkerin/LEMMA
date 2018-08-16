@@ -85,6 +85,7 @@ class Data
 	Eigen::MatrixXd E; // env matrix
 	Eigen::VectorXd Z; // interaction vector
 	Eigen::MatrixXd R; // recombination map
+	Eigen::ArrayXXd dXtEEX;
 	Eigen::MatrixXd E_weights;
 	genfile::bgen::View::UniquePtr bgenView;
 	std::vector< double > beta, tau, neglogP, neglogP_2dof;
@@ -224,6 +225,10 @@ class Data
 		// Read in grids for importance sampling
 		if (params.mode_vb) {
 			read_grids();
+		}
+
+		if(params.dxteex_file != "NULL"){
+			read_dxteex();
 		}
 
 		// Read starting point for VB approximation if provided
@@ -534,6 +539,79 @@ class Data
 
 	void read_grid_file( std::string filename,
 						 Eigen::MatrixXd& M,
+						 std::vector< std::string >& col_names){
+		// Used in mode_vb only.
+		// Slightly different from read_txt_file in that I don't know
+		// how many rows there will be and we can assume no missing values.
+
+		boost_io::filtering_istream fg;
+		fg.push(boost_io::file_source(filename.c_str()));
+		if (!fg) {
+			std::cout << "ERROR: " << filename << " not opened." << std::endl;
+			std::exit(EXIT_FAILURE);
+		}
+
+		// Read file twice to acertain number of lines
+		std::string line;
+		int n_grid = 0;
+		getline(fg, line);
+		while (getline(fg, line)) {
+			n_grid++;
+		}
+		fg.reset();
+		fg.push(boost_io::file_source(filename.c_str()));
+
+		// Reading column names
+		if (!getline(fg, line)) {
+			std::cout << "ERROR: " << filename << " not read." << std::endl;
+			std::exit(EXIT_FAILURE);
+		}
+		std::stringstream ss;
+		std::string s;
+		int n_cols = 0;
+		ss.clear();
+		ss.str(line);
+		while (ss >> s) {
+			++n_cols;
+			col_names.push_back(s);
+		}
+		std::cout << " Detected " << n_cols << " column(s) from " << filename << std::endl;
+
+		// Write remainder of file to Eigen matrix M
+		M.resize(n_grid, n_cols);
+		int i = 0;
+		double tmp_d;
+		try {
+			while (getline(fg, line)) {
+				if (i >= n_grid) {
+					throw std::runtime_error("ERROR: could not convert txt file (too many lines).");
+				}
+				ss.clear();
+				ss.str(line);
+				for (int k = 0; k < n_cols; k++) {
+					std::string s;
+					ss >> s;
+					try{
+						tmp_d = stod(s);
+					} catch (const std::invalid_argument &exc){
+						std::cout << s << " on line " << i << std::endl;
+						throw;
+					}
+
+					M(i, k) = tmp_d;
+				}
+				i++; // loop should end at i == n_grid
+			}
+			if (i < n_grid) {
+				throw std::runtime_error("ERROR: could not convert txt file (too few lines).");
+			}
+		} catch (const std::exception &exc) {
+			throw;
+		}
+	}
+
+	void read_grid_file( std::string filename,
+						 Eigen::ArrayXXd& M,
 						 std::vector< std::string >& col_names){
 		// Used in mode_vb only.
 		// Slightly different from read_txt_file in that I don't know
@@ -958,6 +1036,20 @@ class Data
 
 		assert(n_cols == 1);
 		assert(missing_rows.size() == 0);
+	}
+
+	void read_dxteex( ){
+		// TODO: make this less hacky
+		// Assumed in correct order and no missing values
+		std::vector<std::string> dxteex_names;
+		read_grid_file( params.dxteex_file, dXtEEX, dxteex_names );
+
+		assert(dxteex_names.size() == n_env * n_env);
+		std::cout << "Warning: " << dXtEEX.rows() << " rows found in ";
+		std::cout << params.dxteex_file << std::endl;
+		std::cout << "No checking is done to confirm";
+		std::cout << " that this is the same as the number of variants, or that ";
+		std::cout << "they are in the correct order." << std::endl;
 	}
 
 	void read_recombination_map( ){

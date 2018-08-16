@@ -92,7 +92,8 @@ void parse_arguments(parameters &p, int argc, char *argv[]) {
 		"--env_update_repeats",
 		"--rescale_eta",
 		"--gamma_updates_thresh",
-		"--init_weights_with_snpwise_scan"
+		"--init_weights_with_snpwise_scan",
+		"--dxteex"
 	};
 
 	std::set<std::string>::iterator set_it;
@@ -351,6 +352,13 @@ void parse_arguments(parameters &p, int argc, char *argv[]) {
 				check_counts(in_str, i, 1, argc);
 				p.vb_init_file = argv[i + 1]; // covar file
 				check_file_exists(p.vb_init_file);
+				i += 1;
+			}
+
+			if(strcmp(in_str, "--dxteex") == 0) {
+				check_counts(in_str, i, 1, argc);
+				p.dxteex_file = argv[i + 1]; // covar file
+				check_file_exists(p.dxteex_file);
 				i += 1;
 			}
 
