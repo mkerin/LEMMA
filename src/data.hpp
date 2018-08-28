@@ -48,9 +48,6 @@ class Data
 	public :
 	parameters params;
 
-	std::vector< std::string > chromosome, rsid;
-	std::vector< uint32_t > position;
-	std::vector< std::vector< std::string > > alleles;
 
 	int n_pheno; // number of phenotypes
 	int n_covar; // number of covariates
@@ -68,6 +65,10 @@ class Data
 
 	std::vector< double > info;
 	std::vector< double > maf;
+	std::vector< std::string > chromosome, rsid, SNPID;
+	std::vector< std::string > external_dXtEEX_SNPID;
+	std::vector< uint32_t > position;
+	std::vector< std::vector< std::string > > alleles;
 	std::vector< std::string > rsid_list;
 
 	std::map<int, bool> missing_envs;   // set of subjects missing >= 1 env variables
@@ -86,6 +87,7 @@ class Data
 	Eigen::VectorXd Z; // interaction vector
 	Eigen::MatrixXd R; // recombination map
 	Eigen::ArrayXXd dXtEEX;
+	Eigen::ArrayXXd external_dXtEEX;
 	Eigen::MatrixXd E_weights;
 	genfile::bgen::View::UniquePtr bgenView;
 	std::vector< double > beta, tau, neglogP, neglogP_2dof;
@@ -228,7 +230,7 @@ class Data
 		}
 
 		if(params.dxteex_file != "NULL"){
-			read_dxteex();
+			read_external_dxteex();
 		}
 
 		// Read starting point for VB approximation if provided
@@ -284,7 +286,7 @@ class Data
 		uint32_t pos_j ;
 		std::string rsid_j ;
 		std::vector< std::string > alleles_j ;
-		std::string SNPID ; // read but ignored
+		std::string SNPID_j ; // read but ignored
 		std::vector< std::vector< double > > probs ;
 		ProbSetter setter( &probs );
 		std::map<int, bool> missing_genos;
@@ -307,7 +309,7 @@ class Data
 		long int n_constant_variance = 0;
 		std::size_t jj = 0;
 		while ( jj < params.chunk_size && bgen_pass ) {
-			bgen_pass = bgenView->read_variant( &SNPID, &rsid_j, &chr_j, &pos_j, &alleles_j );
+			bgen_pass = bgenView->read_variant( &SNPID_j, &rsid_j, &chr_j, &pos_j, &alleles_j );
 			if (!bgen_pass) break;
 			n_var_parsed++;
 			assert( alleles_j.size() > 0 );
@@ -391,6 +393,7 @@ class Data
 			info.push_back(info_j);
 			rsid.push_back(rsid_j);
 			chromosome.push_back(chr_j);
+			SNPID.push_back(SNPID_j);
 			position.push_back(pos_j);
 			alleles.push_back(alleles_j);
 			G.al_0.push_back(alleles_j[0]);
@@ -400,6 +403,7 @@ class Data
 			G.position.push_back(pos_j);
 			std::string key_j = chr_j + "~" + std::to_string(pos_j) + "~" + alleles_j[0] + "~" + alleles_j[1];
 			G.SNPKEY.push_back(key_j);
+			G.SNPID.push_back(SNPID_j);
 
 			// filters passed; write dosage to G
 			// Note that we only write dosage for valid sample ids
@@ -1038,18 +1042,104 @@ class Data
 		assert(missing_rows.size() == 0);
 	}
 
-	void read_dxteex( ){
-		// TODO: make this less hacky
-		// Assumed in correct order and no missing values
-		std::vector<std::string> dxteex_names;
-		read_grid_file( params.dxteex_file, dXtEEX, dxteex_names );
+	void read_external_dxteex( ){
+		int col_offset = 6; // number of context cols before snp-env covariances
 
-		assert(dxteex_names.size() == n_env * n_env);
-		std::cout << "Warning: " << dXtEEX.rows() << " rows found in ";
-		std::cout << params.dxteex_file << std::endl;
-		std::cout << "No checking is done to confirm";
-		std::cout << " that this is the same as the number of variants, or that ";
-		std::cout << "they are in the correct order." << std::endl;
+		// Reading from file
+		boost_io::filtering_istream fg;
+		fg.push(boost_io::file_source(params.dxteex_file.c_str()));
+		if (!fg) {
+			std::cout << "ERROR: " << params.dxteex_file << " not opened." << std::endl;
+			std::exit(EXIT_FAILURE);
+		}
+
+		// Read file twice to acertain number of lines
+		int n_lines = 0;
+		std::string line;
+		getline(fg, line); // skip header
+		while (getline(fg, line)) {
+			n_lines++;
+		}
+		fg.reset();
+		fg.push(boost_io::file_source(params.dxteex_file.c_str()));
+
+		// Reading column names
+		std::vector<std::string> dxteex_names;
+		if (!getline(fg, line)) {
+			std::cout << "ERROR: " << params.dxteex_file << " not read." << std::endl;
+			std::exit(EXIT_FAILURE);
+		}
+		std::stringstream ss;
+		std::string s;
+		int n_cols = 0;
+		ss.clear();
+		ss.str(line);
+		while (ss >> s) {
+			++n_cols;
+			dxteex_names.push_back(s);
+		}
+		if(n_cols != n_env * n_env + col_offset){
+			std::cout << "Expecting columns in order: " << std::endl;
+			std::cout << "SNPID, chr, rsid, pos, allele0, allele1, env-snp covariances.." << std::endl;
+			throw std::runtime_error("Unexpected number of columns");
+		}
+
+		// Write remainder of file to Eigen matrix M
+		external_dXtEEX.resize(n_lines, n_env * n_env);
+		int i = 0;
+		double tmp_d;
+		while (getline(fg, line)) {
+			if (i >= n_samples) {
+				throw std::runtime_error("ERROR: could not convert txt file (too many lines).");
+			}
+			ss.clear();
+			ss.str(line);
+			for (int k = 0; k < n_cols; k++) {
+				std::string s;
+				ss >> s;
+				if (k == 0){
+					external_dXtEEX_SNPID.push_back(s);
+				}
+				if (k >= col_offset){
+					try{
+						external_dXtEEX(i, k-col_offset) = stod(s);
+					} catch (const std::invalid_argument &exc){
+						std::cout << "Found value " << s << " on line " << i;
+	 					std::cout << " of file " << params.dxteex_file << std::endl;
+						throw std::runtime_error("Unexpected value");
+					}
+				}
+			}
+			i++; // loop should end at i == n_samples
+		}
+		std::cout << n_lines << " rows found in " << params.dxteex_file << std::endl;
+	}
+
+	void calc_dxteex(){
+		std::cout << "Reordering/building dXtEEX array" << std::endl;
+		MyTimer t_calcDXtEEX("dXtEEX array constructed in %ts \n");
+		Eigen::ArrayXd cl_j;
+		double dztz_lmj;
+		dXtEEX.resize(n_var, n_env * n_env);
+		std::vector<std::string>::iterator it;
+		int cnt = 0;
+		for (std::size_t jj = 0; jj < n_var; jj++){
+			it = std::find(external_dXtEEX_SNPID.begin(), external_dXtEEX_SNPID.end(), G.SNPID[jj]);
+			if (it == G.SNPKEY.end()){
+				cnt++;
+				cl_j = G.col(jj);
+				for (int ll = 0; ll < n_env; ll++){
+					for (int mm = 0; mm <= ll; mm++){
+						dztz_lmj = (cl_j * E.array().col(ll) * E.array().col(mm) * cl_j).sum();
+						dXtEEX(jj, ll*n_env + mm) = dztz_lmj;
+						dXtEEX(jj, mm*n_env + ll) = dztz_lmj;
+					}
+				}
+			} else {
+				dXtEEX.row(jj) = external_dXtEEX.row(it - external_dXtEEX_SNPID.begin());
+			}
+		}
+		std::cout << cnt << " computed from raw data " << n_var - cnt << " read from file" << std::endl;
 	}
 
 	void read_recombination_map( ){

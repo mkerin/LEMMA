@@ -183,7 +183,7 @@ public:
 		t_interimOutput.resume();
 
 		outf_iter << cnt << "\t" << std::setprecision(3) << std::fixed;
-		outf_iter << i_hyps.sigma << "\t" << std::setprecision(8) << std::fixed;
+		outf_iter << i_hyps.sigma << "\t" << std::setprecision(12) << std::fixed;
 		for (int ee = 0; ee < n_effects; ee++){
 			outf_iter << i_hyps.pve(ee) << "\t";
 			if(p.mode_mog_prior){

@@ -73,6 +73,7 @@ public:
 	std::vector< std::uint32_t > position;
 	// chr~pos~a0~a1
 	std::vector< std::string > SNPKEY;
+	std::vector< std::string > SNPID;
 
 	std::vector<std::map<int, bool>> missing_genos;
 	Eigen::VectorXd compressed_dosage_means;
