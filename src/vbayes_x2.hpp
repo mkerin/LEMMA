@@ -95,6 +95,8 @@ public:
 	Eigen::MatrixXd hyps_grid;
 	Eigen::MatrixXd probs_grid; // prob of each point in grid under hyps
 
+	// genome wide scan computed upstream
+	Eigen::ArrayXXd& snpstats;
 
 	// Init points
 	VariationalParametersLite vp_init;
@@ -120,6 +122,7 @@ public:
                             Y(Eigen::Map<Eigen::VectorXd>(dat.Y.data(), dat.Y.rows())),
                             C( dat.W ),
                             dXtEEX( dat.dXtEEX ),
+                            snpstats( dat.snpstats ),
                             p( dat.params ),
                             t_updateAlphaMu("updateAlphaMu: %ts \n"),
                             t_elbo("calcElbo: %ts \n"),
@@ -225,9 +228,7 @@ public:
 		Cty = C.transpose() * Y;
 
 		// dXtEEX an L^2 x P array
-		if(p.dxteex_file != "NULL"){
-			dXtEEX = dat.dXtEEX;
-		} else {
+		if(p.dxteex_file == "NULL"){
 			std::cout << "Building dXtEEX array" << std::endl;
 			Eigen::ArrayXd cl_j;
 			double dztz_lmj;
@@ -897,91 +898,27 @@ public:
 	}
 
 	void calc_snpwise_regression(VariationalParametersLite& vp){
-		/* Current aim to run this before starting VB
+		/* 
+		Genome-wide gxe scan now computed upstream
+		Eigen::ArrayXXd snpstats contains results
 
-		Snpwise scan where we fit linear regression to
-		Y = X_j beta + (X_j dot E) tau
-
-		return:
-		- tau coefficients
-		- pvalue from f-test (tau non zero)
+		cols:
+		neglogp-main, neglogp-gxe, coeff-gxe-main, coeff-gxe-env..
 		*/
-		std::cout << "Starting GWAS scan" << std::endl;
 		t_snpwise_regression.resume();
-
-		// Regress covars from Y
-		Eigen::MatrixXd coeff = solve(C.transpose() * C, C.transpose() * Y);
-		Eigen::MatrixXd Y2 = Y - C * coeff;
-
-		// Snp-wise scan
-		Eigen::ArrayXd  gxe_neglogp(n_var);
-		Eigen::ArrayXd  main_neglogp(n_var);
-		Eigen::ArrayXd  tau1(n_var);
-		Eigen::MatrixXd tau2(1 + n_env, n_var);
-		boost_m::fisher_f f_dist(n_env, n_samples - n_env - 1);
-		for (std::uint32_t jj = 0; jj < n_var; jj++){
-			Eigen::VectorXd X_kk = X.col(jj);
-
-			Eigen::MatrixXd H(n_samples, 1 + n_env);
-			H << X_kk, (E.array().colwise() * X_kk.array()).matrix();
-
-			// Fitting regression models
-			Eigen::MatrixXd tau1_j = X_kk.transpose() * Y2 / (N-1.0);
-			Eigen::MatrixXd tau2_j = solve(H.transpose() * H, H.transpose() * Y2);
-			double rss_null = (Y2 - X_kk * tau1_j).squaredNorm();
-			double rss_alt  = (Y2 - H * tau2_j).squaredNorm();
-
-			// T-test; main effect of variant j
-			boost_m::students_t t_dist(n_samples - 1);
-			double main_se_j    = std::sqrt(rss_null) / (N - 1.0);
-			double main_tstat_j = tau1_j(0, 0) / main_se_j;
-			double main_pval_j  = 2 * boost_m::cdf(boost_m::complement(t_dist, fabs(main_tstat_j)));
-
-			// F-test; joint interaction effect of variant j
-			double f_stat        = (rss_null - rss_alt) / (double) n_env;
-			f_stat              /= rss_alt / (double) (n_samples - n_env - 1);
-			double gxe_pval_j    = boost_m::cdf(boost_m::complement(f_dist, f_stat));
-			double gxe_neglogp_j = -1 * std::log10(gxe_pval_j);
-			if(!std::isfinite(gxe_neglogp_j)){
-				std::cout << "Warning: neglog-p = " << gxe_neglogp_j << std::endl;
-				std::cout << "Warning: p-val = "    << gxe_pval_j << std::endl;
-				std::cout << "Warning: rss_null = " << rss_null << std::endl;
-				std::cout << "Warning: rss_alt = "  << rss_alt << std::endl;
-				std::cout << "Warning: f_stat = "   << f_stat << std::endl;
-			}
-
-			tau1(jj)           = tau1_j(0, 0);
-			tau2.col(jj)       = tau2_j;
-			gxe_neglogp[jj]    = -1 * std::log10(gxe_pval_j);
-			main_neglogp[jj]   = -1 * std::log10(main_pval_j);
-		}
 
 		// Keep values from point with highest p-val
 		double vv = 0.0;
-		for (std::uint32_t jj = 0; jj < n_var; jj++){
-			if (gxe_neglogp(jj) > vv){
-				vv = gxe_neglogp(jj);
-				vp.muw = tau2.block(1, jj, n_env, 1);
+		for (long int jj = 0; jj < n_var; jj++){
+			if (snpstats(jj, 1) > vv){
+				vv = snpstats(jj, 1);
+				vp.muw = snpstats.block(jj, 3, 1, n_env);
 
-				std::cout << "neglogp at variant " << jj << ": " << gxe_neglogp(jj);
-				std::cout << std::endl << tau2.block(1, jj, n_env, 1).transpose() << std::endl;
+				std::cout << "neglogp at variant " << jj << ": " << vv;
+				std::cout << std::endl << vp.muw.transpose() << std::endl;
 			}
 		}
 		t_snpwise_regression.stop();
-
-		// Write to file
-		std::string ofile_scan = fstream_init(outf_scan, "", "_snpwise_scan");
-		std::cout << "Writing snp-wise scan to file " << ofile_scan << std::endl;
-
-		outf_scan << "chr rsid pos a0 a1 main main_neglogp joint_gxe_neglogp";
-		outf_scan << std::endl;
-		for (std::uint32_t kk = 0; kk < n_var; kk++){
-			outf_scan << X.chromosome[kk] << " " << X.rsid[kk] << " " << X.position[kk];
-			outf_scan << " " << X.al_0[kk] << " " << X.al_1[kk];
-			outf_scan << " " << tau1(kk) << " " << main_neglogp(kk);
-			outf_scan << " " << gxe_neglogp(kk);
-			outf_scan << std::endl;
-		}
 	}
 
 	/********** Helper functions ************/
