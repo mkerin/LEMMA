@@ -51,6 +51,7 @@ void parse_arguments(parameters &p, int argc, char *argv[]) {
 		"--recombination_map",
 		"--environment",
 		"--environment_weights",
+		"--snpwise_scan",
 		"--chunk",
 		"--range",
 		"--maf",
@@ -306,6 +307,13 @@ void parse_arguments(parameters &p, int argc, char *argv[]) {
 				check_counts(in_str, i, 1, argc);
 				p.covar_file = argv[i + 1]; // covar file
 				check_file_exists(p.covar_file);
+				i += 1;
+			}
+
+			if(strcmp(in_str, "--snpwise_scan") == 0) {
+				check_counts(in_str, i, 1, argc);
+				p.snpstats_file = argv[i + 1]; // covar file
+				check_file_exists(p.snpstats_file);
 				i += 1;
 			}
 

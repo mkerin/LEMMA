@@ -53,9 +53,9 @@ int main( int argc, char** argv ) {
 		// Also regresses out covariables if necessary
 		data.standardise_non_genetic_data();
 
-
 		data.read_full_bgen();
 		data.calc_dxteex();
+		data.calc_snpstats();
 		if(p.vb_init_file != "NULL"){
 			data.read_alpha_mu();
 		}
