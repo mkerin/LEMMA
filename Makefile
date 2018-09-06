@@ -5,43 +5,50 @@ PRINTF  := printf
 
 TARGET := bin/bgen_prog
 SRCDIR := src
-INCLUDES = -Ibuild/genfile/include/ -I3rd_party/zstd-1.1.0/lib/ \
-           -Ibuild/db/include/ -I3rd_party/sqlite3 -I3rd_party/boost_1_55_0
-LIBS =     -Lbuild/ -Lbuild/3rd_party/zstd-1.1.0 -Lbuild/db -Lbuild/3rd_party/sqlite3 \
-           -Lbuild/3rd_party/boost_1_55_0 -lbgen -ldb -lsqlite3 -lboost -lz -ldl -lrt -lpthread -lzstd
+FLAGS = -std=c++11 -Wno-deprecated
+
+rescomp: CXX = /apps/well/gcc/7.2.0/bin/g++
+rescomp: FLAGS += -O3 -static -static-libgcc -static-libstdc++ -lrt
+rescomp: $(TARGET)
+
+rescomp-optim: CXX = /apps/well/gcc/7.2.0/bin/g++
+rescomp-optim: FLAGS += -O3 -fno-rounding-math -fno-signed-zeros -fprefetch-loop-arrays -flto -lrt
+rescomp-optim: $(TARGET)
+
+rescomp-debug: CXX = /apps/well/gcc/7.2.0/bin/g++
+rescomp-debug: FLAGS += -g3 -lrt
+rescomp-debug: $(TARGET)
+
+garganey: CXX = g++
+garganey: FLAGS += -g3 -lrt
+garganey: $(TARGET)
+
+garganey-optim: CXX = g++
+garganey-optim: FLAGS += -O3 -lrt
+garganey-optim: $(TARGET)
+
+laptop: BGEN = /Users/kerin/software/bgen/
+laptop: CXX = g++
+laptop: LD_LIBRARY_PATH = $(ls -d /usr/local/Cellar/gcc/* | tail -n1)/lib
+laptop: LIBS += -L/usr/local/Cellar/boost@1.55/1.55.0_1 -lboost_iostreams
+laptop: FLAGS += -DOSX -lz
+laptop: $(TARGET)
+
+# INCLUDES += -I$(BGEN)build/genfile/include/ -I$(BGEN)3rd_party/zstd-1.1.0/lib/ \
+#             -I$(BGEN)build/db/include/ -I$(BGEN)3rd_party/sqlite3 -I$(BGEN)3rd_party/boost_1_55_0
+# LIBS +=     -Lbuild/ -Lbuild/3rd_party/zstd-1.1.0 -Lbuild/db -Lbuild/3rd_party/sqlite3 \
+#             -Lbuild/3rd_party/boost_1_55_0 -lbgen -ldb -lsqlite3 -lboost -lz -ldl -lrt -lpthread -lzstd
+LIBS += -L$(BGEN)build/3rd_party/boost_1_55_0/ -L$(BGEN)build/3rd_party/zstd-1.1.0/ \
+       -L$(BGEN)build/3rd_party/sqlite3/ -L$(BGEN)build/db/ -L$(BGEN)build/ \
+       -lzstd -lbgen -ldb -lsqlite3 -ldl -lboost
+INCLUDES = -I$(BGEN)db/include -I$(BGEN)3rd_party/sqlite3 -I$(BGEN)3rd_party/boost_1_55_0/ \
+           -I$(BGEN)genfile/include -I$(BGEN)3rd_party/zstd-1.1.0/lib
+FLAGS += $(LIBS) $(INCLUDES)
 
 HEADERS := vbayes_x2.hpp genotype_matrix.hpp vbayes_tracker.hpp \
            parse_arguments.hpp data.hpp class.h bgen_parser.hpp utils.hpp \
            variational_parameters.hpp
 HEADERS := $(addprefix $(SRCDIR)/,$(HEADERS))
-
-rescomp: CXX = /apps/well/gcc/7.2.0/bin/g++
-rescomp: FLAGS += -O3 -static -static-libgcc -static-libstdc++
-rescomp: $(TARGET)
-
-rescomp-optim: CXX = /apps/well/gcc/7.2.0/bin/g++
-rescomp-optim: FLAGS += -O3 -fno-rounding-math -fno-signed-zeros -fprefetch-loop-arrays -flto
-rescomp-optim: $(TARGET)
-
-rescomp-debug: CXX = /apps/well/gcc/7.2.0/bin/g++
-rescomp-debug: FLAGS += -g3
-rescomp-debug: $(TARGET)
-
-garganey: CXX = g++
-garganey: FLAGS += -g3
-garganey: $(TARGET)
-
-garganey-optim: CXX = g++
-garganey-optim: FLAGS += -O3
-garganey-optim: $(TARGET)
-
-# Cutting out -lrt, -lz
-laptop: CXX = /usr/local/Cellar/gcc/7.3.0/bin/x86_64-apple-darwin17.4.0-g++-7
-laptop: LD_LIBRARY_PATH = $(ls -d /usr/local/Cellar/gcc/* | tail -n1)/lib
-laptop: FLAGS += -g3 -lbgen -ldb -lsqlite3 -lboost -ldl -lpthread -lzstd -L$(LD_LIBRARY_PATH)
-laptop: $(TARGET)
-
-FLAGS += -std=c++11 -Wno-deprecated $(LIBS) $(INCLUDES)
 
 $(TARGET) lastest_compile_branch.txt : $(SRCDIR)/bgen_prog.cpp $(HEADERS)
 	$(info $$CXX is [${CXX}])
@@ -53,7 +60,7 @@ $(TARGET) lastest_compile_branch.txt : $(SRCDIR)/bgen_prog.cpp $(HEADERS)
 	echo "Started at: `date`" >> latest_compile_branch.txt
 	echo "*********************************" >> latest_compile_branch.txt
 	$(PRINTF) "\n\nCompilation flags:\n$(FLAGS)\n" >> latest_compile_branch.txt
-	$(CXX) -o $@ $< $(FLAGS)
+	$(CXX) ${FLAGS} -o $@ $<
 
 file_parse : file_parse.cpp
 	$(CXX) -o $@ $< $(FLAGS)

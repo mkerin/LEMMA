@@ -19,7 +19,6 @@ https://stackoverflow.com/questions/3283021/compile-a-standalone-static-executab
 #include <random>
 #include <thread>
 #include "sys/types.h"
-#include "sys/sysinfo.h"
 #include "class.h"
 #include "vbayes_tracker.hpp"
 #include "data.hpp"
@@ -1450,6 +1449,7 @@ public:
 	}
 
 	int getValueRAM(){ //Note: this value is in KB!
+#ifndef OSX
 		FILE* file = fopen("/proc/self/status", "r");
 		int result = -1;
 		char line[128];
@@ -1462,6 +1462,9 @@ public:
 		}
 		fclose(file);
 		return result;
+#else
+		return -1;
+#endif
 	}
 
 	/********** SGD stuff; unfinished ************/
