@@ -108,6 +108,11 @@ void parse_arguments(parameters &p, int argc, char *argv[]) {
 		std::cout << "======-----"<< std::endl;
 		std::cout << "Matt's BGEN PROG" << std::endl;
 		std::cout << "======-----" << std::endl << std::endl;
+
+#ifdef EIGEN_VECTORIZE
+		std::cout << "Supports:" << std::endl;
+		std::cout << "- vectorization with SSE" << std::endl;
+#endif
 		std::exit(EXIT_SUCCESS);
 	}
 
