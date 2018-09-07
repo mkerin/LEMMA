@@ -31,7 +31,7 @@ laptop: BGEN = /Users/kerin/software/bgen/
 laptop: CXX = g++
 laptop: LD_LIBRARY_PATH = $(ls -d /usr/local/Cellar/gcc/* | tail -n1)/lib
 laptop: LIBS += -L/usr/local/Cellar/boost@1.55/1.55.0_1 -lboost_iostreams
-laptop: FLAGS += -DOSX -lz
+laptop: FLAGS += -DOSX -lz -msse2
 laptop: $(TARGET)
 
 # INCLUDES += -I$(BGEN)build/genfile/include/ -I$(BGEN)3rd_party/zstd-1.1.0/lib/ \
