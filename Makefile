@@ -27,12 +27,17 @@ garganey-optim: CXX = g++
 garganey-optim: FLAGS += -O3 -lrt
 garganey-optim: $(TARGET)
 
-laptop: BGEN = /Users/kerin/software/bgen/
+laptop: BGEN="/Users/kerin/software/bgen/"
+laptop: LDFLAGS="-L/usr/local/opt/llvm/lib"
+laptop: CPPFLAGS="-I/usr/local/opt/llvm/include"
 laptop: CXX = g++
 laptop: LD_LIBRARY_PATH = $(ls -d /usr/local/Cellar/gcc/* | tail -n1)/lib
 laptop: LIBS += -L/usr/local/Cellar/boost@1.55/1.55.0_1 -lboost_iostreams
+laptop: INCLUDES += -I/usr/local/Cellar/boost@1.55/1.55.0_1
 laptop: FLAGS += -DOSX -lz -msse2
 laptop: $(TARGET)
+laptop: examples/test_matrix_matrix_mult
+
 
 # INCLUDES += -I$(BGEN)build/genfile/include/ -I$(BGEN)3rd_party/zstd-1.1.0/lib/ \
 #             -I$(BGEN)build/db/include/ -I$(BGEN)3rd_party/sqlite3 -I$(BGEN)3rd_party/boost_1_55_0
@@ -41,7 +46,7 @@ laptop: $(TARGET)
 LIBS += -L$(BGEN)build/3rd_party/boost_1_55_0/ -L$(BGEN)build/3rd_party/zstd-1.1.0/ \
        -L$(BGEN)build/3rd_party/sqlite3/ -L$(BGEN)build/db/ -L$(BGEN)build/ \
        -lzstd -lbgen -ldb -lsqlite3 -ldl -lboost
-INCLUDES = -I$(BGEN)db/include -I$(BGEN)3rd_party/sqlite3 -I$(BGEN)3rd_party/boost_1_55_0/ \
+INCLUDES += -I$(BGEN)db/include -I$(BGEN)3rd_party/sqlite3 -I$(BGEN)3rd_party/boost_1_55_0/ \
            -I$(BGEN)genfile/include -I$(BGEN)3rd_party/zstd-1.1.0/lib
 FLAGS += $(LIBS) $(INCLUDES)
 
@@ -100,6 +105,10 @@ examples/check_nested_classes: examples/check_nested_classes.cpp
 
 examples/check_eigen: examples/check_eigen.cpp
 	$(CXX) -o $@ $< $(FLAGS)
+
+examples/test_matrix_matrix_mult: examples/test_matrix_matrix_mult.cpp
+	$(CXX) $< -o $@ $(FLAGS)  -fopenmp -O3
+
 
 # IO Tests
 # Files in data/out are regarded as 'true', and we check that the equivalent
