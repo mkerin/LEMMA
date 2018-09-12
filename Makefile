@@ -24,7 +24,7 @@ garganey: FLAGS += -g3 -lrt
 garganey: $(TARGET)
 
 garganey-optim: CXX = g++
-garganey-optim: FLAGS += -O3 -lrt
+garganey-optim: FLAGS += -O3 -msse2
 garganey-optim: $(TARGET)
 
 laptop: BGEN = /Users/kerin/software/bgen/
@@ -38,11 +38,11 @@ laptop: $(TARGET)
 #             -I$(BGEN)build/db/include/ -I$(BGEN)3rd_party/sqlite3 -I$(BGEN)3rd_party/boost_1_55_0
 # LIBS +=     -Lbuild/ -Lbuild/3rd_party/zstd-1.1.0 -Lbuild/db -Lbuild/3rd_party/sqlite3 \
 #             -Lbuild/3rd_party/boost_1_55_0 -lbgen -ldb -lsqlite3 -lboost -lz -ldl -lrt -lpthread -lzstd
-LIBS += -L$(BGEN)build/3rd_party/boost_1_55_0/ -L$(BGEN)build/3rd_party/zstd-1.1.0/ \
-       -L$(BGEN)build/3rd_party/sqlite3/ -L$(BGEN)build/db/ -L$(BGEN)build/ \
-       -lzstd -lbgen -ldb -lsqlite3 -ldl -lboost
-INCLUDES = -I$(BGEN)db/include -I$(BGEN)3rd_party/sqlite3 -I$(BGEN)3rd_party/boost_1_55_0/ \
-           -I$(BGEN)genfile/include -I$(BGEN)3rd_party/zstd-1.1.0/lib
+LIBS += -L$(BGEN)build/ -L$(BGEN)build/3rd_party/zstd-1.1.0 -L$(BGEN)build/db \
+       -L$(BGEN)build/3rd_party/sqlite3 -L$(BGEN)build/3rd_party/boost_1_55_0 \
+       -lbgen -ldb -lsqlite3 -lboost -lz -ldl -lrt -lpthread -lzstd 
+INCLUDES = -I$(BGEN)build/genfile/include/ -I$(BGEN)3rd_party/zstd-1.1.0/lib/ \
+           -I$(BGEN)build/db/include/ -I$(BGEN)3rd_party/sqlite3 -I$(BGEN)3rd_party/boost_1_55_0
 FLAGS += $(LIBS) $(INCLUDES)
 
 HEADERS := vbayes_x2.hpp genotype_matrix.hpp vbayes_tracker.hpp \
@@ -60,7 +60,7 @@ $(TARGET) lastest_compile_branch.txt : $(SRCDIR)/bgen_prog.cpp $(HEADERS)
 	echo "Started at: `date`" >> latest_compile_branch.txt
 	echo "*********************************" >> latest_compile_branch.txt
 	$(PRINTF) "\n\nCompilation flags:\n$(FLAGS)\n" >> latest_compile_branch.txt
-	$(CXX) ${FLAGS} -o $@ $<
+	$(CXX) -o $@ $< ${FLAGS}
 
 file_parse : file_parse.cpp
 	$(CXX) -o $@ $< $(FLAGS)
