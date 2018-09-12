@@ -14,6 +14,7 @@
 #include <string>
 #include <stdexcept>
 #include "class.h"
+#include "my_timer.hpp"
 #include "tools/eigen3.3/Dense"
 #include "tools/eigen3.3/Sparse"
 #include "tools/eigen3.3/Eigenvalues"
@@ -1166,6 +1167,7 @@ class Data
 	void calc_snpstats(){
 		std::cout << "Reordering/computing results for snpwise scan" << std::endl;
 		MyTimer my_timer("snpwise scan constructed in %ts \n");
+		my_timer.resume();
 		Eigen::ArrayXd cl_j;
 		double dztz_lmj;
 		snpstats.resize(n_var, n_env + 3);
@@ -1237,6 +1239,7 @@ class Data
 	void calc_dxteex(){
 		std::cout << "Reordering/building dXtEEX array" << std::endl;
 		MyTimer t_calcDXtEEX("dXtEEX array constructed in %ts \n");
+		t_calcDXtEEX.resume();
 		Eigen::ArrayXd cl_j;
 		double dztz_lmj;
 		dXtEEX.resize(n_var, n_env * n_env);

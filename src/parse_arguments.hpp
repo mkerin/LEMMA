@@ -9,12 +9,39 @@
 #include <sys/stat.h>
 #include "class.h"
 #include "version.h"
+#include "my_timer.hpp"
 #include <regex>
 #include <stdexcept>
+#include "tools/eigen3.3/Dense" // For vectorise profiling
 
 void check_counts(const std::string& in_str, int i, int num, int argc);
 void parse_arguments(parameters &p, int argc, char *argv[]);
 void check_file_exists(const std::string& filename);
+
+// For vectorise profiling
+void foo(const Eigen::VectorXi& aa1,
+         const Eigen::VectorXi& aa2,
+         Eigen::VectorXi& aa){
+	asm("#it begins here!");
+		aa = aa1 + aa2;
+	asm("#it ends here!");
+}
+
+void foo(const Eigen::VectorXf& aa1,
+         const Eigen::VectorXf& aa2,
+         Eigen::VectorXf& aa){
+	asm("#it begins here!");
+		aa = aa1 + aa2;
+	asm("#it ends here!");
+}
+
+void foo(const Eigen::VectorXd& aa1,
+         const Eigen::VectorXd& aa2,
+         Eigen::VectorXd& aa){
+	asm("#it begins here!");
+		aa = aa1 + aa2;
+	asm("#it ends here!");
+}
 
 void check_counts(const std::string& in_str, int i, int num, int argc) {
 	// Stop overflow from argv
@@ -113,6 +140,48 @@ void parse_arguments(parameters &p, int argc, char *argv[]) {
 		std::cout << "Supports:" << std::endl;
 		std::cout << "- vectorization with SSE" << std::endl;
 #endif
+
+#ifndef EIGEN_VECTORIZE
+		std::cout << "Not supported:" << std::endl;
+		std::cout << "- vectorization with SSE" << std::endl;
+#endif
+
+		// For vectorise profiling
+		Eigen::VectorXi aa1 = Eigen::VectorXi::Random(256000);
+		Eigen::VectorXi aa2 = Eigen::VectorXi::Random(256000);
+		Eigen::VectorXi aa(256000);
+		Eigen::VectorXf bb1 = Eigen::VectorXf::Random(256000);
+		Eigen::VectorXf bb2 = Eigen::VectorXf::Random(256000);
+		Eigen::VectorXf bb(256000);
+		Eigen::VectorXd cc1 = Eigen::VectorXd::Random(256000);
+		Eigen::VectorXd cc2 = Eigen::VectorXd::Random(256000);
+		Eigen::VectorXd cc(256000);
+
+		MyTimer t_testi("500 foo() calls in %ts (int)\n");
+		t_testi.resume();
+		for (int jj = 0; jj < 500; jj++){
+			foo(aa1, aa2, aa);
+		}
+		t_testi.stop();
+		t_testi.report();
+
+		MyTimer t_testf("500 foo() calls in %ts (float)\n");
+		t_testf.resume();
+		for (int jj = 0; jj < 500; jj++){
+			foo(bb1, bb2, bb);
+		}
+		t_testf.stop();
+		t_testf.report();
+
+
+		MyTimer t_testd("500 foo() calls in %ts (double)\n");
+		t_testd.resume();
+		for (int jj = 0; jj < 500; jj++){
+			foo(cc1, cc2, cc);
+		}
+		t_testd.stop();
+		t_testd.report();
+
 		std::exit(EXIT_SUCCESS);
 	}
 
