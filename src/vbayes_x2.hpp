@@ -37,7 +37,6 @@ namespace boost_m = boost::math;
 template <typename T>
 inline std::vector<int> validate_grid(const Eigen::MatrixXd &grid, const T n_var);
 inline Eigen::MatrixXd subset_matrix(const Eigen::MatrixXd &orig, const std::vector<int> &valid_points);
-inline std::size_t find_covar_index( std::string colname, std::vector< std::string > col_names );
 
 class VBayesX2 {
 public:
@@ -1581,16 +1580,6 @@ public:
 	}
 };
 
-inline std::size_t find_covar_index( std::string colname, std::vector< std::string > col_names ){
-	std::size_t x_col;
-	std::vector<std::string>::iterator it;
-	it = std::find(col_names.begin(), col_names.end(), colname);
-	if (it == col_names.end()){
-		throw std::invalid_argument("Can't locate parameter " + colname);
-	}
-	x_col = it - col_names.begin();
-	return x_col;
-}
 
 template <typename T>
 inline std::vector<int> validate_grid(const Eigen::MatrixXd &grid, const T n_var){
