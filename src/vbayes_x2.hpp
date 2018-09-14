@@ -145,21 +145,9 @@ public:
 		env_names      = dat.env_names;
 		N              = (double) n_samples;
 
-
 		// Read environmental variables
 		E = dat.E;
-		// if (p.env_file != "NULL"){
-		// } else if(p.x_param_name != "NULL"){
-		// 	std::size_t x_col = find_covar_index(p.x_param_name, dat.covar_names);
-		// 	E                = dat.W.col(x_col);
-		// 	n_env = 1;
-		// 	env_names.push_back(p.x_param_name);
-		// } else {
-		// 	E                = dat.W.col(0);
-		// 	n_env = 1;
-		// 	env_names.push_back("covar[0]");
-		// }
-		X.E = E;  // WARNING: Required to be able to call X.col(jj) with jj > PARNING: Required to be able to call X.col(jj) with jj > P
+		X.E = E;  // Required to be able to call X.col(jj) with jj > P
 
 		// Allocate memory - fwd/back pass vectors
 		std::uint32_t L;
@@ -603,8 +591,7 @@ public:
 		}
 	}
 
-
-	void updateAlphaMu_head(const std::vector< std::uint32_t >& iter,
+	void updateAlphaMu_head(const std::vector< std::vector< std::uint32_t >>& iter_chunks,
                             const Hyps& hyps,
                             VariationalParameters& vp,
                             long int& hty_updates){
@@ -612,23 +599,24 @@ public:
 		// Partition chunks amongst available threads 
 		t_updateAlphaMu.resume();
 
-		const int chunk_size = 64;
-		long int chunk_index = 0;
-		while (chunk_index * chunk_size < n_var){
-			long int offset = chunk_index * chunk_size;
-			int chunk_len = std::min(n_var - offset, chunk_size);
-
+		for (auto chunk : iter_chunks){
 			// partition chunk amongst threads
 			std::vector<std::vector<int>> iters(p.n_thread);
-			for (int kk = 0; kk < chunk_len; kk++){
+			for (int kk = 0; kk < chunk.size(); kk++){
 				iters[kk % p.n_thread].push_back(kk);
 			}
 
+			// Update alpha / mu's
 			for (int nn = 0; nn < p.n_thread; nn++){
 				updateAlphaMu_node
 			}
 
-			chunk_index += 1;
+			// compute variant correlations within chunk
+			// TODO: save this for main effects
+
+			// adjust updates within chunk
+
+			// update residuals
 		}
 
 		for(std::uint32_t kk : iter ){
@@ -639,11 +627,6 @@ public:
 
 			_internal_updateAlphaMu(X_kk, ee, jj, hty_updates, vp, hyps, alpha_cnst);
 
-			if(p.mode_alternating_updates){
-				for(int ee = 1; ee < n_effects; ee++){
-					_internal_updateAlphaMu(X_kk, ee, jj, hty_updates, vp, hyps, alpha_cnst);
-				}
-			}
 		}
 
 		// update summary quantity
@@ -652,14 +635,18 @@ public:
 		t_updateAlphaMu.stop();
 	}
 
-
 	void updateAlphaMu_node(const std::vector< std::uint32_t >& iter,
+                            const Eigen::Ref<const Eigen::VectorXd>& yx,
+                            const Eigen::Ref<const Eigen::VectorXd>& ym,
                             const Hyps& hyps,
+                            const long int& chunk_offset,
+                            Eigen::Ref<Eigen::MatrixXd>& X_chunk,
                             VariationalParameters& vp,
                             long int& hty_updates){
-		t_updateAlphaMu.resume();
-		Eigen::VectorXd X_kk(n_samples);
-		Eigen::VectorXd Z_kk(n_samples);
+		/* Changes for multithreaded updates:
+		- use residuals yx & ym from last chunk
+		- write decompressed dosage to matrix X_chunk
+		*/
 
 		Eigen::ArrayXd alpha_cnst;
 		if(p.mode_mog_prior){
@@ -689,7 +676,6 @@ public:
 
 		t_updateAlphaMu.stop();
 	}
-
 
 	void updateAlphaMu(const std::vector< std::uint32_t >& iter,
                        const Hyps& hyps,
