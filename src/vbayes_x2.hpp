@@ -142,24 +142,24 @@ public:
 		n_grid         = dat.hyps_grid.rows();
 		print_interval = std::max(1, n_grid / 10);
 		covar_names    = dat.covar_names;
+		env_names      = dat.env_names;
 		N              = (double) n_samples;
 
-		env_names = dat.env_names;
 
 		// Read environmental variables
-		if (p.env_file != "NULL"){
-			E = dat.E;
-		} else if(p.x_param_name != "NULL"){
-			std::size_t x_col = find_covar_index(p.x_param_name, dat.covar_names);
-			E                = dat.W.col(x_col);
-			n_env = 1;
-			env_names.push_back(p.x_param_name);
-		} else {
-			E                = dat.W.col(0);
-			n_env = 1;
-			env_names.push_back("covar[0]");
-		}
-		X.E = E;  // WARNING: Required to be able to call X.col(jj) with jj > P
+		E = dat.E;
+		// if (p.env_file != "NULL"){
+		// } else if(p.x_param_name != "NULL"){
+		// 	std::size_t x_col = find_covar_index(p.x_param_name, dat.covar_names);
+		// 	E                = dat.W.col(x_col);
+		// 	n_env = 1;
+		// 	env_names.push_back(p.x_param_name);
+		// } else {
+		// 	E                = dat.W.col(0);
+		// 	n_env = 1;
+		// 	env_names.push_back("covar[0]");
+		// }
+		X.E = E;  // WARNING: Required to be able to call X.col(jj) with jj > PARNING: Required to be able to call X.col(jj) with jj > P
 
 		// Allocate memory - fwd/back pass vectors
 		std::uint32_t L;
@@ -512,11 +512,13 @@ public:
 			alpha_diff_updates.push_back(alpha_diff);
 
 			// Update env-weights
-			for (int uu = 0; uu < p.env_update_repeats; uu++ ){
-				updateEnvWeights(env_fwd_pass, hyps, vp);
-				updateEnvWeights(env_back_pass, hyps, vp);
+			if (n_effects > 1 && n_env > 1){
+				for (int uu = 0; uu < p.env_update_repeats; uu++ ){
+					updateEnvWeights(env_fwd_pass, hyps, vp);
+					updateEnvWeights(env_back_pass, hyps, vp);
+				}
+				check_monotonic_elbo(hyps, vp, count, logw_prev, "updateEnvWeights");
 			}
-			check_monotonic_elbo(hyps, vp, count, logw_prev, "updateEnvWeights");
 
 			// Log updates
 			i_logw     = calc_logw(hyps, vp);
