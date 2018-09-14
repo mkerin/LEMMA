@@ -215,8 +215,20 @@ class Data
 			read_covar();
 		}
 
+		// Environmental vars - subset of covars
 		if(params.env_file != "NULL"){
 			read_environment();
+		} else if (params.x_param_name != "NULL"){
+			env_names.push_back(params.x_param_name);
+			n_env             = 1;
+			std::size_t x_col = find_covar_index(params.x_param_name, covar_names);
+			E                 = W.col(x_col);
+		} else if (params.interaction_analysis){
+			env_names.push_back(covar_names[0]);
+			E                 = W.col(0);
+			n_env             = 1;
+		} else {
+			n_env             = 0;
 		}
 
 		if(params.env_weights_file != "NULL" && params.env_file != "NULL"){
