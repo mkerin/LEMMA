@@ -153,13 +153,8 @@ public:
 
 		// Allocate memory - fwd/back pass vectors
 		std::cout << "Allocating indices for fwd/back passes" << std::endl;
-		std::uint32_t L;
-		if(p.mode_alternating_updates){
-			L = n_var;
-		} else {
-			L = n_var * n_effects;
-		}
-		for(std::uint32_t kk = 0; kk < L; kk++){
+
+		for(std::uint32_t kk = 0; kk < n_var * n_effects; kk++){
 			fwd_pass.push_back(kk);
 			back_pass.push_back(n_var2 - kk - 1);
 		}
@@ -173,15 +168,13 @@ public:
 		n_chunks *= n_effects;
 		fwd_pass_chunks.resize(n_chunks);
 		back_pass_chunks.resize(n_chunks);
-		for (int ee = 0; ee < n_effects; ee++){
-			for(std::uint32_t kk = ee * n_var; kk < (ee+1) * n_var; kk++){
-				std::uint32_t ch_index = (kk / p.vb_chunk_size) + (kk / n_var);
-				fwd_pass_chunks[ch_index].push_back(kk);
+		for(std::uint32_t kk = 0; kk < n_effects * n_var; kk++){
+			std::uint32_t ch_index = (kk / p.vb_chunk_size) + (kk / n_var);
+			fwd_pass_chunks[ch_index].push_back(kk);
 
-				std::uint32_t kk_bck = n_effects * n_var - 1 - kk;
-				std::uint32_t ch_bck_index = n_chunks - 1 - ((kk_bck / p.vb_chunk_size) + (kk_bck / n_var));
-				back_pass_chunks[ch_bck_index].push_back(kk_bck);
-			}
+			std::uint32_t kk_bck = n_effects * n_var - 1 - kk;
+			std::uint32_t ch_bck_index = n_chunks - 1 - ((kk_bck / p.vb_chunk_size) + (kk_bck / n_var));
+			back_pass_chunks[ch_bck_index].push_back(kk_bck);
 		}
 
 		// non random initialisation
@@ -234,25 +227,6 @@ public:
 		}
 
 		Cty = C.transpose() * Y;
-
-		// dXtEEX an L^2 x P array
-		if(p.dxteex_file == "NULL"){
-			std::cout << "Building dXtEEX array" << std::endl;
-			Eigen::ArrayXd cl_j;
-			double dztz_lmj;
-			dXtEEX.resize(n_var, n_env * n_env);
-			for (std::size_t jj = 0; jj < n_var; jj++){
-				cl_j = X.col(jj);
-				for (int ll = 0; ll < n_env; ll++){
-					for (int mm = 0; mm <= ll; mm++){
-						dztz_lmj = (cl_j * E.col(ll) * E.col(mm) * cl_j).sum();
-						dXtEEX(jj, ll*n_env + mm) = dztz_lmj;
-						dXtEEX(jj, mm*n_env + ll) = dztz_lmj;
-					}
-				}
-			}
-			std::cout << "Built dXtEEX array" << std::endl;
-		}
 
 		// sgd
 		if(p.mode_sgd){
