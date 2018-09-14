@@ -252,6 +252,33 @@ public:
 		return vec;
 	}
 
+	template<typename T>
+	Eigen::VectorXf col_float(T jj){
+		Eigen::VectorXf vec(NN);
+		if(!scaling_performed){
+			calc_scaled_values();
+		}
+
+		t_readXk.resume();
+		if(low_mem){
+			if(mode_sgd){
+				vec = M.cast<float>().block(batch_start, jj, nBatch, 1);
+			} else {
+				vec = M.cast<float>().col(jj);
+			}
+			vec *= (intervalWidth * compressed_dosage_inv_sds[jj]);
+			vec = vec.array() + (0.5 * intervalWidth - compressed_dosage_means[jj]) * compressed_dosage_inv_sds[jj];
+		} else {
+			if(mode_sgd){
+				vec = G.cast<float>().block(batch_start, jj, nBatch, 1);
+			} else {
+				vec = G.cast<float>().col(jj);
+			}
+		}
+		t_readXk.stop();
+		return vec;
+	}
+
 	// Eigen read column
 	template<typename T>
 	void col(T jj, Eigen::Ref<Eigen::VectorXd> vec){

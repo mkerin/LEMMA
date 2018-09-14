@@ -128,7 +128,6 @@ t7_dir     := data/io_test/t7_varbvs
 t7_context := $(t7_dir)/hyperpriors_gxage.txt $(t7_dir)/answer.rds
 data/io_test/t7_varbvs/attempt.out: data/io_test/n50_p100.bgen ./bin/bgen_prog $(t7_context)
 	./bin/bgen_prog --mode_vb --verbose \
-	    --keep_constant_variants \
 	    --bgen $< \
 	    --interaction x \
 	    --covar data/io_test/age.txt \
@@ -142,7 +141,6 @@ data/io_test/t7_varbvs/attempt.out: data/io_test/n50_p100.bgen ./bin/bgen_prog $
 
 data/io_test/t7_varbvs/attempt_multithread.out: data/io_test/n50_p100.bgen ./bin/bgen_prog $(t7_context)
 	./bin/bgen_prog --mode_vb --verbose \
-	    --keep_constant_variants \
 	    --threads 2 \
 	    --bgen $< \
 	    --interaction x \
