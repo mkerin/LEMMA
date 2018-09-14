@@ -43,6 +43,7 @@ inline size_t numCols(const Eigen::MatrixXd &A);
 inline void setCol(Eigen::MatrixXd &A, const Eigen::VectorXd &v, size_t col);
 inline Eigen::VectorXd getCol(const Eigen::MatrixXd &A, size_t col);
 inline Eigen::MatrixXd solve(const Eigen::MatrixXd &A, const Eigen::MatrixXd &b);
+inline std::size_t find_covar_index( std::string colname, std::vector< std::string > col_names );
 
 
 class Data
@@ -1549,6 +1550,18 @@ inline Eigen::MatrixXd solve(const Eigen::MatrixXd &A, const Eigen::MatrixXd &b)
 		std::exit(EXIT_FAILURE);
 	}
 	return x;
+}
+
+
+inline std::size_t find_covar_index( std::string colname, std::vector< std::string > col_names ){
+	std::size_t x_col;
+	std::vector<std::string>::iterator it;
+	it = std::find(col_names.begin(), col_names.end(), colname);
+	if (it == col_names.end()){
+		throw std::invalid_argument("Can't locate parameter " + colname);
+	}
+	x_col = it - col_names.begin();
+	return x_col;
 }
 
 	// void read_external_dxteex( ){

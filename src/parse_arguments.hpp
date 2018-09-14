@@ -35,6 +35,14 @@ void foo(const Eigen::VectorXf& aa1,
 	asm("#it ends here!");
 }
 
+void foo(const Eigen::VectorXf& aa1,
+         const Eigen::VectorXd& aa2,
+         Eigen::VectorXf& aa){
+	asm("#it begins here!");
+		aa = aa1 + aa2.cast<float>();
+	asm("#it ends here!");
+}
+
 void foo(const Eigen::VectorXd& aa1,
          const Eigen::VectorXd& aa2,
          Eigen::VectorXd& aa){
@@ -172,6 +180,14 @@ void parse_arguments(parameters &p, int argc, char *argv[]) {
 		}
 		t_testf.stop();
 		t_testf.report();
+
+		MyTimer t_testf_cast("500 foo() calls in %ts (float via cast)\n");
+		t_testf_cast.resume();
+		for (int jj = 0; jj < 500; jj++){
+			foo(bb1, cc2, bb);
+		}
+		t_testf_cast.stop();
+		t_testf_cast.report();
 
 
 		MyTimer t_testd("500 foo() calls in %ts (double)\n");

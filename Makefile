@@ -46,9 +46,9 @@ laptop: examples/test_matrix_matrix_mult
 
 LIBS += -L$(BGEN)build/ -L$(BGEN)build/3rd_party/zstd-1.1.0 -L$(BGEN)build/db \
        -L$(BGEN)build/3rd_party/sqlite3 -L$(BGEN)build/3rd_party/boost_1_55_0 \
-       -lbgen -ldb -lsqlite3 -lboost -lz -ldl -lrt -lpthread -lzstd 
-INCLUDES += -I$(BGEN)build/genfile/include/ -I$(BGEN)3rd_party/zstd-1.1.0/lib/ \
-           -I$(BGEN)build/db/include/ -I$(BGEN)3rd_party/sqlite3 -I$(BGEN)3rd_party/boost_1_55_0
+       -lbgen -ldb -lsqlite3 -lboost -lz -ldl -lpthread -lzstd 
+INCLUDES += -I$(BGEN)genfile/include/ -I$(BGEN)3rd_party/zstd-1.1.0/lib/ \
+           -I$(BGEN)db/include/ -I$(BGEN)3rd_party/sqlite3 -I$(BGEN)3rd_party/boost_1_55_0
 FLAGS += $(LIBS) $(INCLUDES)
 
 HEADERS := vbayes_x2.hpp genotype_matrix.hpp vbayes_tracker.hpp \
