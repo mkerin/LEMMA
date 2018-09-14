@@ -601,6 +601,94 @@ public:
 		}
 	}
 
+
+	void updateAlphaMu_head(const std::vector< std::uint32_t >& iter,
+                            const Hyps& hyps,
+                            VariationalParameters& vp,
+                            long int& hty_updates){
+		// Divide updates into chunks
+		// Partition chunks amongst available threads 
+		t_updateAlphaMu.resume();
+
+		const int chunk_size = 64;
+		long int chunk_index = 0;
+		while (chunk_index * chunk_size < n_var){
+			long int offset = chunk_index * chunk_size;
+			int chunk_len = std::min(n_var - offset, chunk_size);
+
+			// partition chunk amongst threads
+			std::vector<std::vector<int>> iters(p.n_thread);
+			for (int kk = 0; kk < chunk_len; kk++){
+				iters[kk % p.n_thread].push_back(kk);
+			}
+
+			for (int nn = 0; nn < p.n_thread; nn++){
+				updateAlphaMu_node
+			}
+
+			chunk_index += 1;
+		}
+
+		for(std::uint32_t kk : iter ){
+			int ee            = kk / n_var;
+			std::uint32_t jj = (kk % n_var);
+
+			X_kk = X.col(jj); // Only read normalised genotypes!
+
+			_internal_updateAlphaMu(X_kk, ee, jj, hty_updates, vp, hyps, alpha_cnst);
+
+			if(p.mode_alternating_updates){
+				for(int ee = 1; ee < n_effects; ee++){
+					_internal_updateAlphaMu(X_kk, ee, jj, hty_updates, vp, hyps, alpha_cnst);
+				}
+			}
+		}
+
+		// update summary quantity
+		calcVarqBeta(hyps, vp, vp.varB);
+
+		t_updateAlphaMu.stop();
+	}
+
+
+	void updateAlphaMu_node(const std::vector< std::uint32_t >& iter,
+                            const Hyps& hyps,
+                            VariationalParameters& vp,
+                            long int& hty_updates){
+		t_updateAlphaMu.resume();
+		Eigen::VectorXd X_kk(n_samples);
+		Eigen::VectorXd Z_kk(n_samples);
+
+		Eigen::ArrayXd alpha_cnst;
+		if(p.mode_mog_prior){
+			alpha_cnst  = (hyps.lambda / (1.0 - hyps.lambda) + eps).log();
+			alpha_cnst -= (hyps.slab_var.log() - hyps.spike_var.log()) / 2.0;
+		} else {
+			alpha_cnst = (hyps.lambda / (1.0 - hyps.lambda) + eps).log() - hyps.slab_var.log() / 2.0;
+		}
+
+		for(std::uint32_t kk : iter ){
+			int ee            = kk / n_var;
+			std::uint32_t jj = (kk % n_var);
+
+			X_kk = X.col(jj); // Only read normalised genotypes!
+
+			_internal_updateAlphaMu(X_kk, ee, jj, hty_updates, vp, hyps, alpha_cnst);
+
+			if(p.mode_alternating_updates){
+				for(int ee = 1; ee < n_effects; ee++){
+					_internal_updateAlphaMu(X_kk, ee, jj, hty_updates, vp, hyps, alpha_cnst);
+				}
+			}
+		}
+
+		// update summary quantity
+		calcVarqBeta(hyps, vp, vp.varB);
+
+		t_updateAlphaMu.stop();
+	}
+
+
 	void updateAlphaMu(const std::vector< std::uint32_t >& iter,
                        const Hyps& hyps,
                        VariationalParameters& vp,
