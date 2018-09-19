@@ -706,8 +706,8 @@ public:
 			for (int mm = 0; mm < ii; mm++){
 				offset += rr_k_diff(mm) * D_corr(mm, ii);
 			}
-			vp.mu(jj, ee)                       = vp.s_sq(jj, ee)  * (A(ii) - offset) / hyps.sigma;
-			if(p.mode_mog_prior) vp.mup(jj, ee) = vp.sp_sq(jj, ee) * (A(ii) - offset) / hyps.sigma;
+			vp.mu(jj, ee)                       = vp.s_sq(jj, ee)  * (A(ii) + offset) / hyps.sigma;
+			if(p.mode_mog_prior) vp.mup(jj, ee) = vp.sp_sq(jj, ee) * (A(ii) + offset) / hyps.sigma;
 
 			// Update alpha
 			double ff_k;
@@ -716,6 +716,8 @@ public:
 			if(p.mode_mog_prior) ff_k -= vp.mup(jj, ee) * vp.mup(jj, ee) / vp.sp_sq(jj, ee);
 			if(p.mode_mog_prior) ff_k -= std::log(vp.sp_sq(jj, ee));
 			vp.alpha(jj, ee)           = sigmoid(ff_k / 2.0 + alpha_cnst(ee));
+
+			std::cout << A(ii) << " + " << offset << "\t\t\t" << vp.alpha(jj, ee) << " " << vp.mu(jj, ee) << " " << vp.s_sq(jj, ee) << std::endl;
 
 			rr_k_diff(ii)                       = vp.alpha(jj, ee) * vp.mu(jj, ee) - rr_k(ii);
 			if(p.mode_mog_prior) rr_k_diff(ii) += (1.0 - vp.alpha(jj, ee)) * vp.mup(jj, ee);
