@@ -27,9 +27,9 @@ garganey-optim: CXX = g++
 garganey-optim: FLAGS += -O3 -msse2
 garganey-optim: $(TARGET)
 
-laptop: BGEN="/Users/kerin/software/bgen/"
-laptop: LDFLAGS="-L/usr/local/opt/llvm/lib"
-laptop: CPPFLAGS="-I/usr/local/opt/llvm/include"
+laptop: BGEN=/Users/kerin/software/bgen/
+laptop: LDFLAGS += -L/usr/local/opt/llvm/lib
+laptop: CPPFLAGS += -I/usr/local/opt/llvm/include
 laptop: CXX = g++
 laptop: LD_LIBRARY_PATH = $(ls -d /usr/local/Cellar/gcc/* | tail -n1)/lib
 laptop: LIBS += -L/usr/local/Cellar/boost@1.55/1.55.0_1 -lboost_iostreams
@@ -46,7 +46,7 @@ laptop: examples/test_matrix_matrix_mult
 
 LIBS += -L$(BGEN)build/ -L$(BGEN)build/3rd_party/zstd-1.1.0 -L$(BGEN)build/db \
        -L$(BGEN)build/3rd_party/sqlite3 -L$(BGEN)build/3rd_party/boost_1_55_0 \
-       -lbgen -ldb -lsqlite3 -lboost -lz -ldl -lpthread -lzstd 
+       -lbgen -ldb -lsqlite3 -lboost -lz -ldl -lpthread -lzstd
 INCLUDES += -I$(BGEN)genfile/include/ -I$(BGEN)3rd_party/zstd-1.1.0/lib/ \
            -I$(BGEN)db/include/ -I$(BGEN)3rd_party/sqlite3 -I$(BGEN)3rd_party/boost_1_55_0
 FLAGS += $(LIBS) $(INCLUDES)
