@@ -147,6 +147,8 @@ public:
 		env_names      = dat.env_names;
 		N              = (double) n_samples;
 
+		p.vb_chunk_size = (int) std::min((long int) p.vb_chunk_size, (long int) n_samples);
+
 		// Read environmental variables
 		E = dat.E;
 
@@ -163,16 +165,16 @@ public:
 			env_back_pass.push_back(n_env - ll - 1);
 		}
 
-		int n_chunks = (n_var + p.vb_chunk_size - 1) / p.vb_chunk_size;
+		int n_chunks = (n_var + p.vb_chunk_size - 1) / p.vb_chunk_size; // ceiling of n_var / chunk size
 		n_chunks *= n_effects;
 		fwd_pass_chunks.resize(n_chunks);
 		back_pass_chunks.resize(n_chunks);
 		for(std::uint32_t kk = 0; kk < n_effects * n_var; kk++){
-			std::uint32_t ch_index = (kk / p.vb_chunk_size) + (kk / n_var);
+			std::uint32_t ch_index = (kk / p.vb_chunk_size) + (n_var == p.vb_chunk_size ? 0 : kk / n_var);
 			fwd_pass_chunks[ch_index].push_back(kk);
 
 			std::uint32_t kk_bck = n_effects * n_var - 1 - kk;
-			std::uint32_t ch_bck_index = n_chunks - 1 - ((kk_bck / p.vb_chunk_size) + (kk_bck / n_var));
+			std::uint32_t ch_bck_index = n_chunks - 1 - ch_index;
 			back_pass_chunks[ch_bck_index].push_back(kk_bck);
 		}
 
@@ -414,14 +416,6 @@ public:
 			i_hyps.slab_relative_var.resize(n_effects);
 			i_hyps.spike_relative_var.resize(n_effects);
 			i_hyps.lambda.resize(n_effects);
-			i_hyps.s_x.resize(2);
-
-			Eigen::ArrayXd muw_sq(n_env * n_env);
-			for (int ll = 0; ll < n_env; ll++){
-				for (int mm = 0; mm < n_env; mm++){
-					muw_sq(mm*n_env + ll) = vp_init.muw(mm) * vp_init.muw(ll);
-				}
-			}
 				//
 			i_hyps.sigma = sigma;
 			i_hyps.slab_var           << sigma * sigma_b, sigma * sigma_g;
@@ -429,7 +423,7 @@ public:
 			i_hyps.slab_relative_var  << sigma_b, sigma_g;
 			i_hyps.spike_relative_var << sigma_b / spike_diff_factor, sigma_g / spike_diff_factor;
 			i_hyps.lambda             << lam_b, lam_g;
-			i_hyps.s_x                << n_var, (dXtEEX.rowwise() * muw_sq.transpose()).sum() / (N - 1.0);
+			i_hyps.s_x.resize(2);
 				// }
 
 			// Run outer loop - don't update trackers
@@ -460,9 +454,6 @@ public:
 		}
 		updateSSq(hyps, vp);
 		vp.calcEdZtZ(dXtEEX, n_env);
-
-		// Initial s_x
-
 
 		// Run inner loop until convergence
 		int count = 0;
@@ -611,8 +602,9 @@ public:
 			std::vector< std::uint32_t > chunk = iter_chunks[ch];
 			int ee = chunk[0] % n_var;
 			int ch_len = chunk.size();
+			std::uint32_t ch_start = chunk[0] % n_var;
 
-			Eigen::MatrixXd D = X.col_block(chunk[0], ch_len);
+			Eigen::MatrixXd D = X.col_block(ch_start, ch_len);
 
 			// variant correlations with residuals
 			Eigen::VectorXd residual;
@@ -686,7 +678,8 @@ public:
 		int ee     = iter_chunk[0] / n_var; // TODO: use better var as switch
 		Eigen::VectorXd rr_k(ch_len);
 		for (int ii = 0; ii < ch_len; ii++){
-			rr_k(ii) = vp.alpha(iter_chunk[ii], ee) * vp.mu(iter_chunk[ii], ee);
+			std::uint32_t jj = iter_chunk[ii] % n_var;
+			rr_k(ii) = vp.alpha(jj, ee) * vp.mu(jj, ee);
 		}
 
 		// adjust updates within chunk
