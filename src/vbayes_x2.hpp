@@ -149,7 +149,6 @@ public:
 
 		// Read environmental variables
 		E = dat.E;
-		X.E = E;  // Required to be able to call X.col(jj) with jj > P
 
 		// Allocate memory - fwd/back pass vectors
 		std::cout << "Allocating indices for fwd/back passes" << std::endl;
@@ -591,7 +590,7 @@ public:
                             VariationalParameters& vp,
                             long int& hty_updates){
 		// Divide updates into chunks
-		// Partition chunks amongst available threads 
+		// Partition chunks amongst available threads
 		t_updateAlphaMu.resume();
 
 		Eigen::ArrayXd alpha_cnst;
@@ -661,7 +660,7 @@ public:
 				if(p.mode_mog_prior) ff_k -= vp.mup(jj, ee) * vp.mup(jj, ee) / vp.sp_sq(jj, ee);
 				if(p.mode_mog_prior) ff_k -= std::log(vp.sp_sq(jj, ee));
 				vp.alpha(jj, ee)           = sigmoid(ff_k / 2.0 + alpha_cnst(ee));
-				
+
 				rr_k_diff(ii)                       = vp.alpha(jj, ee) * vp.mu(jj, ee) - rr_k(ii);
 				if(p.mode_mog_prior) rr_k_diff(ii) += (1.0 - vp.alpha(jj, ee)) * vp.mup(jj, ee);
 			}
@@ -1012,7 +1011,7 @@ public:
 	}
 
 	void calc_snpwise_regression(VariationalParametersLite& vp){
-		/* 
+		/*
 		Genome-wide gxe scan now computed upstream
 		Eigen::ArrayXXd snpstats contains results
 
