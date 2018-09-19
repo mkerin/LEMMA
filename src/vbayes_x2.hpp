@@ -81,7 +81,7 @@ public:
 	std::vector< std::vector < std::uint32_t >> back_pass_chunks;
 	std::vector< int > env_fwd_pass;
 	std::vector< int > env_back_pass;
-	std::map<long int, Eigen::MatrixXf> X_chunk_correlations;
+	std::map<long int, Eigen::MatrixXd> D_correlations;
 
 	// Data
 	GenotypeMatrix& X;
@@ -458,6 +458,7 @@ public:
 		bool converged = false;
 		Eigen::ArrayXXd alpha_prev;
 		std::vector< std::uint32_t > iter;
+		std::vector< std::vector< std::uint32_t >> iter_chunks;
 		double i_logw = calc_logw(hyps, vp);
 		std::vector< double > logw_updates, alpha_diff_updates;
 		logw_updates.push_back(i_logw);
@@ -471,8 +472,10 @@ public:
 			// Alternate between back and fwd passes
 			if(count % 2 == 0){
 				iter = fwd_pass;
+				iter_chunks = fwd_pass_chunks;
 			} else {
 				iter = back_pass;
+				iter_chunks = back_pass_chunks;
 			}
 
 			// Update covar main effects
@@ -483,7 +486,7 @@ public:
 			}
 
 			// Update main & interaction effects
-			updateAlphaMu(iter, hyps, vp, hty_update_counter);
+			updateAlphaMu(iter_chunks, hyps, vp, hty_update_counter);
 			check_monotonic_elbo(hyps, vp, count, logw_prev, "updateAlphaMu");
 
 			if(p.xtra_verbose){
@@ -585,13 +588,80 @@ public:
 		}
 	}
 
-	void updateAlphaMu_head(const std::vector< std::vector< std::uint32_t >>& iter_chunks,
-                            const Hyps& hyps,
-                            VariationalParameters& vp,
-                            long int& hty_updates){
+	void updateAlphaMu(const std::vector< std::vector< std::uint32_t >>& iter_chunks,
+                       const Hyps& hyps,
+                       VariationalParameters& vp,
+                       long int& hty_updates){
 		// Divide updates into chunks
 		// Partition chunks amongst available threads
 		t_updateAlphaMu.resume();
+
+		for (std::uint32_t ch = 0; ch < iter_chunks.size(); ch++){
+			std::vector< std::uint32_t > chunk = iter_chunks[ch];
+			int ee = chunk[0] % n_var;
+			int ch_len = chunk.size();
+
+			Eigen::MatrixXd D = X.col_block(chunk[0], ch_len);
+
+			// variant correlations with residuals
+			Eigen::VectorXd residual;
+			if (ee == 0){
+				residual = Y - vp.ym - vp.yx.cwiseProduct(vp.eta);
+			} else {
+				residual = (Y - vp.ym).cwiseProduct(vp.eta) - vp.yx.cwiseProduct(vp.eta_sq);
+			}
+			Eigen::VectorXd A = residual.transpose() * D;
+			// Eigen::VectorXd A = X.col_block_transpose_vector_multiply(residual,chunk[0],ch_len);
+
+			// compute variant correlations within chunk
+			Eigen::MatrixXd D_corr;
+			if (ee == 0){
+				if (D_correlations.count(ch) == 0){
+					// D_corr = X.selfAdjointBlock(chunk[0],ch_len);
+					D_corr = D.selfadjointView<Eigen::Upper>().rankUpdate(D.transpose());
+					D_correlations[ch] = D_corr;
+				} else {
+					D_corr = D_correlations[ch];
+				}
+			} else {
+				Eigen::MatrixXd Z_chunk = vp.eta.asDiagonal() * D;
+				D_corr = Z_chunk.selfadjointView<Eigen::Upper>().rankUpdate(Z_chunk.transpose());
+				// D_corr = X.selfAdjointBlock_w_interaction(vp.eta, chunk[0], ch_len);
+			}
+
+			// compute VB updates for alpha, mu, s_sq
+			_internal_updateAlphaMu(chunk, A, D_corr, D, hyps, vp);
+		}
+
+		// update summary quantity
+		calcVarqBeta(hyps, vp, vp.varB);
+
+		t_updateAlphaMu.stop();
+	}
+
+	void decompress_dosages(const std::vector< int >& index,
+                            const std::vector< std::uint32_t >& iter_chunk,
+                            const Hyps& hyps,
+                            Eigen::Ref<Eigen::MatrixXd> D){
+		/* Changes for multithreaded updates:
+		- use residuals yx & ym from last chunk
+		- write decompressed dosage to matrix D
+		*/
+
+		for(std::uint32_t ii : index ){
+			std::uint32_t kk = iter_chunk[ii];
+			std::uint32_t jj = (kk % n_var);
+
+			D.col(ii)       = X.col(jj);
+		}
+	}
+
+	void _internal_updateAlphaMu(const std::vector< std::uint32_t >& iter_chunk,
+                                const Eigen::Ref<const Eigen::VectorXd>& A,
+                                const Eigen::Ref<const Eigen::MatrixXd>& D_corr,
+                                const Eigen::Ref<const Eigen::MatrixXd>& D,
+                                const Hyps& hyps,
+                                VariationalParameters& vp){
 
 		Eigen::ArrayXd alpha_cnst;
 		if(p.mode_mog_prior){
@@ -601,105 +671,18 @@ public:
 			alpha_cnst = (hyps.lambda / (1.0 - hyps.lambda) + eps).log() - hyps.slab_var.log() / 2.0;
 		}
 
-		for (std::uint32_t ch = 0; ch < iter_chunks.size(); ch++){
-			std::vector< std::uint32_t > chunk = iter_chunks[ch];
-			int ee = chunk[0] % n_var;
-			int ch_len = chunk.size();
-
-			Eigen::VectorXd rr_k(ch_len);
-			for (int ii = 0; ii < ch_len; ii++){
-				rr_k(ii) = vp.alpha(chunk[ii], ee) * vp.mu(chunk[ii], ee);
-			}
-
-			// partition chunk amongst threads
-			std::vector<std::vector<int>> indexes(p.n_thread);
-			for (int ii = 0; ii < ch_len; ii++){
-				indexes[ii % p.n_thread].push_back(ii);
-			}
-
-			Eigen::MatrixXf X_chunk(n_samples, chunk.size());
-
-			// Update alpha / mu's
-			for (int nn = 0; nn < p.n_thread; nn++){
-				updateAlphaMu_node(indexes[nn], chunk, hyps, X_chunk, vp, hty_updates);
-			}
-
-			// compute variant correlations within chunk
-			Eigen::MatrixXf X_chunk_corr;
-			if (ee == 0){
-				if (X_chunk_correlations.count(ch) == 0){
-					X_chunk_corr = X_chunk.selfadjointView<Eigen::Upper>().rankUpdate(X_chunk.transpose());
-					X_chunk_correlations[ch] = X_chunk_corr;
-				} else {
-					X_chunk_corr = X_chunk_correlations[ch];
-				}
-			} else {
-				Eigen::MatrixXf Z_chunk = vp.eta.cast<float>().asDiagonal() * X_chunk;
-				X_chunk_corr = Z_chunk.selfadjointView<Eigen::Upper>().rankUpdate(Z_chunk.transpose());
-			}
-
-			// adjust updates within chunk
-			Eigen::VectorXf rr_k_diff(ch_len);
-			for (int ii = 0; ii < ch_len; ii++){
-				std::uint32_t kk = chunk[ii];
-				int ee           = kk / n_var;
-				std::uint32_t jj = (kk % n_var);
-
-				// TODO adjust vp.mu and vp.mup
-				double offset = 0;
-				for (int mm = 0; mm < ii; mm++){
-					offset += rr_k_diff(mm) * X_chunk_corr(mm, ii);
-				}
-				vp.mu(jj, ee)                       -= vp.s_sq(jj, ee)  * offset / hyps.sigma;
-				if(p.mode_mog_prior) vp.mup(jj, ee) -= vp.sp_sq(jj, ee) * offset / hyps.sigma;
-
-				// Update alpha
-				double ff_k;
-				ff_k                       = vp.mu(jj, ee) * vp.mu(jj, ee) / vp.s_sq(jj, ee);
-				ff_k                      += std::log(vp.s_sq(jj, ee));
-				if(p.mode_mog_prior) ff_k -= vp.mup(jj, ee) * vp.mup(jj, ee) / vp.sp_sq(jj, ee);
-				if(p.mode_mog_prior) ff_k -= std::log(vp.sp_sq(jj, ee));
-				vp.alpha(jj, ee)           = sigmoid(ff_k / 2.0 + alpha_cnst(ee));
-
-				rr_k_diff(ii)                       = vp.alpha(jj, ee) * vp.mu(jj, ee) - rr_k(ii);
-				if(p.mode_mog_prior) rr_k_diff(ii) += (1.0 - vp.alpha(jj, ee)) * vp.mup(jj, ee);
-			}
-
-			// update residuals
-			if(ee == 0){
-				vp.ym += (X_chunk * rr_k_diff).cast<double>();
-			} else {
-				vp.yx += (X_chunk * rr_k_diff).cast<double>();
-			}
+		int ch_len = iter_chunk.size();
+		int ee     = iter_chunk[0] / n_var; // TODO: use better var as switch
+		Eigen::VectorXd rr_k(ch_len);
+		for (int ii = 0; ii < ch_len; ii++){
+			rr_k(ii) = vp.alpha(iter_chunk[ii], ee) * vp.mu(iter_chunk[ii], ee);
 		}
 
-		// update summary quantity
-		calcVarqBeta(hyps, vp, vp.varB);
-
-		t_updateAlphaMu.stop();
-	}
-
-	void updateAlphaMu_node(const std::vector< int >& index,
-                            const std::vector< std::uint32_t >& iter_chunk,
-                            const Hyps& hyps,
-                            Eigen::Ref<Eigen::MatrixXf> X_chunk,
-                            VariationalParameters& vp,
-                            long int& hty_updates){
-		/* Changes for multithreaded updates:
-		- use residuals yx & ym from last chunk
-		- write decompressed dosage to matrix X_chunk
-		*/
-
-		for(std::uint32_t ii : index ){
-			std::uint32_t kk = iter_chunk[ii];
-			int ee           = kk / n_var;
-			std::uint32_t jj = (kk % n_var);
-
-			Eigen::VectorXf X_kk = X.col_float(jj);
-			X_chunk.col(ii)      = X_kk;
-
-			double rr_k                = vp.alpha(jj, ee) * vp.mu(jj, ee);
-			if(p.mode_mog_prior) rr_k += (1.0 - vp.alpha(jj, ee)) * vp.mup(jj, ee);
+		// adjust updates within chunk
+		Eigen::VectorXd rr_k_diff(ch_len);
+		for (int ii = 0; ii < ch_len; ii++){
+			int ee           = iter_chunk[ii] / n_var;   // 0 -> main effect
+			std::uint32_t jj = (iter_chunk[ii] % n_var); // variant index
 
 			// Update s_sq
 			if (ee == 0){
@@ -715,113 +698,33 @@ public:
 			}
 
 			// Update mu
-			double A;
-			if(ee == 0){
-				A  = (Y - vp.ym - vp.yx.cwiseProduct(vp.eta)).cast<float>().dot(X_kk) + rr_k * (N - 1.0);
-			} else {
-				A  = (Y - vp.ym).cwiseProduct(vp.eta).cast<float>().dot(X_kk);
-				A -= (vp.yx.cwiseProduct(vp.eta_sq).cast<float>().dot(X_kk) - rr_k * vp.EdZtZ(jj));
+			double offset = rr_k(ii) * D_corr(ii, ii);
+			for (int mm = 0; mm < ii; mm++){
+				offset += rr_k_diff(mm) * D_corr(mm, ii);
 			}
+			vp.mu(jj, ee)                       = vp.s_sq(jj, ee)  * (A(ii) - offset) / hyps.sigma;
+			if(p.mode_mog_prior) vp.mup(jj, ee) = vp.sp_sq(jj, ee) * (A(ii) - offset) / hyps.sigma;
 
-			vp.mu(jj, ee)                       = vp.s_sq(jj, ee)  * A / hyps.sigma;
-			if(p.mode_mog_prior) vp.mup(jj, ee) = vp.sp_sq(jj, ee) * A / hyps.sigma;
-		}
-	}
+			// Update alpha
+			double ff_k;
+			ff_k                       = vp.mu(jj, ee) * vp.mu(jj, ee) / vp.s_sq(jj, ee);
+			ff_k                      += std::log(vp.s_sq(jj, ee));
+			if(p.mode_mog_prior) ff_k -= vp.mup(jj, ee) * vp.mup(jj, ee) / vp.sp_sq(jj, ee);
+			if(p.mode_mog_prior) ff_k -= std::log(vp.sp_sq(jj, ee));
+			vp.alpha(jj, ee)           = sigmoid(ff_k / 2.0 + alpha_cnst(ee));
 
-	void updateAlphaMu(const std::vector< std::uint32_t >& iter,
-                       const Hyps& hyps,
-                       VariationalParameters& vp,
-                       long int& hty_updates){
-		t_updateAlphaMu.resume();
-		Eigen::VectorXd X_kk(n_samples);
-		Eigen::VectorXd Z_kk(n_samples);
-
-		Eigen::ArrayXd alpha_cnst;
-		if(p.mode_mog_prior){
-			alpha_cnst  = (hyps.lambda / (1.0 - hyps.lambda) + eps).log();
-			alpha_cnst -= (hyps.slab_var.log() - hyps.spike_var.log()) / 2.0;
-		} else {
-			alpha_cnst = (hyps.lambda / (1.0 - hyps.lambda) + eps).log() - hyps.slab_var.log() / 2.0;
+			rr_k_diff(ii)                       = vp.alpha(jj, ee) * vp.mu(jj, ee) - rr_k(ii);
+			if(p.mode_mog_prior) rr_k_diff(ii) += (1.0 - vp.alpha(jj, ee)) * vp.mup(jj, ee);
 		}
 
-		for(std::uint32_t kk : iter ){
-			int ee            = kk / n_var;
-			std::uint32_t jj = (kk % n_var);
-			X_kk = X.col(jj); // Only read normalised genotypes!
-
-			_internal_updateAlphaMu(X_kk, ee, jj, hty_updates, vp, hyps, alpha_cnst);
-
-			if(p.mode_alternating_updates){
-				for(int ee = 1; ee < n_effects; ee++){
-					_internal_updateAlphaMu(X_kk, ee, jj, hty_updates, vp, hyps, alpha_cnst);
-				}
-			}
-		}
-
-		// update summary quantity
-		calcVarqBeta(hyps, vp, vp.varB);
-
-		t_updateAlphaMu.stop();
-	}
-
-	void _internal_updateAlphaMu(const Eigen::Ref<const Eigen::VectorXd>& X_kk,
-								 const int& ee, std::uint32_t jj, long int& hty_updates,
-								 VariationalParameters& vp,
-								 const Hyps& hyps,
-								 const Eigen::Ref<const Eigen::ArrayXd>& alpha_cnst) __attribute__ ((hot)){
-		//
-		double rr_k_diff;
-
-		double rr_k                = vp.alpha(jj, ee) * vp.mu(jj, ee);
-		if(p.mode_mog_prior) rr_k += (1.0 - vp.alpha(jj, ee)) * vp.mup(jj, ee);
-
-		// Update s_sq
-		// Strictly speaking; only need to do every iter if maximising hyps
-		// or updating env-weights.
-		if (ee == 0){
-			vp.s_sq(jj, ee)                        = hyps.slab_var(ee);
-			vp.s_sq(jj, ee)                       /= (hyps.slab_relative_var(ee) * (N-1) + 1);
-			if(p.mode_mog_prior) vp.sp_sq(jj, ee)  = hyps.spike_var(ee);
-			if(p.mode_mog_prior) vp.sp_sq(jj, ee) /= (hyps.spike_relative_var(ee) * (N-1) + 1);
-		} else {
-			vp.s_sq(jj, ee)                        = hyps.slab_var(ee);
-			vp.s_sq(jj, ee)                       /= (hyps.slab_relative_var(ee) * vp.EdZtZ(jj) + 1);
-			if(p.mode_mog_prior) vp.sp_sq(jj, ee)  = hyps.spike_var(ee);
-			if(p.mode_mog_prior) vp.sp_sq(jj, ee) /= (hyps.spike_relative_var(ee) * vp.EdZtZ(jj) + 1);
-		}
-
-		// Update mu
-		double A;
+		// update residuals
+		// Eg: residuals += D * rr_f_diff;
 		if(ee == 0){
-			A  = (Y - vp.ym - vp.yx.cwiseProduct(vp.eta)).dot(X_kk) + rr_k * (N - 1.0);
+			// vp.ym += X.col_block_vector_multiply(rr_k_diff, iter_chunk[0], ch_len);
+			vp.ym += D * rr_k_diff;
 		} else {
-			A  = (Y - vp.ym).cwiseProduct(vp.eta).dot(X_kk);
-			A -= (vp.yx.cwiseProduct(vp.eta_sq).dot(X_kk) - rr_k * vp.EdZtZ(jj));
-		}
-
-		vp.mu(jj, ee)                       = vp.s_sq(jj, ee)  * A / hyps.sigma;
-		if(p.mode_mog_prior) vp.mup(jj, ee) = vp.sp_sq(jj, ee) * A / hyps.sigma;
-
-		// Update alpha
-		double ff_k;
-		ff_k                       = vp.mu(jj, ee) * vp.mu(jj, ee) / vp.s_sq(jj, ee);
-		ff_k                      += std::log(vp.s_sq(jj, ee));
-		if(p.mode_mog_prior) ff_k -= vp.mup(jj, ee) * vp.mup(jj, ee) / vp.sp_sq(jj, ee);
-		if(p.mode_mog_prior) ff_k -= std::log(vp.sp_sq(jj, ee));
-
-		vp.alpha(jj, ee)           = sigmoid(ff_k / 2.0 + alpha_cnst(ee));
-
-		// Update residuals only if coeff is large enough to matter
-		rr_k_diff                       = vp.alpha(jj, ee) * vp.mu(jj, ee) - rr_k;
-		if(p.mode_mog_prior) rr_k_diff += (1.0 - vp.alpha(jj, ee)) * vp.mup(jj, ee);
-
-		if(!p.mode_approximate_residuals || std::abs(rr_k_diff) > p.min_residuals_diff){
-			hty_updates++;
-			if(ee == 0){
-				vp.ym += rr_k_diff * X_kk;
-			} else {
-				vp.yx += rr_k_diff * X_kk;
-			}
+			// vp.yx += X.col_block_vector_multiply(rr_k_diff, iter_chunk[0], ch_len);
+			vp.yx += D * rr_k_diff;
 		}
 	}
 

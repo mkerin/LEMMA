@@ -132,7 +132,7 @@ class Data
 	// 	filters_applied = false;
 	// }
 
-	explicit Data( const parameters& p ) : params(p), G(p.low_mem) {
+	explicit Data( const parameters& p ) : params(p), G(p) {
 		// system time at start
 		start = std::chrono::system_clock::now();
 		std::time_t start_time = std::chrono::system_clock::to_time_t(start);

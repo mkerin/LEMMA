@@ -40,6 +40,7 @@ Questions:
 #include <vector>
 #include <map>
 #include "my_timer.hpp"
+#include "class.h"
 #include "tools/eigen3.3/Dense"
 
 inline Eigen::MatrixXd getCols(const Eigen::MatrixXd &X, const std::vector<size_t> &cols);
@@ -64,6 +65,7 @@ class GenotypeMatrix {
 public:
 	const bool low_mem;
 	bool scaling_performed;
+	parameters params;
 
 	Eigen::Matrix<unsigned char, Eigen::Dynamic, Eigen::Dynamic> M; // used in low-mem mode
 	Eigen::MatrixXd G; // used when not in low-mem node
@@ -79,8 +81,11 @@ public:
 	Eigen::VectorXd compressed_dosage_means;
 	Eigen::VectorXd compressed_dosage_sds;
 	Eigen::VectorXd compressed_dosage_inv_sds;  // 1 / col-wise sd
-	// Eigen::VectorXd aa;  // vector of ages
-	std::size_t NN, PP;
+	Eigen::VectorXd char_colMeans;
+	Eigen::MatrixXd JJ_k; // matrix of ones used in compressed computations
+	Eigen::MatrixXd JJ; // matrix of ones used in compressed computations
+
+	std::size_t nn, pp;
 
 	// Interface type of Eigen indices -> see eigen3/Eigen/src/Core/EigenBase.h
 	typedef Eigen::Index Index;
@@ -92,31 +97,36 @@ public:
 	MyTimer t_readXk;
 
 	// Constructors
-	GenotypeMatrix(bool use_compression) : low_mem(use_compression),
+	GenotypeMatrix(const parameters& my_params) : low_mem(my_params.low_mem),
+                                                  params(my_params),
                                            t_readXk("read_X_kk: %ts \n"){
 		scaling_performed = false;
-		NN = 0;
-		PP = 0;
+		nn = 0;
+		pp = 0;
+		JJ_k = (Eigen::MatrixXd::Zero(params.vb_chunk_size, params.vb_chunk_size).array() + 1.0).matrix();
 	};
 
-	GenotypeMatrix(bool use_compression,
+	GenotypeMatrix(const parameters& my_params,
                    const long int n,
-                   const long int p) : low_mem(use_compression),
+                   const long int p) : low_mem(my_params.low_mem),
+                                       params(my_params),
                                              t_readXk("read_X_kk: %ts \n"){
 		if(low_mem){
 			M.resize(n, p);
 		} else {
 			G.resize(n, p);
 		}
-		NN = n;
-		PP = p;
+		nn = n;
+		pp = p;
 
 		compressed_dosage_means.resize(p);
 		compressed_dosage_sds.resize(p);
 		compressed_dosage_inv_sds.resize(p);
 		missing_genos.resize(p);
+		char_colMeans.resize(p);
 
 		scaling_performed = false;
+		JJ_k = (Eigen::MatrixXd::Zero(params.vb_chunk_size, params.vb_chunk_size).array() + 1.0).matrix();
 	};
 
 	~GenotypeMatrix(){
@@ -125,7 +135,7 @@ public:
 	// sgd
 	void draw_minibatch(long int my_nBatch){
 		std::default_random_engine generator;
-		std::uniform_int_distribution<long int> distribution(0,NN - my_nBatch);
+		std::uniform_int_distribution<long int> distribution(0,nn - my_nBatch);
 
 		batch_start = distribution(generator);
 		nBatch = my_nBatch;
@@ -155,14 +165,14 @@ public:
 	// Replacement(s) for write-version of Eigen Method .col()
 	template<typename T>
 	void assign_col(const T& jj, Eigen::Ref<Eigen::VectorXd> vec){
-		assert(vec.rows() == NN);
+		assert(vec.rows() == nn);
 
 		if(low_mem){
-			for (Index ii = 0; ii < NN; ii++){
+			for (Index ii = 0; ii < nn; ii++){
 				M(ii, jj) = CompressDosage(vec[ii]);
 			}
 		} else {
-			for (Index ii = 0; ii < NN; ii++){
+			for (Index ii = 0; ii < nn; ii++){
 				G(ii, jj) = vec[ii];
 			}
 		}
@@ -189,8 +199,8 @@ public:
 	// Eigen read column
 	template<typename T>
 	Eigen::VectorXd col(T jj){
-		assert(jj < PP);
-		Eigen::VectorXd vec(NN);
+		assert(jj < pp);
+		Eigen::VectorXd vec(nn);
 		if(!scaling_performed){
 			calc_scaled_values();
 		}
@@ -217,7 +227,7 @@ public:
 
 	template<typename T>
 	Eigen::VectorXf col_float(T jj){
-		Eigen::VectorXf vec(NN);
+		Eigen::VectorXf vec(nn);
 		if(!scaling_performed){
 			calc_scaled_values();
 		}
@@ -245,13 +255,13 @@ public:
 	// Eigen read column
 	template<typename T>
 	void col(T jj, Eigen::Ref<Eigen::VectorXd> vec){
-		assert(jj < PP);
+		assert(jj < pp);
 		if(!scaling_performed){
 			calc_scaled_values();
 		}
 
 		if(low_mem){
-			for (Index ii = 0; ii < NN; ii++){
+			for (Index ii = 0; ii < nn; ii++){
 				vec[ii] = (DecompressDosage(M(ii, jj)) - compressed_dosage_means[jj]) * compressed_dosage_inv_sds[jj];
 			}
 		} else {
@@ -261,7 +271,7 @@ public:
 
 	// Dot with jth col - this was actually slower. Oh well.
 	double dot_with_jth_col(const Eigen::Ref<const Eigen::VectorXd>& vec, Index jj){
-		assert(jj < PP);
+		assert(jj < pp);
 		double tmp, offset, res;
 		if(!scaling_performed){
 			calc_scaled_values();
@@ -297,7 +307,6 @@ public:
 	// Eigen lhs matrix multiplication
 	Eigen::VectorXd transpose_vector_multiply(const Eigen::Ref<const Eigen::VectorXd>& lhs){
 		// G.transpose_vector_multiply(y) <=> (y^t G)^t <=> G^t y
-		// NOTE: assumes that lhs is centered!
 		if(!scaling_performed){
 			calc_scaled_values();
 		}
@@ -307,13 +316,125 @@ public:
 			assert(lhs.rows() == M.rows());
 			double offset = lhs.sum();
 
-			res = (lhs.transpose() * M.cast<double>()).array() + 0.5 * offset;
+			res = lhs.transpose() * M.cast<double>();
 			res *= intervalWidth;
-			res -= (offset * compressed_dosage_means);
+			res += offset * (intervalWidth * 0.5 - compressed_dosage_means.array()).matrix();
 			return res.cwiseProduct(compressed_dosage_inv_sds);
 		} else {
 			return lhs.transpose() * G;
 		}
+	}
+
+	Eigen::VectorXd col_block_transpose_vector_multiply(const Eigen::Ref<const Eigen::VectorXd>& lhs,
+                                                        const std::uint32_t& ch_start,
+                                                        const int& ch_len){
+		// G.transpose_vector_multiply(y) <=> (y^t G)^t <=> G^t y on a subset of columns
+		if(!scaling_performed){
+			calc_scaled_values();
+		}
+
+		Eigen::VectorXd res;
+		if(low_mem){
+			assert(lhs.rows() == M.rows());
+			double offset = lhs.sum();
+
+			res = lhs.transpose() * M.block(0, ch_start, nn, ch_len).cast<double>();
+			res *= intervalWidth;
+			res += offset * (intervalWidth * 0.5 - compressed_dosage_means.array()).matrix();
+			return res.cwiseProduct(compressed_dosage_inv_sds);
+		} else {
+			return lhs.transpose() * G.block(0, ch_start, nn, ch_len);
+		}
+	}
+
+	Eigen::MatrixXd col_block(const std::uint32_t& ch_start,
+                              const int& ch_len){
+		if(!scaling_performed){
+			calc_scaled_values();
+		}
+
+		if(low_mem){
+			double ww = intervalWidth;
+
+			Eigen::ArrayXd  E = 0.5 * ww - compressed_dosage_means.segment(ch_start, ch_len).array();
+			Eigen::ArrayXd  S = compressed_dosage_inv_sds.segment(ch_start, ch_len);
+			Eigen::ArrayXXd res;
+
+ 			res = ww * M.block(0, ch_start, nn, ch_len).cast<double>();
+			res.rowwise() += E.transpose();
+			res.rowwise() *= S.transpose();
+			return res.matrix();
+		} else {
+			return G.block(0, ch_start, nn, ch_len);
+		}
+	}
+
+	Eigen::VectorXd col_block_vector_multiply(const Eigen::Ref<const Eigen::VectorXd>& lhs,
+                                              const std::uint32_t& ch_start,
+                                              const int& ch_len){
+		if(!scaling_performed){
+			calc_scaled_values();
+		}
+
+		Eigen::VectorXd res;
+		if(low_mem){
+			assert(lhs.rows() == M.rows());
+			// TODO: Find way to cast without making copy!
+			// Eigen::Ref <Eigen::Matrix<unsigned char, Eigen::Dynamic, Eigen::Dynamic>> MM;
+			// MM = M.block(0, ch_start, nn, ch_len);
+			Eigen::Matrix<unsigned char, Eigen::Dynamic, Eigen::Dynamic> MM = M.block(0, ch_start, nn, ch_len);
+
+			Eigen::Ref<Eigen::VectorXd> E = compressed_dosage_means.segment(ch_start, ch_len);
+			Eigen::Ref<Eigen::VectorXd> S = compressed_dosage_inv_sds.segment(ch_start, ch_len);
+			double ww = intervalWidth;
+			Eigen::MatrixXd E_tilde = JJ * (ww * 0.5 - E.array()).matrix().asDiagonal();
+
+			res = ww * MM.cast<double>() * S.asDiagonal() * lhs + E_tilde * S.asDiagonal() * lhs;
+			return res;
+		} else {
+			return G.block(0, ch_start, nn, ch_len);
+		}
+	}
+
+	Eigen::MatrixXd selfAdjointBlock(const std::uint32_t& ch_start,
+                                     const int& ch_len){
+		Eigen::MatrixXd res;
+		if(low_mem){
+			// TODO: Find way to cast without making copy!
+			// Eigen::Ref <Eigen::Matrix<unsigned char, Eigen::Dynamic, Eigen::Dynamic>> MM;
+			// MM = M.block(0, ch_start, nn, ch_len);
+			Eigen::Matrix<unsigned char, Eigen::Dynamic, Eigen::Dynamic> MM = M.block(0, ch_start, nn, ch_len);
+
+			Eigen::Ref<Eigen::VectorXd> E = compressed_dosage_means.segment(ch_start, ch_len);
+			Eigen::Ref<Eigen::VectorXd> S = compressed_dosage_inv_sds.segment(ch_start, ch_len);
+			Eigen::Ref<Eigen::VectorXd> Q = char_colMeans.segment(ch_start, ch_len);
+			double ww = intervalWidth;
+
+			Eigen::MatrixXi MtM = MM.transpose().cast<int>() * MM.cast<int>();
+			Eigen::MatrixXd MtE_tilde = (nn * 0.5 * ww * Q.asDiagonal() * JJ_k -
+                                         nn * Q.asDiagonal() * JJ_k * E.asDiagonal());
+
+			Eigen::MatrixXd EtE_tilde = (nn * ww * ww * 0.25 * JJ_k -
+                                         nn * ww * 0.5 * (E.asDiagonal() * JJ_k + JJ_k * E.asDiagonal()) +
+                                         nn * E.asDiagonal() * JJ_k * E);
+
+			res = (ww * ww * S.asDiagonal() * MtM.cast<double>() * S.asDiagonal() +
+                   ww * S.asDiagonal() * (MtE_tilde + MtE_tilde.transpose()) * S.asDiagonal() +
+                   S.asDiagonal() * EtE_tilde * S.asDiagonal());
+		} else {
+			Eigen::Ref<Eigen::MatrixXd> D = G.block(0, ch_start, nn, ch_len);
+			Eigen::MatrixXd tmp = D.selfadjointView<Eigen::Upper>().rankUpdate(D.transpose());
+			res = tmp;
+		}
+		return res;
+		}
+
+	Eigen::MatrixXd selfAdjointBlock_w_interaction(const Eigen::Ref<const Eigen::VectorXd>& lhs,
+                                                        const std::uint32_t& ch_start,
+                                                        const int& ch_len){
+		// TODO
+		Eigen::MatrixXd res;
+		return res;
 	}
 
 	// // Eigen lhs matrix multiplication
@@ -341,6 +462,7 @@ public:
 	/********** Mean center & unit variance; internal use ************/
 	void calc_scaled_values(){
 		if (low_mem){
+			JJ = (Eigen::MatrixXd::Zero(nn, params.vb_chunk_size).array() + 1.0).matrix();
 			compute_means_and_sd();
 		} else {
 			standardise_matrix();
@@ -350,30 +472,34 @@ public:
 
 	void compute_means_and_sd(){
 		// Column means
-		for (Index jj = 0; jj < PP; jj++){
+		for (Index jj = 0; jj < pp; jj++){
 			compressed_dosage_means[jj] = 0;
-			for (Index ii = 0; ii < NN; ii++){
+			for (Index ii = 0; ii < nn; ii++){
 				compressed_dosage_means[jj] += DecompressDosage(M(ii, jj));
 			}
 		}
-		compressed_dosage_means /= (double) NN;
+		compressed_dosage_means /= (double) nn;
+
+		for (Index jj = 0; jj < pp; jj++){
+			char_colMeans[jj] = M.col(jj).mean();
+		}
 
 		// Column standard deviation
 		double val, sigma;
-		Eigen::VectorXd compressed_dosage_sds(PP);
-		for (Index jj = 0; jj < PP; jj++){
+		Eigen::VectorXd compressed_dosage_sds(pp);
+		for (Index jj = 0; jj < pp; jj++){
 			sigma = 0;
-			for (Index ii = 0; ii < NN; ii++){
+			for (Index ii = 0; ii < nn; ii++){
 				val = DecompressDosage(M(ii, jj)) - compressed_dosage_means[jj];
 				sigma += val * val;
 			}
 			compressed_dosage_sds[jj] = sigma;
 		}
 
-		compressed_dosage_sds /= ((double) NN - 1.0);
+		compressed_dosage_sds /= ((double) nn - 1.0);
 		compressed_dosage_sds = compressed_dosage_sds.array().sqrt().matrix();
 
-		for (Index jj = 0; jj < PP; jj++){
+		for (Index jj = 0; jj < pp; jj++){
 			sigma = compressed_dosage_sds[jj];
 			if (sigma > 1e-9){
 				compressed_dosage_inv_sds[jj] = 1 / sigma;
@@ -385,10 +511,10 @@ public:
 
 	void standardise_matrix(){
 		if(!low_mem){
-			for (std::size_t k = 0; k < PP; k++) {
+			for (std::size_t k = 0; k < pp; k++) {
 				double mu = 0.0;
 				double count = 0;
-				for (std::size_t i = 0; i < NN; i++) {
+				for (std::size_t i = 0; i < nn; i++) {
 					if (missing_genos[k].count(i) == 0) {
 						mu += G(i, k);
 						count += 1;
@@ -397,7 +523,7 @@ public:
 
 				mu = mu / count;
 				double val, sigma = 0.0;
-				for (std::size_t i = 0; i < NN; i++) {
+				for (std::size_t i = 0; i < nn; i++) {
 					if (missing_genos[k].count(i) == 0) {
 						G(i, k) -= mu;
 						val = G(i, k);
@@ -409,7 +535,7 @@ public:
 
 				sigma = sqrt(sigma/(count - 1));
 				if (sigma > 1e-12) {
-					for (std::size_t i = 0; i < NN; i++) {
+					for (std::size_t i = 0; i < nn; i++) {
 						G(i, k) /= sigma;
 					}
 				}
@@ -418,9 +544,9 @@ public:
 	}
 
 	/********** Utility functions ************/
-	inline Index rows() const { return NN; }
+	inline Index rows() const { return nn; }
 
-	inline Index cols() const { return PP; }
+	inline Index cols() const { return pp; }
 
 	template <typename T, typename T2>
 	void resize(const T& n, const T2& p){
@@ -432,9 +558,10 @@ public:
 		compressed_dosage_means.resize(p);
 		compressed_dosage_sds.resize(p);
 		compressed_dosage_inv_sds.resize(p);
+		char_colMeans.resize(p);
 		missing_genos.resize(p);
-		NN = n;
-		PP = p;
+		nn = n;
+		pp = p;
 	}
 
 	template <typename T, typename T2>
@@ -447,9 +574,10 @@ public:
 		compressed_dosage_means.conservativeResize(p);
 		compressed_dosage_sds.conservativeResize(p);
 		compressed_dosage_inv_sds.conservativeResize(p);
+		char_colMeans.conservativeResize(p);
 		missing_genos.resize(p);
-		NN = n;
-		PP = p;
+		nn = n;
+		pp = p;
 	}
 
 	friend std::ostream &operator<<( std::ostream &output, const GenotypeMatrix &gg ) {
