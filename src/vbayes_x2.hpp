@@ -147,7 +147,6 @@ public:
 
 		// Read environmental variables
 		E = dat.E;
-		X.E = E;  // WARNING: Required to be able to call X.col(jj) with jj > P
 
 		// Allocate memory - fwd/back pass vectors
 		for(std::uint32_t kk = 0; kk < n_var * n_effects; kk++){
@@ -862,7 +861,7 @@ public:
 	}
 
 	void calc_snpwise_regression(VariationalParametersLite& vp){
-		/* 
+		/*
 		Genome-wide gxe scan now computed upstream
 		Eigen::ArrayXXd snpstats contains results
 

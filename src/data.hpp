@@ -338,7 +338,7 @@ class Data
 		alleles.clear();
 
 		// Resize genotype matrix
-		G.resize(n_samples, params.chunk_size, n_effects);
+		G.resize(n_samples, params.chunk_size);
 
 		long int n_constant_variance = 0;
 		std::size_t jj = 0;
@@ -463,7 +463,7 @@ class Data
 
 		// need to resize G whilst retaining existing coefficients if while
 		// loop exits early due to EOF.
-		G.conservativeResize(n_samples, jj, n_effects);
+		G.conservativeResize(n_samples, jj);
 		assert( rsid.size() == jj );
 		assert( chromosome.size() == jj );
 		assert( position.size() == jj );
@@ -1566,7 +1566,7 @@ inline std::size_t find_covar_index( std::string colname, std::vector< std::stri
 
 	// void read_external_dxteex( ){
 	// 	int col_offset = 6; // number of context cols before snp-env covariances
-	// 
+	//
 	// 	// Reading from file
 	// 	boost_io::filtering_istream fg;
 	// 	fg.push(boost_io::file_source(params.dxteex_file.c_str()));
@@ -1574,7 +1574,7 @@ inline std::size_t find_covar_index( std::string colname, std::vector< std::stri
 	// 		std::cout << "ERROR: " << params.dxteex_file << " not opened." << std::endl;
 	// 		std::exit(EXIT_FAILURE);
 	// 	}
-	// 
+	//
 	// 	// Read file twice to acertain number of lines
 	// 	int n_lines = 0;
 	// 	std::string line;
@@ -1584,7 +1584,7 @@ inline std::size_t find_covar_index( std::string colname, std::vector< std::stri
 	// 	}
 	// 	fg.reset();
 	// 	fg.push(boost_io::file_source(params.dxteex_file.c_str()));
-	// 
+	//
 	// 	// Reading column names
 	// 	std::vector<std::string> dxteex_names;
 	// 	if (!getline(fg, line)) {
@@ -1605,7 +1605,7 @@ inline std::size_t find_covar_index( std::string colname, std::vector< std::stri
 	// 		std::cout << "SNPID, chr, rsid, pos, allele0, allele1, env-snp covariances.." << std::endl;
 	// 		throw std::runtime_error("Unexpected number of columns");
 	// 	}
-	// 
+	//
 	// 	// Write remainder of file to Eigen matrix M
 	// 	external_dXtEEX.resize(n_lines, n_env * n_env);
 	// 	int i = 0;
