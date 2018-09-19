@@ -19,12 +19,14 @@ rescomp-debug: CXX = /apps/well/gcc/7.2.0/bin/g++
 rescomp-debug: FLAGS += -g3 -lrt
 rescomp-debug: $(TARGET)
 
+garganey: BGEN=/homes/kerin/projects/bgen/
 garganey: CXX = g++
-garganey: FLAGS += -g3 -lrt
+garganey: FLAGS += -g3 -lrt -lboost_iostreams
 garganey: $(TARGET)
 
+garganey-optim: BGEN=/homes/kerin/projects/bgen/
 garganey-optim: CXX = g++
-garganey-optim: FLAGS += -O3 -msse2
+garganey-optim: FLAGS += -O3 -msse2 -lrt -lboost_iostreams
 garganey-optim: $(TARGET)
 
 laptop: BGEN=/Users/kerin/software/bgen/
