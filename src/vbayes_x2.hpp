@@ -394,6 +394,14 @@ public:
 			i_hyps.slab_relative_var.resize(n_effects);
 			i_hyps.spike_relative_var.resize(n_effects);
 			i_hyps.lambda.resize(n_effects);
+			i_hyps.s_x.resize(2);
+
+			Eigen::ArrayXd muw_sq(n_env * n_env);
+			for (int ll = 0; ll < n_env; ll++){
+				for (int mm = 0; mm < n_env; mm++){
+					muw_sq(mm*n_env + ll) = vp_init.muw(mm) * vp_init.muw(ll);
+				}
+			}
 				//
 			i_hyps.sigma = sigma;
 			i_hyps.slab_var           << sigma * sigma_b, sigma * sigma_g;
@@ -401,7 +409,7 @@ public:
 			i_hyps.slab_relative_var  << sigma_b, sigma_g;
 			i_hyps.spike_relative_var << sigma_b / spike_diff_factor, sigma_g / spike_diff_factor;
 			i_hyps.lambda             << lam_b, lam_g;
-			i_hyps.s_x.resize(2);
+			i_hyps.s_x                << n_var, (dXtEEX.rowwise() * muw_sq.transpose()).sum() / (N - 1.0);
 				// }
 
 			// Run outer loop - don't update trackers
@@ -432,6 +440,9 @@ public:
 		}
 		updateSSq(hyps, vp);
 		vp.calcEdZtZ(dXtEEX, n_env);
+
+		// Initial s_x
+
 
 		// Run inner loop until convergence
 		int count = 0;
