@@ -656,9 +656,9 @@ public:
 			// Hence during back pass we reverse A
 			// TODO: make sure memoization saves reversed objects
 			if (is_fwd_pass){
-				// std::cout << std::endl << "Starting fwd pass" << std::endl;
+				std::cout << std::endl << "Starting fwd pass" << std::endl;
 			} else {
-				// std::cout << std::endl << "Starting back pass" << std::endl;
+				std::cout << std::endl << "Starting back pass" << std::endl;
 				Eigen::VectorXd tmp = A.reverse();
 				A = tmp;
 
@@ -666,8 +666,8 @@ public:
 				D_corr = tmp_mat;
 			}
 
-			// std::cout << ch << ": " << chunk[0] << " " << ee << " " << ch_start << " " << ch_len << std::endl;
-			// std::cout << D_corr << std::endl  << std::endl;
+			std::cout << ch << ": " << chunk[0] << " " << ee << " " << ch_start << " " << ch_len << std::endl;
+			std::cout << D_corr << std::endl  << std::endl;
 
 			// compute VB updates for alpha, mu, s_sq
 			_internal_updateAlphaMu(chunk, A, D_corr, D, hyps, vp);
@@ -756,7 +756,7 @@ public:
 			if(p.mode_mog_prior) ff_k -= std::log(vp.sp_sq(jj, ee));
 			vp.alpha(jj, ee)           = sigmoid(ff_k / 2.0 + alpha_cnst(ee));
 
-			// std::cout << jj << ": " << A(ii) << " + " << offset << "\t\t\t" << vp.alpha(jj, ee) << " " << vp.mu(jj, ee) << " " << vp.s_sq(jj, ee) << std::endl;
+			std::cout << jj << ": " << A(ii) << " + " << offset << " = " << A(ii) + offset << "\t\t\t" << vp.alpha(jj, ee) << " " << vp.mu(jj, ee) << " " << vp.s_sq(jj, ee) << std::endl;
 
 			rr_k_diff(ii)                       = vp.alpha(jj, ee) * vp.mu(jj, ee) - rr_k(ii);
 			if(p.mode_mog_prior) rr_k_diff(ii) += (1.0 - vp.alpha(jj, ee)) * vp.mup(jj, ee);

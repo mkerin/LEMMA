@@ -62,7 +62,7 @@ class parameters {
 		chunk_size = 256;
 		vb_chunk_size = 10;
 		missing_code = -999;
-		vb_iter_max = 10000;
+		vb_iter_max = 2;
 		range = false;
 		maf_lim = false;
 		info_lim = false;
