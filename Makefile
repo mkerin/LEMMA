@@ -21,7 +21,7 @@ rescomp: $(TARGET)
 
 rescomp-optim: CXX = /apps/well/gcc/7.2.0/bin/g++
 rescomp-optim: FLAGS += -O3 -fno-rounding-math -fno-signed-zeros -fprefetch-loop-arrays -flto
-rescomp-optim: $(TARGET)
+rescomp-optim: bin/bgen_prog.s
 
 rescomp-debug: CXX = /apps/well/gcc/7.2.0/bin/g++
 rescomp-debug: FLAGS += -g3
@@ -54,6 +54,9 @@ $(TARGET) lastest_compile_branch.txt : $(SRCDIR)/bgen_prog.cpp $(HEADERS)
 	echo "*********************************" >> latest_compile_branch.txt
 	$(PRINTF) "\n\nCompilation flags:\n$(FLAGS)\n" >> latest_compile_branch.txt
 	$(CXX) -o $@ $< $(FLAGS)
+
+bin/bgen_prog.s: $(SRCDIR)/bgen_prog.cpp $(HEADERS)
+	$(CXX) -S -c -fverbose-asm -g -o $@ $< $(FLAGS)
 
 file_parse : file_parse.cpp
 	$(CXX) -o $@ $< $(FLAGS)
