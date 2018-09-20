@@ -60,7 +60,7 @@ class parameters {
 		env_update_repeats = 1;
 		interaction_analysis = false;
 		chunk_size = 256;
-		vb_chunk_size = 64;
+		vb_chunk_size = 10;
 		missing_code = -999;
 		vb_iter_max = 10000;
 		range = false;

@@ -3,7 +3,7 @@ RSCRIPT := Rscript
 CP      := cp
 PRINTF  := printf
 
-TARGET := bin/bgen_prog
+TARGET := bin/bgen_prog_multithread
 SRCDIR := src
 FLAGS = -std=c++11 -Wno-deprecated
 
@@ -21,12 +21,12 @@ rescomp-debug: $(TARGET)
 
 garganey: BGEN=/homes/kerin/projects/bgen/
 garganey: CXX = g++
-garganey: FLAGS += -g3 -lrt -lboost_iostreams
+garganey: FLAGS += -g3 -lrt
 garganey: $(TARGET)
 
 garganey-optim: BGEN=/homes/kerin/projects/bgen/
 garganey-optim: CXX = g++
-garganey-optim: FLAGS += -O3 -msse2 -lrt -lboost_iostreams
+garganey-optim: FLAGS += -O3 -msse2 -lrt
 garganey-optim: $(TARGET)
 
 laptop: BGEN=/Users/kerin/software/bgen/
@@ -34,7 +34,7 @@ laptop: LDFLAGS += -L/usr/local/opt/llvm/lib
 laptop: CPPFLAGS += -I/usr/local/opt/llvm/include
 laptop: CXX = g++
 laptop: LD_LIBRARY_PATH = $(ls -d /usr/local/Cellar/gcc/* | tail -n1)/lib
-laptop: LIBS += -L/usr/local/Cellar/boost@1.55/1.55.0_1 -lboost_iostreams
+laptop: LIBS += -L/usr/local/Cellar/boost@1.55/1.55.0_1
 laptop: INCLUDES += -I/usr/local/Cellar/boost@1.55/1.55.0_1
 laptop: FLAGS += -DOSX -lz -msse2
 laptop: $(TARGET)
@@ -47,8 +47,9 @@ laptop: examples/test_matrix_matrix_mult
 #             -Lbuild/3rd_party/boost_1_55_0 -lbgen -ldb -lsqlite3 -lboost -lz -ldl -lrt -lpthread -lzstd
 
 LIBS += -L$(BGEN)build/ -L$(BGEN)build/3rd_party/zstd-1.1.0 -L$(BGEN)build/db \
-       -L$(BGEN)build/3rd_party/sqlite3 -L$(BGEN)build/3rd_party/boost_1_55_0 \
-       -lbgen -ldb -lsqlite3 -lboost -lz -ldl -lpthread -lzstd
+        -L$(BGEN)build/3rd_party/sqlite3 -L$(BGEN)build/3rd_party/boost_1_55_0 \
+        -lbgen -ldb -lsqlite3 -lboost -lz -ldl -lpthread -lzstd \
+        -lboost_iostreams -fopenmp
 INCLUDES += -I$(BGEN)genfile/include/ -I$(BGEN)3rd_party/zstd-1.1.0/lib/ \
            -I$(BGEN)db/include/ -I$(BGEN)3rd_party/sqlite3 -I$(BGEN)3rd_party/boost_1_55_0
 FLAGS += $(LIBS) $(INCLUDES)
@@ -128,8 +129,8 @@ testIO: $(IOfiles)
 # TEST 7; TODO: check hyps not rescricted
 t7_dir     := data/io_test/t7_varbvs
 t7_context := $(t7_dir)/hyperpriors_gxage.txt $(t7_dir)/answer.rds
-data/io_test/t7_varbvs/attempt.out: data/io_test/n50_p100.bgen ./bin/bgen_prog $(t7_context)
-	./bin/bgen_prog --mode_vb --verbose \
+data/io_test/t7_varbvs/attempt.out: data/io_test/n50_p100.bgen $(TARGET) $(t7_context)
+	$(TARGET) --mode_vb --verbose \
 	    --bgen $< \
 	    --interaction x \
 	    --covar data/io_test/age.txt \
@@ -141,8 +142,8 @@ data/io_test/t7_varbvs/attempt.out: data/io_test/n50_p100.bgen ./bin/bgen_prog $
 	$(RSCRIPT) R/vbayes_x_tests/check_output.R $(dir $@) > $(dir $@)attempt.log
 	diff $(dir $@)answer.log $(dir $@)attempt.log
 
-data/io_test/t7_varbvs/attempt_multithread.out: data/io_test/n50_p100.bgen ./bin/bgen_prog $(t7_context)
-	./bin/bgen_prog --mode_vb --verbose \
+data/io_test/t7_varbvs/attempt_multithread.out: data/io_test/n50_p100.bgen $(TARGET) $(t7_context)
+	$(TARGET) --mode_vb --verbose \
 	    --threads 2 \
 	    --bgen $< \
 	    --interaction x \
@@ -155,8 +156,8 @@ data/io_test/t7_varbvs/attempt_multithread.out: data/io_test/n50_p100.bgen ./bin
 	$(RSCRIPT) R/vbayes_x_tests/check_output.R $(dir $@) > $(dir $@)attempt_multithread.log
 	diff $(dir $@)answer.log $(dir $@)attempt_multithread.log
 
-data/io_test/t7_varbvs/attempt_alt_updates.out: data/io_test/n50_p100.bgen ./bin/bgen_prog $(t7_context)
-	./bin/bgen_prog --mode_vb --verbose \
+data/io_test/t7_varbvs/attempt_alt_updates.out: data/io_test/n50_p100.bgen $(TARGET) $(t7_context)
+	$(TARGET) --mode_vb --verbose \
 	    --keep_constant_variants \
 	    --mode_alternating_updates \
 	    --bgen $< \
@@ -187,8 +188,8 @@ $(t7_dir)/answer.rds: R/vbayes_x_tests/run_VBayesR.R $(t7_dir)/hyperpriors_gxage
 # TEST 8;
 t8_dir     := data/io_test/t8_mog_prior
 t8_context := $(t8_dir)/hyperpriors_gxage.txt
-data/io_test/t8_mog_prior/attempt.out: data/io_test/n50_p100.bgen ./bin/bgen_prog $(t8_context)
-	./bin/bgen_prog --mode_vb --verbose \
+data/io_test/t8_mog_prior/attempt.out: data/io_test/n50_p100.bgen $(TARGET) $(t8_context)
+	$(TARGET) --mode_vb --verbose \
 	    --keep_constant_variants \
 	    --effects_prior_mog \
 	    --bgen $< \
@@ -206,8 +207,8 @@ data/io_test/t8_mog_prior/attempt.out: data/io_test/n50_p100.bgen ./bin/bgen_pro
 # TEST 9;
 t9_dir     := data/io_test/t9_vb_covar_update
 t9_context := data/io_test/hyperpriors_gxage.txt
-data/io_test/t9_vb_covar_update/attempt.out: data/io_test/n50_p100.bgen ./bin/bgen_prog $(t9_context)
-	./bin/bgen_prog --mode_vb --verbose \
+data/io_test/t9_vb_covar_update/attempt.out: data/io_test/n50_p100.bgen $(TARGET) $(t9_context)
+	$(TARGET) --mode_vb --verbose \
 	    --keep_constant_variants \
 	    --use_vb_on_covars \
 	    --bgen $< \
@@ -228,8 +229,8 @@ data/io_test/t9_vb_covar_update/attempt.out: data/io_test/n50_p100.bgen ./bin/bg
 # Test when runnign from random start point.. this may be unstable
 t10_dir     := data/io_test/t10_varbvs_without_init
 t10_context := $(t10_dir)/hyperpriors_gxage.txt
-$(t10_dir)/attempt.out: $(t10_dir)/n50_p100.bgen ./bin/bgen_prog $(t10_context)
-	./bin/bgen_prog --mode_vb --verbose \
+$(t10_dir)/attempt.out: $(t10_dir)/n50_p100.bgen $(TARGET) $(t10_context)
+	$(TARGET) --mode_vb --verbose \
 	    --keep_constant_variants \
 	    --bgen $< \
 	    --interaction x \
@@ -258,8 +259,8 @@ $(t10_dir)/hyperpriors_gxage.txt: R/t10/gen_hyps.R
 # Multi-thread; yeahhh boi!
 t11_dir     := data/io_test/t11_varbvs_multithread
 t11_context := $(t11_dir)/hyperpriors_gxage.txt $(t11_dir)/answer.rds
-$(t11_dir)/attempt.out: $(t11_dir)/n50_p100.bgen ./bin/bgen_prog $(t11_context)
-	./bin/bgen_prog --mode_vb --verbose \
+$(t11_dir)/attempt.out: $(t11_dir)/n50_p100.bgen $(TARGET) $(t11_context)
+	$(TARGET) --mode_vb --verbose \
 	    --keep_constant_variants \
 	    --bgen $< \
 	    --interaction x \
@@ -289,8 +290,8 @@ $(t11_dir)/answer.rds: R/vbayes_x_tests/run_VBayesR.R $(t11_dir)/hyperpriors_gxa
 
 # TEST 12
 # custom start;
-data/io_test/t12_custom_init/answer.out: data/io_test/n50_p100.bgen ./bin/bgen_prog
-	./bin/bgen_prog --mode_vb --verbose --low_mem \
+data/io_test/t12_custom_init/answer.out: data/io_test/n50_p100.bgen $(TARGET)
+	$(TARGET) --mode_vb --verbose --low_mem \
 	    --keep_constant_variants \
 	    --bgen $< \
 	    --interaction x \
@@ -301,8 +302,8 @@ data/io_test/t12_custom_init/answer.out: data/io_test/n50_p100.bgen ./bin/bgen_p
 	    --vb_init data/io_test/t12_custom_init/vb_init.txt \
 	    --out $@
 
-data/io_test/t12_custom_init/attempt.out: data/io_test/n50_p100.bgen ./bin/bgen_prog data/io_test/t12_custom_init/answer.out
-	./bin/bgen_prog --mode_vb --verbose --low_mem \
+data/io_test/t12_custom_init/attempt.out: data/io_test/n50_p100.bgen $(TARGET) data/io_test/t12_custom_init/answer.out
+	$(TARGET) --mode_vb --verbose --low_mem \
 	    --keep_constant_variants \
 	    --bgen $< \
 	    --interaction x \

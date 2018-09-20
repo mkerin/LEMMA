@@ -175,8 +175,24 @@ public:
 
 			std::uint32_t kk_bck = n_effects * n_var - 1 - kk;
 			std::uint32_t ch_bck_index = n_chunks - 1 - ch_index;
-			back_pass_chunks[ch_bck_index].push_back(kk_bck);
+			back_pass_chunks[ch_index].push_back(kk_bck);
 		}
+
+		//
+		// for (auto chunk : fwd_pass_chunks){
+		// 	for (auto kk : chunk){
+		// 		std::cout << kk << " ";
+		// 	}
+		// 	std::cout << std::endl;
+		// }
+		//
+		// for (auto chunk : back_pass_chunks){
+		// 	for (auto kk : chunk){
+		// 		std::cout << kk << " ";
+		// 	}
+		// 	std::cout << std::endl;
+		// }
+
 
 		// non random initialisation
 		if(p.vb_init_file != "NULL"){
@@ -472,7 +488,8 @@ public:
 			long int hty_update_counter = 0;
 
 			// Alternate between back and fwd passes
-			if(count % 2 == 0){
+			bool is_fwd_pass = (count % 2 == 0);
+			if(is_fwd_pass){
 				iter = fwd_pass;
 				iter_chunks = fwd_pass_chunks;
 			} else {
@@ -488,7 +505,7 @@ public:
 			}
 
 			// Update main & interaction effects
-			updateAlphaMu(iter_chunks, hyps, vp, hty_update_counter);
+			updateAlphaMu(iter_chunks, hyps, vp, hty_update_counter, is_fwd_pass);
 			check_monotonic_elbo(hyps, vp, count, logw_prev, "updateAlphaMu");
 
 			if(p.xtra_verbose){
@@ -593,16 +610,17 @@ public:
 	void updateAlphaMu(const std::vector< std::vector< std::uint32_t >>& iter_chunks,
                        const Hyps& hyps,
                        VariationalParameters& vp,
-                       long int& hty_updates){
+                       long int& hty_updates,
+                       const bool& is_fwd_pass){
 		// Divide updates into chunks
 		// Partition chunks amongst available threads
 		t_updateAlphaMu.resume();
 
 		for (std::uint32_t ch = 0; ch < iter_chunks.size(); ch++){
 			std::vector< std::uint32_t > chunk = iter_chunks[ch];
-			int ee = chunk[0] % n_var;
-			int ch_len = chunk.size();
-			std::uint32_t ch_start = chunk[0] % n_var;
+			int ee                 = chunk[0] / n_var;
+			int ch_len             = chunk.size();
+			std::uint32_t ch_start = *std::min_element(chunk.begin(), chunk.end()) % n_var;
 
 			Eigen::MatrixXd D = X.col_block(ch_start, ch_len);
 
@@ -619,18 +637,37 @@ public:
 			// compute variant correlations within chunk
 			Eigen::MatrixXd D_corr;
 			if (ee == 0){
-				if (D_correlations.count(ch) == 0){
+				// if (D_correlations.count(ch) == 0){
 					// D_corr = X.selfAdjointBlock(chunk[0],ch_len);
-					D_corr = D.selfadjointView<Eigen::Upper>().rankUpdate(D.transpose());
-					D_correlations[ch] = D_corr;
-				} else {
-					D_corr = D_correlations[ch];
-				}
+					// D_corr = D.selfadjointView<Eigen::Upper>().rankUpdate(D.transpose());
+					D_corr = D.transpose() * D;
+					// D_correlations[ch] = D_corr;
+				// } else {
+				// 	D_corr = D_correlations[ch];
+				// }
 			} else {
 				Eigen::MatrixXd Z_chunk = vp.eta.asDiagonal() * D;
-				D_corr = Z_chunk.selfadjointView<Eigen::Upper>().rankUpdate(Z_chunk.transpose());
+				// D_corr = Z_chunk.selfadjointView<Eigen::Upper>().rankUpdate(Z_chunk.transpose());
+				D_corr = Z_chunk.transpose() * Z_chunk;
 				// D_corr = X.selfAdjointBlock_w_interaction(vp.eta, chunk[0], ch_len);
 			}
+
+			// Cols in D always read in in same order
+			// Hence during back pass we reverse A
+			// TODO: make sure memoization saves reversed objects
+			if (is_fwd_pass){
+				// std::cout << std::endl << "Starting fwd pass" << std::endl;
+			} else {
+				// std::cout << std::endl << "Starting back pass" << std::endl;
+				Eigen::VectorXd tmp = A.reverse();
+				A = tmp;
+
+				Eigen::MatrixXd tmp_mat = D_corr.reverse();
+				D_corr = tmp_mat;
+			}
+
+			// std::cout << ch << ": " << chunk[0] << " " << ee << " " << ch_start << " " << ch_len << std::endl;
+			// std::cout << D_corr << std::endl  << std::endl;
 
 			// compute VB updates for alpha, mu, s_sq
 			_internal_updateAlphaMu(chunk, A, D_corr, D, hyps, vp);
@@ -666,6 +703,7 @@ public:
                                 const Hyps& hyps,
                                 VariationalParameters& vp){
 
+
 		Eigen::ArrayXd alpha_cnst;
 		if(p.mode_mog_prior){
 			alpha_cnst  = (hyps.lambda / (1.0 - hyps.lambda) + eps).log();
@@ -683,6 +721,7 @@ public:
 		}
 
 		// adjust updates within chunk
+		// Need to be able to go backwards during a back_pass
 		Eigen::VectorXd rr_k_diff(ch_len);
 		for (int ii = 0; ii < ch_len; ii++){
 			int ee           = iter_chunk[ii] / n_var;   // 0 -> main effect
@@ -704,7 +743,7 @@ public:
 			// Update mu
 			double offset = rr_k(ii) * D_corr(ii, ii);
 			for (int mm = 0; mm < ii; mm++){
-				offset += rr_k_diff(mm) * D_corr(mm, ii);
+				offset -= rr_k_diff(mm) * D_corr(mm, ii);
 			}
 			vp.mu(jj, ee)                       = vp.s_sq(jj, ee)  * (A(ii) + offset) / hyps.sigma;
 			if(p.mode_mog_prior) vp.mup(jj, ee) = vp.sp_sq(jj, ee) * (A(ii) + offset) / hyps.sigma;
@@ -717,7 +756,7 @@ public:
 			if(p.mode_mog_prior) ff_k -= std::log(vp.sp_sq(jj, ee));
 			vp.alpha(jj, ee)           = sigmoid(ff_k / 2.0 + alpha_cnst(ee));
 
-			std::cout << A(ii) << " + " << offset << "\t\t\t" << vp.alpha(jj, ee) << " " << vp.mu(jj, ee) << " " << vp.s_sq(jj, ee) << std::endl;
+			// std::cout << jj << ": " << A(ii) << " + " << offset << "\t\t\t" << vp.alpha(jj, ee) << " " << vp.mu(jj, ee) << " " << vp.s_sq(jj, ee) << std::endl;
 
 			rr_k_diff(ii)                       = vp.alpha(jj, ee) * vp.mu(jj, ee) - rr_k(ii);
 			if(p.mode_mog_prior) rr_k_diff(ii) += (1.0 - vp.alpha(jj, ee)) * vp.mup(jj, ee);
