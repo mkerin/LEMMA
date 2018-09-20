@@ -14,6 +14,7 @@
 #include <string>
 #include <stdexcept>
 #include "class.h"
+#include "my_timer.hpp"
 #include "tools/eigen3.3/Dense"
 #include "tools/eigen3.3/Sparse"
 #include "tools/eigen3.3/Eigenvalues"
@@ -42,6 +43,7 @@ inline size_t numCols(const Eigen::MatrixXd &A);
 inline void setCol(Eigen::MatrixXd &A, const Eigen::VectorXd &v, size_t col);
 inline Eigen::VectorXd getCol(const Eigen::MatrixXd &A, size_t col);
 inline Eigen::MatrixXd solve(const Eigen::MatrixXd &A, const Eigen::MatrixXd &b);
+inline std::size_t find_covar_index( std::string colname, std::vector< std::string > col_names );
 
 
 class Data
@@ -214,8 +216,20 @@ class Data
 			read_covar();
 		}
 
+		// Environmental vars - subset of covars
 		if(params.env_file != "NULL"){
 			read_environment();
+		} else if (params.x_param_name != "NULL"){
+			env_names.push_back(params.x_param_name);
+			n_env             = 1;
+			std::size_t x_col = find_covar_index(params.x_param_name, covar_names);
+			E                 = W.col(x_col);
+		} else if (params.interaction_analysis){
+			env_names.push_back(covar_names[0]);
+			E                 = W.col(0);
+			n_env             = 1;
+		} else {
+			n_env             = 0;
 		}
 
 		if(params.env_weights_file != "NULL" && params.env_file != "NULL"){
@@ -1166,6 +1180,7 @@ class Data
 	void calc_snpstats(){
 		std::cout << "Reordering/computing results for snpwise scan" << std::endl;
 		MyTimer my_timer("snpwise scan constructed in %ts \n");
+		my_timer.resume();
 		Eigen::ArrayXd cl_j;
 		double dztz_lmj;
 		snpstats.resize(n_var, n_env + 3);
@@ -1237,6 +1252,7 @@ class Data
 	void calc_dxteex(){
 		std::cout << "Reordering/building dXtEEX array" << std::endl;
 		MyTimer t_calcDXtEEX("dXtEEX array constructed in %ts \n");
+		t_calcDXtEEX.resume();
 		Eigen::ArrayXd cl_j;
 		double dztz_lmj;
 		dXtEEX.resize(n_var, n_env * n_env);
@@ -1534,6 +1550,18 @@ inline Eigen::MatrixXd solve(const Eigen::MatrixXd &A, const Eigen::MatrixXd &b)
 		std::exit(EXIT_FAILURE);
 	}
 	return x;
+}
+
+
+inline std::size_t find_covar_index( std::string colname, std::vector< std::string > col_names ){
+	std::size_t x_col;
+	std::vector<std::string>::iterator it;
+	it = std::find(col_names.begin(), col_names.end(), colname);
+	if (it == col_names.end()){
+		throw std::invalid_argument("Can't locate parameter " + colname);
+	}
+	x_col = it - col_names.begin();
+	return x_col;
 }
 
 	// void read_external_dxteex( ){

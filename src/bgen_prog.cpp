@@ -15,11 +15,7 @@
 #include "my_timer.hpp"
 #include "class.h"
 #include "data.hpp"
-#include "genfile/bgen/bgen.hpp"
-#include "genfile/bgen/View.hpp"
-#include "bgen_parser.hpp"
 #include "vbayes_x2.hpp"
-#include "version.h"
 
 void read_directory(const std::string& name, std::vector<std::string>& v);
 

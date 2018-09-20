@@ -19,7 +19,6 @@ https://stackoverflow.com/questions/3283021/compile-a-standalone-static-executab
 #include <random>
 #include <thread>
 #include "sys/types.h"
-#include "sys/sysinfo.h"
 #include "class.h"
 #include "vbayes_tracker.hpp"
 #include "data.hpp"
@@ -38,7 +37,6 @@ namespace boost_m = boost::math;
 template <typename T>
 inline std::vector<int> validate_grid(const Eigen::MatrixXd &grid, const T n_var);
 inline Eigen::MatrixXd subset_matrix(const Eigen::MatrixXd &orig, const std::vector<int> &valid_points);
-inline std::size_t find_covar_index( std::string colname, std::vector< std::string > col_names );
 
 class VBayesX2 {
 public:
@@ -143,33 +141,16 @@ public:
 		n_grid         = dat.hyps_grid.rows();
 		print_interval = std::max(1, n_grid / 10);
 		covar_names    = dat.covar_names;
+		env_names      = dat.env_names;
 		N              = (double) n_samples;
 
-		env_names = dat.env_names;
 
 		// Read environmental variables
-		if (p.env_file != "NULL"){
-			E = dat.E;
-		} else if(p.x_param_name != "NULL"){
-			std::size_t x_col = find_covar_index(p.x_param_name, dat.covar_names);
-			E                = dat.W.col(x_col);
-			n_env = 1;
-			env_names.push_back(p.x_param_name);
-		} else {
-			E                = dat.W.col(0);
-			n_env = 1;
-			env_names.push_back("covar[0]");
-		}
+		E = dat.E;
 		X.E = E;  // WARNING: Required to be able to call X.col(jj) with jj > P
 
 		// Allocate memory - fwd/back pass vectors
-		std::uint32_t L;
-		if(p.mode_alternating_updates){
-			L = n_var;
-		} else {
-			L = n_var * n_effects;
-		}
-		for(std::uint32_t kk = 0; kk < L; kk++){
+		for(std::uint32_t kk = 0; kk < n_var * n_effects; kk++){
 			fwd_pass.push_back(kk);
 			back_pass.push_back(n_var2 - kk - 1);
 		}
@@ -226,25 +207,6 @@ public:
 		}
 
 		Cty = C.transpose() * Y;
-
-		// dXtEEX an L^2 x P array
-		if(p.dxteex_file == "NULL"){
-			std::cout << "Building dXtEEX array" << std::endl;
-			Eigen::ArrayXd cl_j;
-			double dztz_lmj;
-			dXtEEX.resize(n_var, n_env * n_env);
-			for (std::size_t jj = 0; jj < n_var; jj++){
-				cl_j = X.col(jj);
-				for (int ll = 0; ll < n_env; ll++){
-					for (int mm = 0; mm <= ll; mm++){
-						dztz_lmj = (cl_j * E.col(ll) * E.col(mm) * cl_j).sum();
-						dXtEEX(jj, ll*n_env + mm) = dztz_lmj;
-						dXtEEX(jj, mm*n_env + ll) = dztz_lmj;
-					}
-				}
-			}
-			std::cout << "Built dXtEEX array" << std::endl;
-		}
 
 		// sgd
 		if(p.mode_sgd){
@@ -513,11 +475,13 @@ public:
 			alpha_diff_updates.push_back(alpha_diff);
 
 			// Update env-weights
-			for (int uu = 0; uu < p.env_update_repeats; uu++ ){
-				updateEnvWeights(env_fwd_pass, hyps, vp);
-				updateEnvWeights(env_back_pass, hyps, vp);
+			if (n_effects > 1 && n_env > 1){
+				for (int uu = 0; uu < p.env_update_repeats; uu++ ){
+					updateEnvWeights(env_fwd_pass, hyps, vp);
+					updateEnvWeights(env_back_pass, hyps, vp);
+				}
+				check_monotonic_elbo(hyps, vp, count, logw_prev, "updateEnvWeights");
 			}
-			check_monotonic_elbo(hyps, vp, count, logw_prev, "updateEnvWeights");
 
 			// Log updates
 			i_logw     = calc_logw(hyps, vp);
@@ -1450,6 +1414,7 @@ public:
 	}
 
 	int getValueRAM(){ //Note: this value is in KB!
+#ifndef OSX
 		FILE* file = fopen("/proc/self/status", "r");
 		int result = -1;
 		char line[128];
@@ -1462,6 +1427,9 @@ public:
 		}
 		fclose(file);
 		return result;
+#else
+		return -1;
+#endif
 	}
 
 	/********** SGD stuff; unfinished ************/
@@ -1502,16 +1470,6 @@ public:
 	}
 };
 
-inline std::size_t find_covar_index( std::string colname, std::vector< std::string > col_names ){
-	std::size_t x_col;
-	std::vector<std::string>::iterator it;
-	it = std::find(col_names.begin(), col_names.end(), colname);
-	if (it == col_names.end()){
-		throw std::invalid_argument("Can't locate parameter " + colname);
-	}
-	x_col = it - col_names.begin();
-	return x_col;
-}
 
 template <typename T>
 inline std::vector<int> validate_grid(const Eigen::MatrixXd &grid, const T n_var){
