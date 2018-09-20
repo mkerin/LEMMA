@@ -23,12 +23,14 @@ rescomp-debug: CXX = /apps/well/gcc/7.2.0/bin/g++
 rescomp-debug: FLAGS += -g3 -lrt
 rescomp-debug: $(TARGET)
 
+garganey: BGEN=/homes/kerin/projects/bgen/
 garganey: CXX = g++
 garganey: FLAGS += -g3 -lrt
 garganey: $(TARGET)
 
+garganey-optim: BGEN=/homes/kerin/projects/bgen/
 garganey-optim: CXX = g++
-garganey-optim: FLAGS += -O3 -msse2
+garganey-optim: FLAGS += -O3 -lrt
 garganey-optim: $(TARGET)
 
 laptop: BGEN="/Users/kerin/software/bgen/"
@@ -50,7 +52,7 @@ laptop: examples/test_matrix_matrix_mult
 
 LIBS += -L$(BGEN)build/ -L$(BGEN)build/3rd_party/zstd-1.1.0 -L$(BGEN)build/db \
        -L$(BGEN)build/3rd_party/sqlite3 -L$(BGEN)build/3rd_party/boost_1_55_0 \
-       -lbgen -ldb -lsqlite3 -lboost -lz -ldl -lpthread -lzstd
+       -lbgen -ldb -lsqlite3 -lboost -lz -ldl -lpthread -lzstd -lboost_iostreams
 INCLUDES += -I$(BGEN)genfile/include/ -I$(BGEN)3rd_party/zstd-1.1.0/lib/ \
            -I$(BGEN)db/include/ -I$(BGEN)3rd_party/sqlite3 -I$(BGEN)3rd_party/boost_1_55_0
 FLAGS += $(LIBS) $(INCLUDES)
