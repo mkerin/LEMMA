@@ -670,7 +670,7 @@ public:
 			std::cout << D_corr << std::endl  << std::endl;
 
 			// compute VB updates for alpha, mu, s_sq
-			_internal_updateAlphaMu(chunk, A, D_corr, D, hyps, vp);
+			_internal_updateAlphaMu(chunk, A, D_corr, D, is_fwd_pass, hyps, vp);
 		}
 
 		// update summary quantity
@@ -700,6 +700,7 @@ public:
                                 const Eigen::Ref<const Eigen::VectorXd>& A,
                                 const Eigen::Ref<const Eigen::MatrixXd>& D_corr,
                                 const Eigen::Ref<const Eigen::MatrixXd>& D,
+                                const bool& is_fwd_pass,
                                 const Hyps& hyps,
                                 VariationalParameters& vp){
 
@@ -760,6 +761,12 @@ public:
 
 			rr_k_diff(ii)                       = vp.alpha(jj, ee) * vp.mu(jj, ee) - rr_k(ii);
 			if(p.mode_mog_prior) rr_k_diff(ii) += (1.0 - vp.alpha(jj, ee)) * vp.mup(jj, ee);
+		}
+
+		// Because data is still arranged as per fwd pass
+		if (!is_fwd_pass){
+			Eigen::VectorXd tmp = rr_k_diff.reverse();
+			rr_k_diff = tmp;
 		}
 
 		// update residuals
