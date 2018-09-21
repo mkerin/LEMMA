@@ -477,7 +477,7 @@ public:
 			updateAlphaMu(iter, hyps, vp, hty_update_counter);
 			check_monotonic_elbo(hyps, vp, count, logw_prev, "updateAlphaMu");
 
-			if(p.xtra_verbose){
+			if(count % 5 == 0 && p.xtra_verbose){
 				tracker.push_interim_param_values(count, n_effects, n_var, vp,
                          X.chromosome, X.rsid, X.al_0, X.al_1, X.position);
 			}

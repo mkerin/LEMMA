@@ -7,14 +7,19 @@ TARGET := bin/bgen_prog
 SRCDIR := src
 FLAGS = -std=c++11 -Wno-deprecated
 
+rescomp: BGEN=/well/marchini/kebl4230/software/bgen/
 rescomp: CXX = /apps/well/gcc/7.2.0/bin/g++
-rescomp: FLAGS += -O3 -static -static-libgcc -static-libstdc++ -lrt
+rescomp: LIBS += -L/well/marchini/kebl4230/software/boost_1_62_0/stage/lib
+rescomp: FLAGS += -O3 -lrt
 rescomp: $(TARGET)
 
+rescomp-optim: BGEN=/well/marchini/kebl4230/software/bgen/
 rescomp-optim: CXX = /apps/well/gcc/7.2.0/bin/g++
+rescomp-optim: bin/bgen_prog.s
 rescomp-optim: FLAGS += -O3 -fno-rounding-math -fno-signed-zeros -fprefetch-loop-arrays -flto -lrt
 rescomp-optim: $(TARGET)
 
+rescomp-debug: BGEN=/well/marchini/kebl4230/software/bgen/
 rescomp-debug: CXX = /apps/well/gcc/7.2.0/bin/g++
 rescomp-debug: FLAGS += -g3 -lrt
 rescomp-debug: $(TARGET)
@@ -34,7 +39,7 @@ laptop: LDFLAGS += -L/usr/local/opt/llvm/lib
 laptop: CPPFLAGS += -I/usr/local/opt/llvm/include
 laptop: CXX = g++
 laptop: LD_LIBRARY_PATH = $(ls -d /usr/local/Cellar/gcc/* | tail -n1)/lib
-laptop: LIBS += -L/usr/local/Cellar/boost@1.55/1.55.0_1 -lboost_iostreams
+laptop: LIBS += -L/usr/local/Cellar/boost@1.55/1.55.0_1
 laptop: INCLUDES += -I/usr/local/Cellar/boost@1.55/1.55.0_1
 laptop: FLAGS += -DOSX -lz -msse2
 laptop: $(TARGET)
@@ -73,6 +78,9 @@ $(TARGET) lastest_compile_branch.txt : $(SRCDIR)/bgen_prog.cpp $(HEADERS)
 	echo "*********************************" >> latest_compile_branch.txt
 	$(PRINTF) "\n\nCompilation flags:\n$(FLAGS)\n" >> latest_compile_branch.txt
 	$(CXX) -o $@ $< ${FLAGS}
+
+bin/bgen_prog.s: $(SRCDIR)/bgen_prog.cpp $(HEADERS)
+	$(CXX) -S -c -fverbose-asm -g -o $@ $< $(FLAGS)
 
 file_parse : file_parse.cpp
 	$(CXX) -o $@ $< $(FLAGS)
@@ -134,7 +142,6 @@ t7_dir     := data/io_test/t7_varbvs
 t7_context := $(t7_dir)/hyperpriors_gxage.txt $(t7_dir)/answer.rds
 data/io_test/t7_varbvs/attempt.out: data/io_test/n50_p100.bgen ./bin/bgen_prog $(t7_context)
 	./bin/bgen_prog --mode_vb --verbose \
-	    --keep_constant_variants \
 	    --bgen $< \
 	    --interaction x \
 	    --covar data/io_test/age.txt \
