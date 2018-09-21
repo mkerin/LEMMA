@@ -10,7 +10,7 @@ FLAGS = -std=c++11 -Wno-deprecated
 rescomp: BGEN=/well/marchini/kebl4230/software/bgen/
 rescomp: CXX = /apps/well/gcc/7.2.0/bin/g++
 rescomp: LIBS += -L/well/marchini/kebl4230/software/boost_1_62_0/stage/lib
-rescomp: FLAGS += -O3 -lrt
+rescomp: FLAGS += -O3 -lrt -static -static-libgcc -static-libstdc++ -lz
 rescomp: $(TARGET)
 
 rescomp-optim: BGEN=/well/marchini/kebl4230/software/bgen/

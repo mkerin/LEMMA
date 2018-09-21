@@ -503,6 +503,7 @@ public:
 			// Maximise hyps
 			if(round_index > 1 && p.mode_empirical_bayes){
 				if (count >= p.burnin_maxhyps) wrapMaximiseHyps(hyps, vp);
+				check_monotonic_elbo(hyps, vp, count, logw_prev, "updateCovarEffects");
 
 				i_logw     = calc_logw(hyps, vp);
 
