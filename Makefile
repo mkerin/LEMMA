@@ -9,13 +9,14 @@ INCLUDES = -Ibuild/genfile/include/ -I3rd_party/zstd-1.1.0/lib/ \
            -Ibuild/db/include/ -I3rd_party/sqlite3 -I3rd_party/boost_1_55_0
 LIBS =     -Lbuild/ -Lbuild/3rd_party/zstd-1.1.0 -Lbuild/db -Lbuild/3rd_party/sqlite3 \
            -Lbuild/3rd_party/boost_1_55_0 -lbgen -ldb -lsqlite3 -lboost -lz -ldl -lrt -lpthread -lzstd
-FLAGS := -std=c++11 -Wno-deprecated $(LIBS) $(INCLUDES)
 
-HEADERS := parse_arguments.hpp data.hpp class.h bgen_parser.hpp vbayes.hpp vbayes_x.hpp utils.hpp vbayes_x2.hpp
+HEADERS := vbayes_x2.hpp genotype_matrix.hpp vbayes_tracker.hpp \
+           parse_arguments.hpp data.hpp class.h bgen_parser.hpp utils.hpp \
+           variational_parameters.hpp
 HEADERS := $(addprefix $(SRCDIR)/,$(HEADERS))
 
 rescomp: CXX = /apps/well/gcc/7.2.0/bin/g++
-rescomp: FLAGS += -O3
+rescomp: FLAGS += -O3 -static -static-libgcc -static-libstdc++
 rescomp: $(TARGET)
 
 rescomp-optim: CXX = /apps/well/gcc/7.2.0/bin/g++
@@ -40,6 +41,8 @@ laptop: LD_LIBRARY_PATH = $(ls -d /usr/local/Cellar/gcc/* | tail -n1)/lib
 laptop: FLAGS += -g3 -lbgen -ldb -lsqlite3 -lboost -ldl -lpthread -lzstd -L$(LD_LIBRARY_PATH)
 laptop: $(TARGET)
 
+FLAGS += -std=c++11 -Wno-deprecated $(LIBS) $(INCLUDES)
+
 $(TARGET) lastest_compile_branch.txt : $(SRCDIR)/bgen_prog.cpp $(HEADERS)
 	$(info $$CXX is [${CXX}])
 	$(info $$CFLAGS is [${CFLAGS}])
@@ -49,7 +52,7 @@ $(TARGET) lastest_compile_branch.txt : $(SRCDIR)/bgen_prog.cpp $(HEADERS)
 	echo "Git branch: `git rev-parse --abbrev-ref HEAD`" >> latest_compile_branch.txt
 	echo "Started at: `date`" >> latest_compile_branch.txt
 	echo "*********************************" >> latest_compile_branch.txt
-	$(PRINTF) "\n\nCompilation flags:\n$(FLAGS)" >> latest_compile_branch.txt
+	$(PRINTF) "\n\nCompilation flags:\n$(FLAGS)\n" >> latest_compile_branch.txt
 	$(CXX) -o $@ $< $(FLAGS)
 
 file_parse : file_parse.cpp
@@ -61,7 +64,7 @@ file_parse : file_parse.cpp
 # Note: this uses the Catch library to Unit Test the cpp source code. If we want
 # to test input/output of the executable we do that directly with the Makefile
 # and `diff` command.
-# UNITTESTS := test-data.cpp tests-parse-arguments.cpp 
+# UNITTESTS := test-data.cpp tests-parse-arguments.cpp
 # UNITTESTS := $(addprefix tests/,$(UNITTESTS))
 
 testUNIT: tests/tests-main
@@ -72,113 +75,83 @@ tests/tests-main: tests/tests-main.o
 tests/tests-main.o: tests/tests-main.cpp $(SRCDIR)/bgen_prog.cpp $(HEADERS)
 	$(CXX) tests/tests-main.cpp -c -o $@ $(FLAGS)
 
+# Examples
+examples/test_updates: examples/test_updates.cpp
+	$(CXX) $< -o $@ $(FLAGS) -Ofast -I /homes/kerin/local/boost_1_67_0 -L /homes/kerin/local/boost_1_67_0/stage/lib
+
+examples/test_compression_storage: examples/test_compression_storage.cpp
+	$(CXX) $< -o $@ $(FLAGS) -O3 -I /homes/kerin/local/boost_1_67_0 -L /homes/kerin/local/boost_1_67_0/stage/lib
+
+examples/test_vector_matrix_mult: examples/test_vector_matrix_mult.cpp
+		$(CXX) $< -o $@ $(FLAGS) -O3 -I /homes/kerin/local/boost_1_67_0 -L /homes/kerin/local/boost_1_67_0/stage/lib
+
+examples/check_my_timer: examples/check_my_timer.cpp
+	$(CXX) $< -o $@ $(FLAGS) -I /homes/kerin/local/boost_1_67_0 -L /homes/kerin/local/boost_1_67_0/stage/lib
+
+examples/check_nested_classes: examples/check_nested_classes.cpp
+	$(CXX) -o $@ $< $(FLAGS)
+
+examples/check_eigen: examples/check_eigen.cpp
+	$(CXX) -o $@ $< $(FLAGS)
+
 # IO Tests
 # Files in data/out are regarded as 'true', and we check that the equivalent
 # file in data/io_test is identical after making changes to the executable.
-IOfiles := t1_range t2_lm t3_lm_two_chunks t4_lm_2dof t5_joint_model t6_lm2 \
-           t7_varbvs_constrained t8_varbvs t10_varbvs_without_init
+# IOfiles := t8_mog_prior
+IOfiles := t7_varbvs  t9_vb_covar_update t12_custom_init
 IOfiles := $(addprefix data/io_test/,$(addsuffix /attempt.out,$(IOfiles)))
-IOfiles += $(addprefix data/io_test/t2_lm/attempt, $(addsuffix .out,B C D))
-IOfiles += $(addprefix data/io_test/t1_range/attempt, $(addsuffix .out,B))
+IOfiles += $(addprefix data/io_test/t7_varbvs/attempt, $(addsuffix .out,_multithread _alt_updates))
+# IOfiles += $(addprefix data/io_test/t1_range/attempt, $(addsuffix .out,B))
 
 testIO: $(IOfiles)
 	@
 
-# Test of --range command
-data/io_test/t1_range/attempt.out: data/io_test/example.v11.bgen ./bin/bgen_prog
-	./bin/bgen_prog --convert_to_vcf --bgen $< --range 01 1 3000 --out $@
-	diff $(dir $@)answer.out $@
-
-# Test of --incl_rsids on same test case
-data/io_test/t1_range/attemptB.out: data/io_test/example.v11.bgen ./bin/bgen_prog
-	./bin/bgen_prog --convert_to_vcf --bgen $< --incl_rsids $(dir $@)t1_variants.txt --out $@
-	diff $(dir $@)answer.out $@
-
-# Small regression analysis; subset to complete cases, normalising, 1dof interaction model
-data/io_test/t2_lm/attempt.out: data/io_test/example.v11.bgen ./bin/bgen_prog
-	./bin/bgen_prog --lm \
-	    --bgen $< \
-	    --pheno $(dir $@)t2.pheno \
-	    --covar $(dir $@)t2.covar \
-	    --range 01 2000 2001 --out $@
-	diff $(dir $@)answer.out $@
-
-# Same regression analysis as t2_lm but with chunk exact right size
-data/io_test/t2_lm/attemptB.out: data/io_test/example.v11.bgen ./bin/bgen_prog
-	./bin/bgen_prog --lm \
-	    --bgen $< \
-	    --pheno $(dir $@)t2.pheno \
-	    --covar $(dir $@)t2.covar \
-	    --chunk 2 \
-	    --range 01 2000 2001 --out $@
-	diff $(dir $@)answer.out $@
-
-# Same regression analysis as t2_lm but split into two chunks
-data/io_test/t2_lm/attemptC.out: data/io_test/example.v11.bgen ./bin/bgen_prog
-	./bin/bgen_prog --lm \
-	    --bgen $< \
-	    --pheno $(dir $@)t2.pheno \
-	    --covar $(dir $@)t2.covar \
-	    --chunk 1 \
-	    --range 01 2000 2001 --out $@
-	diff $(dir $@)answer.out $@
-
-# Same regression analysis as t2_lm but explicitly naming interaction column
-data/io_test/t2_lm/attemptD.out: data/io_test/example.v11.bgen ./bin/bgen_prog
-	./bin/bgen_prog --lm \
-	    --bgen $< \
-	    --pheno $(dir $@)t2.pheno \
-	    --covar $(dir $@)t2.covar \
-	    --interaction covar1 \
-	    --range 01 2000 2001 --out $@
-	diff $(dir $@)answer.out $@
-
-data/io_test/t4_lm_2dof/attempt.out: data/io_test/example.v11.bgen ./bin/bgen_prog
-	./bin/bgen_prog --lm \
-	    --bgen $< \
-	    --pheno $(dir $@)t4.pheno \
-	    --covar $(dir $@)t4.covar \
-	    --range 01 3000 3001 --out $@
-	diff $(dir $@)answer.out $@
-
-# # Joint model test
-# data/io_test/t5_joint_model/attempt.out: data/io_test/example.v11.bgen ./bin/bgen_prog
-# 	./bin/bgen_prog --joint_model \
-# 	    --bgen $< \
-# 	    --pheno $(dir $@)t2.pheno \
-# 	    --covar $(dir $@)t2.covar \
-# 	    --range 01 2000 2001 --out $@
-# 	diff $(dir $@)answer.out $@
-
-# linear regression with full gene-env-covariates model
-data/io_test/t6_lm2/attempt.out: data/io_test/example.v11.bgen ./bin/bgen_prog
-	./bin/bgen_prog --full_lm \
-	    --bgen $< \
-	    --pheno $(dir $@)t6.pheno \
-	    --covar $(dir $@)t6.covar \
-	    --interaction covar1 \
-	    --genetic_confounders covar2 \
-	    --range 01 2000 2001 \
-	    --out $@
-	diff $(dir $@)answer.out $@
-
-# TEST 7
-# Restricted model with sigma_b == sigma_g and lambda_b == lambda_g
-# This is equivalent to the original carbonetto model on H = (X, Z)
-t7_dir     := data/io_test/t7_varbvs_constrained
+# TEST 7; TODO: check hyps not rescricted
+t7_dir     := data/io_test/t7_varbvs
 t7_context := $(t7_dir)/hyperpriors_gxage.txt $(t7_dir)/answer.rds
-data/io_test/t7_varbvs_constrained/attempt.out: data/io_test/n50_p100.bgen ./bin/bgen_prog $(t7_context)
+data/io_test/t7_varbvs/attempt.out: data/io_test/n50_p100.bgen ./bin/bgen_prog $(t7_context)
 	./bin/bgen_prog --mode_vb --verbose \
+	    --keep_constant_variants \
 	    --bgen $< \
 	    --interaction x \
-	    --covar $(dir $@)age.txt \
-	    --pheno $(dir $@)pheno.txt \
-	    --hyps_grid $(dir $@)hyperpriors_gxage.txt \
-	    --hyps_probs $(dir $@)hyperpriors_gxage_probs.txt \
-	    --vb_init $(dir $@)answer_init.txt \
+	    --covar data/io_test/age.txt \
+	    --pheno data/io_test/pheno.txt \
+	    --hyps_grid data/io_test/hyperpriors_gxage.txt \
+	    --hyps_probs data/io_test/hyperpriors_gxage_probs.txt \
+	    --vb_init data/io_test/answer_init.txt \
 	    --out $@
 	$(RSCRIPT) R/vbayes_x_tests/check_output.R $(dir $@) > $(dir $@)attempt.log
 	diff $(dir $@)answer.log $(dir $@)attempt.log
+
+data/io_test/t7_varbvs/attempt_multithread.out: data/io_test/n50_p100.bgen ./bin/bgen_prog $(t7_context)
+	./bin/bgen_prog --mode_vb --verbose \
+	    --keep_constant_variants \
+	    --threads 2 \
+	    --bgen $< \
+	    --interaction x \
+	    --covar data/io_test/age.txt \
+	    --pheno data/io_test/pheno.txt \
+	    --hyps_grid data/io_test/hyperpriors_gxage.txt \
+	    --hyps_probs data/io_test/hyperpriors_gxage_probs.txt \
+	    --vb_init data/io_test/answer_init.txt \
+	    --out $@
+	$(RSCRIPT) R/vbayes_x_tests/check_output.R $(dir $@) > $(dir $@)attempt_multithread.log
+	diff $(dir $@)answer.log $(dir $@)attempt_multithread.log
+
+data/io_test/t7_varbvs/attempt_alt_updates.out: data/io_test/n50_p100.bgen ./bin/bgen_prog $(t7_context)
+	./bin/bgen_prog --mode_vb --verbose \
+	    --keep_constant_variants \
+	    --mode_alternating_updates \
+	    --bgen $< \
+	    --interaction x \
+	    --covar data/io_test/age.txt \
+	    --pheno data/io_test/pheno.txt \
+	    --hyps_grid data/io_test/hyperpriors_gxage.txt \
+	    --hyps_probs data/io_test/hyperpriors_gxage_probs.txt \
+	    --vb_init data/io_test/answer_init.txt \
+	    --out $@
+	$(RSCRIPT) R/vbayes_x_tests/check_output.R $(dir $@) $(notdir $@) > $(dir $@)attempt_alt_updates.log
+	diff $(dir $@)answer.log $(dir $@)attempt_alt_updates.log
 
 $(t7_dir)/hyperpriors_gxage.txt: R/t7/gen_hyps.R
 	$(RSCRIPT) $<
@@ -186,65 +159,53 @@ $(t7_dir)/hyperpriors_gxage.txt: R/t7/gen_hyps.R
 $(t7_dir)/answer.rds: R/vbayes_x_tests/run_VBayesR.R $(t7_dir)/hyperpriors_gxage.txt
 	# $(RSCRIPT) $< $(dir $@)
 	Rscript R/vbayesr_commandline.R run \
-	  --pheno $(dir $@)pheno.txt \
-	  --covar $(dir $@)age.txt \
+	  --pheno data/io_test/pheno.txt \
+	  --covar data/io_test/age.txt \
 	  --vcf $(dir $@)n50_p100.vcf.gz \
 	  --out $@ \
-	  --hyps_grid $(dir $@)hyperpriors_gxage.txt \
-	  --hyps_probs $(dir $@)hyperpriors_gxage_probs.txt \
-	  --vb_init $(dir $@)answer_init.txt
+	  --hyps_grid data/io_test/hyperpriors_gxage.txt \
+	  --hyps_probs data/io_test/hyperpriors_gxage_probs.txt \
+	  --vb_init data/io_test/answer_init.txt
 
-# TEST 8
-# Unrestricted model; comparison with R implementation
-t8_dir     := data/io_test/t8_varbvs
-t8_context := $(t8_dir)/hyperpriors_gxage.txt $(t8_dir)/answer.rds
-data/io_test/t8_varbvs/attempt.out: data/io_test/n50_p100.bgen ./bin/bgen_prog $(t8_context)
+# TEST 8;
+t8_dir     := data/io_test/t8_mog_prior
+t8_context := $(t8_dir)/hyperpriors_gxage.txt
+data/io_test/t8_mog_prior/attempt.out: data/io_test/n50_p100.bgen ./bin/bgen_prog $(t8_context)
 	./bin/bgen_prog --mode_vb --verbose \
+	    --keep_constant_variants \
+	    --effects_prior_mog \
 	    --bgen $< \
 	    --interaction x \
-	    --covar $(dir $@)age.txt \
-	    --pheno $(dir $@)pheno.txt \
-	    --hyps_grid $(dir $@)hyperpriors_gxage.txt \
-	    --hyps_probs $(dir $@)hyperpriors_gxage_probs.txt \
-	    --vb_init $(dir $@)answer_init.txt \
+	    --covar data/io_test/age.txt \
+	    --pheno data/io_test/pheno.txt \
+	    --hyps_grid data/io_test/hyperpriors_gxage.txt \
+	    --hyps_probs data/io_test/hyperpriors_gxage_probs.txt \
+	    --vb_init data/io_test/answer_init.txt \
 	    --out $@
-	$(RSCRIPT) R/vbayes_x_tests/check_output.R $(dir $@) > $(dir $@)attempt.log
-	diff $(dir $@)answer.log $(dir $@)attempt.log
+	cut -f2 -d" " $(dir $@)answer.out > $(dir $@)answer_reformated.out
+	cut -f2 -d" " $(dir $@)attempt.out> $(dir $@)attempt_reformated.out
+	diff $(dir $@)answer_reformated.out $(dir $@)attempt_reformated.out
 
-$(t8_dir)/hyperpriors_gxage.txt: R/t8/gen_hyps.R
-	$(RSCRIPT) $<
+# TEST 9;
+t9_dir     := data/io_test/t9_vb_covar_update
+t9_context := data/io_test/hyperpriors_gxage.txt
+data/io_test/t9_vb_covar_update/attempt.out: data/io_test/n50_p100.bgen ./bin/bgen_prog $(t9_context)
+	./bin/bgen_prog --mode_vb --verbose \
+	    --keep_constant_variants \
+	    --use_vb_on_covars \
+	    --bgen $< \
+	    --interaction x \
+	    --covar data/io_test/age.txt \
+	    --pheno data/io_test/pheno.txt \
+	    --hyps_grid data/io_test/hyperpriors_gxage.txt \
+	    --hyps_probs data/io_test/hyperpriors_gxage_probs.txt \
+	    --vb_init data/io_test/answer_init.txt \
+	    --out $@
+	cut -f2 -d" " $(dir $@)answer.out > $(dir $@)answer_reformated.out
+	cut -f2 -d" " $(dir $@)attempt.out> $(dir $@)attempt_reformated.out
 
-$(t8_dir)/answer.rds: R/vbayes_x_tests/run_VBayesR.R $(t8_dir)/hyperpriors_gxage.txt
-	# $(RSCRIPT) $< $(dir $@)
-	Rscript R/vbayesr_commandline.R run \
-	  --pheno $(dir $@)pheno.txt \
-	  --covar $(dir $@)age.txt \
-	  --vcf $(dir $@)n50_p100.vcf.gz \
-	  --out $(dir $@)answer.rds \
-	  --hyps_grid $(dir $@)hyperpriors_gxage.txt \
-	  --hyps_probs $(dir $@)hyperpriors_gxage_probs.txt \
-	  --vb_init $(dir $@)answer_init.txt
+# diff $(dir $@)answer_reformated.out $(dir $@)attempt_reformated.out
 
-# NEED TO MAKE THIS RUN WITH VBAYESR IS WANT TO KEEP
-# TEST 9
-# Tests when h_g is zero (ie collapse down to original carbonetto model on X)
-# t9_dir     := data/io_test/t9_varbvs_zero_hg
-# t9_context := $(t9_dir)/hyperpriors_gxage.txt $(t9_dir)/answer.rds
-# data/io_test/t9_varbvs_zero_hg/attempt.out: data/io_test/n50_p100.bgen ./bin/bgen_prog $(t9_context)
-# 	./bin/bgen_prog --mode_vb --verbose \
-# 	    --bgen $< \
-# 	    --interaction x \
-# 	    --covar $(dir $@)age.txt \
-# 	    --pheno $(dir $@)pheno.txt \
-# 	    --hyps_grid $(dir $@)hyperpriors_gxage.txt \
-# 	    --hyps_probs $(dir $@)hyperpriors_gxage_probs.txt \
-# 	    --vb_init $(dir $@)answer_init.txt \
-# 	    --out $@
-# 	$(RSCRIPT) R/vbayes_x_tests/check_output.R $(dir $@) > $(dir $@)attempt.log
-# 	diff $(dir $@)answer.log $(dir $@)attempt.log
-# 
-# $(t9_dir)/answer.rds: R/t9/t9_run_vbayesr.R $(t9_dir)/hyperpriors_gxage.txt
-# 	$(RSCRIPT) $< $(dir $@)
 
 # TEST 10
 # Test when runnign from random start point.. this may be unstable
@@ -252,23 +213,24 @@ t10_dir     := data/io_test/t10_varbvs_without_init
 t10_context := $(t10_dir)/hyperpriors_gxage.txt
 $(t10_dir)/attempt.out: $(t10_dir)/n50_p100.bgen ./bin/bgen_prog $(t10_context)
 	./bin/bgen_prog --mode_vb --verbose \
+	    --keep_constant_variants \
 	    --bgen $< \
 	    --interaction x \
-	    --covar $(dir $@)age.txt \
-	    --pheno $(dir $@)pheno.txt \
-	    --hyps_grid $(dir $@)hyperpriors_gxage.txt \
-	    --hyps_probs $(dir $@)hyperpriors_gxage_probs.txt \
+	    --covar data/io_test/age.txt \
+	    --pheno data/io_test/pheno.txt \
+	    --hyps_grid data/io_test/hyperpriors_gxage.txt \
+	    --hyps_probs data/io_test/hyperpriors_gxage_probs.txt \
 	    --out $@
 	$(CP) $(t10_dir)/attempt_inits.out $(t10_dir)/answer_init.txt
 	# $(RSCRIPT) R/vbayes_x_tests/run_VBayesR.R $(dir $@)
 	$(RSCRIPT) R/vbayesr_commandline.R run \
-	  --pheno $(dir $@)pheno.txt \
-	  --covar $(dir $@)age.txt \
+	  --pheno data/io_test/pheno.txt \
+	  --covar data/io_test/age.txt \
 	  --vcf $(dir $@)n50_p100.vcf.gz \
 	  --out $(dir $@)answer.rds \
-	  --hyps_grid $(dir $@)hyperpriors_gxage.txt \
-	  --hyps_probs $(dir $@)hyperpriors_gxage_probs.txt \
-	  --vb_init $(dir $@)answer_init.txt
+	  --hyps_grid data/io_test/hyperpriors_gxage.txt \
+	  --hyps_probs data/io_test/hyperpriors_gxage_probs.txt \
+	  --vb_init data/io_test/answer_init.txt
 	$(RSCRIPT) R/t10/check_output.R $(dir $@) > $(dir $@)attempt.log
 	diff $(dir $@)answer.log $(dir $@)attempt.log
 
@@ -281,13 +243,14 @@ t11_dir     := data/io_test/t11_varbvs_multithread
 t11_context := $(t11_dir)/hyperpriors_gxage.txt $(t11_dir)/answer.rds
 $(t11_dir)/attempt.out: $(t11_dir)/n50_p100.bgen ./bin/bgen_prog $(t11_context)
 	./bin/bgen_prog --mode_vb --verbose \
+	    --keep_constant_variants \
 	    --bgen $< \
 	    --interaction x \
-	    --covar $(dir $@)age.txt \
-	    --pheno $(dir $@)pheno.txt \
-	    --hyps_grid $(dir $@)hyperpriors_gxage.txt \
-	    --hyps_probs $(dir $@)hyperpriors_gxage_probs.txt \
-	    --vb_init $(dir $@)answer_init.txt \
+	    --covar data/io_test/age.txt \
+	    --pheno data/io_test/pheno.txt \
+	    --hyps_grid data/io_test/hyperpriors_gxage.txt \
+	    --hyps_probs data/io_test/hyperpriors_gxage_probs.txt \
+	    --vb_init data/io_test/answer_init.txt \
 	    --threads 2 \
 	    --out $@
 	$(RSCRIPT) R/vbayes_x_tests/check_output.R $(dir $@) > $(dir $@)attempt.log
@@ -299,13 +262,43 @@ $(t11_dir)/hyperpriors_gxage.txt: R/t8/gen_hyps.R
 $(t11_dir)/answer.rds: R/vbayes_x_tests/run_VBayesR.R $(t11_dir)/hyperpriors_gxage.txt
 	# $(RSCRIPT) $< $(dir $@)
 	$(RSCRIPT) R/vbayesr_commandline.R run \
-	  --pheno $(dir $@)pheno.txt \
-	  --covar $(dir $@)age.txt \
+	  --pheno data/io_test/pheno.txt \
+	  --covar data/io_test/age.txt \
 	  --vcf $(dir $@)n50_p100.vcf.gz \
 	  --out $(dir $@)answer.rds \
-	  --hyps_grid $(dir $@)hyperpriors_gxage.txt \
-	  --hyps_probs $(dir $@)hyperpriors_gxage_probs.txt \
-	  --vb_init $(dir $@)answer_init.txt
+	  --hyps_grid data/io_test/hyperpriors_gxage.txt \
+	  --hyps_probs data/io_test/hyperpriors_gxage_probs.txt \
+	  --vb_init data/io_test/answer_init.txt
+
+# TEST 12
+# custom start;
+data/io_test/t12_custom_init/answer.out: data/io_test/n50_p100.bgen ./bin/bgen_prog
+	./bin/bgen_prog --mode_vb --verbose --low_mem \
+	    --keep_constant_variants \
+	    --bgen $< \
+	    --interaction x \
+	    --covar data/io_test/age.txt \
+	    --pheno data/io_test/pheno.txt \
+	    --hyps_grid data/io_test/hyperpriors_gxage.txt \
+	    --hyps_probs data/io_test/hyperpriors_gxage_probs.txt \
+	    --vb_init data/io_test/t12_custom_init/vb_init.txt \
+	    --out $@
+
+data/io_test/t12_custom_init/attempt.out: data/io_test/n50_p100.bgen ./bin/bgen_prog data/io_test/t12_custom_init/answer.out
+	./bin/bgen_prog --mode_vb --verbose --low_mem \
+	    --keep_constant_variants \
+	    --bgen $< \
+	    --interaction x \
+	    --covar data/io_test/age.txt \
+	    --pheno data/io_test/pheno.txt \
+	    --hyps_grid data/io_test/hyperpriors_gxage.txt \
+	    --hyps_probs data/io_test/hyperpriors_gxage_probs.txt \
+	    --vb_init data/io_test/t12_custom_init/vb_init_scrambled.txt \
+	    --out $@
+	cut -f2 -d" " $(dir $@)answer.out > $(dir $@)answer_reformated.out
+	cut -f2 -d" " $(dir $@)attempt.out> $(dir $@)attempt_reformated.out
+	diff $(dir $@)answer_reformated.out $(dir $@)attempt_reformated.out
+
 
 
 # Clean dir

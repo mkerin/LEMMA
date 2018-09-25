@@ -18,6 +18,8 @@
 #include "tools/eigen3.3/Sparse"
 #include "tools/eigen3.3/Eigenvalues"
 
+#include "genotype_matrix.hpp"
+
 #include "bgen_parser.hpp"
 #include "genfile/bgen/bgen.hpp"
 #include "genfile/bgen/View.hpp"
@@ -41,18 +43,20 @@ inline Eigen::VectorXd getCol(const Eigen::MatrixXd &A, size_t col);
 inline Eigen::MatrixXd solve(const Eigen::MatrixXd &A, const Eigen::MatrixXd &b);
 
 
-class data 
+class Data
 {
 	public :
 	parameters params;
 
-	std::vector< std::string > chromosome, rsid, SNPID;
+	std::vector< std::string > chromosome, rsid;
 	std::vector< uint32_t > position;
 	std::vector< std::vector< std::string > > alleles;
-	
+
 	int n_pheno; // number of phenotypes
 	int n_covar; // number of covariates
-	int n_samples; // number of samples
+	int n_env; // number of env variables
+	int n_effects;   // number of environmental interactions
+	long int n_samples; // number of samples
 	long int n_snps; // number of snps
 	bool bgen_pass;
 	int n_var;
@@ -60,23 +64,28 @@ class data
 
 	bool Y_reduced;   // Variables to track whether we have already
 	bool W_reduced;   // reduced to complete cases or not.
+	bool E_reduced;
 
 	std::vector< double > info;
 	std::vector< double > maf;
 	std::vector< std::string > rsid_list;
 
+	std::map<int, bool> missing_envs;   // set of subjects missing >= 1 env variables
 	std::map<int, bool> missing_covars; // set of subjects missing >= 1 covariate
 	std::map<int, bool> missing_phenos; // set of subjects missing >= phenotype
 	std::map< int, bool > incomplete_cases; // union of samples missing data
 
 	std::vector< std::string > pheno_names;
 	std::vector< std::string > covar_names;
+	std::vector< std::string > env_names;
 
-	Eigen::MatrixXd G; // probabilistic genotype matrix
-	Eigen::MatrixXi GG; // rounded genotype matrix
+	GenotypeMatrix G;
 	Eigen::MatrixXd Y; // phenotype matrix
 	Eigen::MatrixXd W; // covariate matrix
+	Eigen::MatrixXd E; // env matrix
 	Eigen::VectorXd Z; // interaction vector
+	Eigen::MatrixXd R; // recombination map
+	Eigen::MatrixXd E_weights;
 	genfile::bgen::View::UniquePtr bgenView;
 	std::vector< double > beta, tau, neglogP, neglogP_2dof;
 	std::vector< std::vector< double > > gamma;
@@ -84,32 +93,58 @@ class data
 	boost_io::filtering_ostream outf;
 
 	std::chrono::system_clock::time_point start;
+	bool filters_applied;
 
 	// grid things for vbayes
 	std::vector< std::string > hyps_names, imprt_names;
-	Eigen::MatrixXd r1_hyps_grid, hyps_grid, imprt_grid;
-	Eigen::VectorXd alpha_init, mu_init;
+	Eigen::MatrixXd r1_hyps_grid, r1_probs_grid, hyps_grid, imprt_grid;
+	Eigen::ArrayXXd alpha_init, mu_init;
 
-	
+
 	// constructors/destructors
 	// data() : bgenView( "NULL" ) {
 	// 	bgen_pass = false; // No bgen file set; read_bgen_chunk won't run.
 	// }
 
-	data( std::string filename ) {
+	// Data( const std::string& filename ) : G(false) {
+	// 	// system time at start
+	// 	start = std::chrono::system_clock::now();
+	// 	std::time_t start_time = std::chrono::system_clock::to_time_t(start);
+	// 	std::cout << "Starting analysis at " << std::ctime(&start_time) << std::endl;
+	// 	std::cout << "Compiled from git branch: master" << std::endl;
+	//
+	// 	bgenView = genfile::bgen::View::create(filename);
+	// 	bgen_pass = true;
+	// 	n_samples = bgenView->number_of_samples();
+	// 	n_var_parsed = 0;
+	// 	filters_applied = false;
+	// }
+
+	explicit Data( const parameters& p ) : params(p), G(p.low_mem) {
 		// system time at start
 		start = std::chrono::system_clock::now();
 		std::time_t start_time = std::chrono::system_clock::to_time_t(start);
 		std::cout << "Starting analysis at " << std::ctime(&start_time) << std::endl;
 		std::cout << "Compiled from git branch: master" << std::endl;
 
-		bgenView = genfile::bgen::View::create(filename);
+		bgenView = genfile::bgen::View::create(p.bgen_file);
 		bgen_pass = true;
 		n_samples = bgenView->number_of_samples();
 		n_var_parsed = 0;
+		filters_applied = false;
+
+		// Explicit initial values to eliminate linter errors..
+		n_pheno   = -1;
+		n_effects = -1;
+		n_covar   = -1;
+		n_env   = -1;
+		n_snps    = -1;
+		n_var     = -1;
+		Y_reduced = false;
+		W_reduced = false;
 	}
-	
-	~data() {
+
+	~Data() {
 		// system time at end
 		auto end = std::chrono::system_clock::now();
 		std::chrono::duration<double> elapsed_seconds = end-start;
@@ -118,69 +153,114 @@ class data
 		std::cout << "Elapsed time: " << elapsed_seconds.count() << "s" << std::endl;
 	}
 
-	void output_init() {
-		// open output file
-		std::string ofile, gz_str = ".gz";
-
-		ofile = params.out_file;
-		if (params.out_file.find(gz_str) != std::string::npos) {
-			outf.push(boost_io::gzip_compressor());
-		}
-		outf.push(boost_io::file_sink(ofile.c_str()));
-
-		if(params.mode_vcf){
-			// Output header for vcf file
-			outf << "##fileformat=VCFv4.2\n"
-				<< "FORMAT=<ID=GP,Type=Float,Number=G,Description=\"Genotype call probabilities\">\n"
-				<< "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT" ;
-			bgenView->get_sample_ids(
-				[&]( std::string const& id ) { outf << "\t" << id ; }
-			) ;
-			outf << "\n" ;
+	void apply_filters(){
+		// filter - incl sample ids
+		if(params.incl_sids_file != "NULL"){
+			read_incl_sids();
 		}
 
-		if(params.mode_lm){
-			// Output header for vcf file
-			outf << "chr\trsid\tpos\ta_0\ta_1\taf\tinfo\tbeta\ttau";
-			outf << "\tneglogP_1dof\tgamma1\tgamma2\tgamma3\tneglogP_2dof" << std::endl;
+		// filter - range
+		if (params.range){
+			std::cout << "Selecting range..." << std::endl;
+			genfile::bgen::IndexQuery::UniquePtr query = genfile::bgen::IndexQuery::create(params.bgi_file);
+			genfile::bgen::IndexQuery::GenomicRange rr1(params.chr, params.start, params.end);
+			query->include_range( rr1 ).initialise();
+			bgenView->set_query( query );
 		}
 
-		if(params.mode_lm2){
-			outf << "chr\trsid\tpos\ta_0\ta_1\taf\tinfo";
-			for (int kk = 0; kk < n_covar; kk++){
-				outf << "\tbeta_" << covar_names[kk];
-			}
-			outf << "\tbeta_var_j\tbeta_gx" << params.x_param_name;
-			for (int kk = 0; kk < params.n_gconf; kk++){
-				outf << "\tbeta_gx" << params.gconf[kk];
-			}
-			outf << "\tneglogP_gx" << params.x_param_name << std::endl;
+		// filter - incl rsids
+		if(params.select_snps){
+			read_incl_rsids();
+			std::cout << "Filtering SNPs by rsid..." << std::endl;
+			genfile::bgen::IndexQuery::UniquePtr query = genfile::bgen::IndexQuery::create(params.bgi_file);
+			query->include_rsids( rsid_list ).initialise();
+			bgenView->set_query( query );
 		}
 
-		if(params.mode_joint_model){
-			outf << "chr\trsid\tpos\ta_0\ta_1\taf\tinfo\ttau\t1dof_neglogP";
- 			outf << std::endl;
+		// filter - select single rsid
+		if(params.select_rsid){
+			std::sort(params.rsid.begin(), params.rsid.end());
+			std::cout << "Filtering to rsids:" << std::endl;
+			for (int kk = 0; kk < params.rsid.size(); kk++) std::cout << params.rsid[kk]<< std::endl;
+			genfile::bgen::IndexQuery::UniquePtr query = genfile::bgen::IndexQuery::create(params.bgi_file);
+			query->include_rsids( params.rsid ).initialise();
+			bgenView->set_query( query );
+		}
+
+		filters_applied = true;
+	}
+
+	void read_non_genetic_data(){
+		// Apply sample / rsid / range filters if applicable
+		if(!filters_applied){
+			apply_filters();
+		}
+
+		// Read in phenotypes
+		read_pheno();
+
+		// Read in covariates if present
+		if(params.covar_file != "NULL"){
+			read_covar();
+		}
+
+		if(params.env_file != "NULL"){
+			read_environment();
+		}
+
+		if(params.env_weights_file != "NULL" && params.env_file != "NULL"){
+			read_environment_weights();
+		}
+
+		if(params.interaction_analysis){
+			n_effects = 2;  // 1 more than actually present... n_effects?
+		} else {
+			n_effects = 1;
+		}
+
+		// Exclude samples with missing values in phenos / covars / filters
+		reduce_to_complete_cases();
+
+		// Read in grids for importance sampling
+		if (params.mode_vb) {
+			read_grids();
+		}
+
+		// Read starting point for VB approximation if provided
+		if(params.mode_vb && params.vb_init_file != "NULL"){
+			// read_alpha_mu();
 		}
 	}
 
-	void output_results() {
-		if(params.mode_lm){
-			for (int s = 0; s < n_var; s++){
-				outf << chromosome[s] << "\t" << rsid[s] << "\t" << position[s] << "\t";
-				outf << alleles[s][0] << "\t" << alleles[s][1] << "\t" << maf[s] << "\t";
-				outf << info[s] << "\t" << beta[s] << "\t" << tau[s] << "\t";
-	 			outf << neglogP[s] << "\t" << gamma[s][0] << "\t" << gamma[s][1];
-	 			outf << "\t" << gamma[s][2] << "\t" << neglogP_2dof[s] << std::endl;
-			}
+	void standardise_non_genetic_data(){
+		// Step 3; Center phenos, normalise covars
+		center_matrix( Y, n_pheno );
+		if(params.scale_pheno){
+			std::cout << "Scaling phenotype" << std::endl;
+			scale_matrix( Y, n_pheno, pheno_names );
 		}
+		if(params.covar_file != "NULL"){
+			center_matrix( W, n_covar );
+			scale_matrix( W, n_covar, covar_names );
+		}
+		if(params.env_file != "NULL"){
+			center_matrix( E, n_env );
+			scale_matrix( E, n_env, env_names );
+		}
+	}
 
-		if(params.mode_joint_model){
-			for (int s = 0; s < n_var; s++){
-				outf << chromosome[s] << "\t" << rsid[s] << "\t" << position[s] << "\t";
-				outf << alleles[s][0] << "\t" << alleles[s][1] << "\t" << maf[s] << "\t";
-				outf << info[s] << "\t" << tau[s] << "\t" << neglogP[s] << std::endl;
-			}
+	void read_full_bgen(){
+		std::cout << "Reading in BGEN" << std::endl;
+		params.chunk_size = bgenView->number_of_variants();
+		MyTimer t_readFullBgen("BGEN parsed in %ts \n");
+
+		if(params.flip_high_maf_variants){
+			std::cout << "Flipping variants with MAF > 0.5" << std::endl;
 		}
+		t_readFullBgen.resume();
+		read_bgen_chunk();
+		t_readFullBgen.stop();
+		std::cout << "BGEN contained " << n_var << " variants." << std::endl;
 	}
 
 	bool read_bgen_chunk() {
@@ -189,6 +269,7 @@ class data
 		// Assumed that:
 		// - commandline args parsed and passed to params
 		// - bgenView initialised with correct filename
+		// - scale + centering happening internally
 
 		// Exit function if last call hit EOF.
 		if (!bgen_pass) return false;
@@ -203,8 +284,8 @@ class data
 		ProbSetter setter( &probs );
 		std::map<int, bool> missing_genos;
 
-		double d1, theta, x, dosage, check, info_j, f1, f2, chunk_missingness;
-		double missing_calls = 0.0;
+		double x, dosage, check, info_j, f1, chunk_missingness;
+		double dosage_mean, dosage_sigma, missing_calls = 0.0;
 		int n_var_incomplete = 0;
 
 		// Wipe variant context from last chunk
@@ -216,144 +297,146 @@ class data
 		alleles.clear();
 
 		// Resize genotype matrix
-		G.resize(n_samples, params.chunk_size);
+		G.resize(n_samples, params.chunk_size, n_effects);
 
-		std::size_t valid_count, jj = 0;
+		long int n_constant_variance = 0;
+		std::size_t jj = 0;
 		while ( jj < params.chunk_size && bgen_pass ) {
 			bgen_pass = bgenView->read_variant( &SNPID, &rsid_j, &chr_j, &pos_j, &alleles_j );
-			n_var_parsed++;
 			if (!bgen_pass) break;
+			n_var_parsed++;
 			assert( alleles_j.size() > 0 );
-
-			// // range filter
-			// if (params.range && (pos_j < params.start || pos_j > params.end)){
-			// 	bgenView->ignore_genotype_data_block();
-			// 	continue;
-			// }
 
 			// Read probs + check maf filter
 			bgenView->read_genotype_data_block( setter );
 
 			// maf + info filters; computed on valid sample_ids & variants whose alleles
 			// sum to 1
-			d1 = f2 = 0.0;
-			valid_count = 0;
-			for( std::size_t ii = 0; ii < probs.size(); ++ii ) {
+			std::map<int, bool> missing_genos;
+			Eigen::ArrayXd dosage_j(n_samples);
+			double f2 = 0.0, valid_count = 0.0;
+			std::uint32_t ii_obs = 0;
+			for( std::size_t ii = 0; ii < probs.size(); ii++ ) {
 				if (incomplete_cases.count(ii) == 0) {
 					f1 = dosage = check = 0.0;
-					for( std::size_t kk = 0; kk < probs[ii].size(); ++kk ) {
+					for( std::size_t kk = 0; kk < probs[ii].size(); kk++ ) {
 						x = probs[ii][kk];
 						dosage += x * kk;
 						f1 += x * kk * kk;
 						check += x;
 					}
 					if(check > 0.9999 && check < 1.0001){
-						d1 += dosage;
+						dosage_j[ii_obs] = dosage;
 						f2 += (f1 - dosage * dosage);
 						valid_count++;
+					} else {
+						missing_genos[ii_obs] = 1;
+						dosage_j[ii_obs] = 0.0;
 					}
+					ii_obs++;
 				}
 			}
-			theta = d1 / (2.0 * valid_count);
-			info_j = 1.0;
-			if(theta > 1e-10 && theta < 0.9999999999){
-				info_j -= f2 / (2.0 * valid_count * theta * (1.0 - theta));
+			assert(ii_obs == n_samples);
+
+			double d1    = dosage_j.sum();
+			double maf_j = d1 / (2.0 * valid_count);
+
+			// Flip dosage vector if maf > 0.5
+			if(params.flip_high_maf_variants && maf_j > 0.5){
+				dosage_j = (2.0 - dosage_j);
+				for (std::uint32_t ii = 0; ii < n_samples; ii++){
+					if (missing_genos.count(ii) > 0){
+						dosage_j[ii] = 0.0;
+					}
+				}
+
+				f2       = 4.0 * valid_count - 4.0 * d1 + f2;
+				d1       = dosage_j.sum();
+				maf_j    = d1 / (2.0 * valid_count);
 			}
-			if (params.maf_lim && (theta < params.min_maf || theta > 1 - params.min_maf)) {
+
+			double mu    = d1 / valid_count;
+			info_j       = 1.0;
+			if(maf_j > 1e-10 && maf_j < 0.9999999999){
+				info_j -= f2 / (2.0 * valid_count * maf_j * (1.0 - maf_j));
+			}
+
+			// Compute sd
+			double sigma = (dosage_j - mu).square().sum();
+			sigma = std::sqrt(sigma/(valid_count - 1.0));
+
+			// Filters
+			if (params.maf_lim && (maf_j < params.min_maf || maf_j > 1 - params.min_maf)) {
 				continue;
 			}
 			if (params.info_lim && info_j < params.min_info) {
 				continue;
 			}
+			if(!params.keep_constant_variants && d1 < 5.0){
+				n_constant_variance++;
+				continue;
+			}
+			if(!params.keep_constant_variants && sigma <= 1e-12){
+				n_constant_variance++;
+				continue;
+			}
 
 			// filters passed; write contextual info
-			maf.push_back(theta);
+			maf.push_back(maf_j);
 			info.push_back(info_j);
 			rsid.push_back(rsid_j);
 			chromosome.push_back(chr_j);
 			position.push_back(pos_j);
 			alleles.push_back(alleles_j);
-			
+			G.al_0.push_back(alleles_j[0]);
+			G.al_1.push_back(alleles_j[1]);
+			G.rsid.push_back(rsid_j);
+			G.chromosome.push_back(std::stoi(chr_j));
+			G.position.push_back(pos_j);
+			std::string key_j = chr_j + "~" + std::to_string(pos_j) + "~" + alleles_j[0] + "~" + alleles_j[1];
+			G.SNPKEY.push_back(key_j);
+
 			// filters passed; write dosage to G
 			// Note that we only write dosage for valid sample ids
-			std::size_t ii_obs = 0;
-			double mu = 0.0;
-			double count = 0;
-			missing_genos.clear();
-			for( std::size_t ii = 0; ii < probs.size(); ++ii ) {
-				if (incomplete_cases.count(ii) == 0) {
-					dosage = 0.0;
-					check = 0.0;
-
-					for( std::size_t kk = 0; kk < probs[ii].size(); ++kk ) {
-						x = probs[ii][kk];
-						dosage += x * kk;
-						check += x;
-					}
-
-					if(params.geno_check){
-						if(check > 0.9999 && check < 1.0001){
-							G(ii_obs,jj) = dosage;
-							mu += dosage;
-							count += 1;
-						} else if(check > 0){
-							std::cout << "Unexpected sum of allele probs: ";
-		 					std::cout << check << " at sample=" << ii;
-		 					std::cout << ", variant=" << jj << std::endl;
-							throw std::logic_error("Allele probs expected to sum to 1 or 0");
-						} else {
-							missing_genos[ii_obs] = 1;
-						}
-					} else {
-						G(ii_obs,jj) = dosage;
-						mu += dosage;
-						count += 1;
-					}
-
-					ii_obs++; // loop should end at ii_obs == n_samples
-				}
-			}
-
-			if (ii_obs < n_samples) {
-				throw std::logic_error("ERROR: Fewer non-missing genotypes than expected");
-			}
-
-			// Set missing entries to mean
-			// Could mean center here, but still want to write to VCF.
+			// Scale + center dosage, set missing to mean
 			if(missing_genos.size() > 0){
 				n_var_incomplete += 1;
 				missing_calls += (double) missing_genos.size();
-				mu = mu / count;
-				for (int ii = 0; ii < n_samples; ii++) {
-					if (missing_genos.count(ii) != 0) {
-						G(ii, jj) = mu;
+				for (std::uint32_t ii = 0; ii < n_samples; ii++){
+					if (missing_genos.count(ii) > 0){
+						dosage_j[ii] = mu;
 					}
 				}
 			}
+
+			for (std::uint32_t ii = 0; ii < n_samples; ii++){
+				G.assign_index(ii, jj, dosage_j[ii]);
+			}
+			// G.compressed_dosage_sds[jj] = sigma;
+			// G.compressed_dosage_means[jj] = mu;
+
 			jj++;
 		}
 
 		// need to resize G whilst retaining existing coefficients if while
 		// loop exits early due to EOF.
-		G.conservativeResize(n_samples, jj);
+		G.conservativeResize(n_samples, jj, n_effects);
 		assert( rsid.size() == jj );
 		assert( chromosome.size() == jj );
 		assert( position.size() == jj );
 		assert( alleles.size() == jj );
 		n_var = jj;
 
-		// keep integer copy of genotypes for 2 dof test
-		if(params.test_2dof){
-			Eigen::MatrixXd tmp;
-			tmp = (G.array() + 0.5).matrix();
-			GG = tmp.cast <int> ();
-		}
-
 		chunk_missingness = missing_calls / (double) (n_var * n_samples);
 		if(chunk_missingness > 0.0){
 			std::cout << "Chunk missingness " << chunk_missingness << "(";
  			std::cout << n_var_incomplete << "/" << n_var;
 			std::cout << " variants incomplete)" << std::endl;
+		}
+
+		if(n_constant_variance > 0){
+			std::cout << n_constant_variance << " variants removed due to ";
+			std::cout << "constant variance" << std::endl;
 		}
 
 		if(jj == 0){
@@ -438,12 +521,13 @@ class data
 			}
 
 			for (int jj = bb; jj < n_samples; jj++){
-				incomplete_cases[bb] = 1;
+				incomplete_cases[jj] = 1;
 			}
 		} catch (const std::exception &exc) {
 			// throw std::runtime_error("ERROR: problem converting incl_sample_ids.");
 			throw;
 		}
+		// n_samples = ii;
 		std::cout << "Subsetted down to " << ii << " ids from --incl_sample_ids";
 		std::cout << std::endl;
 	}
@@ -510,6 +594,109 @@ class data
 					}
 
 					M(i, k) = tmp_d;
+				}
+				i++; // loop should end at i == n_grid
+			}
+			if (i < n_grid) {
+				throw std::runtime_error("ERROR: could not convert txt file (too few lines).");
+			}
+		} catch (const std::exception &exc) {
+			throw;
+		}
+	}
+
+	void read_vb_init_file(std::string filename,
+                           Eigen::MatrixXd& M,
+                           std::vector< std::string >& col_names,
+                        //    std::vector< int >& init_chr,
+                        //    std::vector< uint32_t >& init_pos,
+                        //    std::vector< std::string >& init_a0,
+                           std::vector< std::string >& init_key){
+		// Used in mode_vb only.
+		// Need custom function to deal with variable input. Sometimes
+		// we have string columns with rsid / a0 etc
+		// init_chr, init_pos, init_a0, init_a1;
+
+		boost_io::filtering_istream fg;
+		fg.push(boost_io::file_source(filename.c_str()));
+		if (!fg) {
+			std::cout << "ERROR: " << filename << " not opened." << std::endl;
+			std::exit(EXIT_FAILURE);
+		}
+
+		// Read file twice to acertain number of lines
+		std::string line;
+		int n_grid = 0;
+		getline(fg, line);
+		while (getline(fg, line)) {
+			n_grid++;
+		}
+		fg.reset();
+		fg.push(boost_io::file_source(filename.c_str()));
+
+		// Reading column names
+		if (!getline(fg, line)) {
+			std::cout << "ERROR: " << filename << " not read." << std::endl;
+			std::exit(EXIT_FAILURE);
+		}
+		std::stringstream ss;
+		std::string s;
+		int n_cols = 0;
+		ss.clear();
+		ss.str(line);
+		while (ss >> s) {
+			++n_cols;
+			col_names.push_back(s);
+		}
+		std::cout << " Detected " << n_cols << " column(s) from " << filename << std::endl;
+
+		// Write remainder of file to Eigen matrix M
+		M.resize(n_grid, n_cols);
+		int i = 0;
+		double tmp_d;
+		std::string key_i;
+		try {
+			while (getline(fg, line)) {
+				if (i >= n_grid) {
+					throw std::runtime_error("ERROR: could not convert txt file (too many lines).");
+				}
+				ss.clear();
+				ss.str(line);
+				if(n_cols < 7){
+					for (int k = 0; k < n_cols; k++) {
+						std::string s;
+						ss >> s;
+						try{
+							tmp_d = stod(s);
+						} catch (const std::invalid_argument &exc){
+							std::cout << s << " on line " << i << std::endl;
+							throw;
+						}
+						M(i, k) = tmp_d;
+					}
+				} else if(n_cols == 7){
+					key_i = "";
+					for (int k = 0; k < n_cols; k++) {
+						std::string s;
+						ss >> s;
+						if(k == 0){
+							key_i += s + "~";
+						} else if (k == 2){
+							key_i += s + "~";
+							// init_pos.push_back(std::stoull(s));
+						} else if (k == 3){
+							key_i += s + "~";
+							// init_a0.push_back(s);
+						} else if (k == 4){
+							key_i += s;
+							init_key.push_back(key_i);
+							// init_a1.push_back(s);
+						} else if(k >= 5){
+							M(i, k) = stod(s);
+						}
+					}
+				} else {
+					throw std::runtime_error("Unexpected number of columns.");
 				}
 				i++; // loop should end at i == n_grid
 			}
@@ -603,7 +790,6 @@ class data
 		// Only call on matrixes which have been reduced to complete cases,
 		// as no check for incomplete rows.
 
-		std::vector<size_t> keep;
 		for (int k = 0; k < n_cols; k++) {
 			double mu = 0.0;
 			double count = 0;
@@ -641,7 +827,7 @@ class data
 			}
 
 			sigma = sqrt(sigma/(count - 1));
-			if (sigma > 1e-12) {  
+			if (sigma > 1e-12) {
 				for (int i = 0; i < n_samples; i++) {
 					M(i, k) /= sigma;
 				}
@@ -658,7 +844,7 @@ class data
 				std::cout << reject_names[kk] << std::endl;
 			}
 			M = getCols(M, keep);
-			
+
 			n_cols = keep.size();
 			col_names = keep_names;
 		}
@@ -686,7 +872,7 @@ class data
 			}
 
 			sigma = sqrt(sigma/(count - 1));
-			if (sigma > 1e-12) {  
+			if (sigma > 1e-12) {
 				for (int i = 0; i < n_samples; i++) {
 					M(i, k) /= sigma;
 				}
@@ -697,7 +883,7 @@ class data
 		if (keep.size() != n_cols) {
 			std::cout << " Removing " << (n_cols - keep.size())  << " columns with zero variance." << std::endl;
 			M = getCols(M, keep);
-			
+
 			n_cols = keep.size();
 		}
 
@@ -723,7 +909,7 @@ class data
 			}
 
 			sigma = sqrt(sigma/(count - 1));
-			if (sigma > 1e-12) {  
+			if (sigma > 1e-12) {
 				for (int i = 0; i < n_samples; i++) {
 					M(i, k) /= sigma;
 				}
@@ -752,6 +938,41 @@ class data
 			throw std::logic_error( "Tried to read NULL covar file." );
 		}
 		W_reduced = false;
+	}
+
+	void read_environment( ){
+		// Read covariates to Eigen matrix W
+		if ( params.env_file != "NULL" ) {
+			read_txt_file( params.env_file, E, n_env, env_names, missing_envs );
+		} else {
+			throw std::logic_error( "Tried to read NULL env file." );
+		}
+		E_reduced = false;
+	}
+
+	void read_environment_weights( ){
+		int n_cols;
+		std::vector< std::string > col_names;
+		std::map<int, bool> missing_rows;
+		read_txt_file( params.env_file, E_weights, n_cols, col_names, missing_rows );
+
+		assert(n_cols == 1);
+		assert(missing_rows.size() == 0);
+	}
+
+	void read_recombination_map( ){
+		// Read covariates to Eigen matrix W
+		int n_cols;
+		std::vector<std::string> colnames;
+		std::map<int, bool> missing_rows;
+
+		read_txt_file( params.recombination_file, R, n_cols, colnames, missing_rows );
+
+		std::vector<std::string> expected_colnames = {"position",
+                                     "COMBINED_rate(cM/Mb)", "Genetic_Map(cM)"};
+		assert(n_cols == 3);
+		assert(colnames == expected_colnames);
+
 	}
 
 	void read_grids(){
@@ -786,51 +1007,89 @@ class data
 		}
 
 		// Option to provide separate grid to evaluate in round 1
-		std::vector< std::string > r1_hyps_names;
+		std::vector< std::string > r1_hyps_names, r1_probs_names;
 		if ( params.r1_hyps_grid_file != "NULL" ) {
 			read_grid_file( params.r1_hyps_grid_file, r1_hyps_grid, r1_hyps_names );
 			if(hyps_names != r1_hyps_names){
 				throw std::invalid_argument( "Header of --r1_hyps_grid must match --hyps_grid." );
 			}
+			read_grid_file( params.r1_probs_grid_file, r1_probs_grid, r1_probs_names );
 		}
 	}
 
 	void read_alpha_mu(){
 		// For use in vbayes object
 		Eigen::MatrixXd vb_init_mat;
+		// std::vector< int > init_chr;
+		// std::vector< uint32_t > init_pos;
+		// chr~pos~a0~a1
+		std::vector< std::string > init_key;
+		// std::vector< std::string > init_a1;
 
 		std::vector< std::string > vb_init_colnames;
-		std::vector< std::string > cols_check = {"alpha", "mu"};
+		std::vector< std::string > cols_check1 = {"alpha", "mu"};
+		std::vector<std::string> cols_check2 = {"chr", "rsid", "pos", "a0", "a1", "beta", "gamma"};
 
 		if ( params.vb_init_file != "NULL" ) {
 			std::cout << "Reading initialisation for alpha from file" << std::endl;
-			read_grid_file( params.vb_init_file, vb_init_mat, vb_init_colnames );
+			read_vb_init_file(params.vb_init_file, vb_init_mat, vb_init_colnames,
+                              init_key);
 
-			assert(vb_init_mat.cols() == 2);
-			assert(vb_init_mat.rows() == n_var || vb_init_mat.rows() == 2*n_var);
-			assert(vb_init_colnames == cols_check);
+			if(vb_init_mat.cols() < 7){
+				if(!std::includes(vb_init_colnames.begin(), vb_init_colnames.end(), cols_check1.begin(), cols_check1.end())){
+					throw std::runtime_error("First 2 columns of --vb_init should be alpha mu ");
+				}
+				alpha_init = Eigen::Map<Eigen::ArrayXXd>(vb_init_mat.col(0).data(), n_var, n_effects);
+				mu_init = Eigen::Map<Eigen::ArrayXXd>(vb_init_mat.col(1).data(), n_var, n_effects);
+			} else {
+				for(int aa = 0; aa < 7; aa++){
+					std::cout << vb_init_colnames[aa] << std::endl;
+				}
+				assert(vb_init_colnames == cols_check2);
+				std::cout << "--vb_init file with contextual information detected" << std::endl;
+				std::cout << "Warning: This will be O(PL) where L = " << vb_init_mat.rows();
+				std::cout << " is the number of lines in file given to --vb_init." << std::endl;
+				// alpha_init = Eigen::VectorXd::Zero(2*n_var);
+				// mu_init    = Eigen::VectorXd::Zero(2*n_var);
+				alpha_init = Eigen::MatrixXd::Zero(n_var, n_effects);
+				mu_init    = Eigen::MatrixXd::Zero(n_var, n_effects);
 
-			alpha_init = Eigen::Map<Eigen::VectorXd>(vb_init_mat.col(0).data(), vb_init_mat.rows());
-			mu_init = Eigen::Map<Eigen::VectorXd>(vb_init_mat.col(1).data(), vb_init_mat.rows());
+				std::vector<std::string>::iterator it;
+				std::uint32_t index_kk;
+				for(int kk = 0; kk < vb_init_mat.rows(); kk++){
+					it = std::find(G.SNPKEY.begin(), G.SNPKEY.end(), init_key[kk]);
+					if (it == G.SNPKEY.end()){
+						std::cout << "WARNING: Can't locate variant with key: ";
+						std::cout << init_key[kk] << std::endl;
+					} else {
+						index_kk = it - G.SNPKEY.begin();
+
+						alpha_init(index_kk, 0)      = 1.0;
+						alpha_init(index_kk, 1)      = 1.0;
+						mu_init(index_kk, 0)         = vb_init_mat(kk, 5);
+						mu_init(index_kk, 1)         = vb_init_mat(kk, 6);
+					}
+				}
+			}
+
 		} else {
 			throw std::invalid_argument( "Tried to read NULL --vb_init file." );
 		}
 
 	}
 
-	void reduce_mat_to_complete_cases( Eigen::MatrixXd& M, 
+	Eigen::MatrixXd reduce_mat_to_complete_cases( Eigen::Ref<Eigen::MatrixXd> M,
 								   bool& matrix_reduced,
 								   int n_cols,
 								   std::map< int, bool > incomplete_cases ) {
 		// Remove rows contained in incomplete_cases
-		int n_incomplete;
 		Eigen::MatrixXd M_tmp;
 		if (matrix_reduced) {
 			throw std::runtime_error("ERROR: Trying to remove incomplete cases twice...");
 		}
 
 		// Create temporary matrix of complete cases
-		n_incomplete = incomplete_cases.size();
+		int n_incomplete = incomplete_cases.size();
 		M_tmp.resize(n_samples - n_incomplete, n_cols);
 
 		// Fill M_tmp with non-missing entries of M
@@ -847,273 +1106,20 @@ class data
 		}
 
 		// Assign new values to reference variables
-		M = M_tmp;
 		matrix_reduced = true;
+		return M_tmp;
 	}
 
-	void regress_covars() {
+	void regress_out_covars() {
 		std::cout << "Regressing out covars:" << std::endl;
 		for(int cc = 0; cc < n_covar; cc++){
-			std::cout << ( cc > 0 ? ", " : "" ) << covar_names[cc]; 
+			std::cout << ( cc > 0 ? ", " : "" ) << covar_names[cc];
 		}
 		std::cout << std::endl;
 
 		Eigen::MatrixXd ww = W.rowwise() - W.colwise().mean(); //not needed probably
 		Eigen::MatrixXd bb = solve(ww.transpose() * ww, ww.transpose() * Y);
 		Y = Y - ww * bb;
-	}
-
-	std::size_t find_covar_index( std::string colname ){
-		std::size_t x_col;
-		std::vector<std::string>::iterator it;
-		it = std::find(covar_names.begin(), covar_names.end(), colname);
-		if (it == covar_names.end()){
-			throw std::invalid_argument("Can't locate parameter " + colname);
-		}
-		x_col = it - covar_names.begin();
-		return x_col;
-	}
-
-	void calc_lrts() {
-		// For-loop through variants and compute interaction models.
-		// Save to
-		// data.tau, data.beta
-		// Y is a matrix of dimension n_samples x 1
-		Eigen::VectorXd e_j, f_j, g_j, gamma_j;
-		double beta_j, tau_j, xtx_inv, loglik_null, loglik_alt, chi_stat;
-		long double pval;
-
-		// Determine which covar to use in interaction
-		std::ptrdiff_t x_col;
-		if( params.x_param_name != "NULL"){
-			x_col = find_covar_index(params.x_param_name);
-		} else {
-			x_col = 0;
-		}
-
-		Eigen::VectorXd vv(Eigen::Map<Eigen::VectorXd>(W.col(x_col).data(), n_samples));
-		Eigen::MatrixXd Z = G.array().colwise() * vv.array();
-
-		beta.clear();
-		tau.clear();
-		gamma.clear();
-		neglogP.clear();
-		neglogP_2dof.clear();
-		xtx_inv = 1.0 / (n_samples - 1.0);
-
-		for (int jj = 0; jj < n_var; jj++){
-			Eigen::Map<Eigen::VectorXd> G_j(G.col(jj).data(), n_samples);
-			Eigen::Map<Eigen::VectorXd> Z_j(Z.col(jj).data(), n_samples);
-
-			// null
-			beta_j = xtx_inv * (G_j.transpose() * Y)(0,0);
-			e_j = Y - G_j * beta_j;
-
-			// alt - 1dof
-			tau_j = (Z_j.transpose() * e_j)(0,0) / (Z_j.transpose() * Z_j)(0,0);
-			f_j = e_j - Z_j * tau_j;
-
-			// Saving variables
-			beta.push_back(beta_j);
-			tau.push_back(tau_j);
-			neglogP.push_back(lrt(e_j, f_j, 1));
-
-			// 2 dof stuff
-			Eigen::MatrixXd A = Eigen::MatrixXd::Zero(n_samples, 3);
-			Eigen::MatrixXd AA = Eigen::MatrixXd::Zero(n_samples, 2);
-			Eigen::MatrixXd D;
-			std::vector<double> nn(3, 0);
-			std::vector< double > gamma_vec(3, std::nan(""));
-			int kk;
-			for (int ii = 0; ii < n_samples; ii++){
-				kk = GG(ii,jj);
-				nn[kk] += 1.0;
-			}
-
-			if(std::all_of(nn.begin(), nn.end(), [](int i){return i>0.0;})){
-				for (int ii = 0; ii < n_samples; ii++){
-					kk = GG(ii,jj);
-					// A(ii, kk) = vv(ii);
-					if(kk == 0){
-						AA(ii, 0) -= nn[1] * vv(ii) / nn[0];
-						AA(ii, 1) -= nn[2] * vv(ii) / nn[0];
-					} else {
-						AA(ii, kk-1) = vv(ii);
-					}
-				}
-
-				D = (AA.transpose() * AA);
-				gamma_j = D.ldlt().solve(AA.transpose() * e_j);
-				g_j = e_j - AA * gamma_j;
-
-				gamma_vec[1] = gamma_j(0, 0);
-				gamma_vec[2] = gamma_j(1, 0);
-				gamma_vec[0] = -(nn[1]*gamma_vec[1] + nn[2]*gamma_vec[2]) / nn[0];
-				gamma.push_back(gamma_vec);
-				neglogP_2dof.push_back(lrt(e_j, g_j, 2));
-			} else {
-				gamma.push_back(gamma_vec);
-				neglogP_2dof.push_back(std::nan(""));
-			}
-		}
-	}
-
-	void calc_lrts2() {
-		// Determine column indexs to include in X_g
-		std::vector< std::size_t > col_indexes;
-		if( params.x_param_name != "NULL"){
-			col_indexes.push_back(find_covar_index(params.x_param_name));
-		} else {
-			col_indexes.push_back(0);
-		}
-		for (int ii = 0; ii < params.n_gconf; ii++){
-			col_indexes.push_back(find_covar_index(params.gconf[ii]));
-		}
-
-		for (int jj = 0; jj < n_var; jj++){
-			// Build matrix X_g
-			Eigen::MatrixXd tmp;
-			tmp = (getCols(W, col_indexes)).array().colwise() * G.col(jj).array();
-			int tmp_ncol = params.n_gconf + 1;
-			center_matrix( tmp, tmp_ncol );
-			scale_matrix( tmp, tmp_ncol );
-
-			// Combine to matrix X_comb = (X_c, X_g)
-			int comb_col = n_covar + 2 + params.n_gconf;
-			Eigen::MatrixXd X_comb(n_samples, comb_col);
-			X_comb << W, G.col(jj), tmp;
-
-			// Fit joint regression Y = X_comb beta_comb + epsilon
-			Eigen::MatrixXd XtX_comb = X_comb.transpose() * X_comb;
-			Eigen::MatrixXd XtX_comb_inv = XtX_comb.inverse();
-			Eigen::MatrixXd beta_comb_j = XtX_comb_inv * X_comb.transpose() * Y;
-
-			// Create vector of standard errors
-			double s_var = (Y - X_comb * beta_comb_j).norm() / std::sqrt(n_samples - comb_col);
-			std::vector< double > se;
-			for (int kk = 0; kk < comb_col; kk++){
-				se.push_back(s_var * std::sqrt(XtX_comb_inv(kk, kk)));
-			}
-
-			// Compute t-test on GxE param
-			double n_dof;
-			n_dof = (double) (n_samples - (n_covar + 2 + params.n_gconf));
-			boost::math::students_t t_dist(n_dof);
-			double t_stat = beta_comb_j(n_covar + 1, 0) / se[n_covar + 1];
-
-			// p-value from 2 tailed t-test
-			double q = 2 * boost::math::cdf(boost::math::complement(t_dist, fabs(t_stat)));
-
- 			// Output stats
-			outf << chromosome[jj] << "\t" << rsid[jj] << "\t" << position[jj];
-			outf << "\t" << alleles[jj][0] << "\t" << alleles[jj][1] << "\t";
-			outf << maf[jj] << "\t" << info[jj];
-
-			for (int kk = 0; kk < n_covar + 2 + params.n_gconf; kk++){
-				outf << "\t" << beta_comb_j(kk, 0);
-			}
-
-			outf << "\t" << -1 * std::log10(q) << std::endl;
-		}
-	}
-
-	void calc_joint_model() {
-		// Y = G beta
-		// vs
-		// Y = G beta + Z tau
-		// Want:
-		// - coefficients
-		// - variance explained
-		// - F test comparing model fit (just need residuals)
-		// - AIC?
-		// Common sense checks; n < p
-		if (n_var > n_samples){
-			throw std::logic_error("n_samples must be less than n_var for the joint model");
-		}
-
-		// Determine which covar to use in interaction
-		std::ptrdiff_t x_col;
-		if( params.x_param_name != "NULL"){
-			std::vector<std::string>::iterator it;
-			it = std::find(covar_names.begin(), covar_names.end(), params.x_param_name);
-			if (it == covar_names.end()){
-				throw std::invalid_argument("Can't locate --interaction parameter");
-			}
-			x_col = it - covar_names.begin();
-		} else {
-			x_col = 0;
-		}
-
-		Eigen::VectorXd vv(Eigen::Map<Eigen::VectorXd>(W.col(x_col).data(), n_samples));
-		std::cout << "Initialising matrix W (" << G.rows() << "," << 2*G.cols() << ")" << std::endl;
-		Eigen::MatrixXd W(G.rows(), G.cols() + G.cols());
-		W << G, (G.array().colwise() * vv.array()).matrix();
-		std::cout << W << std::endl;
-		// G should be centered and scaled by now
-		std::cout << "Fitting polygenic model" << std::endl;
-		Eigen::MatrixXd beta = solve(G.transpose() * G, G.transpose() * Y);
-		Eigen::VectorXd e_null = Y - G * beta;
-
-		// eta; vector of coefficients c(beta, tau)
-		std::cout << "Fitting joint interaction model" << std::endl;
-		Eigen::MatrixXd eta = solve(W.transpose() * W, W.transpose() * Y);
-		Eigen::VectorXd e_alt = Y - W * eta;
-		std::cout << eta << std::endl;
-		std::cout << e_alt << std::endl;
-
-		boost::math::students_t t_dist(n_samples - n_var - 1);
-		double pval_j, eta_j;
-		for(int jj = 0; jj < n_var; jj++){
-			eta_j = eta(n_var + jj, 0);
-			tau.push_back(eta_j);
-			pval_j = 1.0 - boost::math::cdf(t_dist, eta_j);
-			neglogP.push_back(-1*std::log10(pval_j));
-		}
-
-		// F test
-		double f_stat, rss_null, rss_alt, pval, neglogp_joint;
-		rss_null = e_null.dot(e_null);
-		rss_alt = e_alt.dot(e_alt);
-		f_stat = (rss_null - rss_alt) / (double) n_var;
-		f_stat /= rss_alt / (double) (n_samples - n_var - 1);
-		boost::math::fisher_f f_dist(n_var, n_samples - n_var);
-		pval = 1.0 - boost::math::cdf(f_dist, f_stat);
-		neglogp_joint = -1 * std::log10(pval);
-
-		// Output
-		std::cout << "F-test comparing models " << std::endl;
-		std::cout << "H0: Y = G x beta" << std::endl;
-		std::cout << "vs" << std::endl;
-		std::cout << "H0: Y = G x beta + Z x tau" << std::endl;
-		std::cout << "F-stat = " << f_stat << ", neglogP = " << neglogp_joint << std::endl;
-
-		std::cout << "Variance explained by null: ";
-		std::cout << 100 * (1.0 - rss_null / (Y.transpose() * Y)(0,0)) << std::endl;
-		std::cout << "Variance explained by alt: ";
-		std::cout << 100 * (1.0 - rss_alt / (Y.transpose() * Y)(0,0)) << std::endl;
-	}
-
-	double lrt(Eigen::VectorXd null, Eigen::VectorXd alt, int df){
-		// Logliks correct up to ignoreable constant
-		boost::math::chi_squared chi_dist_1(1), chi_dist_2(2);
-		double loglik_null, loglik_alt, chi_stat, neglogp;
-
-		loglik_null = std::log(n_samples) - std::log(null.dot(null));
-		loglik_null *= n_samples/2.0;
-		loglik_alt = std::log(n_samples) - std::log(alt.dot(alt));
-		loglik_alt *= n_samples/2.0;
-
-		chi_stat = 2*(loglik_alt - loglik_null);
-		if(chi_stat < 0 && chi_stat > -0.0000001){
-			chi_stat = 0.0; // Sometimes we get -1e-09
-		}
-		if (df == 1){
-			neglogp = std::log10(boost::math::cdf(boost::math::complement(chi_dist_1, chi_stat)));
-		} else {
-			neglogp = std::log10(boost::math::cdf(boost::math::complement(chi_dist_2, chi_stat)));
-		}
-		neglogp *= -1.0;
-		return neglogp;
 	}
 
 	void reduce_to_complete_cases() {
@@ -1124,77 +1130,28 @@ class data
 
 		incomplete_cases.insert(missing_covars.begin(), missing_covars.end());
 		incomplete_cases.insert(missing_phenos.begin(), missing_phenos.end());
+		if(params.env_file != "NULL"){
+			incomplete_cases.insert(missing_envs.begin(), missing_envs.end());
+		}
+
 		if(params.pheno_file != "NULL"){
-			reduce_mat_to_complete_cases( Y, Y_reduced, n_pheno, incomplete_cases );
+			Y = reduce_mat_to_complete_cases( Y, Y_reduced, n_pheno, incomplete_cases );
 		}
 		if(params.covar_file != "NULL"){
-			reduce_mat_to_complete_cases( W, W_reduced, n_covar, incomplete_cases );
+			W = reduce_mat_to_complete_cases( W, W_reduced, n_covar, incomplete_cases );
+		}
+		if(params.env_file != "NULL"){
+			E = reduce_mat_to_complete_cases( E, E_reduced, n_env, incomplete_cases );
 		}
 		n_samples -= incomplete_cases.size();
 		missing_phenos.clear();
 		missing_covars.clear();
+		missing_envs.clear();
 
 		std::cout << "Reduced to " << n_samples << " samples with complete data";
- 		std::cout << " across covariates and phenotype." << std::endl;
-	}
-
-	void run() {
-		int ch = 0;
-
-		// Step 1; Read in raw covariates and phenotypes
-		// - also makes a record of missing values
-		read_covar();
-		read_pheno();
-
-		// Step 2; Reduce raw covariates and phenotypes to complete cases
-		// - may change value of n_samples
-		// - will also skip these cases when reading bgen later
-		reduce_to_complete_cases();
-
-		// Step 3; Center phenos, genotypes, normalise covars
-		center_matrix( Y, n_pheno );
-		center_matrix( W, n_covar );
-		scale_matrix( W, n_covar, covar_names );
-
-		// Step 4; Regress covars out of phenos
-		if(!params.mode_lm2){
-			std::cout << " Regressing out covariates" << std::endl;
-			regress_covars();
-		}
-
-		// TODO: Move UI messages to coherent place?
-		if( params.x_param_name != "NULL"){
-			std::cout << "Searching for --interaction param ";
-			std::cout << params.x_param_name << std::endl;
-		} else {
-			std::cout << "Choosing first covar to use as interaction term (default)" << std::endl;
-		}
-
-		// Write headers to output file
-		output_init();
-
-		while (read_bgen_chunk()) {
-			// Raw dosage read in to G
-			std::cout << "Chunk " << ch+1 << " read (size " << n_var;
-			std::cout << ", " << n_var_parsed-1 << "/" << bgenView->number_of_variants();
-			std::cout << " variants parsed)" << std::endl;
-
-			// Normalise genotypes
-			center_matrix( G, n_var );
-			scale_matrix( G, n_var );
-
-			// Actually compute models
-			if(params.mode_lm){
-				calc_lrts();
-				output_results();
-			} else if(params.mode_lm2){
-				calc_lrts2();
-			} else if(params.mode_joint_model){
-				calc_joint_model();
-				output_results();
-			}
-			ch++;
-		}
+		std::cout << " across covariates";
+		if(params.env_file != "NULL") std::cout << ", env-variables" << std::endl;
+		std::cout << " and phenotype." << std::endl;
 	}
 };
 

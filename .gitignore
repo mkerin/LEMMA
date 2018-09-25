@@ -15,4 +15,16 @@ bin/*
 .Rproj.user
 .Rhistory
 *.Rproj
+latest_compile_branch.txt
 
+# tests/ executables
+tests/tests-main.o
+tests/tests-main
+tests/tests
+
+examples/test_code
+examples/test_gaussian
+examples/test_genotype_mat
+examples/test_updates
+examples/test_updates_constants_out_of_loop
+examples/test_updates_internal_dot

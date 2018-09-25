@@ -3,6 +3,7 @@
 #define PARSE_ARGUMENTS_HPP
 
 #include <iostream>
+#include <iomanip>
 #include <set>
 #include <cstring>
 #include <sys/stat.h>
@@ -11,11 +12,11 @@
 #include <regex>
 #include <stdexcept>
 
-void check_counts(std::string in_str, int i, int num, int argc);
+void check_counts(const std::string& in_str, int i, int num, int argc);
 void parse_arguments(parameters &p, int argc, char *argv[]);
 void check_file_exists(const std::string& filename);
 
-void check_counts(std::string in_str, int i, int num, int argc) {
+void check_counts(const std::string& in_str, int i, int num, int argc) {
 	// Stop overflow from argv
 	if (i + num >= argc) {
 		if (num == 1) {
@@ -47,16 +48,20 @@ void parse_arguments(parameters &p, int argc, char *argv[]) {
 		"--bgen",
 		"--pheno",
 		"--covar",
+		"--recombination_map",
+		"--environment",
+		"--environment_weights",
 		"--chunk",
 		"--range",
 		"--maf",
 		"--info",
 		"--out",
-		"--convert_to_vcf",
-		"--lm",
-		"--full_lm",
-		"--joint_model",
 		"--mode_vb",
+		"--mode_empirical_bayes",
+		"--effects_prior_mog",
+		"--use_vb_on_covars",
+		"--threads",
+		"--low_mem",
 		"--interaction",
 		"--incl_sample_ids",
 		"--incl_rsids",
@@ -64,12 +69,30 @@ void parse_arguments(parameters &p, int argc, char *argv[]) {
 		"--no_geno_check",
 		"--genetic_confounders",
 		"--r1_hyps_grid",
-		"--logw_tol",
+		"--r1_probs_grid",
+		"--min_elbo_diff",
+		"--min_alpha_diff",
 		"--hyps_grid",
 		"--hyps_probs",
 		"--vb_init",
 		"--verbose",
-		"--threads"
+		"--xtra_verbose",
+		"--keep_constant_variants",
+		"--force_round1",
+		"--raw_phenotypes",
+		"--mode_alternating_updates",
+		"--mode_approximate_residuals",
+		"--min_residuals_diff",
+		"--vb_iter_max",
+		"--mode_sgd",
+		"--sgd_delay",
+		"--sgd_forgetting_rate",
+		"--sgd_minibatch_size",
+		"--burnin_maxhyps",
+		"--env_update_repeats",
+		"--rescale_eta",
+		"--gamma_updates_thresh",
+		"--init_weights_with_snpwise_scan"
 	};
 
 	std::set<std::string>::iterator set_it;
@@ -81,14 +104,14 @@ void parse_arguments(parameters &p, int argc, char *argv[]) {
 
 	if (argc == 1) {
 		std::cout << "======-----"<< std::endl;
-		std::cout << "Matt's BGEN PROG" << std::endl; 
+		std::cout << "Matt's BGEN PROG" << std::endl;
 		std::cout << "======-----" << std::endl << std::endl;
 		std::exit(EXIT_SUCCESS);
 	}
 
 	// read in and check option flags
 	for (i = 0; i < argc; i++) {
-		in_str = argv[i];	
+		in_str = argv[i];
 		if (strcmp(in_str, "--version") == 0 || strcmp(in_str, "--help") == 0) {
 			std::cout << "ERROR: flag '" << in_str << "' cannot be used with any other flags." << std::endl;
 			std::exit(EXIT_FAILURE);
@@ -100,7 +123,7 @@ void parse_arguments(parameters &p, int argc, char *argv[]) {
 
 	for(i = 0; i < argc; i++){
 		if(*argv[i] == '-'){
-			in_str = argv[i];	
+			in_str = argv[i];
 			set_it = option_list.find(in_str);
 
 			if(set_it == option_list.end()) {
@@ -110,29 +133,63 @@ void parse_arguments(parameters &p, int argc, char *argv[]) {
 
 				exit(EXIT_FAILURE);
 			}
-	
+
 			// flags with parameters should eat their arguments
 			// & also make sure they don't go over argc
 
 			// Modes - a variety of different functionalities now included
-			if(strcmp(in_str, "--convert_to_vcf") == 0) {
-				p.mode_vcf = true;
+			if(strcmp(in_str, "--mode_sgd") == 0) {
+				p.mode_sgd = true;
 				i += 0;
 			}
 
-			if(strcmp(in_str, "--full_lm") == 0) {
-				p.mode_lm2 = true;
+			if(strcmp(in_str, "--sgd_delay") == 0) {
+				p.sgd_delay = std::stod(argv[i + 1]);
+				p.sgd_delay_set = true;
+				i += 1;
+			}
+
+			if(strcmp(in_str, "--burnin_maxhyps") == 0) {
+				p.burnin_maxhyps = std::stoi(argv[i + 1]);
+				i += 1;
+			}
+
+			if(strcmp(in_str, "--env_update_repeats") == 0) {
+				p.env_update_repeats = std::stoi(argv[i + 1]);
+				i += 1;
+			}
+
+			if(strcmp(in_str, "--init_weights_with_snpwise_scan") == 0) {
+				p.init_weights_with_snpwise_scan = true;
 				i += 0;
 			}
 
-			if(strcmp(in_str, "--lm") == 0) {
-				p.mode_lm = true;
+			if(strcmp(in_str, "--rescale_eta") == 0) {
+				p.rescale_eta = true;
 				i += 0;
 			}
 
-			if(strcmp(in_str, "--joint_model") == 0) {
-				p.mode_joint_model = true;
-				i += 0;
+			if(strcmp(in_str, "--gamma_updates_thresh") == 0) {
+				p.restrict_gamma_updates = true;
+				p.gamma_updates_thresh = std::stod(argv[i + 1]);
+				i += 1;
+			}
+
+			if(strcmp(in_str, "--sgd_forgetting_rate") == 0) {
+				p.sgd_forgetting_rate = std::stod(argv[i + 1]);
+				p.sgd_forgetting_rate_set = true;
+				i += 1;
+			}
+
+			if(strcmp(in_str, "--sgd_minibatch_size") == 0) {
+				p.sgd_minibatch_size = std::stol(argv[i + 1]);
+				p.sgd_minibatch_size_set = true;
+				i += 1;
+			}
+
+			if(strcmp(in_str, "--vb_iter_max") == 0) {
+				p.vb_iter_max = std::stol(argv[i + 1]);
+				i += 1;
 			}
 
 			if(strcmp(in_str, "--mode_vb") == 0) {
@@ -140,8 +197,64 @@ void parse_arguments(parameters &p, int argc, char *argv[]) {
 				i += 0;
 			}
 
+			if(strcmp(in_str, "--effects_prior_mog") == 0) {
+				p.mode_mog_prior = true;
+				i += 0;
+			}
+
+			if(strcmp(in_str, "--use_vb_on_covars") == 0) {
+				p.use_vb_on_covars = true;
+				i += 0;
+			}
+
+			if(strcmp(in_str, "--mode_approximate_residuals") == 0) {
+				p.mode_approximate_residuals = true;
+				i += 0;
+			}
+
+			if(strcmp(in_str, "--mode_alternating_updates") == 0) {
+				p.mode_alternating_updates = true;
+				i += 0;
+			}
+
+			if(strcmp(in_str, "--min_residuals_diff") == 0) {
+				p.min_residuals_diff = std::stod(argv[i + 1]);
+				i += 1;
+			}
+
+			if(strcmp(in_str, "--keep_constant_variants") == 0) {
+				p.keep_constant_variants = true;
+				i += 0;
+			}
+
+			if(strcmp(in_str, "--force_round1") == 0) {
+				p.user_requests_round1 = true;
+				i += 0;
+			}
+
+			if(strcmp(in_str, "--mode_empirical_bayes") == 0) {
+				p.mode_empirical_bayes = true;
+				i += 0;
+			}
+
 			if(strcmp(in_str, "--verbose") == 0) {
 				p.verbose = true;
+				i += 0;
+			}
+
+			if(strcmp(in_str, "--xtra_verbose") == 0) {
+				p.verbose = true;
+				p.xtra_verbose = true;
+				i += 0;
+			}
+
+			if(strcmp(in_str, "--low_mem") == 0) {
+				p.low_mem = true;
+				i += 0;
+			}
+
+			if(strcmp(in_str, "--raw_phenotypes") == 0) {
+				p.scale_pheno = false;
 				i += 0;
 			}
 
@@ -163,6 +276,28 @@ void parse_arguments(parameters &p, int argc, char *argv[]) {
 				check_counts(in_str, i, 1, argc);
 				p.pheno_file = argv[i + 1]; // pheno file
 				check_file_exists(p.pheno_file);
+				i += 1;
+			}
+
+			if(strcmp(in_str, "--recombination_map") == 0) {
+				check_counts(in_str, i, 1, argc);
+				p.recombination_file = argv[i + 1]; // pheno file
+				check_file_exists(p.recombination_file);
+				i += 1;
+			}
+
+			if(strcmp(in_str, "--environment") == 0) {
+				check_counts(in_str, i, 1, argc);
+				p.interaction_analysis = true;
+				p.env_file = argv[i + 1]; // pheno file
+				check_file_exists(p.env_file);
+				i += 1;
+			}
+
+			if(strcmp(in_str, "--environment_weights") == 0) {
+				check_counts(in_str, i, 1, argc);
+				p.env_weights_file = argv[i + 1]; // pheno file
+				check_file_exists(p.env_weights_file);
 				i += 1;
 			}
 
@@ -195,6 +330,13 @@ void parse_arguments(parameters &p, int argc, char *argv[]) {
 				check_counts(in_str, i, 1, argc);
 				p.r1_hyps_grid_file = argv[i + 1]; // covar file
 				check_file_exists(p.r1_hyps_grid_file);
+				i += 1;
+			}
+
+			if(strcmp(in_str, "--r1_probs_grid") == 0) {
+				check_counts(in_str, i, 1, argc);
+				p.r1_probs_grid_file = argv[i + 1]; // covar file
+				check_file_exists(p.r1_probs_grid_file);
 				i += 1;
 			}
 
@@ -249,12 +391,21 @@ void parse_arguments(parameters &p, int argc, char *argv[]) {
 				i += 1;
 			}
 
-			if(strcmp(in_str, "--logw_tol") == 0) {
+			if(strcmp(in_str, "--min_alpha_diff") == 0) {
 				check_counts(in_str, i, 1, argc);
-				p.logw_lim_set = true;
-				p.logw_tol = atof(argv[i + 1]);
-				if(p.n_thread < 0) throw std::runtime_error("--logw_tol must be positive.");
-				std::cout << "--logw_tol of " << p.logw_tol << " entered." << std::endl;
+				p.alpha_tol_set_by_user = true;
+				p.alpha_tol = atof(argv[i + 1]);
+				if(p.alpha_tol < 0) throw std::runtime_error("--min_alpha_diff must be positive.");
+				std::cout << "--min_alpha_diff of " << p.alpha_tol << " entered." << std::endl;
+				i += 1;
+			}
+
+			if(strcmp(in_str, "--min_elbo_diff") == 0) {
+				check_counts(in_str, i, 1, argc);
+				p.elbo_tol_set_by_user = true;
+				p.elbo_tol = atof(argv[i + 1]);
+				if(p.elbo_tol < 0) throw std::runtime_error("--min_elbo_diff must be positive.");
+				std::cout << "--min_elbo_diff of " << p.elbo_tol << " entered." << std::endl;
 				i += 1;
 			}
 
@@ -320,76 +471,12 @@ void parse_arguments(parameters &p, int argc, char *argv[]) {
 		}
 	}
 
+	if(p.mode_approximate_residuals){
+		std::cout << "Vector of residuals only updated if change in beta greater than:";
+		std::cout << std::setprecision(10) << std::fixed << p.min_residuals_diff << std::endl;
+	}
+
 	// Sanity checks here
-	int mode_count = 0;
-	mode_count += (p.mode_lm ? 1 : 0);
-	mode_count += (p.mode_lm2 ? 1 : 0);
-	mode_count += (p.mode_vb ? 1 : 0);
-	mode_count += (p.mode_vcf ? 1 : 0);
-	mode_count += (p.mode_joint_model ? 1 : 0);
-	if(mode_count != 1){
-		std::cout << "ERROR: exactly one of flags --lm, --mode_vb, --full_lm, ";
-		std::cout << "--joint_model or --convert_to_vcf should be present." << std::endl;
-		std::exit(EXIT_FAILURE);
-	}
-	if(p.mode_lm){
-		bool has_bgen = p.bgen_file != "NULL";
-		bool has_out = p.out_file != "NULL";
-		bool has_pheno = p.pheno_file != "NULL";
-		bool has_covar = p.covar_file != "NULL";
-		bool has_all = (has_covar && has_pheno && has_out && has_bgen);
-		if(!has_all){
-			std::cout << "ERROR: bgen, covar, pheno and out files should all be ";
-			std::cout << "provided in conjunction with --lm." << std::endl;
-			std::exit(EXIT_FAILURE);
-		}
-		if(p.bgen_wildcard){
-			std::cout << "ERROR: bgen wildcard input only works with --joint_model." << std::endl;
-			throw std::runtime_error("Wrong input; check manual.");
-		}
-	}
-	if(p.mode_lm2){
-		bool has_bgen = p.bgen_file != "NULL";
-		bool has_out = p.out_file != "NULL";
-		bool has_pheno = p.pheno_file != "NULL";
-		bool has_covar = p.covar_file != "NULL";
-		bool has_all = (has_covar && has_pheno && has_out && has_bgen);
-		if(!has_all){
-			std::cout << "ERROR: bgen, covar, pheno and out files should all be ";
-			std::cout << "provided in conjunction with --lm." << std::endl;
-			std::exit(EXIT_FAILURE);
-		}
-		if(p.bgen_wildcard){
-			std::cout << "ERROR: bgen wildcard input only works with --joint_model." << std::endl;
-			throw std::runtime_error("Wrong input; check manual.");
-		}
-	}
-	if(p.mode_joint_model){
-		bool has_bgen = p.bgen_file != "NULL";
-		bool has_out = p.out_file != "NULL";
-		bool has_pheno = p.pheno_file != "NULL";
-		bool has_covar = p.covar_file != "NULL";
-		bool has_all = (has_covar && has_pheno && has_out && has_bgen);
-		if(!has_all){
-			std::cout << "ERROR: bgen, covar, pheno and out files should all be ";
-			std::cout << "provided in conjunction with --joint_model." << std::endl;
-			std::exit(EXIT_FAILURE);
-		}
-	}
-	if(p.mode_vcf){
-		bool has_bgen = p.bgen_file != "NULL";
-		bool has_out = p.out_file != "NULL";
-		bool has_all = (has_out && has_bgen);
-		if(!has_all){
-			std::cout << "ERROR: bgen and out files should all be provided ";
-			std::cout << "in conjunction with --convert_to_vcf." << std::endl;
-			std::exit(EXIT_FAILURE);
-		}
-		if(p.bgen_wildcard){
-			std::cout << "ERROR: bgen wildcard input only works with --joint_model." << std::endl;
-			throw std::runtime_error("Wrong input; check manual.");
-		}
-	}
 	if(p.range || p.select_snps){
 		struct stat buf;
 		p.bgi_file = p.bgen_file + ".bgi";
@@ -398,41 +485,38 @@ void parse_arguments(parameters &p, int argc, char *argv[]) {
 			throw std::runtime_error("ERROR: file does not exist");
 		}
 	}
-	if(p.gconf.size() > 0 && !p.mode_lm2){
-		throw std::runtime_error("--genetic_confounders should only be used with --full_lm.");
-	}
 
 	// mode_vb specific options
-	if(p.mode_vb){
-		bool has_bgen = p.bgen_file != "NULL";
-		bool has_out = p.out_file != "NULL";
-		bool has_pheno = p.pheno_file != "NULL";
-		bool has_all = (has_pheno && has_out && has_bgen);
-		if(!has_all){
-			std::cout << "ERROR: bgen, pheno and out filepaths should all be ";
-			std::cout << "provided in conjunction with --mode_vb." << std::endl;
-			std::exit(EXIT_FAILURE);
-		}
-		bool has_hyps = p.hyps_grid_file != "NULL";
-		if(!has_hyps){
-			std::cout << "ERROR: search grids for hyperparameter values";
-			std::cout << "should be provided in conjunction with --mode_vb." << std::endl;
-			std::exit(EXIT_FAILURE);
-		}
-
-		if(p.interaction_analysis && p.covar_file == "NULL"){
-			throw std::runtime_error("ERROR: --covar must be provided if --interaction analysis is being run.");
-		}
+	bool has_bgen = p.bgen_file != "NULL";
+	bool has_out = p.out_file != "NULL";
+	bool has_pheno = p.pheno_file != "NULL";
+	bool has_all = (has_pheno && has_out && has_bgen);
+	if(!has_all){
+		std::cout << "ERROR: bgen, pheno and out filepaths should all be ";
+		std::cout << "provided in conjunction with --mode_vb." << std::endl;
+		std::exit(EXIT_FAILURE);
 	}
-	if(!p.mode_vb){
-		if(p.hyps_grid_file != "NULL"){
-			throw std::runtime_error("--hyps_grid should only be used with --mode_vb");
-		}
-		if(p.hyps_probs_file != "NULL"){
-			throw std::runtime_error("--hyps_probs should only be used with --mode_vb");
-		}
+	bool has_hyps = p.hyps_grid_file != "NULL";
+	if(!has_hyps){
+		std::cout << "ERROR: search grids for hyperparameter values";
+		std::cout << "should be provided in conjunction with --mode_vb." << std::endl;
+		std::exit(EXIT_FAILURE);
 	}
 
+	if(p.interaction_analysis && p.covar_file == "NULL"){
+		throw std::runtime_error("ERROR: --covar must be provided if --interaction analysis is being run.");
+	}
+
+	if(p.mode_sgd && !(p.sgd_delay_set && p.sgd_forgetting_rate_set && p.sgd_minibatch_size_set)){
+		throw std::runtime_error("ERROR: Must set forgetting rate, delay and minibatch size for mode sgd");
+	}
+	if(p.mode_sgd && p.sgd_minibatch_size <= 0){
+		throw std::runtime_error("ERROR: Minibatch size must be greater than zero");
+	}
+
+	if(p.env_file == "NULL" && p.env_weights_file != "NULL"){
+		std::cout << "WARNING: --environment_weights will be ignored as no --environment provided" << std::endl;
+	}
 }
 
 #endif

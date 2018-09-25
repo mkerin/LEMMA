@@ -86,7 +86,7 @@ class vbayes_x {
 	boost_io::filtering_ostream outf_mu_updates, outf_alpha_updates, outf_varB_updates;
 	std::string ofile_mu_updates, ofile_alpha_updates, ofile_varB_updates;
 
-	vbayes_x( data& dat ) : X( dat.G ),
+	vbayes_x( Data& dat ) : X( dat.G ),
 							Y( dat.Y ), 
 							p( dat.params ) {
 		sigma_ind = 0;

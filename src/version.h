@@ -5,7 +5,7 @@
 #define VERSION "0.1"
 
 const char *splash = R"VER(
-BGEN_PROG v0.1
-"N00b Central")VER";
+BGEN_PROG v0.2
+"N00b o'clock")VER";
 
 #endif

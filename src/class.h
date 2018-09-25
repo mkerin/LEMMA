@@ -8,51 +8,82 @@
 
 class parameters {
 	public :
-		std::string bgen_file, chr, out_file, pheno_file, covar_file, bgi_file;
-		std::string incl_sids_file, x_param_name, incl_rsids_file;
-		std::string r1_hyps_grid_file, hyps_grid_file, hyps_probs_file, vb_init_file;
+		std::string bgen_file, chr, out_file, pheno_file, env_file, covar_file, bgi_file;
+		std::string incl_sids_file, x_param_name, incl_rsids_file, recombination_file;
+		std::string r1_hyps_grid_file, r1_probs_grid_file, hyps_grid_file;
+		std::string env_weights_file, hyps_probs_file, vb_init_file;
 		std::vector< std::string > rsid;
-		int chunk_size, missing_code, n_gconf, n_thread;
+		long int chunk_size, vb_iter_max;
+		int missing_code, n_gconf, n_thread, burnin_maxhyps, env_update_repeats;
 		uint32_t start, end;
-		bool range, maf_lim, info_lim, mode_vcf, mode_lm, test_2dof, select_snps;
-		bool geno_check, mode_joint_model, bgen_wildcard, mode_lm2, mode_vb;
-		bool select_rsid, interaction_analysis, verbose, logw_lim_set;
-		double min_maf, min_info, logw_tol;
+		bool range, maf_lim, info_lim, test_2dof, select_snps, xtra_verbose;
+		bool geno_check, bgen_wildcard, mode_vb, use_vb_on_covars;
+		bool select_rsid, interaction_analysis, verbose, low_mem;
+		bool elbo_tol_set_by_user, alpha_tol_set_by_user, mode_empirical_bayes;
+		bool keep_constant_variants, user_requests_round1, scale_pheno, mode_mog_prior;
+		bool mode_alternating_updates, mode_approximate_residuals, mode_sgd, sgd_delay_set, sgd_forgetting_rate_set;
+		bool sgd_minibatch_size_set, rescale_eta, restrict_gamma_updates;
+		bool init_weights_with_snpwise_scan, flip_high_maf_variants;
+		double min_maf, min_info, elbo_tol, alpha_tol, min_residuals_diff, gamma_updates_thresh;
+		double sgd_delay, sgd_forgetting_rate;
 		std::vector < std::string > incl_sample_ids, gconf;
-	
-	// constructors/destructors	
-	parameters() {
-		bgen_file = "NULL";
+		long int sgd_minibatch_size;
+
+	// constructors/destructors
+	parameters() : bgen_file("NULL"),
+		out_file("NULL"),
+		pheno_file("NULL"),
+		recombination_file("NULL"),
+		covar_file("NULL"),
+		env_file("NULL"),
+		bgi_file("NULL"),
+		r1_hyps_grid_file("NULL"),
+		r1_probs_grid_file("NULL"),
+		hyps_grid_file("NULL"),
+		hyps_probs_file("NULL"),
+		vb_init_file("NULL"),
+		incl_sids_file("NULL"),
+		incl_rsids_file("NULL"),
+		x_param_name("NULL"),
+		env_weights_file("NULL") {
 		bgen_wildcard = false;
-		bgi_file = "NULL";
-		pheno_file = "NULL";
-		covar_file = "NULL";
-		out_file = "NULL";
-		r1_hyps_grid_file = "NULL";
-		hyps_grid_file = "NULL";
-		hyps_probs_file = "NULL";
-		vb_init_file = "NULL";
-		incl_sids_file = "NULL";
-		incl_rsids_file = "NULL";
-		x_param_name = "NULL";
+		rescale_eta = false;
+		flip_high_maf_variants = true;
+		init_weights_with_snpwise_scan = false;
+		restrict_gamma_updates = false;
 		n_thread = 1;
+		burnin_maxhyps = 0;
+		env_update_repeats = 1;
 		interaction_analysis = false;
 		chunk_size = 256;
 		missing_code = -999;
+		vb_iter_max = 500;
 		range = false;
 		maf_lim = false;
 		info_lim = false;
-		mode_lm = false;
-		mode_lm2 = false;
-		mode_vcf = false;
-		mode_joint_model = false;
+		mode_empirical_bayes = false;
+		mode_alternating_updates = false;
+		mode_approximate_residuals = false;
+		min_residuals_diff = 1e-9;
+		low_mem = false;
 		mode_vb = false;
+		mode_mog_prior = false;
 		test_2dof = true;
 		select_snps = false;
 		select_rsid = false;
 		geno_check = true; // check allele probs sum to 1 by default
 		verbose = false;
-		logw_lim_set = false;
+		xtra_verbose = false;
+		use_vb_on_covars = false;
+		alpha_tol_set_by_user = false;
+		elbo_tol_set_by_user = false;
+		keep_constant_variants = false;
+		user_requests_round1 = false;
+		scale_pheno = true;
+		mode_sgd = false;
+		sgd_forgetting_rate_set = false;
+		sgd_delay_set = false;
+		sgd_minibatch_size_set = false;
 	}
 
 	~parameters() {

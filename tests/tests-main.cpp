@@ -11,6 +11,7 @@
 #include "../src/vbayes.hpp"
 #include "../src/vbayes_x2.hpp"
 #include "../src/data.hpp"
+#include "../src/genotype_matrix.hpp"
 
 TEST_CASE( "Checking parse_arguments", "[io]" ) {
 	parameters p;
@@ -143,6 +144,174 @@ TEST_CASE( "Algebra in Eigen3" ) {
 	}
 }
 
+TEST_CASE( "GenotypeMatrix Class" ) {
+
+	SECTION("low-mem mode on"){
+		GenotypeMatrix GM(true, 3, 2);
+		GM.assign_index(0, 0, 0.2);
+		GM.assign_index(1, 0, 0.8);
+		GM.assign_index(2, 0, 0.2);
+		GM.assign_index(0, 1, 0.3);
+		GM.assign_index(1, 1, 0.345);
+		GM.assign_index(2, 1, 0.213);
+
+		SECTION("Empty constructor"){
+			GenotypeMatrix GM2(true);
+			GM2.resize(3, 2);
+			GM2.assign_index(0, 0, 0.2);
+			GM2.assign_index(1, 0, 0.8);
+			GM2.assign_index(2, 0, 0.2);
+			CHECK(GM2(0,0) == GM(0,0));
+		}
+
+		SECTION("Column means and sds computed correctly"){
+			GM.calc_scaled_values();
+			Eigen::VectorXd true_mean(2), true_sd(2);
+			true_mean << 0.3997396, 0.2877604;
+			true_sd << 2.879253, 14.846298;   // 0.34731227, 0.06735686;
+
+			CHECK(GM.scaling_performed == true);
+			CHECK(Approx(true_mean.sum()) == GM.compressed_dosage_means.sum());
+			CHECK(Approx(true_sd.sum()) == GM.compressed_dosage_inv_sds.sum());
+		}
+
+		SECTION("Read access returns standardised values"){
+			CHECK(Approx(GM(0, 1)) == 0.1933112);
+		}
+
+		SECTION("Decompressed matrix multiplication"){
+			Eigen::VectorXd vv(2);
+			vv << 0.55, 0.676;
+			Eigen::VectorXd res = GM * vv;
+			Eigen::VectorXd res_truth(3);
+			res_truth << -0.1868643, 1.2362057, -1.0493414;
+			CHECK(res_truth[0] == Approx(res[0]));
+			CHECK(res_truth[1] == Approx(res[1]));
+		}
+
+		SECTION("Read column access"){
+			Eigen::VectorXd c2a(3), c2b, c2_truth(3);
+			c2_truth << 0.1933112, 0.8892314, -1.0825425;
+			// CHECK_THROWS(GM.col(1, c2a));
+			// GM.col(1, c2a);
+			c2b = GM.col(1);
+
+			// CHECK(Approx(c2a[0]) == c2_truth[0]);
+			CHECK(Approx(c2b[0]) == c2_truth[0]);
+			CHECK(Approx(c2b[1]) == c2_truth[1]);
+		}
+
+		SECTION("Conservative resize"){
+			GM.conservativeResize(3, 1);
+			CHECK(GM.M.cols() == 1);
+			CHECK(Approx(GM(1,0)) == 1.1547005);
+		}
+
+		SECTION("transpose_vector_multiply "){
+			Eigen::VectorXd yy(3), res;
+			yy << 0.550, 0.676, -1.226;
+ 			res = GM.transpose_vector_multiply(yy);
+
+			CHECK(res.rows() == 2);
+			CHECK(res.cols() == 1);
+			CHECK(Approx(res(0, 0)) == 1.170866);
+		}
+
+		SECTION("dot_with_jth_col "){
+			Eigen::VectorXd yy(3);
+			yy << 10.2, 5.35, 3.1;
+ 			double res = GM.dot_with_jth_col(yy, 1);
+
+			CHECK(Approx(res) == 3.37328);
+		}
+	}
+
+	SECTION("Normal functionality when low-mem off"){
+		GenotypeMatrix GM(false, 3, 2);
+		GM.assign_index(0, 0, 0.2);
+		GM.assign_index(1, 0, 0.8);
+		GM.assign_index(2, 0, 0.2);
+		GM.assign_index(0, 1, 0.3);
+		GM.assign_index(1, 1, 0.345);
+		GM.assign_index(2, 1, 0.213);
+
+		SECTION("Read access returns standardised values"){
+			CHECK(Approx(GM(0, 1)) == 0.2086301);
+		}
+		SECTION("Matrix multiplication functions on scaled matrix"){
+			Eigen::VectorXd vv(2);
+			vv << 0.55, 0.676;
+			Eigen::VectorXd res = GM * vv;
+			Eigen::VectorXd res_truth(3);
+			res_truth << -0.1765087, 1.2294428, -1.0529341;
+			CHECK(res_truth[0] == Approx(res[0]));
+			CHECK(res_truth[1] == Approx(res[1]));
+		}
+
+		SECTION("Missing values handled correctly"){
+			GM.assign_index(2, 0, std::nan(""));
+			CHECK(GM(1, 0) == Approx(0.7071068));
+			CHECK(0.0 == Approx(GM(2, 0)));
+		}
+
+		SECTION("transpose_vector_multiply "){
+			Eigen::VectorXd yy(3), res;
+			yy << 0.550, 0.676, -1.226;
+ 			res = GM.transpose_vector_multiply(yy);
+
+			CHECK(res.rows() == 2);
+			CHECK(res.cols() == 1);
+			CHECK(Approx(res(0, 0)) == 1.170866);
+		}
+	}
+}
+
+TEST_CASE( "Data Class" ){
+	parameters p;
+
+	SECTION("No filters applied, high mem mode"){
+		char* argv[] = { (char*) "bin/bgen_prog", (char*) "--mode_vb", 
+						 (char*) "--interaction", (char*) "x",
+						 (char*) "--bgen", (char*) "tests/data/case6_n50_p100.bgen",
+						 (char*) "--out", (char*) "tests/data/fake.out",
+						 (char*) "--pheno", (char*) "tests/data/pheno.txt",
+						 (char*) "--hyps_grid", (char*) "tests/data/hyperpriors_gxage_v1.txt",
+						 (char*) "--hyps_probs", (char*) "tests/data/hyperpriors_gxage_v1_probs.txt",
+						 (char*) "--vb_init", (char*) "tests/data/vb_inits.out",
+						 (char*) "--covar", (char*) "tests/data/age.txt"};
+		int argc = sizeof(argv)/sizeof(argv[0]);
+		parse_arguments(p, argc, argv);
+		Data data( p );
+
+		data.read_non_genetic_data();
+		SECTION( "Raw non genetic data read in accurately"){
+			CHECK(data.Y(0,0) == Approx(-1.18865038973338));
+			CHECK(data.W(0,0) == Approx(-0.334726453474872));
+			CHECK(data.alpha_init(2,0) == Approx(0.000102891));
+			CHECK(data.mu_init(4,0) == Approx(-0.0968564));
+			CHECK(data.hyps_grid(0,6) == Approx(0.0153846153846154));
+			CHECK(data.imprt_grid(4,0) == Approx(1.0372941821041e-18));
+		}
+
+		data.standardise_non_genetic_data();
+		SECTION( "Non genetic data standardised"){
+			CHECK(data.Y(0,0) == Approx(-1.58005735));
+			CHECK(data.W(0,0) == Approx(-0.5894794));
+		}
+
+		data.regress_out_covars();
+		SECTION( "Covariates regressed out"){
+			CHECK(data.Y(0,0) == Approx(-1.2624914));
+		}
+
+		data.read_full_bgen();
+		SECTION( "bgen read in & standardised correctly"){
+			CHECK(data.G(0, 0) == Approx(-0.2220569));
+		}
+	}
+}
+
+
 TEST_CASE( "vbayes_x2.hpp", "[VBayesX2]" ) {
 	parameters p;
 	char* argv[] = { (char*) "bin/bgen_prog", (char*) "--mode_vb", 
@@ -156,36 +325,13 @@ TEST_CASE( "vbayes_x2.hpp", "[VBayesX2]" ) {
 					 (char*) "--covar", (char*) "tests/data/age.txt"};
 	int argc = sizeof(argv)/sizeof(argv[0]);
 	parse_arguments(p, argc, argv);
-	data Data( p.bgen_file );
-	Data.params = p;
-
-	// Read in phenotypes
-	Data.read_pheno();
-	Data.center_matrix( Data.Y, Data.n_pheno );
-	Data.scale_matrix( Data.Y, Data.n_pheno, Data.pheno_names );
-
-	// Read in covariates if present
-	Data.read_covar();
-	Data.center_matrix( Data.W, Data.n_covar );
-	Data.scale_matrix( Data.W, Data.n_covar, Data.covar_names );
-
-	// Regress out covariates if present
-	Data.regress_covars();
-
-	// Read in all genetic data + standardise to mean 0 var 1
-	Data.params.chunk_size = Data.bgenView->number_of_variants();
-	Data.read_bgen_chunk();
-	Data.center_matrix( Data.G, Data.n_var );
-	Data.scale_matrix_conserved( Data.G, Data.n_var );
-
-	// Read in grids for importance sampling
-	Data.read_grids();
-
-	// Read starting point for VB approximation if provided
-	Data.read_alpha_mu();
+	Data data( p );
+	data.read_non_genetic_data();
+	data.standardise_non_genetic_data();
+	data.read_full_bgen();
 
 	// Pass data to VBayes object
-	VBayesX2 VB(Data);
+	VBayesX2 VB(data);
 
 	// SECTION()
 	CHECK(VB.n_grid == 7);
@@ -220,7 +366,7 @@ TEST_CASE( "vbayes_x2.hpp", "[VBayesX2]" ) {
 // 	int argc = sizeof(argv)/sizeof(argv[0]);
 // 	parameters p;
 // 	parse_arguments(p, argc, argv);
-// 	data Data( p.bgen_file );
+// 	Data data( p.bgen_file );
 // 
 // 	SECTION( "read_txt_file behaving sensibly" ) {
 // 		std::string filename = "tests/cases/test_covar.txt";
@@ -229,8 +375,8 @@ TEST_CASE( "vbayes_x2.hpp", "[VBayesX2]" ) {
 // 		std::vector< std::string > col_names_read, col_names_ans;
 // 		std::map< int, bool > incomplete_row;
 // 
-// 		Data.n_samples = 3;
-// 		Data.read_txt_file( filename,
+// 		data.n_samples = 3;
+// 		data.read_txt_file( filename,
 // 							M_read,
 // 							n_cols,
 // 							col_names_read,
@@ -246,8 +392,8 @@ TEST_CASE( "vbayes_x2.hpp", "[VBayesX2]" ) {
 // 		CHECK( col_names_read == col_names_ans );
 // 
 // 		SECTION( "Number of covariates greater than n_samples" ) {
-// 			Data.n_samples = 2;
-// 			CHECK_THROWS_AS(Data.read_txt_file( filename,
+// 			data.n_samples = 2;
+// 			CHECK_THROWS_AS(data.read_txt_file( filename,
 // 								M_read,
 // 								n_cols,
 // 								col_names_read,
@@ -259,8 +405,8 @@ TEST_CASE( "vbayes_x2.hpp", "[VBayesX2]" ) {
 // 			int n_cols_ans = 3;
 // 			M_cent << -1, -1, -1, 0, 0, 0, 1, 1, 1;
 // 
-// 			Data.center_matrix( M_read, n_cols_ans );
-// 			Data.scale_matrix( M_read, n_cols_ans );
+// 			data.center_matrix( M_read, n_cols_ans );
+// 			data.scale_matrix( M_read, n_cols_ans );
 // 			CHECK( M_read == M_cent );
 // 		}
 // 
@@ -272,7 +418,7 @@ TEST_CASE( "vbayes_x2.hpp", "[VBayesX2]" ) {
 // 		// 	M_reduc << 1, 2, 3, 7, 8, 9;
 // 		// 	incomplete_cases[1] = 1;
 // 		// 
-// 		// 	Data.reduce_mat_to_complete_cases(M_read, check, n_cols_ans, incomplete_cases);
+// 		// 	data.reduce_mat_to_complete_cases(M_read, check, n_cols_ans, incomplete_cases);
 // 		// 	// std::cout << "M_read is now " << M_read.rows() << "x" << M_read.cols() << std::endl;
 // 		// 	CHECK( M_read == M_reduc );
 // 		// }
@@ -287,12 +433,12 @@ TEST_CASE( "vbayes_x2.hpp", "[VBayesX2]" ) {
 // 		// 	red_covar_names.push_back("c1").push_back("c3");
 // 		// 
 // 		// 	// test
-// 		// 	Data.W = W;
-// 		// 	Data.covar_names = covar_names;
-// 		// 	Data.n_col = 3;
-// 		// 	Data.scale_matrix(Data.W, Data.n_col, Data.covar_names);
-// 		// 	CHECK( Data.covar_names == red_covar_names );
-// 		// 	CHECK( Data.n_col == 2 );
+// 		// 	data.W = W;
+// 		// 	data.covar_names = covar_names;
+// 		// 	data.n_col = 3;
+// 		// 	data.scale_matrix(data.W, data.n_col, data.covar_names);
+// 		// 	CHECK( data.covar_names == red_covar_names );
+// 		// 	CHECK( data.n_col == 2 );
 // 		// }
 // 	}
 // }
@@ -310,18 +456,18 @@ TEST_CASE( "vbayes_x2.hpp", "[VBayesX2]" ) {
 // 						 (char*) "data/test/t1_incl_sample_ids/valid_ids.txt"};
 // 		int argc = sizeof(argv)/sizeof(argv[0]);
 // 		parse_arguments(p, argc, argv);
-// 		data Data( p.bgen_file );
-// 		Data.params = p;
+// 		Data data( p.bgen_file );
+// 		data.params = p;
 // 		
-// 		CHECK(Data.params.incl_sids_file == "data/test/t1_incl_sample_ids/valid_ids.txt");
-// 		Data.read_incl_sids();
-// 		CHECK(Data.n_samples - Data.incomplete_cases.size() == 7);
-// 		Data.read_covar();
-// 		Data.reduce_to_complete_cases(); // Also edits n_samples
-// 		CHECK(Data.n_samples == 7);
+// 		CHECK(data.params.incl_sids_file == "data/test/t1_incl_sample_ids/valid_ids.txt");
+// 		data.read_incl_sids();
+// 		CHECK(data.n_samples - data.incomplete_cases.size() == 7);
+// 		data.read_covar();
+// 		data.reduce_to_complete_cases(); // Also edits n_samples
+// 		CHECK(data.n_samples == 7);
 // 		Eigen::MatrixXd C(7,1);
 // 		C << 1, 3, 17, 21, 22, 25, 500;
-// 		CHECK(Data.W == C);
+// 		CHECK(data.W == C);
 // 	}
 // 
 // 	SECTION( "Empty incl_sample_ids file throws error" ) {
@@ -342,10 +488,10 @@ TEST_CASE( "vbayes_x2.hpp", "[VBayesX2]" ) {
 // 						 (char*) "data/test/t1_incl_sample_ids/invalid_ids1.txt"};
 // 		int argc = sizeof(argv)/sizeof(argv[0]);
 // 		parse_arguments(p, argc, argv);
-// 		data Data( p.bgen_file );
-// 		Data.params = p;
+// 		Data data( p.bgen_file );
+// 		data.params = p;
 // 		
-// 		CHECK_THROWS_AS(Data.read_incl_sids(), std::logic_error);
+// 		CHECK_THROWS_AS(data.read_incl_sids(), std::logic_error);
 // 	}
 // 
 // 	SECTION( "Absent sid throws error" ) {
@@ -356,10 +502,10 @@ TEST_CASE( "vbayes_x2.hpp", "[VBayesX2]" ) {
 // 						 (char*) "data/test/t1_incl_sample_ids/invalid_ids2.txt"};
 // 		int argc = sizeof(argv)/sizeof(argv[0]);
 // 		parse_arguments(p, argc, argv);
-// 		data Data( p.bgen_file );
-// 		Data.params = p;
+// 		Data data( p.bgen_file );
+// 		data.params = p;
 // 		
-// 		CHECK_THROWS_AS(Data.read_incl_sids(), std::logic_error);
+// 		CHECK_THROWS_AS(data.read_incl_sids(), std::logic_error);
 // 	}
 // 
 // 	SECTION( "Absent sid throws error including last sid" ) {
@@ -370,35 +516,35 @@ TEST_CASE( "vbayes_x2.hpp", "[VBayesX2]" ) {
 // 						 (char*) "data/test/t1_incl_sample_ids/invalid_ids3.txt"};
 // 		int argc = sizeof(argv)/sizeof(argv[0]);
 // 		parse_arguments(p, argc, argv);
-// 		data Data( p.bgen_file );
-// 		Data.params = p;
+// 		Data data( p.bgen_file );
+// 		data.params = p;
 // 		
-// 		CHECK_THROWS_AS(Data.read_incl_sids(), std::logic_error);
+// 		CHECK_THROWS_AS(data.read_incl_sids(), std::logic_error);
 // 	}
 // 
 // }
 
 
-TEST_CASE( "Unit test vbayes", "[vbayes]" ) {
-	double PI = 3.1415926535897;
-	Eigen::MatrixXd myX(2, 2), myY(2, 1);
-	myY << 1.0, 2.0;
-	myX << 1.0, 0.0, 0.0, 1.0;
-	vbayes VB(myX, myY);
-	
-	SECTION( "Check vbayes.returnZ" ) {
-		// Hardcoded comparison with R
-		Eigen::VectorXd alpha(2), mu(2);
-		alpha << 1.0, 0.0;
-		mu << 0.7, 0.2;
-		std::vector< double > s_sq;
-		s_sq.push_back(1.2);
-		s_sq.push_back(0.8);
-		double pi = 0.2;
-		double sigma = 1.0;
-		double sigmab = 1.0;
-
-		double res = -6.569298;
-		CHECK(Approx(res) == VB.calc_logw(sigma, sigmab, pi, s_sq, alpha, mu));
-	}
-}
+// TEST_CASE( "Unit test vbayes", "[vbayes]" ) {
+// 	double PI = 3.1415926535897;
+// 	Eigen::MatrixXd myX(2, 2), myY(2, 1);
+// 	myY << 1.0, 2.0;
+// 	myX << 1.0, 0.0, 0.0, 1.0;
+// 	vbayes VB(myX, myY);
+// 	
+// 	SECTION( "Check vbayes.returnZ" ) {
+// 		// Hardcoded comparison with R
+// 		Eigen::VectorXd alpha(2), mu(2);
+// 		alpha << 1.0, 0.0;
+// 		mu << 0.7, 0.2;
+// 		std::vector< double > s_sq;
+// 		s_sq.push_back(1.2);
+// 		s_sq.push_back(0.8);
+// 		double pi = 0.2;
+// 		double sigma = 1.0;
+// 		double sigmab = 1.0;
+// 
+// 		double res = -6.569298;
+// 		CHECK(Approx(res) == VB.calc_logw(sigma, sigmab, pi, s_sq, alpha, mu));
+// 	}
+// }
