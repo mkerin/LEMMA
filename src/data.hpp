@@ -1125,7 +1125,7 @@ class Data
 		int cnt = 0;
 		for (std::size_t jj = 0; jj < n_var; jj++){
 			it = std::find(external_dXtEEX_SNPID.begin(), external_dXtEEX_SNPID.end(), G.SNPID[jj]);
-			if (it == G.SNPKEY.end()){
+			if (it == external_dXtEEX_SNPID.end()){
 				cnt++;
 				cl_j = G.col(jj);
 				for (int ll = 0; ll < n_env; ll++){
