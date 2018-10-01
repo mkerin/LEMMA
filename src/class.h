@@ -12,6 +12,7 @@ class parameters {
 		std::string incl_sids_file, x_param_name, incl_rsids_file, recombination_file;
 		std::string r1_hyps_grid_file, r1_probs_grid_file, hyps_grid_file;
 		std::string env_weights_file, hyps_probs_file, vb_init_file;
+		std::string dxteex_file, snpstats_file;
 		std::vector< std::string > rsid;
 		long int chunk_size, vb_iter_max;
 		int missing_code, n_gconf, n_thread, burnin_maxhyps, env_update_repeats;
@@ -37,6 +38,7 @@ class parameters {
 		covar_file("NULL"),
 		env_file("NULL"),
 		bgi_file("NULL"),
+		snpstats_file("NULL"),
 		r1_hyps_grid_file("NULL"),
 		r1_probs_grid_file("NULL"),
 		hyps_grid_file("NULL"),
@@ -45,6 +47,7 @@ class parameters {
 		incl_sids_file("NULL"),
 		incl_rsids_file("NULL"),
 		x_param_name("NULL"),
+		dxteex_file("NULL"),
 		env_weights_file("NULL") {
 		bgen_wildcard = false;
 		rescale_eta = false;
@@ -57,7 +60,7 @@ class parameters {
 		interaction_analysis = false;
 		chunk_size = 256;
 		missing_code = -999;
-		vb_iter_max = 500;
+		vb_iter_max = 10000;
 		range = false;
 		maf_lim = false;
 		info_lim = false;

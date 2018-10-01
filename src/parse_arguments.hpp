@@ -9,12 +9,47 @@
 #include <sys/stat.h>
 #include "class.h"
 #include "version.h"
+#include "my_timer.hpp"
 #include <regex>
 #include <stdexcept>
+#include "tools/eigen3.3/Dense" // For vectorise profiling
 
 void check_counts(const std::string& in_str, int i, int num, int argc);
 void parse_arguments(parameters &p, int argc, char *argv[]);
 void check_file_exists(const std::string& filename);
+
+// For vectorise profiling
+void foo(const Eigen::VectorXi& aa1,
+         const Eigen::VectorXi& aa2,
+         Eigen::VectorXi& aa){
+	asm("#it begins here!");
+		aa = aa1 + aa2;
+	asm("#it ends here!");
+}
+
+void foo(const Eigen::VectorXf& aa1,
+         const Eigen::VectorXf& aa2,
+         Eigen::VectorXf& aa){
+	asm("#it begins here!");
+		aa = aa1 + aa2;
+	asm("#it ends here!");
+}
+
+void foo(const Eigen::VectorXf& aa1,
+         const Eigen::VectorXd& aa2,
+         Eigen::VectorXf& aa){
+	asm("#it begins here!");
+		aa = aa1 + aa2.cast<float>();
+	asm("#it ends here!");
+}
+
+void foo(const Eigen::VectorXd& aa1,
+         const Eigen::VectorXd& aa2,
+         Eigen::VectorXd& aa){
+	asm("#it begins here!");
+		aa = aa1 + aa2;
+	asm("#it ends here!");
+}
 
 void check_counts(const std::string& in_str, int i, int num, int argc) {
 	// Stop overflow from argv
@@ -51,6 +86,7 @@ void parse_arguments(parameters &p, int argc, char *argv[]) {
 		"--recombination_map",
 		"--environment",
 		"--environment_weights",
+		"--snpwise_scan",
 		"--chunk",
 		"--range",
 		"--maf",
@@ -92,7 +128,8 @@ void parse_arguments(parameters &p, int argc, char *argv[]) {
 		"--env_update_repeats",
 		"--rescale_eta",
 		"--gamma_updates_thresh",
-		"--init_weights_with_snpwise_scan"
+		"--init_weights_with_snpwise_scan",
+		"--dxteex"
 	};
 
 	std::set<std::string>::iterator set_it;
@@ -106,6 +143,61 @@ void parse_arguments(parameters &p, int argc, char *argv[]) {
 		std::cout << "======-----"<< std::endl;
 		std::cout << "Matt's BGEN PROG" << std::endl;
 		std::cout << "======-----" << std::endl << std::endl;
+
+#ifdef EIGEN_VECTORIZE
+		std::cout << "Supports:" << std::endl;
+		std::cout << "- vectorization with SSE" << std::endl;
+#endif
+
+#ifndef EIGEN_VECTORIZE
+		std::cout << "Not supported:" << std::endl;
+		std::cout << "- vectorization with SSE" << std::endl;
+#endif
+
+		// For vectorise profiling
+		Eigen::VectorXi aa1 = Eigen::VectorXi::Random(256000);
+		Eigen::VectorXi aa2 = Eigen::VectorXi::Random(256000);
+		Eigen::VectorXi aa(256000);
+		Eigen::VectorXf bb1 = Eigen::VectorXf::Random(256000);
+		Eigen::VectorXf bb2 = Eigen::VectorXf::Random(256000);
+		Eigen::VectorXf bb(256000);
+		Eigen::VectorXd cc1 = Eigen::VectorXd::Random(256000);
+		Eigen::VectorXd cc2 = Eigen::VectorXd::Random(256000);
+		Eigen::VectorXd cc(256000);
+
+		MyTimer t_testi("500 foo() calls in %ts (int)\n");
+		t_testi.resume();
+		for (int jj = 0; jj < 500; jj++){
+			foo(aa1, aa2, aa);
+		}
+		t_testi.stop();
+		t_testi.report();
+
+		MyTimer t_testf("500 foo() calls in %ts (float)\n");
+		t_testf.resume();
+		for (int jj = 0; jj < 500; jj++){
+			foo(bb1, bb2, bb);
+		}
+		t_testf.stop();
+		t_testf.report();
+
+		MyTimer t_testf_cast("500 foo() calls in %ts (float via cast)\n");
+		t_testf_cast.resume();
+		for (int jj = 0; jj < 500; jj++){
+			foo(bb1, cc2, bb);
+		}
+		t_testf_cast.stop();
+		t_testf_cast.report();
+
+
+		MyTimer t_testd("500 foo() calls in %ts (double)\n");
+		t_testd.resume();
+		for (int jj = 0; jj < 500; jj++){
+			foo(cc1, cc2, cc);
+		}
+		t_testd.stop();
+		t_testd.report();
+
 		std::exit(EXIT_SUCCESS);
 	}
 
@@ -308,6 +400,13 @@ void parse_arguments(parameters &p, int argc, char *argv[]) {
 				i += 1;
 			}
 
+			if(strcmp(in_str, "--snpwise_scan") == 0) {
+				check_counts(in_str, i, 1, argc);
+				p.snpstats_file = argv[i + 1]; // covar file
+				check_file_exists(p.snpstats_file);
+				i += 1;
+			}
+
 			if(strcmp(in_str, "--out") == 0) {
 				if (check_out == 1) {
 					std::cout << "ERROR: flag '" << in_str << "' can only be provided once." << std::endl;
@@ -351,6 +450,13 @@ void parse_arguments(parameters &p, int argc, char *argv[]) {
 				check_counts(in_str, i, 1, argc);
 				p.vb_init_file = argv[i + 1]; // covar file
 				check_file_exists(p.vb_init_file);
+				i += 1;
+			}
+
+			if(strcmp(in_str, "--dxteex") == 0) {
+				check_counts(in_str, i, 1, argc);
+				p.dxteex_file = argv[i + 1]; // covar file
+				check_file_exists(p.dxteex_file);
 				i += 1;
 			}
 

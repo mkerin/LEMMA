@@ -73,15 +73,14 @@ public:
 	std::vector< std::uint32_t > position;
 	// chr~pos~a0~a1
 	std::vector< std::string > SNPKEY;
+	std::vector< std::string > SNPID;
 
 	std::vector<std::map<int, bool>> missing_genos;
 	Eigen::VectorXd compressed_dosage_means;
 	Eigen::VectorXd compressed_dosage_sds;
 	Eigen::VectorXd compressed_dosage_inv_sds;  // 1 / col-wise sd
 	// Eigen::VectorXd aa;  // vector of ages
-	Eigen::MatrixXd E;
 	std::size_t NN, PP;
-	int n_effects;
 
 	// Interface type of Eigen indices -> see eigen3/Eigen/src/Core/EigenBase.h
 	typedef Eigen::Index Index;
@@ -98,13 +97,11 @@ public:
 		scaling_performed = false;
 		NN = 0;
 		PP = 0;
-		n_effects = 0;
 	};
 
 	GenotypeMatrix(bool use_compression,
                    const long int n,
-                   const long int p,
-                   const int my_n_effects) : low_mem(use_compression),
+                   const long int p) : low_mem(use_compression),
                                              t_readXk("read_X_kk: %ts \n"){
 		if(low_mem){
 			M.resize(n, p);
@@ -113,15 +110,11 @@ public:
 		}
 		NN = n;
 		PP = p;
-		n_effects = my_n_effects;
 
 		compressed_dosage_means.resize(p);
 		compressed_dosage_sds.resize(p);
 		compressed_dosage_inv_sds.resize(p);
 		missing_genos.resize(p);
-		if(n_effects > 1){
-			E.resize(n, n_effects-1);
-		}
 
 		scaling_performed = false;
 	};
@@ -196,6 +189,7 @@ public:
 	// Eigen read column
 	template<typename T>
 	Eigen::VectorXd col(T jj){
+		assert(jj < PP);
 		Eigen::VectorXd vec(NN);
 		if(!scaling_performed){
 			calc_scaled_values();
@@ -203,48 +197,18 @@ public:
 
 		t_readXk.resume();
 		if(low_mem){
-			if(jj < PP){
-				if(mode_sgd){
-					vec = M.cast<double>().block(batch_start, jj, nBatch, 1);
-				} else {
-					vec = M.cast<double>().col(jj);
-				}
-				vec *= (intervalWidth * compressed_dosage_inv_sds[jj]);
-				vec = vec.array() + (0.5 * intervalWidth - compressed_dosage_means[jj]) * compressed_dosage_inv_sds[jj];
-
+			if(mode_sgd){
+				vec = M.cast<double>().block(batch_start, jj, nBatch, 1);
 			} else {
-				int ee = jj / PP;
-				jj %= PP;
-
-				if(mode_sgd){
-					vec = M.cast<double>().block(batch_start, jj, nBatch, 1);
-				} else {
-					vec = M.cast<double>().col(jj);
-				}
-				vec *= (intervalWidth * compressed_dosage_inv_sds[jj]);
- 				vec = vec.array() + (0.5 * intervalWidth - compressed_dosage_means[jj]) * compressed_dosage_inv_sds[jj];
-
-				if(mode_sgd){
-					vec = vec.cwiseProduct(E.block(batch_start, ee-1, nBatch, 1));
-				} else {
-					vec = vec.cwiseProduct(E.col(ee-1));
-				}
+				vec = M.cast<double>().col(jj);
 			}
+			vec *= (intervalWidth * compressed_dosage_inv_sds[jj]);
+			vec = vec.array() + (0.5 * intervalWidth - compressed_dosage_means[jj]) * compressed_dosage_inv_sds[jj];
 		} else {
-			if(jj < PP){
-				if(mode_sgd){
-					vec = G.block(batch_start, jj, nBatch, 1);
-				} else {
-					vec = G.col(jj);
-				}
+			if(mode_sgd){
+				vec = G.block(batch_start, jj, nBatch, 1);
 			} else {
-				int ee = jj / PP;
-				jj %= PP;
-				if(mode_sgd){
-					vec = G.block(batch_start, jj, nBatch, 1).cwiseProduct(E.block(batch_start, ee-1, nBatch, 1));
-				} else {
-					vec = G.col(jj).cwiseProduct(E.col(ee-1));
-				}
+				vec = G.col(jj);
 			}
 		}
 		t_readXk.stop();
@@ -254,55 +218,30 @@ public:
 	// Eigen read column
 	template<typename T>
 	void col(T jj, Eigen::Ref<Eigen::VectorXd> vec){
+		assert(jj < PP);
 		if(!scaling_performed){
 			calc_scaled_values();
 		}
 
 		if(low_mem){
-			if(jj < PP){
-				for (Index ii = 0; ii < NN; ii++){
-					vec[ii] = (DecompressDosage(M(ii, jj)) - compressed_dosage_means[jj]) * compressed_dosage_inv_sds[jj];
-				}
-			} else {
-				int ee = jj / PP;
-				jj %= PP;
-				for (Index ii = 0; ii < NN; ii++){
-					vec[ii] = E(ii, ee-1) * (DecompressDosage(M(ii, jj)) - compressed_dosage_means[jj]) * compressed_dosage_inv_sds[jj];
-				}
+			for (Index ii = 0; ii < NN; ii++){
+				vec[ii] = (DecompressDosage(M(ii, jj)) - compressed_dosage_means[jj]) * compressed_dosage_inv_sds[jj];
 			}
 		} else {
-			if(jj < PP){
-				vec = G.col(jj);
-			} else {
-				int ee = jj / PP;
-				jj %= PP;
-				vec = G.col(jj).cwiseProduct(E.col(ee-1));
-			}
+			vec = G.col(jj);
 		}
 	}
 
 	// Dot with jth col - this was actually slower. Oh well.
 	double dot_with_jth_col(const Eigen::Ref<const Eigen::VectorXd>& vec, Index jj){
+		assert(jj < PP);
 		double tmp, offset, res;
 		if(!scaling_performed){
 			calc_scaled_values();
 		}
 
-		if (jj < PP){
-			tmp = vec.dot(M.col(jj).cast<double>());
-			offset = vec.sum();
-		} else {
-			int ee = jj / PP;
-			jj %= PP;
-			Eigen::VectorXd bb(vec.rows());
-			bb = bb.cwiseProduct(E.col(ee-1));
-
-			// for(Index ii = 0; ii < NN; ii++){
-			// 	tmp += aa[ii] * vec[ii] * M(ii, jj);
-			// }
-			tmp = bb.dot(M.col(jj).cast<double>());
-			offset = bb.sum();
-		}
+		tmp = vec.dot(M.col(jj).cast<double>());
+		offset = vec.sum();
 
 		res = intervalWidth * tmp + offset * (intervalWidth * 0.5 - compressed_dosage_means[jj]);
 		res *= compressed_dosage_inv_sds[jj];
@@ -456,8 +395,8 @@ public:
 
 	inline Index cols() const { return PP; }
 
-	template <typename T, typename T2, typename T3>
-	void resize(const T& n, const T2& p, const T3& my_n_effects){
+	template <typename T, typename T2>
+	void resize(const T& n, const T2& p){
 		if(low_mem){
 			M.resize(n, p);
 		} else {
@@ -467,14 +406,12 @@ public:
 		compressed_dosage_sds.resize(p);
 		compressed_dosage_inv_sds.resize(p);
 		missing_genos.resize(p);
-		E.resize(n, my_n_effects);
 		NN = n;
 		PP = p;
-		n_effects = my_n_effects;
 	}
 
-	template <typename T, typename T2, typename T3>
-	void conservativeResize(const T& n, const T2& p, const T3& my_n_effects){
+	template <typename T, typename T2>
+	void conservativeResize(const T& n, const T2& p){
 		if(low_mem){
 			M.conservativeResize(n, p);
 		} else {
@@ -483,11 +420,9 @@ public:
 		compressed_dosage_means.conservativeResize(p);
 		compressed_dosage_sds.conservativeResize(p);
 		compressed_dosage_inv_sds.conservativeResize(p);
-		E.conservativeResize(n, my_n_effects);
 		missing_genos.resize(p);
 		NN = n;
 		PP = p;
-		n_effects = my_n_effects;
 	}
 
 	friend std::ostream &operator<<( std::ostream &output, const GenotypeMatrix &gg ) {
