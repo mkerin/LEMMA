@@ -33,6 +33,7 @@
 #include <boost/iostreams/filter/gzip.hpp>
 
 namespace boost_io = boost::iostreams;
+namespace boost_m = boost::math;
 
 inline Eigen::MatrixXd getCols(const Eigen::MatrixXd &X, const std::vector<size_t> &cols);
 inline void setCols(Eigen::MatrixXd &X, const std::vector<size_t> &cols, const Eigen::MatrixXd &values);
@@ -81,7 +82,7 @@ class Data
 	std::vector< std::string > env_names;
 
 	GenotypeMatrix G;
-	Eigen::MatrixXd Y; // phenotype matrix
+	Eigen::MatrixXd Y, Y2; // phenotype matrix (#2 always has covars regressed)
 	Eigen::MatrixXd W; // covariate matrix
 	Eigen::MatrixXd E; // env matrix
 	Eigen::VectorXd Z; // interaction vector
@@ -93,7 +94,13 @@ class Data
 	std::vector< double > beta, tau, neglogP, neglogP_2dof;
 	std::vector< std::vector< double > > gamma;
 
-	boost_io::filtering_ostream outf;
+	// For gxe genome-wide scan
+	// cols: neglogp-main, neglogp-gxe, coeff-gxe-main, coeff-gxe-env..
+	Eigen::ArrayXXd snpstats;
+	Eigen::ArrayXXd external_snpstats;
+	std::vector< std::string > external_snpstats_SNPID;
+
+	boost_io::filtering_ostream outf, outf_scan;
 
 	std::chrono::system_clock::time_point start;
 	bool filters_applied;
@@ -231,6 +238,19 @@ class Data
 
 		if(params.dxteex_file != "NULL"){
 			read_external_dxteex();
+		}
+
+//		if(params.snpstats_file != "NULL"){
+//			read_external_snpstats();
+//		}
+
+		// Y2 always contains the controlled phenotype
+		if(params.covar_file != "NULL" && !params.use_vb_on_covars){
+			regress_out_covars();
+			Y2 = Y;
+		} else {
+			Eigen::MatrixXd coeff = solve(W.transpose() * W, W.transpose() * Y);
+			Y2 = Y - W * coeff;
 		}
 
 		// Read starting point for VB approximation if provided
@@ -1042,18 +1062,51 @@ class Data
 		assert(missing_rows.size() == 0);
 	}
 
-	void read_external_dxteex( ){
-		int col_offset = 6; // number of context cols before snp-env covariances
+    void read_external_dxteex( ){
+        std::vector< std::string > col_names;
+        read_txt_file_w_context( params.dxteex_file, 6, external_dXtEEX,
+                                 external_dXtEEX_SNPID, col_names);
+
+        if(external_dXtEEX.cols() != n_env * n_env){
+            std::cout << "Expecting columns in order: " << std::endl;
+            std::cout << "SNPID, chr, rsid, pos, allele0, allele1, env-snp covariances.." << std::endl;
+            throw std::runtime_error("Unexpected number of columns");
+        }
+    }
+
+
+	void read_external_snpstats( ){
+		std::vector< std::string > col_names;
+		read_txt_file_w_context( params.snpstats_file, 8, external_snpstats,
+								 external_snpstats_SNPID, col_names);
+		if(external_snpstats.cols() != n_env + 3){
+			std::cout << "Expecting columns in order: " << std::endl;
+			std::cout << "SNPID, chr, rsid, pos, allele0, allele1, maf, info, snpstats.." << std::endl;
+			throw std::runtime_error("Unexpected number of columns");
+		}
+	}
+
+	void read_txt_file_w_context( const std::string& filename,
+								  const int& col_offset,
+								  Eigen::ArrayXXd& M,
+								  std::vector<std::string>& M_snpids,
+								  std::vector<std::string>& col_names){
+		/*
+		Txt file where the first column is snp ids, then x-1 contextual,
+		then a matrix to be read into memory.
+		Reads file twice to ascertain number of lines.
+		col_offset - how many contextual columns to skip
+		*/
 
 		// Reading from file
 		boost_io::filtering_istream fg;
-		fg.push(boost_io::file_source(params.dxteex_file.c_str()));
+		fg.push(boost_io::file_source(filename.c_str()));
 		if (!fg) {
-			std::cout << "ERROR: " << params.dxteex_file << " not opened." << std::endl;
+			std::cout << "ERROR: " << filename << " not opened." << std::endl;
 			std::exit(EXIT_FAILURE);
 		}
 
-		// Read file twice to acertain number of lines
+		// Read file twice to ascertain number of lines
 		int n_lines = 0;
 		std::string line;
 		getline(fg, line); // skip header
@@ -1061,58 +1114,52 @@ class Data
 			n_lines++;
 		}
 		fg.reset();
-		fg.push(boost_io::file_source(params.dxteex_file.c_str()));
+		fg.push(boost_io::file_source(filename.c_str()));
 
 		// Reading column names
 		std::vector<std::string> dxteex_names;
 		if (!getline(fg, line)) {
-			std::cout << "ERROR: " << params.dxteex_file << " not read." << std::endl;
+			std::cout << "ERROR: " << filename << " not read." << std::endl;
 			std::exit(EXIT_FAILURE);
 		}
 		std::stringstream ss;
 		std::string s;
 		int n_cols = 0;
+        col_names.clear();
 		ss.clear();
 		ss.str(line);
 		while (ss >> s) {
 			++n_cols;
-			dxteex_names.push_back(s);
+            col_names.push_back(s);
 		}
-		if(n_cols != n_env * n_env + col_offset){
-			std::cout << "Expecting columns in order: " << std::endl;
-			std::cout << "SNPID, chr, rsid, pos, allele0, allele1, env-snp covariances.." << std::endl;
-			throw std::runtime_error("Unexpected number of columns");
-		}
+        assert(n_cols > col_offset);
 
 		// Write remainder of file to Eigen matrix M
-		external_dXtEEX.resize(n_lines, n_env * n_env);
+        M.resize(n_lines, n_cols - col_offset);
 		int i = 0;
 		double tmp_d;
 		while (getline(fg, line)) {
-			if (i >= n_samples) {
-				throw std::runtime_error("ERROR: could not convert txt file (too many lines).");
-			}
 			ss.clear();
 			ss.str(line);
 			for (int k = 0; k < n_cols; k++) {
 				std::string s;
 				ss >> s;
 				if (k == 0){
-					external_dXtEEX_SNPID.push_back(s);
+					M_snpids.push_back(s);
 				}
 				if (k >= col_offset){
 					try{
-						external_dXtEEX(i, k-col_offset) = stod(s);
+                        M(i, k-col_offset) = stod(s);
 					} catch (const std::invalid_argument &exc){
 						std::cout << "Found value " << s << " on line " << i;
-	 					std::cout << " of file " << params.dxteex_file << std::endl;
+	 					std::cout << " of file " << filename << std::endl;
 						throw std::runtime_error("Unexpected value");
 					}
 				}
 			}
 			i++; // loop should end at i == n_samples
 		}
-		std::cout << n_lines << " rows found in " << params.dxteex_file << std::endl;
+		std::cout << n_lines << " rows found in " << filename << std::endl;
 	}
 
 	void calc_dxteex(){
@@ -1139,7 +1186,7 @@ class Data
 				dXtEEX.row(jj) = external_dXtEEX.row(it - external_dXtEEX_SNPID.begin());
 			}
 		}
-		std::cout << cnt << " computed from raw data " << n_var - cnt << " read from file" << std::endl;
+		std::cout << cnt << " computed from raw data, " << n_var - cnt << " read from file" << std::endl;
 	}
 
 	void read_recombination_map( ){
@@ -1294,14 +1341,35 @@ class Data
 
 	void regress_out_covars() {
 		std::cout << "Regressing out covars:" << std::endl;
-		for(int cc = 0; cc < n_covar; cc++){
+		for(int cc = 0; cc < std::min(n_covar, 10); cc++){
 			std::cout << ( cc > 0 ? ", " : "" ) << covar_names[cc];
 		}
+        if (n_covar > 10){
+            std::cout << "... (" << n_covar << " variables)";
+        }
 		std::cout << std::endl;
 
 		Eigen::MatrixXd ww = W.rowwise() - W.colwise().mean(); //not needed probably
 		Eigen::MatrixXd bb = solve(ww.transpose() * ww, ww.transpose() * Y);
 		Y = Y - ww * bb;
+	}
+
+	std::string fstream_init(boost_io::filtering_ostream& my_outf,
+							 const std::string& file_prefix,
+							 const std::string& file_suffix){
+		std::string filepath   = params.out_file;
+		std::string dir        = filepath.substr(0, filepath.rfind("/")+1);
+		std::string stem_w_dir = filepath.substr(0, filepath.find("."));
+		std::string stem       = stem_w_dir.substr(stem_w_dir.rfind("/")+1, stem_w_dir.size());
+		std::string ext        = filepath.substr(filepath.find("."), filepath.size());
+		std::string ofile      = dir + file_prefix + stem + file_suffix + ext;
+		my_outf.reset();
+		std::string gz_str = ".gz";
+		if (params.out_file.find(gz_str) != std::string::npos) {
+			my_outf.push(boost_io::gzip_compressor());
+		}
+		my_outf.push(boost_io::file_sink(ofile.c_str()));
+		return ofile;
 	}
 
 	void reduce_to_complete_cases() {
