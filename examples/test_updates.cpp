@@ -86,57 +86,6 @@ public:
 		for(std::uint32_t kk : iter ){
 			int ee            = kk / n_var;
 			std::uint32_t jj = (kk % n_var);
-
-			X_kk = X.col(kk);
-
-			double rr_k = vp.alpha(jj, ee) * vp.mu(jj, ee);
-
-			// Update mu (eq 9); faster to take schur product inside genotype_matrix
-			vp.mu(jj, ee) = vp.s_sq(jj, ee) * (Hty(jj, ee) - vp.Hr.dot(X_kk) + dHtH(jj, ee) * rr_k) / hyps.sigma;
-
-			// Update alpha (eq 10)
-			double ff_k      = (std::log(vp.s_sq(jj, ee)) + vp.mu(jj, ee) * vp.mu(jj, ee) / vp.s_sq(jj, ee)) / 2.0;
-			vp.alpha(jj, ee) = sigmoid(ff_k + alpha_cnst(ee));
-
-			// Update i_Hr; only if coeff is large enough to matter
-			double rr_k_diff = (vp.alpha(jj, ee)*vp.mu(jj, ee) - rr_k);
-			// if(p.mode_approximate_residuals && std::abs(rr_k_diff) > p.min_residuals_diff){
-				// hty_updates++;
-				vp.Hr += rr_k_diff * X_kk;
-			// }
-
-			// if(p.mode_alternating_updates){
-			Eigen::VectorXd Z_kk(n_samples);
-			for(int ee = 1; ee < n_effects; ee++){
-				Z_kk = X_kk.cwiseProduct(E.col(ee-1));
-
-				double rr_k = vp.alpha(jj, ee) * vp.mu(jj, ee);
-
-				// Update mu (eq 9); faster to take schur product inside genotype_matrix
-				vp.mu(jj, ee) = vp.s_sq(jj, ee) * (Hty(jj, ee) - vp.Hr.dot(Z_kk) + dHtH(jj, ee) * rr_k) / hyps.sigma;
-
-				// Update alpha (eq 10)
-				double ff_k      = (std::log(vp.s_sq(jj, ee)) + vp.mu(jj, ee) * vp.mu(jj, ee) / vp.s_sq(jj, ee)) / 2.0;
-				vp.alpha(jj, ee) = sigmoid(ff_k + alpha_cnst(ee));
-
-				// Update i_Hr; only if coeff is large enough to matter
-				double rr_k_diff = vp.alpha(jj, ee) * vp.mu(jj, ee) - rr_k;
-				vp.Hr += rr_k_diff * Z_kk;
-			}
-		}
-	}
-
-	void updateAlphaMu3(const std::vector< std::uint32_t >& iter,
-					   const Hyps& hyps,
-					   VariationalParameters& vp){
-		Eigen::VectorXd X_kk(n_samples);
-
-		Eigen::ArrayXd alpha_cnst;
-		alpha_cnst = (hyps.lambda / (1.0 - hyps.lambda) + eps).log() - hyps.slab_var.log() / 2.0;
-		for(std::uint32_t kk : iter ){
-			int ee            = kk / n_var;
-			std::uint32_t jj = (kk % n_var);
-
 			X_kk = X.col(kk);
 
 			_internal_updateAlphaMu(X_kk, ee, jj, vp, hyps, alpha_cnst);
