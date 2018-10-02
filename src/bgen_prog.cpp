@@ -41,10 +41,6 @@ int main( int argc, char** argv ) {
 		parse_arguments(p, argc, argv);
 		Data data( p );
 
-		// filter - incl sample ids
-		// filter - range
-		// filter - incl rsids
-		// filter - select single rsid
 		data.apply_filters();
 
 		// Summary info
@@ -53,12 +49,10 @@ int main( int argc, char** argv ) {
 		// Simple approach for the moment; don't bother about covariates etc
 
 		data.read_non_genetic_data();
+
+		// Also regresses out covariables if necessary
 		data.standardise_non_genetic_data();
 
-		if(p.covar_file != "NULL" && !p.use_vb_on_covars){
-			// std::cout << "WARNING: regress out covars done upstream" << std::endl;
-			data.regress_out_covars();
-		}
 		data.read_full_bgen();
 		data.calc_dxteex();
 		if(p.vb_init_file != "NULL"){

@@ -93,6 +93,8 @@ public:
 	Eigen::MatrixXd hyps_grid;
 	Eigen::MatrixXd probs_grid; // prob of each point in grid under hyps
 
+	// genome wide scan computed upstream
+	Eigen::ArrayXXd& snpstats;
 
 	// Init points
 	VariationalParametersLite vp_init;
@@ -118,6 +120,7 @@ public:
                             Y(Eigen::Map<Eigen::VectorXd>(dat.Y.data(), dat.Y.rows())),
                             C( dat.W ),
                             dXtEEX( dat.dXtEEX ),
+                            snpstats( dat.snpstats ),
                             p( dat.params ),
                             t_updateAlphaMu("updateAlphaMu: %ts \n"),
                             t_elbo("calcElbo: %ts \n"),
@@ -223,9 +226,7 @@ public:
 		Cty = C.transpose() * Y;
 
 		// dXtEEX an L^2 x P array
-		if(p.dxteex_file != "NULL"){
-			dXtEEX = dat.dXtEEX;
-		} else {
+		if(p.dxteex_file == "NULL"){
 			std::cout << "Building dXtEEX array" << std::endl;
 			Eigen::ArrayXd cl_j;
 			double dztz_lmj;
