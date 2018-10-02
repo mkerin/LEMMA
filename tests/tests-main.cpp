@@ -52,7 +52,7 @@ TEST_CASE( "Algebra in Eigen3" ) {
 	}
 }
 
-TEST_CASE( "Data Class" ){
+TEST_CASE( "Example 1: single-env" ){
 	parameters p;
 
 	SECTION("No filters applied, high mem mode"){
@@ -103,6 +103,14 @@ TEST_CASE( "Data Class" ){
 			CHECK(data.G(0, 0) == Approx(1.8604233373));
 		}
 
+		SECTION( "Confirm calc_dxteex() reorders properly"){
+		    data.params.dxteex_file = "data/io_test/inputs/dxteex_mixed.txt";
+			data.read_external_dxteex();
+            data.calc_dxteex();
+            CHECK(data.dXtEEX(0, 0) == Approx(87.204591182113916));
+            CHECK(data.n_dxteex_computed == 1);
+		}
+
 		data.calc_dxteex();
 		if(p.vb_init_file != "NULL"){
 			data.read_alpha_mu();
@@ -121,9 +129,9 @@ TEST_CASE( "Data Class" ){
 			CHECK(VB.Cty(0, 0) == Approx(-5.3290705182007514e-15));
 		}
 
-		SECTION("Checking output"){
-		    VB.run();
-		}
+//		SECTION("Checking output"){
+//		    VB.run();
+//		}
 
 		std::vector< VbTracker > trackers(p.n_thread);
 		VB.run_inference(VB.hyps_grid, false, 2, trackers);

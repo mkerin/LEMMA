@@ -60,6 +60,7 @@ class Data
 	bool bgen_pass;
 	int n_var;
 	std::size_t n_var_parsed; // Track progress through IndexQuery
+	long int n_dxteex_computed;
 
 	bool Y_reduced;   // Variables to track whether we have already
 	bool W_reduced;   // reduced to complete cases or not.
@@ -1129,7 +1130,6 @@ class Data
 		fg.push(boost_io::file_source(filename.c_str()));
 
 		// Reading column names
-		std::vector<std::string> dxteex_names;
 		if (!getline(fg, line)) {
 			std::cout << "ERROR: " << filename << " not read." << std::endl;
 			std::exit(EXIT_FAILURE);
@@ -1181,11 +1181,11 @@ class Data
 		double dztz_lmj;
 		dXtEEX.resize(n_var, n_env * n_env);
 		std::vector<std::string>::iterator it;
-		int cnt = 0;
+		n_dxteex_computed = 0;
 		for (std::size_t jj = 0; jj < n_var; jj++){
 			it = std::find(external_dXtEEX_SNPID.begin(), external_dXtEEX_SNPID.end(), G.SNPID[jj]);
 			if (it == external_dXtEEX_SNPID.end()){
-				cnt++;
+				n_dxteex_computed++;
 				cl_j = G.col(jj);
 				for (int ll = 0; ll < n_env; ll++){
 					for (int mm = 0; mm <= ll; mm++){
@@ -1198,7 +1198,7 @@ class Data
 				dXtEEX.row(jj) = external_dXtEEX.row(it - external_dXtEEX_SNPID.begin());
 			}
 		}
-		std::cout << cnt << " computed from raw data, " << n_var - cnt << " read from file" << std::endl;
+		std::cout << n_dxteex_computed << " computed from raw data, " << n_var - n_dxteex_computed << " read from file" << std::endl;
 	}
 
 	void read_recombination_map( ){

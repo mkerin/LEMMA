@@ -146,18 +146,7 @@ public:
 		env_names = dat.env_names;
 
 		// Read environmental variables
-		if (p.env_file != "NULL"){
-			E = dat.E;
-//		} else if(p.x_param_name != "NULL"){
-//			std::size_t x_col = find_covar_index(p.x_param_name, dat.covar_names);
-//			E                = dat.W.col(x_col);
-//			n_env = 1;
-//			env_names.push_back(p.x_param_name);
-		} else {
-			E                = dat.W.col(0);
-			n_env = 1;
-			env_names.push_back("covar[0]");
-		}
+		E = dat.E;
 		X.E = E;  // WARNING: Required to be able to call X.col(jj) with jj > P
 
 		// Allocate memory - fwd/back pass vectors
@@ -224,25 +213,6 @@ public:
 		}
 
 		Cty = C.transpose() * Y;
-
-		// dXtEEX an L^2 x P array
-		if(p.dxteex_file == "NULL"){
-			std::cout << "Building dXtEEX array" << std::endl;
-			Eigen::ArrayXd cl_j;
-			double dztz_lmj;
-			dXtEEX.resize(n_var, n_env * n_env);
-			for (std::size_t jj = 0; jj < n_var; jj++){
-				cl_j = X.col(jj);
-				for (int ll = 0; ll < n_env; ll++){
-					for (int mm = 0; mm <= ll; mm++){
-						dztz_lmj = (cl_j * E.col(ll) * E.col(mm) * cl_j).sum();
-						dXtEEX(jj, ll*n_env + mm) = dztz_lmj;
-						dXtEEX(jj, mm*n_env + ll) = dztz_lmj;
-					}
-				}
-			}
-			std::cout << "Built dXtEEX array" << std::endl;
-		}
 
 		// sgd
 		if(p.mode_sgd){
