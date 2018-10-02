@@ -53,6 +53,7 @@ int main( int argc, char** argv ) {
 		// Also regresses out covariables if necessary
 		data.standardise_non_genetic_data();
 
+
 		data.read_full_bgen();
 		data.calc_dxteex();
 		if(p.vb_init_file != "NULL"){

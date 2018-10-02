@@ -83,19 +83,16 @@ TEST_CASE( "Data Class" ){
 		}
 
 		data.standardise_non_genetic_data();
-		SECTION( "Non genetic data standardised"){
+		SECTION( "Non genetic data standardised + covars regressed"){
 			CHECK(data.params.scale_pheno == true);
-//			CHECK(data.Y(0,0) == Approx(-3.6676363273605137)); If data not scaled
-			CHECK(data.Y(0,0) == Approx(-1.5800573524786081));
-			CHECK(data.W(0,0) == Approx(-0.58947939694779772));
-			CHECK(data.E(0,0) == Approx(-0.58947939694779772));
-		}
-
-		data.regress_out_covars();
-		SECTION( "Covariates regressed out"){
 			CHECK(data.params.use_vb_on_covars == false);
 			CHECK(data.params.covar_file != "NULL");
+//			CHECK(data.Y(0,0) == Approx(-3.6676363273605137)); Centered
+//			CHECK(data.Y(0,0) == Approx(-1.5800573524786081)); Scaled
 			CHECK(data.Y(0,0) == Approx(-1.262491384814441));
+			CHECK(data.Y2(0,0) == Approx(-1.262491384814441));
+			CHECK(data.W(0,0) == Approx(-0.58947939694779772));
+			CHECK(data.E(0,0) == Approx(-0.58947939694779772));
 		}
 
 		data.read_full_bgen();

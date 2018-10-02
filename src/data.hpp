@@ -256,15 +256,6 @@ class Data
 //			read_external_snpstats();
 //		}
 
-		// Y2 always contains the controlled phenotype
-		if(params.covar_file != "NULL" && !params.use_vb_on_covars){
-			regress_out_covars();
-			Y2 = Y;
-		} else {
-			Eigen::MatrixXd coeff = solve(W.transpose() * W, W.transpose() * Y);
-			Y2 = Y - W * coeff;
-		}
-
 		// Read starting point for VB approximation if provided
 		if(params.mode_vb && params.vb_init_file != "NULL"){
 			// read_alpha_mu();
@@ -285,6 +276,15 @@ class Data
 		if(n_env > 0){
 			center_matrix( E, n_env );
 			scale_matrix( E, n_env, env_names );
+		}
+
+		// Y2 always contains the controlled phenotype
+		if(params.covar_file != "NULL" && !params.use_vb_on_covars){
+			regress_out_covars();
+			Y2 = Y;
+		} else {
+			Eigen::MatrixXd coeff = solve(W.transpose() * W, W.transpose() * Y);
+			Y2 = Y - W * coeff;
 		}
 	}
 
