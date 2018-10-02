@@ -97,6 +97,7 @@ public:
 	GenotypeMatrix(bool use_compression) : low_mem(use_compression),
                                            t_readXk("read_X_kk: %ts \n"){
 		scaling_performed = false;
+		mode_sgd = false;
 		NN = 0;
 		PP = 0;
 		n_effects = 0;
@@ -115,6 +116,7 @@ public:
 		NN = n;
 		PP = p;
 		n_effects = my_n_effects;
+		mode_sgd = false;
 
 		compressed_dosage_means.resize(p);
 		compressed_dosage_sds.resize(p);

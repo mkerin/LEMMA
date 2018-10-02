@@ -41,6 +41,7 @@ inline size_t numCols(const Eigen::MatrixXd &A);
 inline void setCol(Eigen::MatrixXd &A, const Eigen::VectorXd &v, size_t col);
 inline Eigen::VectorXd getCol(const Eigen::MatrixXd &A, size_t col);
 inline Eigen::MatrixXd solve(const Eigen::MatrixXd &A, const Eigen::MatrixXd &b);
+inline std::size_t find_covar_index( std::string colname, std::vector< std::string > col_names );
 
 
 class Data
@@ -209,9 +210,20 @@ class Data
 
 		if(params.env_file != "NULL"){
 			read_environment();
+        } else if(params.x_param_name != "NULL"){
+            std::size_t x_col = find_covar_index(params.x_param_name, covar_names);
+            E                = W.col(x_col);
+            n_env = 1;
+            env_names.push_back(params.x_param_name);
+        } else if(params.interaction_analysis){
+            E                = W.col(0);
+            n_env = 1;
+            env_names.push_back(covar_names[0]);
+        } else {
+		    n_env = 0;
 		}
 
-		if(params.env_weights_file != "NULL" && params.env_file != "NULL"){
+		if(params.env_weights_file != "NULL" && n_env > 1 && params.env_file != "NULL"){
 			read_environment_weights();
 		}
 
@@ -229,7 +241,7 @@ class Data
 			read_grids();
 		}
 
-		if(params.dxteex_file != "NULL"){
+		if(n_env > 1 && params.dxteex_file != "NULL"){
 			read_external_dxteex();
 		}
 
@@ -250,7 +262,7 @@ class Data
 			center_matrix( W, n_covar );
 			scale_matrix( W, n_covar, covar_names );
 		}
-		if(params.env_file != "NULL"){
+		if(n_env > 0){
 			center_matrix( E, n_env );
 			scale_matrix( E, n_env, env_names );
 		}
@@ -1391,6 +1403,17 @@ inline Eigen::MatrixXd solve(const Eigen::MatrixXd &A, const Eigen::MatrixXd &b)
 		std::exit(EXIT_FAILURE);
 	}
 	return x;
+}
+
+inline std::size_t find_covar_index( std::string colname, std::vector< std::string > col_names ){
+	std::size_t x_col;
+	std::vector<std::string>::iterator it;
+	it = std::find(col_names.begin(), col_names.end(), colname);
+	if (it == col_names.end()){
+		throw std::invalid_argument("Can't locate parameter " + colname);
+	}
+	x_col = it - col_names.begin();
+	return x_col;
 }
 
 #endif

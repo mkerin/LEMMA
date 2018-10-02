@@ -9,6 +9,7 @@
 #include <vector>
 #include "variational_parameters.hpp"
 #include "tools/eigen3.3/Dense"
+#include "my_timer.hpp"
 #include <boost/iostreams/filtering_stream.hpp>
 #include <boost/iostreams/device/file_descriptor.hpp>
 #include <boost/iostreams/device/file.hpp>

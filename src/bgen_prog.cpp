@@ -12,7 +12,6 @@
 #include <stdexcept>
 #include <memory>
 #include "parse_arguments.hpp"
-#include "my_timer.hpp"
 #include "class.h"
 #include "data.hpp"
 #include "vbayes_x2.hpp"
