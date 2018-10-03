@@ -411,6 +411,18 @@ public:
 			i_hyps.s_x.resize(2);
 				// }
 
+			// Compute s_x; sum of column variances of Z
+			Eigen::ArrayXd muw_sq(n_env * n_env);
+			for (int ll = 0; ll < n_env; ll++){
+				for (int mm = 0; mm < n_env; mm++){
+					muw_sq(mm*n_env + ll) = vp_init.muw(mm) * vp_init.muw(ll);
+				}
+			}
+			// WARNING: Hard coded limit!
+			// WARNING: Updates S_x in hyps
+			i_hyps.s_x(0) = (double) n_var;
+			i_hyps.s_x(1) = (dXtEEX.rowwise() * muw_sq.transpose()).sum() / (N - 1.0);
+
 			// Run outer loop - don't update trackers
 			runInnerLoop(ii, random_init, round_index, i_hyps, tracker);
 
@@ -453,58 +465,23 @@ public:
 		while(!converged && count < p.vb_iter_max){
 			alpha_prev = vp.alpha;
 			double logw_prev = i_logw;
-			long int hty_update_counter = 0;
 
-			// Alternate between back and fwd passes
-			if(count % 2 == 0){
-				iter = fwd_pass;
-			} else {
-				iter = back_pass;
-			}
-
-			// Update covar main effects
-			if(p.use_vb_on_covars){
-				updateCovarEffects(vp, hyps, hty_update_counter);
-				check_monotonic_elbo(hyps, vp, count, logw_prev, "updateCovarEffects");
-				tracker.push_interim_covar_values(count, n_covar, vp,covar_names);
-			}
-
-			// Update main & interaction effects
-			updateAlphaMu(iter, hyps, vp, hty_update_counter);
-			check_monotonic_elbo(hyps, vp, count, logw_prev, "updateAlphaMu");
-
-			if(p.xtra_verbose){
-				tracker.push_interim_param_values(count, n_effects, n_var, vp,
-                         X.chromosome, X.rsid, X.al_0, X.al_1, X.position);
-			}
+			updateAllParams(count, round_index, vp, hyps, logw_prev, logw_updates);
+			i_logw     = calc_logw(hyps, vp);
 			double alpha_diff = (alpha_prev - vp.alpha).abs().maxCoeff();
 			alpha_diff_updates.push_back(alpha_diff);
 
-			// Update env-weights
-			for (int uu = 0; uu < p.env_update_repeats; uu++ ){
-				updateEnvWeights(env_fwd_pass, hyps, vp);
-				updateEnvWeights(env_back_pass, hyps, vp);
+			// Interim output
+			long int hty_update_counter = 0;
+			if(p.use_vb_on_covars){
+				tracker.push_interim_covar_values(count, n_covar, vp,covar_names);
 			}
-			check_monotonic_elbo(hyps, vp, count, logw_prev, "updateEnvWeights");
-
-			// Log updates
-			i_logw     = calc_logw(hyps, vp);
-
-			compute_pve(hyps);
+			if(p.xtra_verbose && count % 5 == 0){
+				tracker.push_interim_param_values(count, n_effects, n_var, vp,
+												  X.chromosome, X.rsid, X.al_0, X.al_1, X.position);
+			}
 			tracker.push_interim_iter_update(count, hyps, i_logw, alpha_diff,
-				t_updateAlphaMu.get_lap_seconds(), hty_update_counter, n_effects, n_var, n_env, vp);
-
-			// Maximise hyps
-			if(round_index > 1 && p.mode_empirical_bayes){
-				if (count >= p.burnin_maxhyps) wrapMaximiseHyps(hyps, vp);
-
-				i_logw     = calc_logw(hyps, vp);
-
-				compute_pve(hyps);
-				tracker.push_interim_iter_update(count, hyps, i_logw, 0.0,
-					t_maximiseHyps.get_lap_seconds(), -1, n_effects, n_var, n_env, vp);
-			}
-			logw_updates.push_back(i_logw);
+											 t_updateAlphaMu.get_lap_seconds(), hty_update_counter, n_effects, n_var, n_env, vp);
 
 			// Diagnose convergence
 			double logw_diff  = i_logw - logw_prev;
@@ -548,6 +525,59 @@ public:
 	}
 
 	/********** VB update functions ************/
+	void updateAllParams(const int& count,
+			             const int& round_index,
+			             VariationalParameters& vp,
+						 Hyps& hyps,
+						 double& logw_prev,
+						 std::vector< double >& logw_updates){
+		std::vector< std::uint32_t > iter;
+		double i_logw;
+		long int hty_update_counter = 0;
+
+		// Alternate between back and fwd passes
+		if(count % 2 == 0){
+			iter = fwd_pass;
+		} else {
+			iter = back_pass;
+		}
+
+		// Update covar main effects
+		if(p.use_vb_on_covars){
+			updateCovarEffects(vp, hyps, hty_update_counter);
+			check_monotonic_elbo(hyps, vp, count, logw_prev, "updateCovarEffects");
+		}
+
+		// Update main & interaction effects
+		updateAlphaMu(iter, hyps, vp, hty_update_counter);
+		check_monotonic_elbo(hyps, vp, count, logw_prev, "updateAlphaMu");
+
+		// Update env-weights
+		if( n_env > 1) {
+			for (int uu = 0; uu < p.env_update_repeats; uu++) {
+				updateEnvWeights(env_fwd_pass, hyps, vp);
+				updateEnvWeights(env_back_pass, hyps, vp);
+			}
+			check_monotonic_elbo(hyps, vp, count, logw_prev, "updateEnvWeights");
+		}
+
+		// Log updates
+		i_logw     = calc_logw(hyps, vp);
+		double alpha_diff = 0;
+
+		compute_pve(hyps);
+
+		// Maximise hyps
+		if(round_index > 1 && p.mode_empirical_bayes){
+			if (count >= p.burnin_maxhyps) wrapMaximiseHyps(hyps, vp);
+
+			i_logw     = calc_logw(hyps, vp);
+
+			compute_pve(hyps);
+		}
+		logw_updates.push_back(i_logw);
+	}
+
 	void updateCovarEffects(VariationalParameters& vp,
                             const Hyps& hyps,
                             long int& hty_updates) __attribute__ ((hot)){
@@ -854,10 +884,12 @@ public:
 
 		// weights
 		double kl_weights = 0.0;
-		kl_weights += (double) n_env / 2.0;
-		kl_weights += vp.sw_sq.log().sum() / 2.0;
-		kl_weights -= vp.sw_sq.sum() / 2.0;
-		kl_weights -= vp.muw.square().sum() / 2.0;
+		if(n_env > 1) {
+			kl_weights += (double) n_env / 2.0;
+			kl_weights += vp.sw_sq.log().sum() / 2.0;
+			kl_weights -= vp.sw_sq.sum() / 2.0;
+			kl_weights -= vp.muw.square().sum() / 2.0;
+		}
 
 		double res = int_linear + int_gamma + int_klbeta + kl_covar + kl_weights;
 
@@ -1041,11 +1073,15 @@ public:
 		// Expectation of linear regression log-likelihood
 		int_linear  = (Y - vp.ym).squaredNorm();
 		int_linear -= 2.0 * (Y - vp.ym).cwiseProduct(vp.eta).dot(vp.yx);
-		int_linear += vp.yx.cwiseProduct(vp.eta_sq).dot(vp.yx);
+		if(n_env > 1) {
+			int_linear += vp.yx.cwiseProduct(vp.eta_sq).dot(vp.yx);
+		} else {
+			int_linear += vp.yx.cwiseProduct(vp.eta).squaredNorm();
+		}
 
 		// variances
 		if(p.use_vb_on_covars){
-			int_linear += (N - 1.0) * vp.sc_sq.sum();
+			int_linear += (N - 1.0) * vp.sc_sq.sum(); // covar main
 		}
 		int_linear += (N - 1.0) * vp.varB.col(0).sum();  // beta
 		int_linear += (vp.EdZtZ * vp.varB.col(1)).sum(); // gamma

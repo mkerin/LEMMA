@@ -100,8 +100,10 @@ public:
 		}
 
 		EdZtZ = (dXtEEX.rowwise() * muw_sq.transpose()).rowwise().sum();
-		for (int ll = 0; ll < n_env; ll++){
-			EdZtZ += dXtEEX.col(ll * n_env + ll) * sw_sq(ll);
+		if(n_env > 1) {
+			for (int ll = 0; ll < n_env; ll++) {
+				EdZtZ += dXtEEX.col(ll * n_env + ll) * sw_sq(ll);
+			}
 		}
 	}
 };

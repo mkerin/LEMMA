@@ -133,63 +133,66 @@ TEST_CASE( "Example 1: single-env" ){
 //		    VB.run();
 //		}
 
+        SECTION("Explicitly checking updates"){
+			// Set up for RunInnerLoop
+			int ii = 0;
+			int n_effects = 2;
+			int n_env = 1;
+			double sigma = VB.hyps_grid(ii, VB.sigma_ind);
+			double sigma_b = VB.hyps_grid(ii, VB.sigma_b_ind);
+			double sigma_g = VB.hyps_grid(ii, VB.sigma_g_ind);
+			double lam_b = VB.hyps_grid(ii, VB.lam_b_ind);
+			double lam_g = VB.hyps_grid(ii, VB.lam_g_ind);
+
+			Hyps hyps;
+			hyps.slab_var.resize(n_effects);
+			hyps.spike_var.resize(n_effects);
+			hyps.slab_relative_var.resize(n_effects);
+			hyps.spike_relative_var.resize(n_effects);
+			hyps.lambda.resize(n_effects);
+			hyps.s_x.resize(2);
+
+			Eigen::ArrayXd muw_sq(n_env * n_env);
+			for (int ll = 0; ll < n_env; ll++){
+				for (int mm = 0; mm < n_env; mm++){
+					muw_sq(mm*n_env + ll) = VB.vp_init.muw(mm) * VB.vp_init.muw(ll);
+				}
+			}
+			//
+			hyps.sigma = sigma;
+			hyps.slab_var           << sigma * sigma_b, sigma * sigma_g;
+			hyps.spike_var          << sigma * sigma_b / VB.spike_diff_factor, sigma * sigma_g / VB.spike_diff_factor;
+			hyps.slab_relative_var  << sigma_b, sigma_g;
+			hyps.spike_relative_var << sigma_b / VB.spike_diff_factor, sigma_g / VB.spike_diff_factor;
+			hyps.lambda             << lam_b, lam_g;
+			hyps.s_x                << VB.n_var, (VB.dXtEEX.rowwise() * muw_sq.transpose()).sum() / (VB.N - 1.0);
+
+			// Set up for updateAllParams
+			VariationalParameters vp;
+			vp.init_from_lite(VB.vp_init);
+			VB.updateSSq(hyps, vp);
+			vp.calcEdZtZ(VB.dXtEEX, n_env);
+			int count = 0, round_index = 2;
+			double logw_prev = -1;
+			std::vector< double > logw_updates;
+
+			VB.updateAllParams(count, round_index, vp, hyps, logw_prev, logw_updates);
+
+			CHECK(vp.alpha(0, 0) == Approx(0.14485896221944508));
+			CHECK(vp.alpha(1, 0) == Approx(0.15184033622793655));
+			CHECK(vp.alpha(63, 0) == Approx(0.17836527480696865));
+			CHECK(VB.calc_logw(hyps, vp) == Approx(-60.9810031189));
+		}
+
 		std::vector< VbTracker > trackers(p.n_thread);
 		VB.run_inference(VB.hyps_grid, false, 2, trackers);
 		SECTION("Vbayes_X2 inference correct"){
 			CHECK(trackers[0].counts_list[0] == 11);
 			CHECK(trackers[0].counts_list[3] == 33);
-			CHECK(trackers[0].logw_list[0] == Approx(-60.461680267318215));
-			CHECK(trackers[0].logw_list[1] == Approx(-59.551958432875722));
-			CHECK(trackers[0].logw_list[2] == Approx(-59.461267092637925));
-			CHECK(trackers[0].logw_list[3] == Approx(-59.761370335497297));
+			CHECK(trackers[0].logw_list[0] == Approx(-60.5189122149));
+			CHECK(trackers[0].logw_list[1] == Approx(-59.9653759921));
+			CHECK(trackers[0].logw_list[2] == Approx(-60.3020600309));
+			CHECK(trackers[0].logw_list[3] == Approx(-61.0641461747));
 		}
 	}
 }
-
-//TEST_CASE( "vbayes_x2.hpp", "[VBayesX2]" ) {
-//	parameters p;
-//	char* argv[] = { (char*) "bin/bgen_prog", (char*) "--mode_vb",
-//					 (char*) "--interaction", (char*) "x",
-//					 (char*) "--bgen", (char*) "data/io_test/n50_p100.bgen",
-//					 (char*) "--out", (char*) "data/io_test/fake.out",
-//					 (char*) "--pheno", (char*) "data/io_test/pheno.txt",
-//					 (char*) "--hyps_grid", (char*) "data/io_test/hyperpriors_gxage.txt",
-//					 (char*) "--hyps_probs", (char*) "data/io_test/hyperpriors_gxage_probs.txt",
-//					 (char*) "--vb_init", (char*) "data/io_test/answer_init.txt",
-//					 (char*) "--covar", (char*) "data/io_test/age.txt"};
-//	int argc = sizeof(argv)/sizeof(argv[0]);
-//	parse_arguments(p, argc, argv);
-//	Data data( p );
-//	data.read_non_genetic_data();
-//	data.standardise_non_genetic_data();
-//	data.read_full_bgen();
-//
-//	// Pass data to VBayes object
-//	VBayesX2 VB(data);
-//
-//	// SECTION()
-//	CHECK(VB.n_grid == 7);
-//	VB.check_inputs();
-//	CHECK(VB.n_grid == 6);
-//	CHECK(VB.hyps_grid.rows() == 6);
-//	CHECK(VB.probs_grid.rows() == 6);
-//
-//	SECTION("Function to validate hyperparameter grid"){
-//			int n_var = 50;
-//			Eigen::MatrixXd orig(3, 5), attempt, answer(2, 5);
-//			std::vector<int> attempt_vec, answer_vec;
-//
-//			// Filling answers
-//			orig << 1, 0.1, 0.1, 0.1, 0.1,
-//					1, 0.1, 0.1, 0.001, 0.1,
-//					1, 0.1, 0.1, 0.1, 0.1;
-//			answer << 1, 0.1, 0.1, 0.1, 0.1,
-//					  1, 0.1, 0.1, 0.1, 0.1;
-//			answer_vec.push_back(0);
-//			answer_vec.push_back(2);
-//
-//			CHECK(validate_grid(orig, n_var) == answer_vec);
-//			CHECK(subset_matrix(orig, answer_vec) == answer);
-//	}
-//}
-//
