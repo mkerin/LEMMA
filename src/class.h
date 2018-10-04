@@ -60,7 +60,7 @@ class parameters {
 		interaction_analysis = false;
 		chunk_size = 256;
 		missing_code = -999;
-		vb_iter_max = 500;
+		vb_iter_max = 10000;
 		range = false;
 		maf_lim = false;
 		info_lim = false;

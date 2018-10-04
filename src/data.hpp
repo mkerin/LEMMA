@@ -14,6 +14,7 @@
 #include <string>
 #include <stdexcept>
 #include "class.h"
+#include "my_timer.hpp"
 #include "tools/eigen3.3/Dense"
 #include "tools/eigen3.3/Sparse"
 #include "tools/eigen3.3/Eigenvalues"
@@ -217,6 +218,7 @@ class Data
 			read_covar();
 		}
 
+		// Environmental vars - subset of covars
 		if(params.env_file != "NULL"){
 			read_environment();
         } else if(params.x_param_name != "NULL"){
@@ -338,7 +340,7 @@ class Data
 		alleles.clear();
 
 		// Resize genotype matrix
-		G.resize(n_samples, params.chunk_size, n_effects);
+		G.resize(n_samples, params.chunk_size);
 
 		long int n_constant_variance = 0;
 		std::size_t jj = 0;
@@ -463,7 +465,7 @@ class Data
 
 		// need to resize G whilst retaining existing coefficients if while
 		// loop exits early due to EOF.
-		G.conservativeResize(n_samples, jj, n_effects);
+		G.conservativeResize(n_samples, jj);
 		assert( rsid.size() == jj );
 		assert( chromosome.size() == jj );
 		assert( position.size() == jj );
@@ -1251,6 +1253,7 @@ class Data
 	void calc_dxteex(){
 		std::cout << "Reordering/building dXtEEX array" << std::endl;
 		MyTimer t_calcDXtEEX("dXtEEX array constructed in %ts \n");
+		t_calcDXtEEX.resume();
 		Eigen::ArrayXd cl_j;
 		double dztz_lmj;
 		dXtEEX.resize(n_var, n_env * n_env);

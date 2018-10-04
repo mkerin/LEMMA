@@ -141,22 +141,15 @@ public:
 		n_grid         = dat.hyps_grid.rows();
 		print_interval = std::max(1, n_grid / 10);
 		covar_names    = dat.covar_names;
+		env_names      = dat.env_names;
 		N              = (double) n_samples;
 
-		env_names = dat.env_names;
 
 		// Read environmental variables
 		E = dat.E;
-		X.E = E;  // WARNING: Required to be able to call X.col(jj) with jj > P
 
 		// Allocate memory - fwd/back pass vectors
-		std::uint32_t L;
-		if(p.mode_alternating_updates){
-			L = n_var;
-		} else {
-			L = n_var * n_effects;
-		}
-		for(std::uint32_t kk = 0; kk < L; kk++){
+		for(std::uint32_t kk = 0; kk < n_var * n_effects; kk++){
 			fwd_pass.push_back(kk);
 			back_pass.push_back(n_var2 - kk - 1);
 		}
@@ -401,6 +394,14 @@ public:
 			i_hyps.slab_relative_var.resize(n_effects);
 			i_hyps.spike_relative_var.resize(n_effects);
 			i_hyps.lambda.resize(n_effects);
+			i_hyps.s_x.resize(2);
+
+			Eigen::ArrayXd muw_sq(n_env * n_env);
+			for (int ll = 0; ll < n_env; ll++){
+				for (int mm = 0; mm < n_env; mm++){
+					muw_sq(mm*n_env + ll) = vp_init.muw(mm) * vp_init.muw(ll);
+				}
+			}
 				//
 			i_hyps.sigma = sigma;
 			i_hyps.slab_var           << sigma * sigma_b, sigma * sigma_g;
@@ -408,20 +409,8 @@ public:
 			i_hyps.slab_relative_var  << sigma_b, sigma_g;
 			i_hyps.spike_relative_var << sigma_b / spike_diff_factor, sigma_g / spike_diff_factor;
 			i_hyps.lambda             << lam_b, lam_g;
-			i_hyps.s_x.resize(2);
+			i_hyps.s_x                << n_var, (dXtEEX.rowwise() * muw_sq.transpose()).sum() / (N - 1.0);
 				// }
-
-			// Compute s_x; sum of column variances of Z
-			Eigen::ArrayXd muw_sq(n_env * n_env);
-			for (int ll = 0; ll < n_env; ll++){
-				for (int mm = 0; mm < n_env; mm++){
-					muw_sq(mm*n_env + ll) = vp_init.muw(mm) * vp_init.muw(ll);
-				}
-			}
-			// WARNING: Hard coded limit!
-			// WARNING: Updates S_x in hyps
-			i_hyps.s_x(0) = (double) n_var;
-			i_hyps.s_x(1) = (dXtEEX.rowwise() * muw_sq.transpose()).sum() / (N - 1.0);
 
 			// Run outer loop - don't update trackers
 			runInnerLoop(ii, random_init, round_index, i_hyps, tracker);
@@ -451,6 +440,9 @@ public:
 		}
 		updateSSq(hyps, vp);
 		vp.calcEdZtZ(dXtEEX, n_env);
+
+		// Initial s_x
+
 
 		// Run inner loop until convergence
 		int count = 0;
@@ -898,7 +890,7 @@ public:
 	}
 
 	void calc_snpwise_regression(VariationalParametersLite& vp){
-		/* 
+		/*
 		Genome-wide gxe scan now computed upstream
 		Eigen::ArrayXXd snpstats contains results
 
@@ -1468,7 +1460,7 @@ public:
 		fclose(file);
 		return result;
 #else
-        return -1;
+		return -1;
 #endif
 	}
 
