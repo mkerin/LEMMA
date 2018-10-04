@@ -55,11 +55,11 @@ TEST_CASE( "Algebra in Eigen3" ) {
 TEST_CASE( "Example 1: single-env" ){
 	parameters p;
 
-	SECTION("No filters applied, high mem mode"){
+	SECTION("Ex1. No filters applied, high mem mode"){
 		char* argv[] = { (char*) "bin/bgen_prog", (char*) "--mode_vb",
 						 (char*) "--interaction", (char*) "x",
 						 (char*) "--bgen", (char*) "data/io_test/n50_p100.bgen",
-						 (char*) "--out", (char*) "data/io_test/fake.out",
+						 (char*) "--out", (char*) "data/io_test/fake_age.out",
 						 (char*) "--pheno", (char*) "data/io_test/pheno.txt",
 						 (char*) "--hyps_grid", (char*) "data/io_test/hyperpriors_gxage.txt",
 						 (char*) "--hyps_probs", (char*) "data/io_test/hyperpriors_gxage_probs.txt",
@@ -71,7 +71,7 @@ TEST_CASE( "Example 1: single-env" ){
 
 		std::cout << "Data initialised" << std::endl;
 		data.read_non_genetic_data();
-		SECTION( "Raw non genetic data read in accurately"){
+		SECTION( "Ex1. Raw non genetic data read in accurately"){
             CHECK(data.n_covar == 1);
             CHECK(data.n_env == 1);
 			CHECK(data.n_pheno == 1);
@@ -83,7 +83,7 @@ TEST_CASE( "Example 1: single-env" ){
 		}
 
 		data.standardise_non_genetic_data();
-		SECTION( "Non genetic data standardised + covars regressed"){
+		SECTION( "Ex1. Non genetic data standardised + covars regressed"){
 			CHECK(data.params.scale_pheno == true);
 			CHECK(data.params.use_vb_on_covars == false);
 			CHECK(data.params.covar_file != "NULL");
@@ -96,14 +96,14 @@ TEST_CASE( "Example 1: single-env" ){
 		}
 
 		data.read_full_bgen();
-		SECTION( "bgen read in & standardised correctly"){
+		SECTION( "Ex1. bgen read in & standardised correctly"){
 			CHECK(data.G.low_mem == false);
 			CHECK(data.params.low_mem == false);
             CHECK(data.params.flip_high_maf_variants == true);
 			CHECK(data.G(0, 0) == Approx(1.8604233373));
 		}
 
-		SECTION( "Confirm calc_dxteex() reorders properly"){
+		SECTION( "Ex1. Confirm calc_dxteex() reorders properly"){
 		    data.params.dxteex_file = "data/io_test/inputs/dxteex_mixed.txt";
 			data.read_external_dxteex();
             data.calc_dxteex();
@@ -117,7 +117,7 @@ TEST_CASE( "Example 1: single-env" ){
 		}
 		VBayesX2 VB(data);
 		VB.check_inputs();
-		SECTION("Vbayes_X2 initialised correctly"){
+		SECTION("Ex1. Vbayes_X2 initialised correctly"){
 			CHECK(VB.n_samples == 50);
 			CHECK(VB.N == 50.0);
 			CHECK(VB.n_env == 1);
@@ -133,7 +133,7 @@ TEST_CASE( "Example 1: single-env" ){
 //		    VB.run();
 //		}
 
-        SECTION("Explicitly checking updates"){
+        SECTION("Ex1. Explicitly checking updates"){
 			// Set up for RunInnerLoop
 			int ii = 0;
 			int n_effects = 2;
@@ -176,23 +176,142 @@ TEST_CASE( "Example 1: single-env" ){
 			double logw_prev = -1;
 			std::vector< double > logw_updates;
 
-			VB.updateAllParams(count, round_index, vp, hyps, logw_prev, logw_updates);
+			VB.updateAllParams(0, round_index, vp, hyps, logw_prev, logw_updates);
 
 			CHECK(vp.alpha(0, 0) == Approx(0.14485896221944508));
 			CHECK(vp.alpha(1, 0) == Approx(0.15184033622793655));
 			CHECK(vp.alpha(63, 0) == Approx(0.17836527480696865));
 			CHECK(VB.calc_logw(hyps, vp) == Approx(-60.9810031189));
+
+			VB.updateAllParams(1, round_index, vp, hyps, logw_prev, logw_updates);
+
+			CHECK(vp.alpha(0, 0) == Approx(0.1351221581));
+			CHECK(vp.alpha(1, 0) == Approx(0.1401495216));
+			CHECK(vp.alpha(63, 0) == Approx(0.1769087833));
+			CHECK(VB.calc_logw(hyps, vp) == Approx(-60.6030355156));
 		}
 
 		std::vector< VbTracker > trackers(p.n_thread);
 		VB.run_inference(VB.hyps_grid, false, 2, trackers);
-		SECTION("Vbayes_X2 inference correct"){
+		SECTION("Ex1. Vbayes_X2 inference correct"){
 			CHECK(trackers[0].counts_list[0] == 11);
 			CHECK(trackers[0].counts_list[3] == 33);
 			CHECK(trackers[0].logw_list[0] == Approx(-60.5189122149));
 			CHECK(trackers[0].logw_list[1] == Approx(-59.9653759921));
 			CHECK(trackers[0].logw_list[2] == Approx(-60.3020600309));
 			CHECK(trackers[0].logw_list[3] == Approx(-61.0641461747));
+		}
+	}
+}
+
+TEST_CASE( "Example 2: multi-env" ){
+	parameters p;
+
+	SECTION("Ex2. No filters applied, high mem mode"){
+		char* argv[] = { (char*) "bin/bgen_prog", (char*) "--mode_vb",
+						 (char*) "--environment", (char*) "data/io_test/n50_p100_env.txt",
+						 (char*) "--bgen", (char*) "data/io_test/n50_p100.bgen",
+						 (char*) "--out", (char*) "data/io_test/fake_env.out",
+						 (char*) "--pheno", (char*) "data/io_test/pheno.txt",
+						 (char*) "--hyps_grid", (char*) "data/io_test/hyperpriors_gxage.txt",
+						 (char*) "--hyps_probs", (char*) "data/io_test/hyperpriors_gxage_probs.txt",
+						 (char*) "--vb_init", (char*) "data/io_test/answer_init.txt",
+						 (char*) "--covar", (char*) "data/io_test/n50_p100_env.txt"};
+		int argc = sizeof(argv)/sizeof(argv[0]);
+		parse_arguments(p, argc, argv);
+		Data data( p );
+
+		data.read_non_genetic_data();
+		data.standardise_non_genetic_data();
+		data.read_full_bgen();
+
+		data.calc_dxteex();
+        data.calc_snpstats();
+		if(p.vb_init_file != "NULL"){
+			data.read_alpha_mu();
+		}
+		VBayesX2 VB(data);
+		VB.check_inputs();
+		SECTION("Ex2. Vbayes_X2 initialised correctly"){
+			CHECK(VB.n_samples == 50);
+			CHECK(VB.N == 50.0);
+			CHECK(VB.n_env == 4);
+			CHECK(VB.n_covar == 4);
+			CHECK(VB.n_effects == 2);
+			CHECK(VB.vp_init.muw(0) == 0.25);
+			CHECK(VB.p.init_weights_with_snpwise_scan == false);
+			CHECK(VB.dXtEEX(0, 0) == Approx(38.9390135703));
+		}
+
+		SECTION("Ex2. Explicitly checking updates"){
+			// Set up for RunInnerLoop
+			int ii = 0;
+			int n_effects = 2;
+			int n_env = 4;
+			double sigma = VB.hyps_grid(ii, VB.sigma_ind);
+			double sigma_b = VB.hyps_grid(ii, VB.sigma_b_ind);
+			double sigma_g = VB.hyps_grid(ii, VB.sigma_g_ind);
+			double lam_b = VB.hyps_grid(ii, VB.lam_b_ind);
+			double lam_g = VB.hyps_grid(ii, VB.lam_g_ind);
+
+			Hyps hyps;
+			hyps.slab_var.resize(n_effects);
+			hyps.spike_var.resize(n_effects);
+			hyps.slab_relative_var.resize(n_effects);
+			hyps.spike_relative_var.resize(n_effects);
+			hyps.lambda.resize(n_effects);
+			hyps.s_x.resize(2);
+
+			Eigen::ArrayXd muw_sq(n_env * n_env);
+			for (int ll = 0; ll < n_env; ll++){
+				for (int mm = 0; mm < n_env; mm++){
+					muw_sq(mm*n_env + ll) = VB.vp_init.muw(mm) * VB.vp_init.muw(ll);
+				}
+			}
+			//
+			hyps.sigma = sigma;
+			hyps.slab_var           << sigma * sigma_b, sigma * sigma_g;
+			hyps.spike_var          << sigma * sigma_b / VB.spike_diff_factor, sigma * sigma_g / VB.spike_diff_factor;
+			hyps.slab_relative_var  << sigma_b, sigma_g;
+			hyps.spike_relative_var << sigma_b / VB.spike_diff_factor, sigma_g / VB.spike_diff_factor;
+			hyps.lambda             << lam_b, lam_g;
+			hyps.s_x                << VB.n_var, (VB.dXtEEX.rowwise() * muw_sq.transpose()).sum() / (VB.N - 1.0);
+
+			// Set up for updateAllParams
+			VariationalParameters vp;
+			vp.init_from_lite(VB.vp_init);
+			VB.updateSSq(hyps, vp);
+			vp.calcEdZtZ(VB.dXtEEX, n_env);
+			int count = 0, round_index = 2;
+			double logw_prev = -1;
+			std::vector< double > logw_updates;
+
+			VB.updateAllParams(0, round_index, vp, hyps, logw_prev, logw_updates);
+
+			CHECK(vp.alpha(0, 0) == Approx(0.1339907047));
+			CHECK(vp.alpha(1, 0) == Approx(0.1393645403 ));
+			CHECK(vp.alpha(63, 0) == Approx(0.1700976171));
+			CHECK(vp.muw(0, 0) == Approx(0.1096760209));
+			CHECK(VB.calc_logw(hyps, vp) == Approx(-68.2656816517));
+
+			VB.updateAllParams(1, round_index, vp, hyps, logw_prev, logw_updates);
+
+			CHECK(vp.alpha(0, 0) == Approx(0.1292192489));
+			CHECK(vp.alpha(1, 0) == Approx(0.1326174323));
+			CHECK(vp.alpha(63, 0) == Approx(0.1704601589));
+			CHECK(vp.muw(0, 0) == Approx(0.0455626691));
+			CHECK(VB.calc_logw(hyps, vp) == Approx(-67.6870841008));
+		}
+
+		std::vector< VbTracker > trackers(p.n_thread);
+		VB.run_inference(VB.hyps_grid, false, 2, trackers);
+		SECTION("Ex2. Vbayes_X2 inference correct"){
+			CHECK(trackers[0].counts_list[0] == 11);
+			CHECK(trackers[0].counts_list[3] == 35);
+			CHECK(trackers[0].logw_list[0] == Approx(-67.6055600008));
+			CHECK(trackers[0].logw_list[1] == Approx(-67.3497693394));
+			CHECK(trackers[0].logw_list[2] == Approx(-67.757622793));
+			CHECK(trackers[0].logw_list[3] == Approx(-68.5048150566));
 		}
 	}
 }
