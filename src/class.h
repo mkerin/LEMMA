@@ -16,6 +16,7 @@ class parameters {
 		std::vector< std::string > rsid;
 		long int chunk_size, vb_iter_max;
 		int missing_code, n_gconf, n_thread, burnin_maxhyps, env_update_repeats;
+		int vb_chunk_size;
 		uint32_t start, end;
 		bool range, maf_lim, info_lim, test_2dof, select_snps, xtra_verbose;
 		bool geno_check, bgen_wildcard, mode_vb, use_vb_on_covars;
@@ -59,6 +60,7 @@ class parameters {
 		env_update_repeats = 1;
 		interaction_analysis = false;
 		chunk_size = 256;
+		vb_chunk_size = 10;
 		missing_code = -999;
 		vb_iter_max = 10000;
 		range = false;

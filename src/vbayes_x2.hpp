@@ -77,8 +77,11 @@ public:
 	parameters& p;
 	std::vector< std::uint32_t > fwd_pass;
 	std::vector< std::uint32_t > back_pass;
+	std::vector< std::vector < std::uint32_t >> fwd_pass_chunks;
+	std::vector< std::vector < std::uint32_t >> back_pass_chunks;
 	std::vector< int > env_fwd_pass;
 	std::vector< int > env_back_pass;
+	std::map<long int, Eigen::MatrixXd> D_correlations;
 
 	// Data
 	GenotypeMatrix& X;
@@ -144,22 +147,56 @@ public:
 		env_names      = dat.env_names;
 		N              = (double) n_samples;
 
+		p.vb_chunk_size = (int) std::min((long int) p.vb_chunk_size, (long int) n_samples);
 
 		// Read environmental variables
 		E = dat.E;
 
 		// Allocate memory - fwd/back pass vectors
+		std::cout << "Allocating indices for fwd/back passes" << std::endl;
+
 		for(std::uint32_t kk = 0; kk < n_var * n_effects; kk++){
 			fwd_pass.push_back(kk);
 			back_pass.push_back(n_var2 - kk - 1);
 		}
+
 		for(int ll = 0; ll < n_env; ll++){
 			env_fwd_pass.push_back(ll);
 			env_back_pass.push_back(n_env - ll - 1);
 		}
 
+		int n_chunks = (n_var + p.vb_chunk_size - 1) / p.vb_chunk_size; // ceiling of n_var / chunk size
+		n_chunks *= n_effects;
+		fwd_pass_chunks.resize(n_chunks);
+		back_pass_chunks.resize(n_chunks);
+		for(std::uint32_t kk = 0; kk < n_effects * n_var; kk++){
+			std::uint32_t ch_index = (kk / p.vb_chunk_size) + (n_var == p.vb_chunk_size ? 0 : kk / n_var);
+			fwd_pass_chunks[ch_index].push_back(kk);
+
+			std::uint32_t kk_bck = n_effects * n_var - 1 - kk;
+			std::uint32_t ch_bck_index = n_chunks - 1 - ch_index;
+			back_pass_chunks[ch_index].push_back(kk_bck);
+		}
+
+
+		 for (auto chunk : fwd_pass_chunks){
+		 	for (auto kk : chunk){
+		 		std::cout << kk << " ";
+		 	}
+		 	std::cout << std::endl;
+		 }
+
+		 for (auto chunk : back_pass_chunks){
+		 	for (auto kk : chunk){
+		 		std::cout << kk << " ";
+		 	}
+		 	std::cout << std::endl;
+		 }
+
+
 		// non random initialisation
 		if(p.vb_init_file != "NULL"){
+			std::cout << "Initialisation - set from file" << std::endl;
 			vp_init.alpha         = dat.alpha_init;
 			vp_init.mu            = dat.mu_init;
 			if(p.mode_mog_prior){
@@ -194,6 +231,7 @@ public:
 		}
 
 		// Assign data - hyperparameters
+		std::cout << "Setting hyps grid" << std::endl;
 		probs_grid          = dat.imprt_grid;
 		hyps_grid           = dat.hyps_grid;
 
@@ -233,13 +271,12 @@ public:
 	void run(){
 		std::cout << "Starting variational inference" << std::endl;
 		time_check = std::chrono::system_clock::now();
-		if(p.n_thread > 1){
-			std::cout << "Running on " << p.n_thread << " threads" << std::endl;
-		}
+		int n_thread = 1; // Parrallel starts swapped for multithreaded inference
 
 		// Round 1; looking for best start point
 		if(run_round1){
-			std::vector< VbTracker > trackers(p.n_thread);
+
+			std::vector< VbTracker > trackers(n_thread);
 			int r1_n_grid = r1_hyps_grid.rows();
 			run_inference(r1_hyps_grid, true, 1, trackers);
 
@@ -322,7 +359,7 @@ public:
 			outf_inits << std::endl;
 		}
 
-		std::vector< VbTracker > trackers(p.n_thread);
+		std::vector< VbTracker > trackers(n_thread);
 		run_inference(hyps_grid, false, 2, trackers);
 
 		write_trackers_to_file("", trackers, hyps_grid, probs_grid);
@@ -337,32 +374,33 @@ public:
 		// Writes results from inference to trackers
 
 		int n_grid = hyps_grid.rows();
+		int n_thread = 1; // Parrallel starts swapped for multithreaded inference
 
 		// Divide grid of hyperparameters into chunks for multithreading
-		std::vector< std::vector< int > > chunks(p.n_thread);
+		std::vector< std::vector< int > > chunks(n_thread);
 		for (int ii = 0; ii < n_grid; ii++){
-			int ch_index = (ii % p.n_thread);
+			int ch_index = (ii % n_thread);
 			chunks[ch_index].push_back(ii);
 		}
 
 		// Allocate memory for trackers
-		for (int ch = 0; ch < p.n_thread; ch++){
+		for (int ch = 0; ch < n_thread; ch++){
 			trackers[ch].resize(n_grid);
 			trackers[ch].set_main_filepath(p.out_file);
 			trackers[ch].p = p;
 		}
 
 		// Assign set of start points to each thread & run
-		std::thread t2[p.n_thread];
-		for (int ch = 1; ch < p.n_thread; ch++){
-			t2[ch] = std::thread( [this, round_index, hyps_grid, n_grid, chunks, ch, random_init, &trackers] {
-				runOuterLoop(round_index, hyps_grid, n_grid, chunks[ch], random_init, trackers[ch]);
-			} );
-		}
+		// std::thread t2[p.n_thread];
+		// for (int ch = 1; ch < p.n_thread; ch++){
+		// 	t2[ch] = std::thread( [this, round_index, hyps_grid, n_grid, chunks, ch, random_init, &trackers] {
+		// 		runOuterLoop(round_index, hyps_grid, n_grid, chunks[ch], random_init, trackers[ch]);
+		// 	} );
+		// }
 		runOuterLoop(round_index, hyps_grid, n_grid, chunks[0], random_init, trackers[0]);
-		for (int ch = 1; ch < p.n_thread; ch++){
-			t2[ch].join();
-		}
+		// for (int ch = 1; ch < p.n_thread; ch++){
+		// 	t2[ch].join();
+		// }
 	}
 
 	void runOuterLoop(const int round_index,
@@ -440,9 +478,6 @@ public:
 		}
 		updateSSq(hyps, vp);
 		vp.calcEdZtZ(dXtEEX, n_env);
-
-		// Initial s_x
-
 
 		// Run inner loop until convergence
 		int count = 0;
@@ -524,14 +559,18 @@ public:
 						 double& logw_prev,
 						 std::vector< double >& logw_updates){
 		std::vector< std::uint32_t > iter;
+		std::vector< std::vector< std::uint32_t >> iter_chunks;
 		double i_logw;
 		long int hty_update_counter = 0;
 
 		// Alternate between back and fwd passes
-		if(count % 2 == 0){
+		bool is_fwd_pass = (count % 2 == 0);
+		if(is_fwd_pass){
 			iter = fwd_pass;
+			iter_chunks = fwd_pass_chunks;
 		} else {
 			iter = back_pass;
+			iter_chunks = back_pass_chunks;
 		}
 
 		// Update covar main effects
@@ -541,7 +580,7 @@ public:
 		}
 
 		// Update main & interaction effects
-		updateAlphaMu(iter, hyps, vp, hty_update_counter);
+		updateAlphaMu(iter_chunks, hyps, vp, hty_update_counter, is_fwd_pass);
 		check_monotonic_elbo(hyps, vp, count, logw_prev, "updateAlphaMu");
 
 		// Update env-weights
@@ -592,13 +631,100 @@ public:
 		}
 	}
 
-	void updateAlphaMu(const std::vector< std::uint32_t >& iter,
+	void updateAlphaMu(const std::vector< std::vector< std::uint32_t >>& iter_chunks,
                        const Hyps& hyps,
                        VariationalParameters& vp,
-                       long int& hty_updates){
+                       long int& hty_updates,
+                       const bool& is_fwd_pass){
+		// Divide updates into chunks
+		// Partition chunks amongst available threads
 		t_updateAlphaMu.resume();
-		Eigen::VectorXd X_kk(n_samples);
-		Eigen::VectorXd Z_kk(n_samples);
+
+		for (std::uint32_t ch = 0; ch < iter_chunks.size(); ch++){
+			std::vector< std::uint32_t > chunk = iter_chunks[ch];
+			int ee                 = chunk[0] / n_var;
+			int ch_len             = chunk.size();
+			std::uint32_t ch_start = *std::min_element(chunk.begin(), chunk.end()) % n_var;
+
+			Eigen::MatrixXd D = X.col_block(ch_start, ch_len);
+
+			// variant correlations with residuals
+			Eigen::VectorXd residual;
+			if (ee == 0){
+				residual = Y - vp.ym - vp.yx.cwiseProduct(vp.eta);
+			} else {
+				residual = (Y - vp.ym).cwiseProduct(vp.eta) - vp.yx.cwiseProduct(vp.eta_sq);
+			}
+			Eigen::VectorXd A = residual.transpose() * D;
+			// Eigen::VectorXd A = X.col_block_transpose_vector_multiply(residual,chunk[0],ch_len);
+
+			// compute variant correlations within chunk
+			Eigen::MatrixXd D_corr;
+			if (ee == 0){
+				// if (D_correlations.count(ch) == 0){
+					// D_corr = X.selfAdjointBlock(chunk[0],ch_len);
+					// D_corr = D.selfadjointView<Eigen::Upper>().rankUpdate(D.transpose());
+					D_corr = D.transpose() * D;
+					// D_correlations[ch] = D_corr;
+				// } else {
+				// 	D_corr = D_correlations[ch];
+				// }
+			} else {
+				Eigen::MatrixXd Z_chunk = vp.eta.asDiagonal() * D;
+				// D_corr = Z_chunk.selfadjointView<Eigen::Upper>().rankUpdate(Z_chunk.transpose());
+				D_corr = Z_chunk.transpose() * Z_chunk;
+				// D_corr = X.selfAdjointBlock_w_interaction(vp.eta, chunk[0], ch_len);
+			}
+
+			// Cols in D always read in in same order
+			// Hence during back pass we reverse A
+			// TODO: make sure memoization saves reversed objects
+			if (is_fwd_pass){
+				// std::cout << std::endl << "Starting fwd pass" << std::endl;
+			} else {
+				// std::cout << std::endl << "Starting back pass" << std::endl;
+				Eigen::VectorXd tmp = A.reverse();
+				A = tmp;
+
+				Eigen::MatrixXd tmp_mat = D_corr.reverse();
+				D_corr = tmp_mat;
+			}
+
+			// compute VB updates for alpha, mu, s_sq
+			_internal_updateAlphaMu(chunk, A, D_corr, D, is_fwd_pass, hyps, vp);
+		}
+
+		// update summary quantity
+		calcVarqBeta(hyps, vp, vp.varB);
+
+		t_updateAlphaMu.stop();
+	}
+
+	void decompress_dosages(const std::vector< int >& index,
+                            const std::vector< std::uint32_t >& iter_chunk,
+                            const Hyps& hyps,
+                            Eigen::Ref<Eigen::MatrixXd> D){
+		/* Changes for multithreaded updates:
+		- use residuals yx & ym from last chunk
+		- write decompressed dosage to matrix D
+		*/
+
+		for(std::uint32_t ii : index ){
+			std::uint32_t kk = iter_chunk[ii];
+			std::uint32_t jj = (kk % n_var);
+
+			D.col(ii)       = X.col(jj);
+		}
+	}
+
+	void _internal_updateAlphaMu(const std::vector< std::uint32_t >& iter_chunk,
+                                const Eigen::Ref<const Eigen::VectorXd>& A,
+                                const Eigen::Ref<const Eigen::MatrixXd>& D_corr,
+                                const Eigen::Ref<const Eigen::MatrixXd>& D,
+                                const bool& is_fwd_pass,
+                                const Hyps& hyps,
+                                VariationalParameters& vp){
+
 
 		Eigen::ArrayXd alpha_cnst;
 		if(p.mode_mog_prior){
@@ -608,97 +734,71 @@ public:
 			alpha_cnst = (hyps.lambda / (1.0 - hyps.lambda) + eps).log() - hyps.slab_var.log() / 2.0;
 		}
 
-		for(std::uint32_t kk : iter ){
-			int ee            = kk / n_var;
-			std::uint32_t jj = (kk % n_var);
-
-			// Skip interaction updates for variants w/o main effect
-			if(p.restrict_gamma_updates && ee == 1 && vp.alpha(jj, 0) < p.gamma_updates_thresh){
-				// remove previous residual if necessary
-				if (vp.alpha(jj, 1) > 1e-6){
-					X_kk = X.col(jj);
-					vp.yx -= vp.alpha(jj, 1) * vp.mu(jj, 1) * X_kk;
-					vp.alpha(jj, 1) = 0.0;
-					vp.mu(jj, 1) = 0.0;
-				}
-				continue;
-			}
-
-			X_kk = X.col(jj); // Only read normalised genotypes!
-
-			_internal_updateAlphaMu(X_kk, ee, jj, hty_updates, vp, hyps, alpha_cnst);
-
-			if(p.mode_alternating_updates){
-				for(int ee = 1; ee < n_effects; ee++){
-					_internal_updateAlphaMu(X_kk, ee, jj, hty_updates, vp, hyps, alpha_cnst);
-				}
-			}
+		int ch_len = iter_chunk.size();
+		int ee     = iter_chunk[0] / n_var; // TODO: use better var as switch
+		Eigen::VectorXd rr_k(ch_len);
+		for (int ii = 0; ii < ch_len; ii++){
+			std::uint32_t jj = iter_chunk[ii] % n_var;
+			rr_k(ii) = vp.alpha(jj, ee) * vp.mu(jj, ee);
 		}
 
-		// update summary quantity
-		calcVarqBeta(hyps, vp, vp.varB);
+		// adjust updates within chunk
+		// Need to be able to go backwards during a back_pass
+		Eigen::VectorXd rr_k_diff(ch_len);
+		for (int ii = 0; ii < ch_len; ii++){
+			int ee           = iter_chunk[ii] / n_var;   // 0 -> main effect
+			std::uint32_t jj = (iter_chunk[ii] % n_var); // variant index
 
-		t_updateAlphaMu.stop();
-	}
-
-	void _internal_updateAlphaMu(const Eigen::Ref<const Eigen::VectorXd>& X_kk,
-								 const int& ee, std::uint32_t jj, long int& hty_updates,
-								 VariationalParameters& vp,
-								 const Hyps& hyps,
-								 const Eigen::Ref<const Eigen::ArrayXd>& alpha_cnst) __attribute__ ((hot)){
-		//
-		double rr_k_diff;
-
-		double rr_k                = vp.alpha(jj, ee) * vp.mu(jj, ee);
-		if(p.mode_mog_prior) rr_k += (1.0 - vp.alpha(jj, ee)) * vp.mup(jj, ee);
-
-		// Update s_sq
-		// Strictly speaking; only need to do every iter if maximising hyps
-		// or updating env-weights.
-		if (ee == 0){
-			vp.s_sq(jj, ee)                        = hyps.slab_var(ee);
-			vp.s_sq(jj, ee)                       /= (hyps.slab_relative_var(ee) * (N-1) + 1);
-			if(p.mode_mog_prior) vp.sp_sq(jj, ee)  = hyps.spike_var(ee);
-			if(p.mode_mog_prior) vp.sp_sq(jj, ee) /= (hyps.spike_relative_var(ee) * (N-1) + 1);
-		} else {
-			vp.s_sq(jj, ee)                        = hyps.slab_var(ee);
-			vp.s_sq(jj, ee)                       /= (hyps.slab_relative_var(ee) * vp.EdZtZ(jj) + 1);
-			if(p.mode_mog_prior) vp.sp_sq(jj, ee)  = hyps.spike_var(ee);
-			if(p.mode_mog_prior) vp.sp_sq(jj, ee) /= (hyps.spike_relative_var(ee) * vp.EdZtZ(jj) + 1);
-		}
-
-		// Update mu
-		double A;
-		if(ee == 0){
-			A  = (Y - vp.ym - vp.yx.cwiseProduct(vp.eta)).dot(X_kk) + rr_k * (N - 1.0);
-		} else {
-			A  = (Y - vp.ym).cwiseProduct(vp.eta).dot(X_kk);
-			A -= (vp.yx.cwiseProduct(vp.eta_sq).dot(X_kk) - rr_k * vp.EdZtZ(jj));
-		}
-
-		vp.mu(jj, ee)                       = vp.s_sq(jj, ee)  * A / hyps.sigma;
-		if(p.mode_mog_prior) vp.mup(jj, ee) = vp.sp_sq(jj, ee) * A / hyps.sigma;
-
-		// Update alpha
-		double ff_k;
-		ff_k                       = vp.mu(jj, ee) * vp.mu(jj, ee) / vp.s_sq(jj, ee);
-		ff_k                      += std::log(vp.s_sq(jj, ee));
-		if(p.mode_mog_prior) ff_k -= vp.mup(jj, ee) * vp.mup(jj, ee) / vp.sp_sq(jj, ee);
-		if(p.mode_mog_prior) ff_k -= std::log(vp.sp_sq(jj, ee));
-
-		vp.alpha(jj, ee)           = sigmoid(ff_k / 2.0 + alpha_cnst(ee));
-
-		// Update residuals only if coeff is large enough to matter
-		rr_k_diff                       = vp.alpha(jj, ee) * vp.mu(jj, ee) - rr_k;
-		if(p.mode_mog_prior) rr_k_diff += (1.0 - vp.alpha(jj, ee)) * vp.mup(jj, ee);
-
-		if(!p.mode_approximate_residuals || std::abs(rr_k_diff) > p.min_residuals_diff){
-			hty_updates++;
-			if(ee == 0){
-				vp.ym += rr_k_diff * X_kk;
+			// Update s_sq
+			if (ee == 0){
+				vp.s_sq(jj, ee)                        = hyps.slab_var(ee);
+				vp.s_sq(jj, ee)                       /= (hyps.slab_relative_var(ee) * (N-1) + 1);
+				if(p.mode_mog_prior) vp.sp_sq(jj, ee)  = hyps.spike_var(ee);
+				if(p.mode_mog_prior) vp.sp_sq(jj, ee) /= (hyps.spike_relative_var(ee) * (N-1) + 1);
 			} else {
-				vp.yx += rr_k_diff * X_kk;
+				vp.s_sq(jj, ee)                        = hyps.slab_var(ee);
+				vp.s_sq(jj, ee)                       /= (hyps.slab_relative_var(ee) * vp.EdZtZ(jj) + 1);
+				if(p.mode_mog_prior) vp.sp_sq(jj, ee)  = hyps.spike_var(ee);
+				if(p.mode_mog_prior) vp.sp_sq(jj, ee) /= (hyps.spike_relative_var(ee) * vp.EdZtZ(jj) + 1);
 			}
+
+			// Update mu
+			double offset = rr_k(ii) * D_corr(ii, ii);
+			for (int mm = 0; mm < ii; mm++){
+				offset -= rr_k_diff(mm) * D_corr(mm, ii);
+			}
+			double AA = A(ii) + offset;
+			vp.mu(jj, ee)                       = vp.s_sq(jj, ee)  * AA / hyps.sigma;
+			if(p.mode_mog_prior) vp.mup(jj, ee) = vp.sp_sq(jj, ee) * AA / hyps.sigma;
+
+			// Update alpha
+			double ff_k;
+			ff_k                       = vp.mu(jj, ee) * vp.mu(jj, ee) / vp.s_sq(jj, ee);
+			ff_k                      += std::log(vp.s_sq(jj, ee));
+			if(p.mode_mog_prior) ff_k -= vp.mup(jj, ee) * vp.mup(jj, ee) / vp.sp_sq(jj, ee);
+			if(p.mode_mog_prior) ff_k -= std::log(vp.sp_sq(jj, ee));
+			vp.alpha(jj, ee)           = sigmoid(ff_k / 2.0 + alpha_cnst(ee));
+
+			// std::cout << jj << ": " << A(ii) << " + " << offset << " = " << A(ii) + offset << "\t\t\t" << vp.alpha(jj, ee) << " " << vp.mu(jj, ee) << " " << vp.s_sq(jj, ee) << std::endl;
+
+			rr_k_diff(ii)                       = vp.alpha(jj, ee) * vp.mu(jj, ee) - rr_k(ii);
+			if(p.mode_mog_prior) rr_k_diff(ii) += (1.0 - vp.alpha(jj, ee)) * vp.mup(jj, ee);
+		}
+
+		// Because data is still arranged as per fwd pass
+		if (!is_fwd_pass){
+			Eigen::VectorXd tmp = rr_k_diff.reverse();
+			rr_k_diff = tmp;
+		}
+
+		// update residuals
+		// Eg: residuals += D * rr_f_diff;
+		if(ee == 0){
+			// vp.ym += X.col_block_vector_multiply(rr_k_diff, iter_chunk[0], ch_len);
+			vp.ym += D * rr_k_diff;
+		} else {
+			// vp.yx += X.col_block_vector_multiply(rr_k_diff, iter_chunk[0], ch_len);
+			vp.yx += D * rr_k_diff;
 		}
 	}
 
@@ -1145,12 +1245,13 @@ public:
                                 const Eigen::Ref<const Eigen::MatrixXd>& hyps_grid,
                                 const Eigen::Ref<const Eigen::VectorXd>& my_probs_grid){
 		// Stitch trackers back together if using multithreading
+		int n_thread = 1; // Parrallel starts swapped for multithreaded inference
 		int my_n_grid = hyps_grid.rows();
 		assert(my_n_grid == my_probs_grid.rows());
 		VbTracker stitched_tracker;
 		stitched_tracker.resize(my_n_grid);
 		for (int ii = 0; ii < my_n_grid; ii++){
-			int tr = (ii % p.n_thread);  // tracker index
+			int tr = (ii % n_thread);  // tracker index
 			stitched_tracker.copy_ith_element(ii, trackers[tr]);
 		}
 

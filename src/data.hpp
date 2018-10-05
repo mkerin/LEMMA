@@ -134,12 +134,15 @@ class Data
 	// 	filters_applied = false;
 	// }
 
-	explicit Data( const parameters& p ) : params(p), G(p.low_mem) {
+	explicit Data( const parameters& p ) : params(p), G(p) {
 		// system time at start
 		start = std::chrono::system_clock::now();
 		std::time_t start_time = std::chrono::system_clock::to_time_t(start);
 		std::cout << "Starting analysis at " << std::ctime(&start_time) << std::endl;
 		std::cout << "Compiled from git branch: master" << std::endl;
+
+		int n = Eigen::nbThreads( );
+		std::cout << "Threads detected by eigen: " << n << std::endl;
 
 		bgenView = genfile::bgen::View::create(p.bgen_file);
 		bgen_pass = true;
