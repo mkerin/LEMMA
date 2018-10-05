@@ -178,22 +178,6 @@ public:
 			back_pass_chunks[ch_index].push_back(kk_bck);
 		}
 
-
-		 for (auto chunk : fwd_pass_chunks){
-		 	for (auto kk : chunk){
-		 		std::cout << kk << " ";
-		 	}
-		 	std::cout << std::endl;
-		 }
-
-		 for (auto chunk : back_pass_chunks){
-		 	for (auto kk : chunk){
-		 		std::cout << kk << " ";
-		 	}
-		 	std::cout << std::endl;
-		 }
-
-
 		// non random initialisation
 		if(p.vb_init_file != "NULL"){
 			std::cout << "Initialisation - set from file" << std::endl;
@@ -646,7 +630,7 @@ public:
 			int ch_len             = chunk.size();
 			std::uint32_t ch_start = *std::min_element(chunk.begin(), chunk.end()) % n_var;
 
-			Eigen::MatrixXd D = X.col_block(ch_start, ch_len);
+			Eigen::MatrixXd D = X.col_block2(ch_start, ch_len);
 
 			// variant correlations with residuals
 			Eigen::VectorXd residual;
@@ -661,24 +645,18 @@ public:
 			// compute variant correlations within chunk
 			Eigen::MatrixXd D_corr;
 			if (ee == 0){
-				// if (D_correlations.count(ch) == 0){
-					// D_corr = X.selfAdjointBlock(chunk[0],ch_len);
-					// D_corr = D.selfadjointView<Eigen::Upper>().rankUpdate(D.transpose());
+				if (D_correlations.count(ch) == 0){
 					D_corr = D.transpose() * D;
-					// D_correlations[ch] = D_corr;
-				// } else {
-				// 	D_corr = D_correlations[ch];
-				// }
+					D_correlations[ch] = D_corr;
+				} else {
+				 	D_corr = D_correlations[ch];
+				}
 			} else {
-				Eigen::MatrixXd Z_chunk = vp.eta.asDiagonal() * D;
-				// D_corr = Z_chunk.selfadjointView<Eigen::Upper>().rankUpdate(Z_chunk.transpose());
-				D_corr = Z_chunk.transpose() * Z_chunk;
-				// D_corr = X.selfAdjointBlock_w_interaction(vp.eta, chunk[0], ch_len);
+				D_corr = D.transpose() * vp.eta_sq.asDiagonal() * D;
 			}
 
 			// Cols in D always read in in same order
 			// Hence during back pass we reverse A
-			// TODO: make sure memoization saves reversed objects
 			if (is_fwd_pass){
 				// std::cout << std::endl << "Starting fwd pass" << std::endl;
 			} else {
@@ -698,23 +676,6 @@ public:
 		calcVarqBeta(hyps, vp, vp.varB);
 
 		t_updateAlphaMu.stop();
-	}
-
-	void decompress_dosages(const std::vector< int >& index,
-                            const std::vector< std::uint32_t >& iter_chunk,
-                            const Hyps& hyps,
-                            Eigen::Ref<Eigen::MatrixXd> D){
-		/* Changes for multithreaded updates:
-		- use residuals yx & ym from last chunk
-		- write decompressed dosage to matrix D
-		*/
-
-		for(std::uint32_t ii : index ){
-			std::uint32_t kk = iter_chunk[ii];
-			std::uint32_t jj = (kk % n_var);
-
-			D.col(ii)       = X.col(jj);
-		}
 	}
 
 	void _internal_updateAlphaMu(const std::vector< std::uint32_t >& iter_chunk,

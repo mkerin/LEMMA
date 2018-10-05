@@ -37,6 +37,7 @@ Questions:
 #include <cstdint>               // uint32_t
 #include <cmath>
 #include <random>
+#include <thread>
 #include <vector>
 #include <map>
 #include "my_timer.hpp"
@@ -340,6 +341,67 @@ public:
 			return res.matrix();
 		} else {
 			return G.block(0, ch_start, nn, ch_len);
+		}
+	}
+
+	Eigen::MatrixXd col_block2(const std::uint32_t& ch_start,
+							   const int& ch_len){
+		if(!scaling_performed){
+			calc_scaled_values();
+		}
+
+		if(params.n_thread == 1 && low_mem) {
+			double ww = intervalWidth;
+
+			Eigen::ArrayXd E = 0.5 * ww - compressed_dosage_means.segment(ch_start, ch_len).array();
+			Eigen::ArrayXd S = compressed_dosage_inv_sds.segment(ch_start, ch_len);
+			Eigen::ArrayXXd res;
+
+			res = ww * M.block(0, ch_start, nn, ch_len).cast<double>();
+			res.rowwise() += E.transpose();
+			res.rowwise() *= S.transpose();
+			return res.matrix();
+		} else if (params.n_thread == 1) {
+			return G.block(0, ch_start, nn, ch_len);
+		} else {
+			Eigen::MatrixXd D(nn, ch_len);
+
+			std::vector< std::uint32_t > chunk;
+			for (int ii = 0; ii < ch_len; ii++){
+				chunk.push_back(ii + ch_start);
+			}
+
+			std::vector<std::vector<int>> indexes(params.n_thread);
+			for (int ii = 0; ii < ch_len; ii++) {
+				indexes[ii % params.n_thread].push_back(ii);
+			}
+#if DEBUG==1
+			decompress_dosages(indexes[0], chunk, D);
+			for (int nn = 1; nn < params.n_thread; nn++){
+				decompress_dosages(indexes[nn], chunk, D);
+			}
+#else
+			std::thread t1[params.n_thread];
+			for (int nn = 1; nn < params.n_thread; nn++){
+				t1[nn] = std::thread( [this, &indexes, nn, &chunk, &D] {
+					get_cols(indexes[nn], chunk, D);
+				});
+			}
+			get_cols(indexes[0], chunk, D);
+			for (int nn = 1; nn < params.n_thread; nn++){
+				t1[nn].join();
+			}
+#endif
+			return D;
+		}
+	}
+
+	void get_cols(const std::vector<int> &index,
+				  const std::vector<std::uint32_t> &iter_chunk,
+				  Eigen::Ref<Eigen::MatrixXd> D){
+		for(std::uint32_t ii : index ) {
+			std::uint32_t jj = (iter_chunk[ii] % pp);
+			D.col(ii) = col(jj);
 		}
 	}
 
