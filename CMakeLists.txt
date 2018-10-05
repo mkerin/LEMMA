@@ -8,6 +8,24 @@ set(CMAKE_CXX_STANDARD 11)
 
 ## Laptop build
 #Compilation flags
+if(CMAKE_CURRENT_SOURCE_DIR MATCHES /Users/kerin)
+    # OSX File System - Laptop
+    set(BGEN /Users/kerin/software/bgen)
+    set(LOC_COMPILE_OPTS -DOSX)
+elseif(CMAKE_CURRENT_SOURCE_DIR MATCHES /well/marchini/kebl4230)
+    # LINUX File System - Rescomp
+    set(BGEN /well/marchini/kebl4230/software/bgen/)
+    set(LIBS rt)
+    set(LOC_COMPILE_OPTS -O3 -static -static-libgcc -static-libstdc++ -lz -fopenmp)
+elseif(CMAKE_CURRENT_SOURCE_DIR MATCHES /homes/kerin)
+    # LINUX File System - Garganey
+    set(BGEN /homes/kerin/projects/bgen/)
+    set(LIBS rt)
+    set(LOC_COMPILE_OPTS -O3 -fopenmp)
+else()
+    message( FATAL_ERROR "Unexpected root directory structure. Where is the BGEN lib located?")
+endif()
+
 set(BGEN /Users/kerin/software/bgen)
 set(SOURCES src/bgen_prog.cpp)
 
@@ -18,20 +36,22 @@ find_library(SQLITE_LIB sqlite3 HINTS ${BGEN}/build/3rd_party/sqlite3)
 find_library(ZSTD_LIB zstd HINTS ${BGEN}/build/3rd_party/zstd-1.1.0)
 
 set(LIB-DIRS "-L${BGEN}/build/3rd_party/boost_1_55_0")
-set(LIBS boost dl pthread boost_iostreams z)
+set(LIBS boost dl pthread boost_iostreams z ${LIBS})
 
 ##Defining compilation commands
-add_executable(bgen_prog ${SOURCES})
+set(TARGET bgen_prog)
+#set(TARGET bgen_prog_${PROJECT_VERSION_MAJOR}_${PROJECT_VERSION_MINOR}_${PROJECT_VERSION_PATCH})
+add_executable(${TARGET} ${SOURCES})
 
-target_compile_options(bgen_prog PRIVATE -Wno-deprecated -msse2 -DOSX)
+target_compile_options(${TARGET} PRIVATE -Wno-deprecated -msse2 ${LOC_COMPILE_OPTS})
 
-target_include_directories(bgen_prog PRIVATE ${BGEN}/genfile/include ${BGEN}/3rd_party/zstd-1.1.0/lib ${BGEN}/db/include ${BGEN}/3rd_party/sqlite3 ${BGEN}/3rd_party/boost_1_55_0)
+target_include_directories(${TARGET} PRIVATE ${BGEN}/genfile/include ${BGEN}/3rd_party/zstd-1.1.0/lib ${BGEN}/db/include ${BGEN}/3rd_party/sqlite3 ${BGEN}/3rd_party/boost_1_55_0)
 
 #Set search paths to 3rd party libs
-set_target_properties(bgen_prog PROPERTIES LINK_FLAGS "${LIB-DIRS}")
+set_target_properties(${TARGET} PROPERTIES LINK_FLAGS "${LIB-DIRS}")
 
 #Link libs
-target_link_libraries(bgen_prog ${BGEN_LIB} ${DB_LIB} ${SQLITE_LIB} ${ZSTD_LIB} ${LIBS})
+target_link_libraries(${TARGET} ${BGEN_LIB} ${DB_LIB} ${SQLITE_LIB} ${ZSTD_LIB} ${LIBS})
 
 ## Catch Unit Tests
 add_executable(catch_tests tests/tests-main.cpp)

@@ -284,11 +284,13 @@ class Data
 
 		// Y2 always contains the controlled phenotype
 		if(params.covar_file != "NULL" && !params.use_vb_on_covars){
-			regress_out_covars();
+			regress_out_covars(Y);
 			Y2 = Y;
 		} else {
-			Eigen::MatrixXd coeff = solve(W.transpose() * W, W.transpose() * Y);
-			Y2 = Y - W * coeff;
+			Y2 = Y;
+			regress_out_covars(Y2);
+//			Eigen::MatrixXd coeff = solve(W.transpose() * W, W.transpose() * Y);
+//			Y2 = Y - W * coeff;
 		}
 	}
 
@@ -1428,7 +1430,7 @@ class Data
 		return M_tmp;
 	}
 
-	void regress_out_covars() {
+	void regress_out_covars(Eigen::Ref<Eigen::MatrixXd> yy) {
 		std::cout << "Regressing out covars:" << std::endl;
 		for(int cc = 0; cc < std::min(n_covar, 10); cc++){
 			std::cout << ( cc > 0 ? ", " : "" ) << covar_names[cc];
@@ -1439,8 +1441,8 @@ class Data
 		std::cout << std::endl;
 
 		Eigen::MatrixXd ww = W.rowwise() - W.colwise().mean(); //not needed probably
-		Eigen::MatrixXd bb = solve(ww.transpose() * ww, ww.transpose() * Y);
-		Y = Y - ww * bb;
+		Eigen::MatrixXd bb = solve(ww.transpose() * ww, ww.transpose() * yy);
+		yy -= ww * bb;
 	}
 
 	void reduce_to_complete_cases() {

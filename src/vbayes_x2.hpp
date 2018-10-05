@@ -754,7 +754,13 @@ public:
 		t_maximiseHyps.resume();
 
 		// max sigma
-		hyps.sigma  = calcExpLinear(hyps, vp) / N;
+		hyps.sigma  = calcExpLinear(hyps, vp);
+		if (p.use_vb_on_covars){
+			hyps.sigma += (vp.sc_sq + vp.muc.square()).sum() / sigma_c;
+			hyps.sigma /= (N + (double) n_covar);
+		} else {
+			hyps.sigma /= N;
+		}
 
 		// max lambda
 		hyps.lambda = vp.alpha.colwise().sum();
