@@ -11,7 +11,7 @@ set(CMAKE_CXX_STANDARD 11)
 if(CMAKE_CURRENT_SOURCE_DIR MATCHES /Users/kerin)
     # OSX File System - Laptop
     set(BGEN /Users/kerin/software/bgen)
-    set(LOC_COMPILE_OPTS -DOSX)
+    set(LOC_COMPILE_OPTS -DOSX -DDEBUG)
 elseif(CMAKE_CURRENT_SOURCE_DIR MATCHES /well/marchini/kebl4230)
     # LINUX File System - Rescomp
     set(BGEN /well/marchini/kebl4230/software/bgen/)
@@ -56,6 +56,6 @@ target_link_libraries(${TARGET} ${BGEN_LIB} ${DB_LIB} ${SQLITE_LIB} ${ZSTD_LIB} 
 ## Catch Unit Tests
 add_executable(catch_tests tests/tests-main.cpp)
 target_link_libraries(catch_tests ${BGEN_LIB} ${DB_LIB} ${SQLITE_LIB} ${ZSTD_LIB} ${LIBS})
-target_compile_options(catch_tests PRIVATE -Wno-deprecated -msse2 -DOSX)
+target_compile_options(catch_tests PRIVATE -Wno-deprecated -msse2 ${LOC_COMPILE_OPTS})
 target_include_directories(catch_tests PRIVATE ${BGEN}/genfile/include ${BGEN}/3rd_party/zstd-1.1.0/lib ${BGEN}/db/include ${BGEN}/3rd_party/sqlite3 ${BGEN}/3rd_party/boost_1_55_0)
 set_target_properties(catch_tests PROPERTIES LINK_FLAGS "${LIB-DIRS}")

@@ -141,12 +141,12 @@ public:
 			outf_inits << chromosome[kk] << " " << rsid[kk] << " " << position[kk];
 			outf_inits << " " << al_0[kk] << " " << al_1[kk];
 			for (int ee = 0; ee < n_effects; ee++){
-				outf_inits << " " << vp.alpha(kk, ee);
-				outf_inits << " " << vp.mu(kk, ee);
-				outf_inits << " " << vp.s_sq(kk, ee);
+				outf_inits << " " << vp.alpha_beta(kk, ee);
+				outf_inits << " " << vp.mu1_beta(kk, ee);
+				outf_inits << " " << vp.s1_beta_sq(kk, ee);
 				if(p.mode_mog_prior){
-					outf_inits << " " << vp.mup(kk, ee);
-					outf_inits << " " << vp.sp_sq(kk, ee);
+					outf_inits << " " << vp.mu2_beta(kk, ee);
+					outf_inits << " " << vp.s2_beta_sq(kk, ee);
 				}
 			}
 			outf_inits << std::endl;
@@ -240,7 +240,7 @@ public:
 			outf_inits << " " << al_0[kk] << " " << al_1[kk];
 			for (int ee = 0; ee < n_effects; ee++){
 				outf_inits << " " << vp_list[ii].alpha(kk, ee);
-				outf_inits << " " << vp_list[ii].mu(kk, ee);
+				outf_inits << " " << vp_list[ii].mu1(kk, ee);
 			}
  			outf_inits << std::endl;
 		}

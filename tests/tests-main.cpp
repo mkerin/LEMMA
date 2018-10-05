@@ -12,7 +12,14 @@
 #include "../src/data.hpp"
 #include "../src/genotype_matrix.hpp"
 
+
 TEST_CASE( "Algebra in Eigen3" ) {
+
+#ifdef DEBUG
+	std::cout << "DEBUG preprocessor flag present!" << std::endl;
+#else
+	std::cout << "DEBUG preprocessor flag not present!" << std::endl;
+#endif
 
 	Eigen::MatrixXd X(3, 3);
 	Eigen::VectorXd v1(3), v2(3);
@@ -169,7 +176,7 @@ TEST_CASE( "Example 1: single-env" ){
 
 			// Set up for updateAllParams
 			VariationalParameters vp;
-			vp.init_from_lite(VB.vp_init);
+			vp.init_from_lite(VB.vp_init, p);
 			VB.updateSSq(hyps, vp);
 			vp.calcEdZtZ(VB.dXtEEX, n_env);
 			int round_index = 2;
@@ -178,16 +185,16 @@ TEST_CASE( "Example 1: single-env" ){
 
 			VB.updateAllParams(0, round_index, vp, hyps, logw_prev, logw_updates);
 
-			CHECK(vp.alpha(0, 0) == Approx(0.14485896221944508));
-			CHECK(vp.alpha(1, 0) == Approx(0.15184033622793655));
-			CHECK(vp.alpha(63, 0) == Approx(0.17836527480696865));
+			CHECK(vp.alpha_beta(0) == Approx(0.14485896221944508));
+			CHECK(vp.alpha_beta(1) == Approx(0.15184033622793655));
+			CHECK(vp.alpha_beta(63) == Approx(0.17836527480696865));
 			CHECK(VB.calc_logw(hyps, vp) == Approx(-60.9810031189));
 
 			VB.updateAllParams(1, round_index, vp, hyps, logw_prev, logw_updates);
 
-			CHECK(vp.alpha(0, 0) == Approx(0.1351221581));
-			CHECK(vp.alpha(1, 0) == Approx(0.1401495216));
-			CHECK(vp.alpha(63, 0) == Approx(0.1769087833));
+			CHECK(vp.alpha_beta(0) == Approx(0.1351221581));
+			CHECK(vp.alpha_beta(1) == Approx(0.1401495216));
+			CHECK(vp.alpha_beta(63) == Approx(0.1769087833));
 			CHECK(VB.calc_logw(hyps, vp) == Approx(-60.6030355156));
 		}
 
@@ -279,7 +286,7 @@ TEST_CASE( "Example 2: multi-env" ){
 
 			// Set up for updateAllParams
 			VariationalParameters vp;
-			vp.init_from_lite(VB.vp_init);
+			vp.init_from_lite(VB.vp_init, p);
 			VB.updateSSq(hyps, vp);
 			vp.calcEdZtZ(VB.dXtEEX, n_env);
 			int count = 0, round_index = 2;
@@ -288,12 +295,12 @@ TEST_CASE( "Example 2: multi-env" ){
 
 			VB.updateAllParams(0, round_index, vp, hyps, logw_prev, logw_updates);
 
-			CHECK(vp.alpha(0, 0) == Approx(0.1339907047));
-			CHECK(vp.alpha(1, 0) == Approx(0.1393645403 ));
-			CHECK(vp.alpha(63, 0) == Approx(0.1700976171));
-			CHECK(vp.alpha(0, 1) == Approx(0.1351102326));
-			CHECK(vp.alpha(1, 1) == Approx(0.1349464317));
-			CHECK(vp.alpha(63, 1) == Approx(0.1351214237));
+			CHECK(vp.alpha_beta(0) == Approx(0.1339907047));
+			CHECK(vp.alpha_beta(1) == Approx(0.1393645403 ));
+			CHECK(vp.alpha_beta(63) == Approx(0.1700976171));
+			CHECK(vp.alpha_gam(0) == Approx(0.1351102326));
+			CHECK(vp.alpha_gam(1) == Approx(0.1349464317));
+			CHECK(vp.alpha_gam(63) == Approx(0.1351214237));
 			CHECK(vp.muw(0, 0) == Approx(0.1096760209));
 			CHECK(vp.yx(0) == Approx(-0.02111226));
 			CHECK(vp.ym(0) == Approx(-0.3874879589));
@@ -301,12 +308,12 @@ TEST_CASE( "Example 2: multi-env" ){
 
 			VB.updateAllParams(1, round_index, vp, hyps, logw_prev, logw_updates);
 
-			CHECK(vp.alpha(63, 1) == Approx(0.12404782));
-			CHECK(vp.alpha(1, 1) == Approx(0.1244627819));
-			CHECK(vp.alpha(0, 1) == Approx(0.1228313573));
-			CHECK(vp.alpha(63, 0) == Approx(0.1704601589));
-			CHECK(vp.alpha(1, 0) == Approx(0.1326174323));
-			CHECK(vp.alpha(0, 0) == Approx(0.1292192489));
+			CHECK(vp.alpha_gam(63) == Approx(0.12404782));
+			CHECK(vp.alpha_gam(1) == Approx(0.1244627819));
+			CHECK(vp.alpha_gam(0) == Approx(0.1228313573));
+			CHECK(vp.alpha_beta(63) == Approx(0.1704601589));
+			CHECK(vp.alpha_beta(1) == Approx(0.1326174323));
+			CHECK(vp.alpha_beta(0) == Approx(0.1292192489));
 			CHECK(vp.muw(0, 0) == Approx(0.0455626691));
 			CHECK(vp.yx(0) == Approx(-0.0071638495));
 			CHECK(vp.ym(0) == Approx(-0.26284773569));
@@ -412,7 +419,7 @@ TEST_CASE( "Example 3: multi-env w/ covars" ){
 
 			// Set up for updateAllParams
 			VariationalParameters vp;
-			vp.init_from_lite(VB.vp_init);
+			vp.init_from_lite(VB.vp_init, p);
 			VB.updateSSq(hyps, vp);
 			vp.calcEdZtZ(VB.dXtEEX, n_env);
 			int count = 0, round_index = 2;
@@ -423,9 +430,9 @@ TEST_CASE( "Example 3: multi-env w/ covars" ){
 
 			CHECK(vp.muc(0) == Approx(0.1221946024));
 			CHECK(vp.muc(3) == Approx(-0.1595909887));
-			CHECK(vp.alpha(0, 0) == Approx(0.1339235799));
-			CHECK(vp.alpha(1, 0) == Approx(0.1415361555));
-			CHECK(vp.alpha(63, 0) == Approx(0.1724736345));
+			CHECK(vp.alpha_beta(0) == Approx(0.1339235799));
+			CHECK(vp.alpha_beta(1) == Approx(0.1415361555));
+			CHECK(vp.alpha_beta(63) == Approx(0.1724736345));
 			CHECK(vp.muw(0, 0) == Approx(0.1127445891));
 			CHECK(VB.calc_logw(hyps, vp) == Approx(-20076.0449393003));
 
@@ -433,9 +440,9 @@ TEST_CASE( "Example 3: multi-env w/ covars" ){
 
 			CHECK(vp.muc(0) == Approx(0.1463805515));
 			CHECK(vp.muc(3) == Approx(-0.1128544804));
-			CHECK(vp.alpha(0, 0) == Approx(0.1292056073));
-			CHECK(vp.alpha(1, 0) == Approx(0.1338797264));
-			CHECK(vp.alpha(63, 0) == Approx(0.1730150924));
+			CHECK(vp.alpha_beta(0) == Approx(0.1292056073));
+			CHECK(vp.alpha_beta(1) == Approx(0.1338797264));
+			CHECK(vp.alpha_beta(63) == Approx(0.1730150924));
 			CHECK(vp.muw(0, 0) == Approx(0.0460748751));
 			CHECK(VB.calc_logw(hyps, vp) == Approx(-20075.3681431899));
 		}
@@ -458,7 +465,7 @@ TEST_CASE( "Example 4: multi-env w/ 2 threads" ){
 
 	SECTION("Ex4. No filters applied, high mem mode"){
 		char* argv[] = { (char*) "bin/bgen_prog", (char*) "--mode_vb",
-						 (char*) "--threads", (char*) '1',
+						 (char*) "--threads", (char*) "2",
 						 (char*) "--environment", (char*) "data/io_test/n50_p100_env.txt",
 						 (char*) "--bgen", (char*) "data/io_test/n50_p100.bgen",
 						 (char*) "--out", (char*) "data/io_test/fake_env.out",
@@ -529,7 +536,7 @@ TEST_CASE( "Example 4: multi-env w/ 2 threads" ){
 
 			// Set up for updateAllParams
 			VariationalParameters vp;
-			vp.init_from_lite(VB.vp_init);
+			vp.init_from_lite(VB.vp_init, p);
 			VB.updateSSq(hyps, vp);
 			vp.calcEdZtZ(VB.dXtEEX, n_env);
 			int count = 0, round_index = 2;
@@ -538,12 +545,12 @@ TEST_CASE( "Example 4: multi-env w/ 2 threads" ){
 
 			VB.updateAllParams(0, round_index, vp, hyps, logw_prev, logw_updates);
 
-			CHECK(vp.alpha(0, 0) == Approx(0.1339907047));
-			CHECK(vp.alpha(1, 0) == Approx(0.1393645403 ));
-			CHECK(vp.alpha(63, 0) == Approx(0.1700976171));
-			CHECK(vp.alpha(0, 1) == Approx(0.1351102326));
-			CHECK(vp.alpha(1, 1) == Approx(0.1349464317));
-			CHECK(vp.alpha(63, 1) == Approx(0.1351214237));
+			CHECK(vp.alpha_beta(0) == Approx(0.1339907047));
+			CHECK(vp.alpha_beta(1) == Approx(0.1393645403 ));
+			CHECK(vp.alpha_beta(63) == Approx(0.1700976171));
+			CHECK(vp.alpha_gam(0) == Approx(0.1351102326));
+			CHECK(vp.alpha_gam(1) == Approx(0.1349464317));
+			CHECK(vp.alpha_gam(63) == Approx(0.1351214237));
 			CHECK(vp.muw(0, 0) == Approx(0.1096760209));
 			CHECK(vp.yx(0) == Approx(-0.02111226));
 			CHECK(vp.ym(0) == Approx(-0.3874879589));
@@ -551,12 +558,12 @@ TEST_CASE( "Example 4: multi-env w/ 2 threads" ){
 
 			VB.updateAllParams(1, round_index, vp, hyps, logw_prev, logw_updates);
 
-			CHECK(vp.alpha(63, 1) == Approx(0.12404782));
-			CHECK(vp.alpha(1, 1) == Approx(0.1244627819));
-			CHECK(vp.alpha(0, 1) == Approx(0.1228313573));
-			CHECK(vp.alpha(63, 0) == Approx(0.1704601589));
-			CHECK(vp.alpha(1, 0) == Approx(0.1326174323));
-			CHECK(vp.alpha(0, 0) == Approx(0.1292192489));
+			CHECK(vp.alpha_gam(63) == Approx(0.12404782));
+			CHECK(vp.alpha_gam(1) == Approx(0.1244627819));
+			CHECK(vp.alpha_gam(0) == Approx(0.1228313573));
+			CHECK(vp.alpha_beta(63) == Approx(0.1704601589));
+			CHECK(vp.alpha_beta(1) == Approx(0.1326174323));
+			CHECK(vp.alpha_beta(0) == Approx(0.1292192489));
 			CHECK(vp.muw(0, 0) == Approx(0.0455626691));
 			CHECK(vp.yx(0) == Approx(-0.0071638495));
 			CHECK(vp.ym(0) == Approx(-0.26284773569));
@@ -565,7 +572,7 @@ TEST_CASE( "Example 4: multi-env w/ 2 threads" ){
 
 		std::vector< VbTracker > trackers(p.n_thread);
 		VB.run_inference(VB.hyps_grid, false, 2, trackers);
-		SECTION("Ex2. Vbayes_X2 inference correct"){
+		SECTION("Ex4. Vbayes_X2 inference correct"){
 			CHECK(trackers[0].counts_list[0] == 11);
 			CHECK(trackers[0].counts_list[3] == 35);
 			CHECK(trackers[0].logw_list[0] == Approx(-67.6055600008));

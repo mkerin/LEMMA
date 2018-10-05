@@ -182,9 +182,9 @@ public:
 		if(p.vb_init_file != "NULL"){
 			std::cout << "Initialisation - set from file" << std::endl;
 			vp_init.alpha         = dat.alpha_init;
-			vp_init.mu            = dat.mu_init;
+			vp_init.mu1            = dat.mu_init;
 			if(p.mode_mog_prior){
-				vp_init.mup   = Eigen::ArrayXXd::Zero(n_var, n_effects);
+				vp_init.mu2   = Eigen::ArrayXXd::Zero(n_var, n_effects);
 			}
 			if(p.use_vb_on_covars){
 				vp_init.muc = Eigen::ArrayXd::Zero(n_covar);
@@ -309,7 +309,7 @@ public:
 				outf_inits << " " << X.al_0[kk] << " " << X.al_1[kk];
 				for (int ee = 0; ee < n_effects; ee++){
 					outf_inits << " " << vp_init.alpha(kk, ee);
-					outf_inits << " " << vp_init.mu(kk, ee);
+					outf_inits << " " << vp_init.mu1(kk, ee);
 				}
 				outf_inits << std::endl;
 			}
@@ -338,7 +338,7 @@ public:
 			outf_inits << " " << X.al_0[kk] << " " << X.al_1[kk];
 			for (int ee = 0; ee < n_effects; ee++){
 				outf_inits << " " << vp_init.alpha(kk, ee);
-				outf_inits << " " << vp_init.mu(kk, ee);
+				outf_inits << " " << vp_init.mu1(kk, ee);
 			}
 			outf_inits << std::endl;
 		}
@@ -458,7 +458,7 @@ public:
 		if (random_init) {
 			initRandomAlphaMu(vp);
 		} else {
-			vp.init_from_lite(vp_init);
+			vp.init_from_lite(vp_init, p);
 		}
 		updateSSq(hyps, vp);
 		vp.calcEdZtZ(dXtEEX, n_env);
@@ -467,19 +467,18 @@ public:
 		int count = 0;
 		bool converged = false;
 		Eigen::ArrayXXd alpha_prev;
-		std::vector< std::uint32_t > iter;
 		double i_logw = calc_logw(hyps, vp);
 		std::vector< double > logw_updates, alpha_diff_updates;
 		logw_updates.push_back(i_logw);
 
 		tracker.interim_output_init(ii, round_index, n_effects, n_env, env_names, vp);
 		while(!converged && count < p.vb_iter_max){
-			alpha_prev = vp.alpha;
+			alpha_prev = vp.alpha_beta;
 			double logw_prev = i_logw;
 
 			updateAllParams(count, round_index, vp, hyps, logw_prev, logw_updates);
 			i_logw     = calc_logw(hyps, vp);
-			double alpha_diff = (alpha_prev - vp.alpha).abs().maxCoeff();
+			double alpha_diff = (alpha_prev - vp.alpha_beta).abs().maxCoeff();
 			alpha_diff_updates.push_back(alpha_diff);
 
 			// Interim output
@@ -524,7 +523,7 @@ public:
 		t_InnerLoop.stop();
 		tracker.logw_list[ii] = i_logw;
 		tracker.counts_list[ii] = count;
-		tracker.vp_list[ii] = vp.convert_to_lite();
+		tracker.vp_list[ii] = vp.convert_to_lite(n_effects, p);
 		tracker.elapsed_time_list[ii] = t_InnerLoop.get_lap_seconds();
 		tracker.hyps_list[ii] = hyps;
 		if(p.verbose){
@@ -657,10 +656,7 @@ public:
 
 			// Cols in D always read in in same order
 			// Hence during back pass we reverse A
-			if (is_fwd_pass){
-				// std::cout << std::endl << "Starting fwd pass" << std::endl;
-			} else {
-				// std::cout << std::endl << "Starting back pass" << std::endl;
+			if (!is_fwd_pass){
 				Eigen::VectorXd tmp = A.reverse();
 				A = tmp;
 
@@ -669,23 +665,29 @@ public:
 			}
 
 			// compute VB updates for alpha, mu, s_sq
-			_internal_updateAlphaMu(chunk, A, D_corr, D, is_fwd_pass, hyps, vp);
+			if(ee == 0){
+				_internal_updateAlphaMu_beta(chunk, A, D_corr, D, is_fwd_pass, hyps, vp);
+			} else {
+				_internal_updateAlphaMu_gam(chunk, A, D_corr, D, is_fwd_pass, hyps, vp);
+			}
 		}
 
 		// update summary quantity
-		calcVarqBeta(hyps, vp, vp.varB);
+		calcVarqBeta(hyps, vp, vp.varB, vp.varG);
 
 		t_updateAlphaMu.stop();
 	}
 
-	void _internal_updateAlphaMu(const std::vector< std::uint32_t >& iter_chunk,
-                                const Eigen::Ref<const Eigen::VectorXd>& A,
-                                const Eigen::Ref<const Eigen::MatrixXd>& D_corr,
-                                const Eigen::Ref<const Eigen::MatrixXd>& D,
-                                const bool& is_fwd_pass,
-                                const Hyps& hyps,
-                                VariationalParameters& vp){
+	void _internal_updateAlphaMu_beta(const std::vector< std::uint32_t >& iter_chunk,
+									  const Eigen::Ref<const Eigen::VectorXd>& A,
+									  const Eigen::Ref<const Eigen::MatrixXd>& D_corr,
+									  const Eigen::Ref<const Eigen::MatrixXd>& D,
+									  const bool& is_fwd_pass,
+									  const Hyps& hyps,
+									  VariationalParameters& vp){
 
+		int ch_len = iter_chunk.size();
+		int ee     = iter_chunk[0] / n_var; // Flag; ee = 0 ? beta : gamma
 
 		Eigen::ArrayXd alpha_cnst;
 		if(p.mode_mog_prior){
@@ -695,12 +697,12 @@ public:
 			alpha_cnst = (hyps.lambda / (1.0 - hyps.lambda) + eps).log() - hyps.slab_var.log() / 2.0;
 		}
 
-		int ch_len = iter_chunk.size();
-		int ee     = iter_chunk[0] / n_var; // TODO: use better var as switch
+		// Vector of previous values
 		Eigen::VectorXd rr_k(ch_len);
 		for (int ii = 0; ii < ch_len; ii++){
 			std::uint32_t jj = iter_chunk[ii] % n_var;
-			rr_k(ii) = vp.alpha(jj, ee) * vp.mu(jj, ee);
+			rr_k(ii)                       = vp.alpha_beta(jj) * vp.mu1_beta(jj);
+			if(p.mode_mog_prior) rr_k(ii) += (1.0 - vp.alpha_beta(jj)) * vp.mu2_beta(jj);
 		}
 
 		// adjust updates within chunk
@@ -711,17 +713,10 @@ public:
 			std::uint32_t jj = (iter_chunk[ii] % n_var); // variant index
 
 			// Update s_sq
-			if (ee == 0){
-				vp.s_sq(jj, ee)                        = hyps.slab_var(ee);
-				vp.s_sq(jj, ee)                       /= (hyps.slab_relative_var(ee) * (N-1) + 1);
-				if(p.mode_mog_prior) vp.sp_sq(jj, ee)  = hyps.spike_var(ee);
-				if(p.mode_mog_prior) vp.sp_sq(jj, ee) /= (hyps.spike_relative_var(ee) * (N-1) + 1);
-			} else {
-				vp.s_sq(jj, ee)                        = hyps.slab_var(ee);
-				vp.s_sq(jj, ee)                       /= (hyps.slab_relative_var(ee) * vp.EdZtZ(jj) + 1);
-				if(p.mode_mog_prior) vp.sp_sq(jj, ee)  = hyps.spike_var(ee);
-				if(p.mode_mog_prior) vp.sp_sq(jj, ee) /= (hyps.spike_relative_var(ee) * vp.EdZtZ(jj) + 1);
-			}
+			vp.s1_beta_sq(jj)                        = hyps.slab_var(ee);
+			vp.s1_beta_sq(jj)                       /= (hyps.slab_relative_var(ee) * (N-1) + 1);
+			if(p.mode_mog_prior) vp.s2_beta_sq(jj)  = hyps.spike_var(ee);
+			if(p.mode_mog_prior) vp.s2_beta_sq(jj) /= (hyps.spike_relative_var(ee) * (N-1) + 1);
 
 			// Update mu
 			double offset = rr_k(ii) * D_corr(ii, ii);
@@ -729,21 +724,20 @@ public:
 				offset -= rr_k_diff(mm) * D_corr(mm, ii);
 			}
 			double AA = A(ii) + offset;
-			vp.mu(jj, ee)                       = vp.s_sq(jj, ee)  * AA / hyps.sigma;
-			if(p.mode_mog_prior) vp.mup(jj, ee) = vp.sp_sq(jj, ee) * AA / hyps.sigma;
+			vp.mu1_beta(jj)                       = vp.s1_beta_sq(jj) * AA / hyps.sigma;
+			if (p.mode_mog_prior) vp.mu2_beta(jj) = vp.s2_beta_sq(jj) * AA / hyps.sigma;
+
 
 			// Update alpha
 			double ff_k;
-			ff_k                       = vp.mu(jj, ee) * vp.mu(jj, ee) / vp.s_sq(jj, ee);
-			ff_k                      += std::log(vp.s_sq(jj, ee));
-			if(p.mode_mog_prior) ff_k -= vp.mup(jj, ee) * vp.mup(jj, ee) / vp.sp_sq(jj, ee);
-			if(p.mode_mog_prior) ff_k -= std::log(vp.sp_sq(jj, ee));
-			vp.alpha(jj, ee)           = sigmoid(ff_k / 2.0 + alpha_cnst(ee));
+			ff_k                        = vp.mu1_beta(jj) * vp.mu1_beta(jj) / vp.s1_beta_sq(jj);
+			ff_k                       += std::log(vp.s1_beta_sq(jj));
+			if (p.mode_mog_prior) ff_k -= vp.mu2_beta(jj) * vp.mu2_beta(jj) / vp.s2_beta_sq(jj);
+			if (p.mode_mog_prior) ff_k -= std::log(vp.s2_beta_sq(jj));
+			vp.alpha_beta(jj)           = sigmoid(ff_k / 2.0 + alpha_cnst(ee));
 
-			// std::cout << jj << ": " << A(ii) << " + " << offset << " = " << A(ii) + offset << "\t\t\t" << vp.alpha(jj, ee) << " " << vp.mu(jj, ee) << " " << vp.s_sq(jj, ee) << std::endl;
-
-			rr_k_diff(ii)                       = vp.alpha(jj, ee) * vp.mu(jj, ee) - rr_k(ii);
-			if(p.mode_mog_prior) rr_k_diff(ii) += (1.0 - vp.alpha(jj, ee)) * vp.mup(jj, ee);
+			rr_k_diff(ii)                       = vp.alpha_beta(jj) * vp.mu1_beta(jj) - rr_k(ii);
+			if(p.mode_mog_prior) rr_k_diff(ii) += (1.0 - vp.alpha_beta(jj)) * vp.mu2_beta(jj);
 		}
 
 		// Because data is still arranged as per fwd pass
@@ -753,14 +747,79 @@ public:
 		}
 
 		// update residuals
-		// Eg: residuals += D * rr_f_diff;
-		if(ee == 0){
-			// vp.ym += X.col_block_vector_multiply(rr_k_diff, iter_chunk[0], ch_len);
-			vp.ym += D * rr_k_diff;
+		vp.ym += D * rr_k_diff;
+	}
+
+	void _internal_updateAlphaMu_gam(const std::vector< std::uint32_t >& iter_chunk,
+									 const Eigen::Ref<const Eigen::VectorXd>& A,
+									 const Eigen::Ref<const Eigen::MatrixXd>& D_corr,
+									 const Eigen::Ref<const Eigen::MatrixXd>& D,
+									 const bool& is_fwd_pass,
+									 const Hyps& hyps,
+									 VariationalParameters& vp){
+
+		int ch_len = iter_chunk.size();
+		int ee     = iter_chunk[0] / n_var; // Flag; ee = 0 ? beta : gamma
+
+		Eigen::ArrayXd alpha_cnst;
+		if(p.mode_mog_prior){
+			alpha_cnst  = (hyps.lambda / (1.0 - hyps.lambda) + eps).log();
+			alpha_cnst -= (hyps.slab_var.log() - hyps.spike_var.log()) / 2.0;
 		} else {
-			// vp.yx += X.col_block_vector_multiply(rr_k_diff, iter_chunk[0], ch_len);
-			vp.yx += D * rr_k_diff;
+			alpha_cnst = (hyps.lambda / (1.0 - hyps.lambda) + eps).log() - hyps.slab_var.log() / 2.0;
 		}
+
+		// Vector of previous values
+		Eigen::VectorXd rr_k(ch_len);
+		for (int ii = 0; ii < ch_len; ii++){
+			std::uint32_t jj = iter_chunk[ii] % n_var;
+			rr_k(ii)                       = vp.alpha_gam(jj) * vp.mu1_gam(jj);
+			if(p.mode_mog_prior) rr_k(ii) += (1.0 - vp.alpha_gam(jj)) * vp.mu2_gam(jj);
+		}
+
+		// adjust updates within chunk
+		// Need to be able to go backwards during a back_pass
+		Eigen::VectorXd rr_k_diff(ch_len);
+		for (int ii = 0; ii < ch_len; ii++){
+			int ee           = iter_chunk[ii] / n_var;   // 0 -> main effect
+			std::uint32_t jj = (iter_chunk[ii] % n_var); // variant index
+
+			// Update s_sq
+			vp.s1_gam_sq(jj)                        = hyps.slab_var(ee);
+			vp.s1_gam_sq(jj)                       /= (hyps.slab_relative_var(ee) * vp.EdZtZ(jj) + 1);
+			if(p.mode_mog_prior) vp.s2_gam_sq(jj)  = hyps.spike_var(ee);
+			if(p.mode_mog_prior) vp.s2_gam_sq(jj) /= (hyps.spike_relative_var(ee) * vp.EdZtZ(jj) + 1);
+
+			// Update mu
+			double offset = rr_k(ii) * D_corr(ii, ii);
+			for (int mm = 0; mm < ii; mm++){
+				offset -= rr_k_diff(mm) * D_corr(mm, ii);
+			}
+			double AA = A(ii) + offset;
+			vp.mu1_gam(jj)                       = vp.s1_gam_sq(jj) * AA / hyps.sigma;
+			if (p.mode_mog_prior) vp.mu2_gam(jj) = vp.s2_gam_sq(jj) * AA / hyps.sigma;
+
+
+			// Update alpha
+			double ff_k;
+			ff_k                        = vp.mu1_gam(jj) * vp.mu1_gam(jj) / vp.s1_gam_sq(jj);
+			ff_k                       += std::log(vp.s1_gam_sq(jj));
+			if (p.mode_mog_prior) ff_k -= vp.mu2_gam(jj) * vp.mu2_gam(jj) / vp.s2_gam_sq(jj);
+			if (p.mode_mog_prior) ff_k -= std::log(vp.s2_gam_sq(jj));
+			vp.alpha_gam(jj)           = sigmoid(ff_k / 2.0 + alpha_cnst(ee));
+
+			rr_k_diff(ii)                       = vp.alpha_gam(jj) * vp.mu1_gam(jj) - rr_k(ii);
+			if(p.mode_mog_prior) rr_k_diff(ii) += (1.0 - vp.alpha_gam(jj)) * vp.mu2_gam(jj);
+		}
+
+		// Because data is still arranged as per fwd pass
+		if (!is_fwd_pass){
+			Eigen::VectorXd tmp = rr_k_diff.reverse();
+			rr_k_diff = tmp;
+		}
+
+		// update residuals
+		vp.yx += D * rr_k_diff;
 	}
 
 	void updateSSq(const Hyps& hyps,
@@ -774,32 +833,33 @@ public:
 		vp.sw_sq = eps;
 		vp.calcEdZtZ(dXtEEX, n_env);
 
-		// Update main
-		vp.s_sq.resize(n_var, n_effects);
-		vp.s_sq.col(0)  = hyps.slab_var(0);
-		vp.s_sq.col(0) /= (hyps.slab_relative_var(0) * (N - 1.0) + 1.0);
+		// Update beta ssq
+		int ee = 0;
+		vp.s1_beta_sq.resize(n_var);
+		vp.s1_beta_sq  = hyps.slab_var(ee);
+		vp.s1_beta_sq /= hyps.slab_relative_var(ee) * (N - 1.0) + 1.0;
 
-		for (int ee = 1; ee < n_effects; ee++){
-			for (std::uint32_t kk = 0; kk < n_var; kk++){
-				vp.s_sq(kk, ee)  = hyps.slab_var(ee);
-				vp.s_sq(kk, ee) /= (hyps.slab_relative_var(ee) * vp.EdZtZ(kk, ee-1) + 1.0);
-			}
+		if(p.mode_mog_prior) {
+			vp.s2_beta_sq.resize(n_var);
+			vp.s2_beta_sq = hyps.spike_var(ee);
+			vp.s2_beta_sq /= (hyps.spike_relative_var(ee) * (N - 1.0) + 1.0);
 		}
 
-		if(p.mode_mog_prior){
-			vp.sp_sq.resize(n_var, n_effects);
-			vp.sp_sq.col(0)  =  hyps.spike_var(0);
-			vp.sp_sq.col(0) /= (hyps.spike_relative_var(0) * (N - 1.0) + 1.0);
+		// Update gamma ssq
+		ee = 1;
+		vp.s1_gam_sq.resize(n_var);
+		vp.s1_gam_sq  = hyps.slab_var(ee);
+		vp.s1_gam_sq /= (hyps.slab_relative_var(ee) * (N - 1.0) + 1.0);
 
-			for (int ee = 1; ee < n_effects; ee++){
-				for (std::uint32_t kk = 0; kk < n_var; kk++){
-					vp.sp_sq(kk, ee)  = hyps.spike_var(ee);
-					vp.sp_sq(kk, ee) /= (hyps.spike_relative_var(ee) * vp.EdZtZ(kk, ee-1) + 1.0);
-				}
-			}
+		if(p.mode_mog_prior) {
+			vp.s2_gam_sq.resize(n_var);
+			vp.s2_gam_sq = hyps.spike_var(ee);
+			vp.s2_gam_sq /= (hyps.spike_relative_var(ee) * (N - 1.0) + 1.0);
 		}
-		vp.varB.resize(n_var, n_effects);
-		calcVarqBeta(hyps, vp, vp.varB);
+
+		vp.varB.resize(n_var);
+		vp.varG.resize(n_var);
+		calcVarqBeta(hyps, vp, vp.varB, vp.varG);
 
 		// for covars
 		if(p.use_vb_on_covars){
@@ -824,14 +884,14 @@ public:
 		}
 
 		// max lambda
-		hyps.lambda = vp.alpha.colwise().sum();
+		hyps.lambda = vp.alpha_beta.colwise().sum();
 
 		// max spike & slab variances
-		hyps.slab_var  = (vp.alpha * (vp.s_sq + vp.mu.square())).colwise().sum();
+		hyps.slab_var  = (vp.alpha_beta * (vp.s1_beta_sq + vp.mu1_beta.square())).colwise().sum();
 		hyps.slab_var /= hyps.lambda;
 		hyps.slab_relative_var = hyps.slab_var / hyps.sigma;
 		if(p.mode_mog_prior){
-			hyps.spike_var  = ((1.0 - vp.alpha) * (vp.sp_sq + vp.mup.square())).colwise().sum();
+			hyps.spike_var  = ((1.0 - vp.alpha_beta) * (vp.s2_beta_sq + vp.mu2_beta.square())).colwise().sum();
 			hyps.spike_var /= ( (double)n_var - hyps.lambda);
 			hyps.spike_relative_var = hyps.spike_var / hyps.sigma;
 		}
@@ -860,7 +920,7 @@ public:
 			// Update s_sq
 			double denom = hyps.sigma;
 			denom       += (vp.yx.array() * E.col(ll)).square().sum();
-			denom       += (vp.varB.col(1) * dXtEEX.col(ll*n_env + ll)).sum();
+			denom       += (vp.varG * dXtEEX.col(ll*n_env + ll)).sum();
 			vp.sw_sq(ll) = hyps.sigma / denom;
 
 			// Remove dependance on current weight
@@ -876,7 +936,7 @@ public:
 
 			double eff = ((Y - vp.ym).array() * E.col(ll) * vp.yx.array()).sum();
 			eff       -= (vp.yx.array() * E.col(ll) * vp.eta.array() * vp.yx.array()).sum();
-			eff       -= (vp.varB.col(1) * env_vars).sum();
+			eff       -= (vp.varG * env_vars).sum();
 			vp.muw(ll) = vp.sw_sq(ll) * eff / hyps.sigma;
 
 			// Update eta
@@ -921,16 +981,27 @@ public:
 		int_linear -= N * std::log(2.0 * PI * hyps.sigma) / 2.0;
 
 		// gamma
-		Eigen::ArrayXd col_sums = vp.alpha.colwise().sum();
-		double int_gamma = 0;
-		for (int ee = 0; ee < n_effects; ee++){
-			int_gamma += col_sums(ee) * std::log(hyps.lambda(ee) + eps);
-			int_gamma -= col_sums(ee) * std::log(1.0 - hyps.lambda(ee) + eps);
-			int_gamma += (double) n_var *  std::log(1.0 - hyps.lambda(ee) + eps);
+		int ee;
+		double col_sum, int_gamma = 0;
+		ee = 0;
+		col_sum = vp.alpha_beta.sum();
+		int_gamma += col_sum * std::log(hyps.lambda(ee) + eps);
+		int_gamma -= col_sum * std::log(1.0 - hyps.lambda(ee) + eps);
+		int_gamma += (double) n_var *  std::log(1.0 - hyps.lambda(ee) + eps);
+
+		if(n_effects > 1) {
+			ee = 1;
+			col_sum = vp.alpha_gam.sum();
+			int_gamma += col_sum * std::log(hyps.lambda(ee) + eps);
+			int_gamma -= col_sum * std::log(1.0 - hyps.lambda(ee) + eps);
+			int_gamma += (double) n_var * std::log(1.0 - hyps.lambda(ee) + eps);
 		}
 
 		// kl-beta
 		double int_klbeta = calcIntKLBeta(hyps, vp);
+		if(n_effects > 1) {
+			int_klbeta += calcIntKLGamma(hyps, vp);
+		}
 
 		// covariates
 		double kl_covar = 0.0;
@@ -997,23 +1068,33 @@ public:
 		std::normal_distribution<double> gaussian(0.0,1.0);
 		std::uniform_real_distribution<double> uniform(0.0,1.0);
 
-		// Allocate memory
-		vp.mu.resize(n_var, n_effects);
-		vp.alpha.resize(n_var, n_effects);
+		// Beta
+		vp.mu1_beta.resize(n_var);
+		vp.alpha_beta.resize(n_var);
 		if(p.mode_mog_prior){
-			vp.mup = Eigen::ArrayXXd::Zero(n_var, n_effects);
+			vp.mu2_beta = Eigen::ArrayXd::Zero(n_var);
 		}
 
-		// Random initialisation of alpha, mu
-		for (int ee = 0; ee < n_effects; ee++){
-			for (std::uint32_t kk = 0; kk < n_var; 	kk++){
-				vp.alpha(kk, ee) = uniform(gen_unif);
-				vp.mu(kk, ee)    = gaussian(gen_gauss);
+		for (std::uint32_t kk = 0; kk < n_var; 	kk++){
+			vp.alpha_beta(kk) = uniform(gen_unif);
+			vp.mu1_beta(kk)    = gaussian(gen_gauss);
+		}
+		vp.alpha_beta /= vp.alpha_beta.sum();
+
+		// Gamma
+		if(n_effects > 1){
+			vp.mu1_gam.resize(n_var);
+			vp.alpha_gam.resize(n_var);
+			if (p.mode_mog_prior) {
+				vp.mu2_gam = Eigen::ArrayXd::Zero(n_var);
 			}
-		}
 
-		// Convert alpha to simplex. Why?
-		vp.alpha.rowwise() /= vp.alpha.colwise().sum();
+			for (std::uint32_t kk = 0; kk < n_var; kk++) {
+				vp.alpha_gam(kk) = uniform(gen_unif);
+				vp.mu1_gam(kk) = gaussian(gen_gauss);
+			}
+			vp.alpha_gam /= vp.alpha_gam.sum();
+		}
 
 		if(p.use_vb_on_covars){
 			vp.muc = Eigen::ArrayXd::Zero(n_covar);
@@ -1032,9 +1113,9 @@ public:
 	void calcPredEffects(VariationalParameters& vp){
 		Eigen::MatrixXd rr;
 		if(p.mode_mog_prior){
-			rr = vp.alpha * (vp.mu - vp.mup) + vp.mup;
+			rr = vp.alpha_beta * (vp.mu1_beta - vp.mu2_beta) + vp.mu2_beta;
 		} else {
-			rr = vp.alpha * vp.mu;
+			rr = vp.alpha_beta * vp.mu1_beta;
 		}
 		assert(rr.cols() == 2);
 
@@ -1049,9 +1130,9 @@ public:
 	void calcPredEffects(VariationalParametersLite& vp){
 		Eigen::MatrixXd rr;
 		if(p.mode_mog_prior){
-			rr = vp.alpha * (vp.mu - vp.mup) + vp.mup;
+			rr = vp.alpha * (vp.mu1 - vp.mu2) + vp.mu2;
 		} else {
-			rr = vp.alpha * vp.mu;
+			rr = vp.alpha * vp.mu1;
 		}
 		assert(rr.cols() == 2);
 
@@ -1112,15 +1193,22 @@ public:
 
 	void calcVarqBeta(const Hyps& hyps,
                       const VariationalParameters& vp,
-                      Eigen::Ref<Eigen::ArrayXXd> varB){
+                      Eigen::Ref<Eigen::ArrayXd> varB,
+					  Eigen::Ref<Eigen::ArrayXd> varG){
 		// Variance of effect size beta under approximating distribution q(u, beta)
 		assert(varB.rows() == n_var);
-		assert(varB.cols() == n_effects);
+		assert(varG.rows() == n_var);
 
-		varB = vp.alpha * (vp.s_sq + (1.0 - vp.alpha) * vp.mu.square());
+		varB = vp.alpha_beta * (vp.s1_beta_sq + (1.0 - vp.alpha_beta) * vp.mu1_beta.square());
 		if(p.mode_mog_prior){
-			varB += (1.0 - vp.alpha) * (vp.sp_sq + (vp.alpha) * vp.mup.square());
-			varB -= 2.0 * vp.alpha * (1.0 - vp.alpha) * vp.mu * vp.mup;
+			varB += (1.0 - vp.alpha_beta) * (vp.s2_beta_sq + (vp.alpha_beta) * vp.mu2_beta.square());
+			varB -= 2.0 * vp.alpha_beta * (1.0 - vp.alpha_beta) * vp.mu1_beta * vp.mu2_beta;
+		}
+
+		varG = vp.alpha_gam * (vp.s1_gam_sq + (1.0 - vp.alpha_gam) * vp.mu1_gam.square());
+		if(p.mode_mog_prior){
+			varG += (1.0 - vp.alpha_gam) * (vp.s2_gam_sq + (vp.alpha_gam) * vp.mu2_gam.square());
+			varG -= 2.0 * vp.alpha_gam * (1.0 - vp.alpha_gam) * vp.mu1_gam * vp.mu2_gam;
 		}
 	}
 
@@ -1142,48 +1230,78 @@ public:
 		if(p.use_vb_on_covars){
 			int_linear += (N - 1.0) * vp.sc_sq.sum(); // covar main
 		}
-		int_linear += (N - 1.0) * vp.varB.col(0).sum();  // beta
-		int_linear += (vp.EdZtZ * vp.varB.col(1)).sum(); // gamma
+		int_linear += (N - 1.0) * vp.varB.sum();  // beta
+		int_linear += (vp.EdZtZ * vp.varG).sum(); // gamma
 
 		return int_linear;
 	}
 
 	double calcIntKLBeta(const Hyps& hyps,
-                         const VariationalParameters& vp){
+						 const VariationalParameters& vp){
 		// KL Divergence of log[ p(beta | u, theta) / q(u, beta) ]
-		double col_sum, int_klbeta;
+		double col_sum, res;
+		int ee = 0;
 
+		// beta
 		if(p.mode_mog_prior){
-			int_klbeta  = n_var * n_effects / 2.0;
+			res  = n_var / 2.0;
 
-			int_klbeta -= ((vp.alpha * (vp.mu.square() + vp.s_sq)).colwise().sum().transpose() / 2.0 / hyps.slab_var).sum();
-			int_klbeta += (vp.alpha * vp.s_sq.log()).sum() / 2.0;
+			res -= (vp.alpha_beta * (vp.mu1_beta.square() + vp.s1_beta_sq)).sum() / 2.0 / hyps.slab_var(ee);
+			res += (vp.alpha_beta * vp.s1_beta_sq.log()).sum() / 2.0;
 
-			int_klbeta -= (((1.0 - vp.alpha) * (vp.mup.square() + vp.sp_sq)).colwise().sum().transpose() / 2.0 / hyps.spike_var).sum();
-			int_klbeta += ((1.0 - vp.alpha) * vp.sp_sq.log()).sum() / 2.0;
+			res -= ((1.0 - vp.alpha_beta) * (vp.mu2_beta.square() + vp.s2_beta_sq)).sum() / 2.0 / hyps.spike_var(ee);
+			res += ((1.0 - vp.alpha_beta) * vp.s2_beta_sq.log()).sum() / 2.0;
 
-			for (int ee = 0; ee < n_effects; ee++){
-				col_sum = vp.alpha.col(ee).sum();
-				int_klbeta -= std::log(hyps.slab_var(ee))  * col_sum / 2.0;
-				int_klbeta -= std::log(hyps.spike_var(ee)) * (n_var - col_sum) / 2.0;
-			}
+			col_sum = vp.alpha_beta.sum();
+			res -= std::log(hyps.slab_var(ee))  * col_sum / 2.0;
+			res -= std::log(hyps.spike_var(ee)) * (n_var - col_sum) / 2.0;
 		} else {
-			int_klbeta  = (vp.alpha * vp.s_sq.log()).sum() / 2.0;
-			int_klbeta -= ((vp.alpha * (vp.mu.square() + vp.s_sq)).colwise().sum().transpose() / 2.0 / hyps.slab_var).sum();
+			res  = (vp.alpha_beta * vp.s1_beta_sq.log()).sum() / 2.0;
+			res -= (vp.alpha_beta * (vp.mu1_beta.square() + vp.s1_beta_sq)).sum() / 2.0 / hyps.slab_var(ee);
 
-			for (int ee = 0; ee < n_effects; ee++){
-				col_sum = vp.alpha.col(ee).sum();
-				int_klbeta += col_sum * (1 - std::log(hyps.slab_var(ee))) / 2.0;
-			}
+			col_sum = vp.alpha_beta.sum();
+			res += col_sum * (1 - std::log(hyps.slab_var(ee))) / 2.0;
 		}
 
-		for (int ee = 0; ee < n_effects; ee++){
-			for (std::uint32_t kk = 0; kk < n_var; kk++){
-				int_klbeta -= vp.alpha(kk, ee) * std::log(vp.alpha(kk, ee) + eps);
-				int_klbeta -= (1 - vp.alpha(kk, ee)) * std::log(1 - vp.alpha(kk, ee) + eps);
-			}
+		for (std::uint32_t kk = 0; kk < n_var; kk++){
+			res -= vp.alpha_beta(kk) * std::log(vp.alpha_beta(kk) + eps);
+			res -= (1 - vp.alpha_beta(kk)) * std::log(1 - vp.alpha_beta(kk) + eps);
 		}
-		return int_klbeta;
+		return res;
+	}
+
+	double calcIntKLGamma(const Hyps& hyps,
+						  const VariationalParameters& vp){
+		// KL Divergence of log[ p(beta | u, theta) / q(u, beta) ]
+		double col_sum, res;
+		int ee = 1;
+
+		// beta
+		if(p.mode_mog_prior){
+			res  = n_var / 2.0;
+
+			res -= (vp.alpha_gam * (vp.mu1_gam.square() + vp.s1_gam_sq)).sum() / 2.0 / hyps.slab_var(ee);
+			res += (vp.alpha_gam * vp.s1_gam_sq.log()).sum() / 2.0;
+
+			res -= ((1.0 - vp.alpha_gam) * (vp.mu2_gam.square() + vp.s2_gam_sq)).sum() / 2.0 / hyps.spike_var(ee);
+			res += ((1.0 - vp.alpha_gam) * vp.s2_gam_sq.log()).sum() / 2.0;
+
+			col_sum = vp.alpha_gam.sum();
+			res -= std::log(hyps.slab_var(ee))  * col_sum / 2.0;
+			res -= std::log(hyps.spike_var(ee)) * (n_var - col_sum) / 2.0;
+		} else {
+			res  = (vp.alpha_gam * vp.s1_gam_sq.log()).sum() / 2.0;
+			res -= (vp.alpha_gam * (vp.mu1_gam.square() + vp.s1_gam_sq)).sum() / 2.0 / hyps.slab_var(ee);
+
+			col_sum = vp.alpha_gam.sum();
+			res += col_sum * (1 - std::log(hyps.slab_var(ee))) / 2.0;
+		}
+
+		for (std::uint32_t kk = 0; kk < n_var; kk++){
+			res -= vp.alpha_gam(kk) * std::log(vp.alpha_gam(kk) + eps);
+			res -= (1 - vp.alpha_gam(kk)) * std::log(1 - vp.alpha_gam(kk) + eps);
+		}
+		return res;
 	}
 
 	void compute_pve(Hyps& hyps){
@@ -1322,9 +1440,9 @@ public:
 		for (int ii = 0; ii < my_n_grid; ii++){
 			if(std::isfinite(weights[ii])){
 				wmean_alpha += weights[ii] * stitched_tracker.vp_list[ii].alpha;
-				wmean_beta  += weights[ii] * stitched_tracker.vp_list[ii].alpha * stitched_tracker.vp_list[ii].mu;
+				wmean_beta  += weights[ii] * stitched_tracker.vp_list[ii].alpha * stitched_tracker.vp_list[ii].mu1;
 				nmean_alpha += stitched_tracker.vp_list[ii].alpha;
-				nmean_beta  += stitched_tracker.vp_list[ii].alpha * stitched_tracker.vp_list[ii].mu;
+				nmean_beta  += stitched_tracker.vp_list[ii].alpha * stitched_tracker.vp_list[ii].mu1;
 			}
 		}
 		nmean_alpha /= (double) my_n_grid;
@@ -1335,7 +1453,7 @@ public:
 		for (int ii = 0; ii < my_n_grid; ii++){
 			if(std::isfinite(weights[ii])){
 				nmean_alpha_sd += (stitched_tracker.vp_list[ii].alpha - nmean_alpha).square();
-				nmean_beta_sd  += (stitched_tracker.vp_list[ii].alpha * stitched_tracker.vp_list[ii].mu - nmean_beta).square();
+				nmean_beta_sd  += (stitched_tracker.vp_list[ii].alpha * stitched_tracker.vp_list[ii].mu1 - nmean_beta).square();
 			}
 		}
 		nmean_alpha_sd /= (double) (my_n_grid - 1);
@@ -1365,7 +1483,7 @@ public:
 			outf_map << " " << X.al_0[kk] << " " << X.al_1[kk];
 			for (int ee = 0; ee < n_effects; ee++){
 				outf_map << " " << stitched_tracker.vp_list[ii_map].alpha(kk, ee);
-				outf_map << " " << stitched_tracker.vp_list[ii_map].alpha(kk, ee) * stitched_tracker.vp_list[ii_map].mu(kk, ee);
+				outf_map << " " << stitched_tracker.vp_list[ii_map].alpha(kk, ee) * stitched_tracker.vp_list[ii_map].mu1(kk, ee);
 			}
 			outf_map << std::endl;
 		}

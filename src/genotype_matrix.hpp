@@ -375,10 +375,10 @@ public:
 			for (int ii = 0; ii < ch_len; ii++) {
 				indexes[ii % params.n_thread].push_back(ii);
 			}
-#if DEBUG==1
-			decompress_dosages(indexes[0], chunk, D);
+#ifdef DEBUG
+			get_cols(indexes[0], chunk, D);
 			for (int nn = 1; nn < params.n_thread; nn++){
-				decompress_dosages(indexes[nn], chunk, D);
+				get_cols(indexes[nn], chunk, D);
 			}
 #else
 			std::thread t1[params.n_thread];
