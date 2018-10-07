@@ -130,6 +130,8 @@ void parse_arguments(parameters &p, int argc, char *argv[]) {
 		"--gamma_updates_thresh",
 		"--init_weights_with_snpwise_scan",
 		"--dxteex",
+		"--mode_mog_beta",
+		"--mode_mog_gamma",
 		"--vb_chunk_size"
 	};
 
@@ -301,7 +303,18 @@ void parse_arguments(parameters &p, int argc, char *argv[]) {
 			}
 
 			if(strcmp(in_str, "--effects_prior_mog") == 0) {
-				p.mode_mog_prior = true;
+				p.mode_mog_prior_beta = true;
+				p.mode_mog_prior_gam = true;
+				i += 0;
+			}
+
+			if(strcmp(in_str, "--mode_mog_beta") == 0) {
+				p.mode_mog_prior_beta = true;
+				i += 0;
+			}
+
+			if(strcmp(in_str, "--mode_mog_gamma") == 0) {
+				p.mode_mog_prior_gam = true;
 				i += 0;
 			}
 

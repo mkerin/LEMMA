@@ -132,7 +132,7 @@ public:
 		outf_inits << "chr rsid pos a0 a1";
 		for (int ee = 0; ee < n_effects; ee++){
 			outf_inits << " alpha" << ee << " mu" << ee << " s_sq" << ee;
-			if(p.mode_mog_prior){
+			if((ee == 0 && p.mode_mog_prior_beta) || (ee == 1 && p.mode_mog_prior_gam)){
 				outf_inits << " mu_spike" << ee << " s_sq_spike" << ee;
 			}
 		}
@@ -144,9 +144,12 @@ public:
 				outf_inits << " " << vp.alpha_beta(kk, ee);
 				outf_inits << " " << vp.mu1_beta(kk, ee);
 				outf_inits << " " << vp.s1_beta_sq(kk, ee);
-				if(p.mode_mog_prior){
+				if(ee == 0 && p.mode_mog_prior_beta){
 					outf_inits << " " << vp.mu2_beta(kk, ee);
 					outf_inits << " " << vp.s2_beta_sq(kk, ee);
+				} else if(ee == 1 && p.mode_mog_prior_gam){
+					outf_inits << " " << vp.mu2_gam(kk, ee);
+					outf_inits << " " << vp.s2_gam_sq(kk, ee);
 				}
 			}
 			outf_inits << std::endl;
@@ -187,11 +190,11 @@ public:
 		outf_iter << i_hyps.sigma << "\t" << std::setprecision(12) << std::fixed;
 		for (int ee = 0; ee < n_effects; ee++){
 			outf_iter << i_hyps.pve(ee) << "\t";
-			if(p.mode_mog_prior){
+			if((ee == 0 && p.mode_mog_prior_beta) || (ee == 1 && p.mode_mog_prior_gam)){
 				outf_iter << i_hyps.pve_large(ee) << "\t";
 			}
 			outf_iter << i_hyps.slab_relative_var(ee) << "\t";
-			if(p.mode_mog_prior){
+			if((ee == 0 && p.mode_mog_prior_beta) || (ee == 1 && p.mode_mog_prior_gam)){
 				outf_iter << i_hyps.spike_relative_var(ee) << "\t";
 			}
 			outf_iter << i_hyps.lambda(ee) << "\t";
@@ -289,11 +292,11 @@ public:
 		outf_iter    << "count\tsigma";
 		for (int ee = 0; ee < n_effects; ee++){
 			outf_iter << "\tpve" << ee;
-			if(p.mode_mog_prior){
+			if((ee == 0 && p.mode_mog_prior_beta) || (ee == 1 && p.mode_mog_prior_gam)){
 				outf_iter << "\tpve_large" << ee;
  			}
 			outf_iter << "\tsigma" << ee;
-			if(p.mode_mog_prior){
+			if((ee == 0 && p.mode_mog_prior_beta) || (ee == 1 && p.mode_mog_prior_gam)){
 				outf_iter << "\tsigma_spike" << ee;
 			}
 			outf_iter << "\tlambda" << ee;

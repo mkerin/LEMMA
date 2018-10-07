@@ -165,25 +165,43 @@ public:
 			env_back_pass.push_back(n_env - ll - 1);
 		}
 
-		int n_chunks = (n_var + p.vb_chunk_size - 1) / p.vb_chunk_size; // ceiling of n_var / chunk size
-		n_chunks *= n_effects;
+		int n_segs = (n_var + p.vb_chunk_size - 1) / p.vb_chunk_size; // ceiling of n_var / chunk size
+		int n_chunks = n_segs * n_effects;
 		fwd_pass_chunks.resize(n_chunks);
 		back_pass_chunks.resize(n_chunks);
 		for(std::uint32_t kk = 0; kk < n_effects * n_var; kk++){
-			std::uint32_t ch_index = (kk / p.vb_chunk_size) + (n_var == p.vb_chunk_size ? 0 : kk / n_var);
+			std::uint32_t ch_index = ((kk % n_var)/ p.vb_chunk_size) + (kk / n_var) * n_segs;
+			std::cout << ch_index << " " << kk << std::endl;
 			fwd_pass_chunks[ch_index].push_back(kk);
 
 			std::uint32_t kk_bck = n_effects * n_var - 1 - kk;
 			std::uint32_t ch_bck_index = n_chunks - 1 - ch_index;
+			std::cout << ch_index << " " << kk_bck << std::endl;
 			back_pass_chunks[ch_index].push_back(kk_bck);
 		}
+
+
+		for (auto chunk : fwd_pass_chunks){
+			for (auto kk : chunk){
+				std::cout << kk << " ";
+			}
+			std::cout << std::endl;
+		}
+
+		for (auto chunk : back_pass_chunks){
+			for (auto kk : chunk){
+				std::cout << kk << " ";
+			}
+			std::cout << std::endl;
+		}
+
 
 		// non random initialisation
 		if(p.vb_init_file != "NULL"){
 			std::cout << "Initialisation - set from file" << std::endl;
 			vp_init.alpha         = dat.alpha_init;
 			vp_init.mu1            = dat.mu_init;
-			if(p.mode_mog_prior){
+			if(p.mode_mog_prior_beta || p.mode_mog_prior_gam){
 				vp_init.mu2   = Eigen::ArrayXXd::Zero(n_var, n_effects);
 			}
 			if(p.use_vb_on_covars){
@@ -724,7 +742,7 @@ public:
 		int ee     = iter_chunk[0] / n_var; // Flag; ee = 0 ? beta : gamma
 
 		Eigen::ArrayXd alpha_cnst;
-		if(p.mode_mog_prior){
+		if(p.mode_mog_prior_beta){
 			alpha_cnst  = (hyps.lambda / (1.0 - hyps.lambda) + eps).log();
 			alpha_cnst -= (hyps.slab_var.log() - hyps.spike_var.log()) / 2.0;
 		} else {
@@ -736,7 +754,7 @@ public:
 		for (int ii = 0; ii < ch_len; ii++){
 			std::uint32_t jj = iter_chunk[ii] % n_var;
 			rr_k(ii)                       = vp.alpha_beta(jj) * vp.mu1_beta(jj);
-			if(p.mode_mog_prior) rr_k(ii) += (1.0 - vp.alpha_beta(jj)) * vp.mu2_beta(jj);
+			if(p.mode_mog_prior_beta) rr_k(ii) += (1.0 - vp.alpha_beta(jj)) * vp.mu2_beta(jj);
 		}
 
 		// adjust updates within chunk
@@ -749,8 +767,8 @@ public:
 			// Update s_sq
 			vp.s1_beta_sq(jj)                        = hyps.slab_var(ee);
 			vp.s1_beta_sq(jj)                       /= (hyps.slab_relative_var(ee) * (N-1) + 1);
-			if(p.mode_mog_prior) vp.s2_beta_sq(jj)  = hyps.spike_var(ee);
-			if(p.mode_mog_prior) vp.s2_beta_sq(jj) /= (hyps.spike_relative_var(ee) * (N-1) + 1);
+			if(p.mode_mog_prior_beta) vp.s2_beta_sq(jj)  = hyps.spike_var(ee);
+			if(p.mode_mog_prior_beta) vp.s2_beta_sq(jj) /= (hyps.spike_relative_var(ee) * (N-1) + 1);
 
 			// Update mu
 			double offset = rr_k(ii) * D_corr(ii, ii);
@@ -759,19 +777,19 @@ public:
 			}
 			double AA = A(ii) + offset;
 			vp.mu1_beta(jj)                       = vp.s1_beta_sq(jj) * AA / hyps.sigma;
-			if (p.mode_mog_prior) vp.mu2_beta(jj) = vp.s2_beta_sq(jj) * AA / hyps.sigma;
+			if (p.mode_mog_prior_beta) vp.mu2_beta(jj) = vp.s2_beta_sq(jj) * AA / hyps.sigma;
 
 
 			// Update alpha
 			double ff_k;
 			ff_k                        = vp.mu1_beta(jj) * vp.mu1_beta(jj) / vp.s1_beta_sq(jj);
 			ff_k                       += std::log(vp.s1_beta_sq(jj));
-			if (p.mode_mog_prior) ff_k -= vp.mu2_beta(jj) * vp.mu2_beta(jj) / vp.s2_beta_sq(jj);
-			if (p.mode_mog_prior) ff_k -= std::log(vp.s2_beta_sq(jj));
+			if (p.mode_mog_prior_beta) ff_k -= vp.mu2_beta(jj) * vp.mu2_beta(jj) / vp.s2_beta_sq(jj);
+			if (p.mode_mog_prior_beta) ff_k -= std::log(vp.s2_beta_sq(jj));
 			vp.alpha_beta(jj)           = sigmoid(ff_k / 2.0 + alpha_cnst(ee));
 
 			rr_k_diff(ii)                       = vp.alpha_beta(jj) * vp.mu1_beta(jj) - rr_k(ii);
-			if(p.mode_mog_prior) rr_k_diff(ii) += (1.0 - vp.alpha_beta(jj)) * vp.mu2_beta(jj);
+			if(p.mode_mog_prior_beta) rr_k_diff(ii) += (1.0 - vp.alpha_beta(jj)) * vp.mu2_beta(jj);
 		}
 
 		// Because data is still arranged as per fwd pass
@@ -796,7 +814,7 @@ public:
 		int ee     = iter_chunk[0] / n_var; // Flag; ee = 0 ? beta : gamma
 
 		Eigen::ArrayXd alpha_cnst;
-		if(p.mode_mog_prior){
+		if(p.mode_mog_prior_gam){
 			alpha_cnst  = (hyps.lambda / (1.0 - hyps.lambda) + eps).log();
 			alpha_cnst -= (hyps.slab_var.log() - hyps.spike_var.log()) / 2.0;
 		} else {
@@ -808,7 +826,7 @@ public:
 		for (int ii = 0; ii < ch_len; ii++){
 			std::uint32_t jj = iter_chunk[ii] % n_var;
 			rr_k(ii)                       = vp.alpha_gam(jj) * vp.mu1_gam(jj);
-			if(p.mode_mog_prior) rr_k(ii) += (1.0 - vp.alpha_gam(jj)) * vp.mu2_gam(jj);
+			if(p.mode_mog_prior_gam) rr_k(ii) += (1.0 - vp.alpha_gam(jj)) * vp.mu2_gam(jj);
 		}
 
 		// adjust updates within chunk
@@ -821,8 +839,8 @@ public:
 			// Update s_sq
 			vp.s1_gam_sq(jj)                        = hyps.slab_var(ee);
 			vp.s1_gam_sq(jj)                       /= (hyps.slab_relative_var(ee) * vp.EdZtZ(jj) + 1);
-			if(p.mode_mog_prior) vp.s2_gam_sq(jj)  = hyps.spike_var(ee);
-			if(p.mode_mog_prior) vp.s2_gam_sq(jj) /= (hyps.spike_relative_var(ee) * vp.EdZtZ(jj) + 1);
+			if(p.mode_mog_prior_gam) vp.s2_gam_sq(jj)  = hyps.spike_var(ee);
+			if(p.mode_mog_prior_gam) vp.s2_gam_sq(jj) /= (hyps.spike_relative_var(ee) * vp.EdZtZ(jj) + 1);
 
 			// Update mu
 			double offset = rr_k(ii) * D_corr(ii, ii);
@@ -831,19 +849,19 @@ public:
 			}
 			double AA = A(ii) + offset;
 			vp.mu1_gam(jj)                       = vp.s1_gam_sq(jj) * AA / hyps.sigma;
-			if (p.mode_mog_prior) vp.mu2_gam(jj) = vp.s2_gam_sq(jj) * AA / hyps.sigma;
+			if (p.mode_mog_prior_gam) vp.mu2_gam(jj) = vp.s2_gam_sq(jj) * AA / hyps.sigma;
 
 
 			// Update alpha
 			double ff_k;
 			ff_k                        = vp.mu1_gam(jj) * vp.mu1_gam(jj) / vp.s1_gam_sq(jj);
 			ff_k                       += std::log(vp.s1_gam_sq(jj));
-			if (p.mode_mog_prior) ff_k -= vp.mu2_gam(jj) * vp.mu2_gam(jj) / vp.s2_gam_sq(jj);
-			if (p.mode_mog_prior) ff_k -= std::log(vp.s2_gam_sq(jj));
+			if (p.mode_mog_prior_gam) ff_k -= vp.mu2_gam(jj) * vp.mu2_gam(jj) / vp.s2_gam_sq(jj);
+			if (p.mode_mog_prior_gam) ff_k -= std::log(vp.s2_gam_sq(jj));
 			vp.alpha_gam(jj)           = sigmoid(ff_k / 2.0 + alpha_cnst(ee));
 
 			rr_k_diff(ii)                       = vp.alpha_gam(jj) * vp.mu1_gam(jj) - rr_k(ii);
-			if(p.mode_mog_prior) rr_k_diff(ii) += (1.0 - vp.alpha_gam(jj)) * vp.mu2_gam(jj);
+			if(p.mode_mog_prior_gam) rr_k_diff(ii) += (1.0 - vp.alpha_gam(jj)) * vp.mu2_gam(jj);
 		}
 
 		// Because data is still arranged as per fwd pass
@@ -873,7 +891,7 @@ public:
 		vp.s1_beta_sq  = hyps.slab_var(ee);
 		vp.s1_beta_sq /= hyps.slab_relative_var(ee) * (N - 1.0) + 1.0;
 
-		if(p.mode_mog_prior) {
+		if(p.mode_mog_prior_beta) {
 			vp.s2_beta_sq.resize(n_var);
 			vp.s2_beta_sq = hyps.spike_var(ee);
 			vp.s2_beta_sq /= (hyps.spike_relative_var(ee) * (N - 1.0) + 1.0);
@@ -885,7 +903,7 @@ public:
 		vp.s1_gam_sq  = hyps.slab_var(ee);
 		vp.s1_gam_sq /= (hyps.slab_relative_var(ee) * (N - 1.0) + 1.0);
 
-		if(p.mode_mog_prior) {
+		if(p.mode_mog_prior_gam) {
 			vp.s2_gam_sq.resize(n_var);
 			vp.s2_gam_sq = hyps.spike_var(ee);
 			vp.s2_gam_sq /= (hyps.spike_relative_var(ee) * (N - 1.0) + 1.0);
@@ -925,7 +943,7 @@ public:
 		hyps.slab_var[ee]  = (vp.alpha_beta * (vp.s1_beta_sq + vp.mu1_beta.square())).sum();
 		hyps.slab_var[ee] /= hyps.lambda[ee];
 		hyps.slab_relative_var[ee] = hyps.slab_var[ee] / hyps.sigma;
-		if(p.mode_mog_prior){
+		if(p.mode_mog_prior_beta){
 			hyps.spike_var[ee]  = ((1.0 - vp.alpha_beta) * (vp.s2_beta_sq + vp.mu2_beta.square())).sum();
 			hyps.spike_var[ee] /= ( (double)n_var - hyps.lambda[ee]);
 			hyps.spike_relative_var[ee] = hyps.spike_var[ee] / hyps.sigma;
@@ -943,7 +961,7 @@ public:
 			hyps.slab_var[ee]  = (vp.alpha_gam * (vp.s1_gam_sq + vp.mu1_gam.square())).sum();
 			hyps.slab_var[ee] /= hyps.lambda[ee];
 			hyps.slab_relative_var[ee] = hyps.slab_var[ee] / hyps.sigma;
-			if(p.mode_mog_prior){
+			if(p.mode_mog_prior_gam){
 				hyps.spike_var[ee]  = ((1.0 - vp.alpha_gam) * (vp.s2_gam_sq + vp.mu2_gam.square())).sum();
 				hyps.spike_var[ee] /= ( (double)n_var - hyps.lambda[ee]);
 				hyps.spike_relative_var[ee] = hyps.spike_var[ee] / hyps.sigma;
@@ -1125,7 +1143,7 @@ public:
 		// Beta
 		vp.mu1_beta.resize(n_var);
 		vp.alpha_beta.resize(n_var);
-		if(p.mode_mog_prior){
+		if(p.mode_mog_prior_beta){
 			vp.mu2_beta = Eigen::ArrayXd::Zero(n_var);
 		}
 
@@ -1139,7 +1157,7 @@ public:
 		if(n_effects > 1){
 			vp.mu1_gam.resize(n_var);
 			vp.alpha_gam.resize(n_var);
-			if (p.mode_mog_prior) {
+			if (p.mode_mog_prior_gam) {
 				vp.mu2_gam = Eigen::ArrayXd::Zero(n_var);
 			}
 
@@ -1165,25 +1183,29 @@ public:
 	}
 
 	void calcPredEffects(VariationalParameters& vp){
-		Eigen::MatrixXd rr;
-		if(p.mode_mog_prior){
-			rr = vp.alpha_beta * (vp.mu1_beta - vp.mu2_beta) + vp.mu2_beta;
+		Eigen::VectorXd rr_beta, rr_gam;
+		if(p.mode_mog_prior_beta){
+			rr_beta = vp.alpha_beta * (vp.mu1_beta - vp.mu2_beta) + vp.mu2_beta;
 		} else {
-			rr = vp.alpha_beta * vp.mu1_beta;
+			rr_beta = vp.alpha_beta * vp.mu1_beta;
 		}
-		assert(rr.cols() == 2);
+		if(p.mode_mog_prior_gam){
+			rr_gam = vp.alpha_gam * (vp.mu1_gam - vp.mu2_gam) + vp.mu2_gam;
+		} else {
+			rr_gam = vp.alpha_gam * vp.mu1_gam;
+		}
 
-		vp.ym = X * rr.col(0);
+		vp.ym = X * rr_beta;
 		if(p.use_vb_on_covars){
 			vp.ym += C * vp.muc.matrix();
 		}
 
-		vp.yx = X * rr.col(1);
+		vp.yx = X * rr_gam;
 	}
 
 	void calcPredEffects(VariationalParametersLite& vp){
 		Eigen::MatrixXd rr;
-		if(p.mode_mog_prior){
+		if(p.mode_mog_prior_beta && p.mode_mog_prior_gam){
 			rr = vp.alpha * (vp.mu1 - vp.mu2) + vp.mu2;
 		} else {
 			rr = vp.alpha * vp.mu1;
@@ -1254,13 +1276,13 @@ public:
 		assert(varG.rows() == n_var);
 
 		varB = vp.alpha_beta * (vp.s1_beta_sq + (1.0 - vp.alpha_beta) * vp.mu1_beta.square());
-		if(p.mode_mog_prior){
+		if(p.mode_mog_prior_beta){
 			varB += (1.0 - vp.alpha_beta) * (vp.s2_beta_sq + (vp.alpha_beta) * vp.mu2_beta.square());
 			varB -= 2.0 * vp.alpha_beta * (1.0 - vp.alpha_beta) * vp.mu1_beta * vp.mu2_beta;
 		}
 
 		varG = vp.alpha_gam * (vp.s1_gam_sq + (1.0 - vp.alpha_gam) * vp.mu1_gam.square());
-		if(p.mode_mog_prior){
+		if(p.mode_mog_prior_gam){
 			varG += (1.0 - vp.alpha_gam) * (vp.s2_gam_sq + (vp.alpha_gam) * vp.mu2_gam.square());
 			varG -= 2.0 * vp.alpha_gam * (1.0 - vp.alpha_gam) * vp.mu1_gam * vp.mu2_gam;
 		}
@@ -1297,7 +1319,7 @@ public:
 		int ee = 0;
 
 		// beta
-		if(p.mode_mog_prior){
+		if(p.mode_mog_prior_beta){
 			res  = n_var / 2.0;
 
 			res -= (vp.alpha_beta * (vp.mu1_beta.square() + vp.s1_beta_sq)).sum() / 2.0 / hyps.slab_var(ee);
@@ -1331,7 +1353,7 @@ public:
 		int ee = 1;
 
 		// beta
-		if(p.mode_mog_prior){
+		if(p.mode_mog_prior_gam){
 			res  = n_var / 2.0;
 
 			res -= (vp.alpha_gam * (vp.mu1_gam.square() + vp.s1_gam_sq)).sum() / 2.0 / hyps.slab_var(ee);
@@ -1364,10 +1386,18 @@ public:
 		hyps.pve_large.resize(n_effects);
 
 		hyps.pve = hyps.lambda * hyps.slab_relative_var * hyps.s_x;
-		if(p.mode_mog_prior){
-			hyps.pve_large = hyps.pve;
-			hyps.pve += (1 - hyps.lambda) * hyps.spike_relative_var * hyps.s_x;
-			hyps.pve_large /= (hyps.pve.sum() + 1.0);
+		if(p.mode_mog_prior_beta){
+			int ee = 0;
+			hyps.pve_large[ee] = hyps.pve[ee];
+			hyps.pve[ee] += (1 - hyps.lambda[ee]) * hyps.spike_relative_var[ee] * hyps.s_x[ee];
+
+			if (p.mode_mog_prior_gam && n_effects > 1){
+				int ee = 1;
+				hyps.pve_large[ee] = hyps.pve[ee];
+				hyps.pve[ee] += (1 - hyps.lambda[ee]) * hyps.spike_relative_var[ee] * hyps.s_x[ee];
+			}
+
+			hyps.pve_large[ee] /= (hyps.pve.sum() + 1.0);
 		}
 		hyps.pve /= (hyps.pve.sum() + 1.0);
 	}
@@ -1449,11 +1479,11 @@ public:
 		outf << " count time sigma";
 		for (int ee = 0; ee < n_effects; ee++){
 			outf << " pve" << ee;
-			if(p.mode_mog_prior){
+			if((ee == 0 && p.mode_mog_prior_beta) || (ee == 1 && p.mode_mog_prior_gam)){
 				outf << " pve_large" << ee;
  			}
 			outf << " sigma" << ee;
-			if(p.mode_mog_prior){
+			if((ee == 0 && p.mode_mog_prior_beta) || (ee == 1 && p.mode_mog_prior_gam)){
 				outf << " sigma_spike" << ee;
 			}
 			outf << " lambda" << ee;
@@ -1472,11 +1502,11 @@ public:
 			outf << std::setprecision(8) << std::fixed;
 			for (int ee = 0; ee < n_effects; ee++){
 				outf << " " << stitched_tracker.hyps_list[ii].pve(ee);
-				if(p.mode_mog_prior){
+				if((ee == 0 && p.mode_mog_prior_beta) || (ee == 1 && p.mode_mog_prior_gam)){
 					outf << " " << stitched_tracker.hyps_list[ii].pve_large(ee);
 				}
 				outf << " " << stitched_tracker.hyps_list[ii].slab_relative_var(ee);
-				if(p.mode_mog_prior){
+				if((ee == 0 && p.mode_mog_prior_beta) || (ee == 1 && p.mode_mog_prior_gam)){
 					outf << " " << stitched_tracker.hyps_list[ii].spike_relative_var(ee);
 				}
 				outf << " " << stitched_tracker.hyps_list[ii].lambda(ee);

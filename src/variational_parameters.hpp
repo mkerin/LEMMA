@@ -76,13 +76,13 @@ public:
 		yx    = init.yx;
 		alpha_beta = init.alpha.col(0);
 		mu1_beta   = init.mu1.col(0);
-		if(p.mode_mog_prior) {
+		if(p.mode_mog_prior_beta) {
 			mu2_beta = init.mu2.col(0);
 		}
 		if(init.alpha.cols() > 1) {
 			alpha_gam = init.alpha.col(1);
 			mu1_gam = init.mu1.col(1);
-			if(p.mode_mog_prior) {
+			if(p.mode_mog_prior_gam) {
 				mu2_gam = init.mu2.col(1);
 			}
 		}
@@ -109,14 +109,16 @@ public:
 			vplite.mu1.col(0)   = mu1_beta;
 			vplite.alpha.col(1) = alpha_gam;
 			vplite.mu1.col(1)   = mu1_gam;
-			if(p.mode_mog_prior) {
+			if(p.mode_mog_prior_beta) {
 				vplite.mu2.col(0) = mu2_beta;
+			}
+			if (p.mode_mog_prior_gam){
 				vplite.mu2.col(1) = mu2_gam;
 			}
 		} else {
 			vplite.alpha = alpha_beta;
 			vplite.mu1    = mu1_beta;
-			if(p.mode_mog_prior) {
+			if(p.mode_mog_prior_beta) {
 				vplite.mu2 = mu2_beta;
 			}
 		}
