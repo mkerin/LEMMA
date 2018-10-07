@@ -26,7 +26,6 @@ else()
     message( FATAL_ERROR "Unexpected root directory structure. Where is the BGEN lib located?")
 endif()
 
-set(BGEN /Users/kerin/software/bgen)
 set(SOURCES src/bgen_prog.cpp)
 
 ##Platform invariant variables

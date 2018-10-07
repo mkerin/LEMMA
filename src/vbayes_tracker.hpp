@@ -357,16 +357,16 @@ public:
 		hyps_list.clear();
 	}
 
-	void copy_ith_element(int ii, const VbTracker& other_tracker){
-		counts_list[ii]       = other_tracker.counts_list[ii];
-		vp_list[ii]           = other_tracker.vp_list[ii];
+	void copy_ith_element(int jj, int ii, const VbTracker& other_tracker){
+		counts_list[jj]       = other_tracker.counts_list[ii];
+		vp_list[jj]           = other_tracker.vp_list[ii];
 		// mu_list[ii]           = other_tracker.mu_list[ii];
 		// alpha_list[ii]        = other_tracker.alpha_list[ii];
-		logw_list[ii]         = other_tracker.logw_list[ii];
-		logw_updates_list[ii] = other_tracker.logw_updates_list[ii];
-		alpha_diff_list[ii]   = other_tracker.alpha_diff_list[ii];
-		elapsed_time_list[ii] = other_tracker.elapsed_time_list[ii];
-		hyps_list[ii]         = other_tracker.hyps_list[ii];
+		logw_list[jj]         = other_tracker.logw_list[ii];
+		logw_updates_list[jj] = other_tracker.logw_updates_list[ii];
+		alpha_diff_list[jj]   = other_tracker.alpha_diff_list[ii];
+		elapsed_time_list[jj] = other_tracker.elapsed_time_list[ii];
+		hyps_list[jj]         = other_tracker.hyps_list[ii];
 	}
 };
 

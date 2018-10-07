@@ -465,7 +465,7 @@ public:
 		bool all_converged = false;
 		std::vector<Eigen::ArrayXd> alpha_prev(n_grid);
 		std::vector<double> i_logw(n_grid);
-		std::vector<std::vector< double >> logw_updates(n_grid), alpha_diff_updates;
+		std::vector<std::vector< double >> logw_updates(n_grid), alpha_diff_updates(n_grid);
 
 		for (int nn = 0; nn < n_grid; nn++){
 			i_logw[nn] = calc_logw(all_hyps[nn], all_vp[nn]);
@@ -538,17 +538,17 @@ public:
 		// Log all things that we want to track
 		t_InnerLoop.stop();
 		for (int nn = 0; nn < n_grid; nn++) {
-			all_tracker[nn].logw_list[nn] = i_logw[nn];
-			all_tracker[nn].counts_list[nn] = count;
-			all_tracker[nn].vp_list[nn] = all_vp[nn].convert_to_lite(n_effects, p);
-			all_tracker[nn].elapsed_time_list[nn] = t_InnerLoop.get_lap_seconds();
-			all_tracker[nn].hyps_list[nn] = all_hyps[nn];
+			all_tracker[nn].logw_list[0] = i_logw[nn];
+			all_tracker[nn].counts_list[0] = count;
+			all_tracker[nn].vp_list[0] = all_vp[nn].convert_to_lite(n_effects, p);
+			all_tracker[nn].elapsed_time_list[0] = t_InnerLoop.get_lap_seconds();
+			all_tracker[nn].hyps_list[0] = all_hyps[nn];
 			if (p.verbose) {
 				logw_updates.push_back(i_logw);  // adding converged estimate
-				all_tracker[nn].logw_updates_list[nn] = logw_updates[nn];
-				all_tracker[nn].alpha_diff_list[nn] = alpha_diff_updates[nn];
+				all_tracker[nn].logw_updates_list[0] = logw_updates[nn];
+				all_tracker[nn].alpha_diff_list[0] = alpha_diff_updates[nn];
 			}
-			all_tracker[nn].push_interim_output(nn, X.chromosome, X.rsid, X.position, X.al_0, X.al_1, n_var, n_effects);
+			all_tracker[nn].push_interim_output(0, X.chromosome, X.rsid, X.position, X.al_0, X.al_1, n_var, n_effects);
 		}
 	}
 
@@ -1384,8 +1384,7 @@ public:
 		VbTracker stitched_tracker;
 		stitched_tracker.resize(my_n_grid);
 		for (int ii = 0; ii < my_n_grid; ii++){
-			int tr = (ii % n_thread);  // tracker index
-			stitched_tracker.copy_ith_element(ii, trackers[tr]);
+			stitched_tracker.copy_ith_element(ii, 0, trackers[ii]);
 		}
 
 		output_init(file_prefix);
@@ -1470,7 +1469,6 @@ public:
 			outf << stitched_tracker.counts_list[ii] << " ";
 			outf << stitched_tracker.elapsed_time_list[ii] <<  " ";
 			outf << stitched_tracker.hyps_list[ii].sigma;
-
 			outf << std::setprecision(8) << std::fixed;
 			for (int ee = 0; ee < n_effects; ee++){
 				outf << " " << stitched_tracker.hyps_list[ii].pve(ee);
