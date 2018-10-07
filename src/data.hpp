@@ -245,6 +245,7 @@ class Data
 			n_effects = 2;  // 1 more than actually present... n_effects?
 		} else {
 			n_effects = 1;
+			assert(n_env = 0);
 		}
 
 		// Exclude samples with missing values in phenos / covars / filters
@@ -1466,7 +1467,7 @@ class Data
 		if(params.covar_file != "NULL"){
 			W = reduce_mat_to_complete_cases( W, W_reduced, n_covar, incomplete_cases );
 		}
-		if(params.env_file != "NULL"){
+		if(n_effects > 1){
 			E = reduce_mat_to_complete_cases( E, E_reduced, n_env, incomplete_cases );
 		}
 		n_samples -= incomplete_cases.size();
