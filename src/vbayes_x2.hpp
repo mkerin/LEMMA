@@ -115,6 +115,7 @@ public:
 	MyTimer t_maximiseHyps;
 	MyTimer t_InnerLoop;
 	MyTimer t_snpwise_regression;
+	MyTimer t_readXk;
 
 	// sgd
 	double minibatch_adjust;
@@ -129,6 +130,7 @@ public:
                             t_elbo("calcElbo: %ts \n"),
                             t_maximiseHyps("maximiseHyps: %ts \n"),
                             t_InnerLoop("runInnerLoop: %ts \n"),
+                            t_readXk("read_X_kk: %ts \n"),
                             t_snpwise_regression("calc_snpwise_regression: %ts \n") {
 		assert(std::includes(dat.hyps_names.begin(), dat.hyps_names.end(), hyps_names.begin(), hyps_names.end()));
 		assert(p.interaction_analysis);
@@ -668,7 +670,9 @@ public:
 			int ch_len             = chunk.size();
 			std::uint32_t ch_start = *std::min_element(chunk.begin(), chunk.end()) % n_var;
 
+			t_readXk.resume();
 			Eigen::MatrixXd D = X.col_block2(ch_start, ch_len);
+			t_readXk.stop();
 
 			// variant correlations with residuals
 			Eigen::MatrixXd residual(n_samples, n_grid);

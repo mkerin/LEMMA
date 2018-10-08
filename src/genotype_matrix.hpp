@@ -92,12 +92,10 @@ public:
 	bool mode_sgd;
 	long int nBatch;
 	long int batch_start;
-	MyTimer t_readXk;
 
 	// Constructors
 	GenotypeMatrix(const parameters& my_params) : low_mem(my_params.low_mem),
-                                                  params(my_params),
-                                           t_readXk("read_X_kk: %ts \n"){
+                                                  params(my_params){
 		scaling_performed = false;
 		mode_sgd = false;
 		nn = 0;
@@ -107,8 +105,7 @@ public:
 	GenotypeMatrix(const parameters& my_params,
                    const long int n,
                    const long int p) : low_mem(my_params.low_mem),
-                                       params(my_params),
-                                             t_readXk("read_X_kk: %ts \n"){
+                                       params(my_params){
 		if(low_mem){
 			M.resize(n, p);
 		} else {
@@ -202,7 +199,6 @@ public:
 			calc_scaled_values();
 		}
 
-		t_readXk.resume();
 		if(low_mem){
 			if(mode_sgd){
 				vec = M.cast<double>().block(batch_start, jj, nBatch, 1);
@@ -218,7 +214,6 @@ public:
 				vec = G.col(jj);
 			}
 		}
-		t_readXk.stop();
 		return vec;
 	}
 
@@ -229,7 +224,6 @@ public:
 			calc_scaled_values();
 		}
 
-		t_readXk.resume();
 		if(low_mem){
 			if(mode_sgd){
 				vec = M.cast<float>().block(batch_start, jj, nBatch, 1);
@@ -245,7 +239,6 @@ public:
 				vec = G.cast<float>().col(jj);
 			}
 		}
-		t_readXk.stop();
 		return vec;
 	}
 
