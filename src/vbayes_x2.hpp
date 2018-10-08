@@ -171,29 +171,27 @@ public:
 		back_pass_chunks.resize(n_chunks);
 		for(std::uint32_t kk = 0; kk < n_effects * n_var; kk++){
 			std::uint32_t ch_index = ((kk % n_var)/ p.vb_chunk_size) + (kk / n_var) * n_segs;
-			std::cout << ch_index << " " << kk << std::endl;
 			fwd_pass_chunks[ch_index].push_back(kk);
 
 			std::uint32_t kk_bck = n_effects * n_var - 1 - kk;
 			std::uint32_t ch_bck_index = n_chunks - 1 - ch_index;
-			std::cout << ch_index << " " << kk_bck << std::endl;
 			back_pass_chunks[ch_index].push_back(kk_bck);
 		}
 
 
-		for (auto chunk : fwd_pass_chunks){
-			for (auto kk : chunk){
-				std::cout << kk << " ";
-			}
-			std::cout << std::endl;
-		}
-
-		for (auto chunk : back_pass_chunks){
-			for (auto kk : chunk){
-				std::cout << kk << " ";
-			}
-			std::cout << std::endl;
-		}
+//		for (auto chunk : fwd_pass_chunks){
+//			for (auto kk : chunk){
+//				std::cout << kk << " ";
+//			}
+//			std::cout << std::endl;
+//		}
+//
+//		for (auto chunk : back_pass_chunks){
+//			for (auto kk : chunk){
+//				std::cout << kk << " ";
+//			}
+//			std::cout << std::endl;
+//		}
 
 
 		// non random initialisation
