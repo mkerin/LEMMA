@@ -227,12 +227,14 @@ class Data
         } else if(params.x_param_name != "NULL"){
             std::size_t x_col = find_covar_index(params.x_param_name, covar_names);
             E                = W.col(x_col);
-            n_env = 1;
-            env_names.push_back(params.x_param_name);
+            n_env            = 1;
+			E_reduced        = false;
+			env_names.push_back(params.x_param_name);
         } else if(params.interaction_analysis){
             E                = W.col(0);
-            n_env = 1;
-            env_names.push_back(covar_names[0]);
+            n_env            = 1;
+			E_reduced        = false;
+			env_names.push_back(covar_names[0]);
         } else {
 		    n_env = 0;
 		}

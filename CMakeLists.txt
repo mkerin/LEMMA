@@ -12,16 +12,19 @@ if(CMAKE_CURRENT_SOURCE_DIR MATCHES /Users/kerin)
     # OSX File System - Laptop
     set(BGEN /Users/kerin/software/bgen)
     set(LOC_COMPILE_OPTS -DOSX -DDEBUG)
+    set(LIB-DIRS "-L${BGEN}/build/3rd_party/boost_1_55_0")
 elseif(CMAKE_CURRENT_SOURCE_DIR MATCHES /well/marchini/kebl4230)
     # LINUX File System - Rescomp
     set(BGEN /well/marchini/kebl4230/software/bgen/)
     set(LIBS rt)
     set(LOC_COMPILE_OPTS -O3 -static -static-libgcc -static-libstdc++ -lz -fopenmp)
+    set(LIB-DIRS "-L${BGEN}/build/3rd_party/boost_1_55_0 -L/well/marchini/kebl4230/software/boost_1_62_0/stage/lib")
 elseif(CMAKE_CURRENT_SOURCE_DIR MATCHES /homes/kerin)
     # LINUX File System - Garganey
     set(BGEN /homes/kerin/projects/bgen/)
     set(LIBS rt)
     set(LOC_COMPILE_OPTS -O3 -fopenmp)
+    set(LIB-DIRS "-L${BGEN}/build/3rd_party/boost_1_55_0")
 else()
     message( FATAL_ERROR "Unexpected root directory structure. Where is the BGEN lib located?")
 endif()
@@ -34,7 +37,6 @@ find_library(DB_LIB db HINTS ${BGEN}/build/db)
 find_library(SQLITE_LIB sqlite3 HINTS ${BGEN}/build/3rd_party/sqlite3)
 find_library(ZSTD_LIB zstd HINTS ${BGEN}/build/3rd_party/zstd-1.1.0)
 
-set(LIB-DIRS "-L${BGEN}/build/3rd_party/boost_1_55_0")
 set(LIBS boost dl pthread boost_iostreams z ${LIBS})
 
 ##Defining compilation commands
