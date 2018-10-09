@@ -55,7 +55,9 @@ int main( int argc, char** argv ) {
 
 		data.read_full_bgen();
 		data.calc_dxteex();
-		data.calc_snpstats();
+		if(p.env_weights_file == "NULL" && p.init_weights_with_snpwise_scan) {
+			data.calc_snpstats();
+		}
 		if(p.vb_init_file != "NULL"){
 			data.read_alpha_mu();
 		}

@@ -117,8 +117,6 @@ void parse_arguments(parameters &p, int argc, char *argv[]) {
 		"--force_round1",
 		"--raw_phenotypes",
 		"--mode_alternating_updates",
-		"--mode_approximate_residuals",
-		"--min_residuals_diff",
 		"--vb_iter_max",
 		"--mode_sgd",
 		"--sgd_delay",
@@ -299,19 +297,9 @@ void parse_arguments(parameters &p, int argc, char *argv[]) {
 				i += 0;
 			}
 
-			if(strcmp(in_str, "--mode_approximate_residuals") == 0) {
-				p.mode_approximate_residuals = true;
-				i += 0;
-			}
-
 			if(strcmp(in_str, "--mode_alternating_updates") == 0) {
 				p.mode_alternating_updates = true;
 				i += 0;
-			}
-
-			if(strcmp(in_str, "--min_residuals_diff") == 0) {
-				p.min_residuals_diff = std::stod(argv[i + 1]);
-				i += 1;
 			}
 
 			if(strcmp(in_str, "--keep_constant_variants") == 0) {
@@ -575,11 +563,6 @@ void parse_arguments(parameters &p, int argc, char *argv[]) {
 				i += 1;
 			}
 		}
-	}
-
-	if(p.mode_approximate_residuals){
-		std::cout << "Vector of residuals only updated if change in beta greater than:";
-		std::cout << std::setprecision(10) << std::fixed << p.min_residuals_diff << std::endl;
 	}
 
 	// Sanity checks here

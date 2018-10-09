@@ -464,7 +464,6 @@ public:
 			alpha_diff_updates.push_back(alpha_diff);
 
 			// Interim output
-			long int hty_update_counter = 0;
 			if(p.use_vb_on_covars){
 				tracker.push_interim_covar_values(count, n_covar, vp,covar_names);
 			}
@@ -473,7 +472,7 @@ public:
 												  X.chromosome, X.rsid, X.al_0, X.al_1, X.position);
 			}
 			tracker.push_interim_iter_update(count, hyps, i_logw, alpha_diff,
-											 t_updateAlphaMu.get_lap_seconds(), hty_update_counter, n_effects, n_var, n_env, vp);
+											 t_updateAlphaMu.get_lap_seconds(), n_effects, n_var, n_env, vp);
 
 			// Diagnose convergence
 			double logw_diff  = i_logw - logw_prev;
@@ -525,7 +524,6 @@ public:
 						 std::vector< double >& logw_updates){
 		std::vector< std::uint32_t > iter;
 		double i_logw;
-		long int hty_update_counter = 0;
 
 		// Alternate between back and fwd passes
 		if(count % 2 == 0){
@@ -536,12 +534,12 @@ public:
 
 		// Update covar main effects
 		if(p.use_vb_on_covars){
-			updateCovarEffects(vp, hyps, hty_update_counter);
+			updateCovarEffects(vp, hyps);
 			check_monotonic_elbo(hyps, vp, count, logw_prev, "updateCovarEffects");
 		}
 
 		// Update main & interaction effects
-		updateAlphaMu(iter, hyps, vp, hty_update_counter);
+		updateAlphaMu(iter, hyps, vp);
 		check_monotonic_elbo(hyps, vp, count, logw_prev, "updateAlphaMu");
 
 		// Update env-weights
@@ -571,8 +569,7 @@ public:
 	}
 
 	void updateCovarEffects(VariationalParameters& vp,
-                            const Hyps& hyps,
-                            long int& hty_updates) __attribute__ ((hot)){
+                            const Hyps& hyps) __attribute__ ((hot)){
 		//
 		for (int cc = 0; cc < n_covar; cc++){
 			double rr_k = vp.muc(cc);
@@ -585,17 +582,13 @@ public:
 
 			// Update predicted effects
 			double rr_k_diff     = vp.muc(cc) - rr_k;
-			if(!p.mode_approximate_residuals || std::abs(rr_k_diff) > p.min_residuals_diff){
-				hty_updates++;
-				vp.ym += rr_k_diff * C.col(cc);
-			}
+			vp.ym += rr_k_diff * C.col(cc);
 		}
 	}
 
 	void updateAlphaMu(const std::vector< std::uint32_t >& iter,
                        const Hyps& hyps,
-                       VariationalParameters& vp,
-                       long int& hty_updates){
+                       VariationalParameters& vp){
 		t_updateAlphaMu.resume();
 		Eigen::VectorXd X_kk(n_samples);
 		Eigen::VectorXd Z_kk(n_samples);
@@ -626,11 +619,11 @@ public:
 
 			X_kk = X.col(jj); // Only read normalised genotypes!
 
-			_internal_updateAlphaMu(X_kk, ee, jj, hty_updates, vp, hyps, alpha_cnst);
+			_internal_updateAlphaMu(X_kk, ee, jj, vp, hyps, alpha_cnst);
 
 			if(p.mode_alternating_updates){
 				for(int ee = 1; ee < n_effects; ee++){
-					_internal_updateAlphaMu(X_kk, ee, jj, hty_updates, vp, hyps, alpha_cnst);
+					_internal_updateAlphaMu(X_kk, ee, jj, vp, hyps, alpha_cnst);
 				}
 			}
 		}
@@ -642,7 +635,7 @@ public:
 	}
 
 	void _internal_updateAlphaMu(const Eigen::Ref<const Eigen::VectorXd>& X_kk,
-								 const int& ee, std::uint32_t jj, long int& hty_updates,
+								 const int& ee, std::uint32_t jj,
 								 VariationalParameters& vp,
 								 const Hyps& hyps,
 								 const Eigen::Ref<const Eigen::ArrayXd>& alpha_cnst) __attribute__ ((hot)){
@@ -692,13 +685,10 @@ public:
 		rr_k_diff                       = vp.alpha(jj, ee) * vp.mu(jj, ee) - rr_k;
 		if(p.mode_mog_prior) rr_k_diff += (1.0 - vp.alpha(jj, ee)) * vp.mup(jj, ee);
 
-		if(!p.mode_approximate_residuals || std::abs(rr_k_diff) > p.min_residuals_diff){
-			hty_updates++;
-			if(ee == 0){
-				vp.ym += rr_k_diff * X_kk;
-			} else {
-				vp.yx += rr_k_diff * X_kk;
-			}
+		if(ee == 0){
+			vp.ym += rr_k_diff * X_kk;
+		} else {
+			vp.yx += rr_k_diff * X_kk;
 		}
 	}
 
@@ -1280,33 +1270,9 @@ public:
 		nmean_beta_sd  /= (double) (my_n_grid - 1);
 
 		// MAP snp-stats to file
-		outf_map << "chr rsid pos a0 a1";
-		for (int ee = 0; ee < n_effects; ee++){
-			outf_map << " alpha" << ee << " beta" << ee;
-		}
-		outf_map << std::endl;
-
-		outf_map << std::setprecision(9) << std::fixed;
 		int ii_map = std::distance(weights.begin(), std::max_element(weights.begin(), weights.end()));
-		if(p.use_vb_on_covars){
-			for (int cc = 0; cc < n_covar; cc++){
-				outf_map << "NA " << covar_names[cc] << " NA NA NA " << 1;
- 				outf_map <<  " " << stitched_tracker.vp_list[ii_map].muc(cc);
-				for (int ee = 1; ee < n_effects; ee++){
-					outf_map << " NA NA";
-				}
-				outf_map << std::endl;
-			}
-		}
-		for (std::uint32_t kk = 0; kk < n_var; kk++){
-			outf_map << X.chromosome[kk] << " " << X.rsid[kk] << " " << X.position[kk];
-			outf_map << " " << X.al_0[kk] << " " << X.al_1[kk];
-			for (int ee = 0; ee < n_effects; ee++){
-				outf_map << " " << stitched_tracker.vp_list[ii_map].alpha(kk, ee);
-				outf_map << " " << stitched_tracker.vp_list[ii_map].alpha(kk, ee) * stitched_tracker.vp_list[ii_map].mu(kk, ee);
-			}
-			outf_map << std::endl;
-		}
+		write_snp_stats_to_file(outf_map, stitched_tracker.vp_list[ii_map]);
+
 
 		// Weighted mean snp-stats to file
 		outf_wmean << "chr rsid pos a0 a1";
@@ -1383,6 +1349,55 @@ public:
 				}
 				outf_alpha_diff << std::endl;
 			}
+		}
+	}
+
+	void write_snp_stats_to_file(boost_io::filtering_ostream& ofile,
+			VariationalParametersLite vp){
+		// Assumes ofile has been initialised.
+
+		// Header
+		ofile << "chr rsid pos a0 a1";
+		for (int ee = 0; ee < n_effects; ee++){
+			ofile << " beta" << ee << " alpha" << ee << " mu" << ee << " s_sq" << ee;
+			if(p.mode_mog_prior){
+				ofile << " mu_spike" << ee << " s_sq_spike" << ee;
+			}
+		}
+
+		ofile << std::setprecision(9) << std::fixed;
+
+		// Covars if appropriate
+		if(p.use_vb_on_covars){
+			for (int cc = 0; cc < n_covar; cc++){
+				ofile << "NA " << covar_names[cc] << " NA NA NA " << 1;
+				ofile <<  " " << vp.muc(cc);
+				for (int ee = 1; ee < n_effects; ee++){
+					ofile << " NA NA";
+				}
+				ofile << std::endl;
+			}
+		}
+
+		// Genetic params
+		Eigen::ArrayXd       beta_vec  = vp.alpha * vp.mu;
+		if(p.mode_mog_prior) beta_vec += (1 - vp.alpha) * vp.mup;
+
+		outf_inits << std::endl;
+		for (std::uint32_t kk = 0; kk < n_var; kk++) {
+			ofile << X.chromosome[kk] << " " << X.rsid[kk] << " " << X.position[kk];
+			ofile << " " << X.al_0[kk] << " " << X.al_1[kk];
+			for (int ee = 0; ee < n_effects; ee++) {
+				ofile << " " << beta_vec(kk, ee);
+				ofile << " " << vp.alpha(kk, ee);
+				ofile << " " << vp.mu(kk, ee);
+				ofile << " " << vp.s_sq(kk, ee);
+				if (p.mode_mog_prior) {
+					ofile << " " << vp.mup(kk, ee);
+					ofile << " " << vp.sp_sq(kk, ee);
+				}
+			}
+			ofile << std::endl;
 		}
 	}
 

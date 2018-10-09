@@ -15,9 +15,11 @@ struct VariationalParametersLite {
 	// Variational parameters for slab
 	Eigen::ArrayXXd alpha; // P x (E+1)
 	Eigen::ArrayXXd mu;    // P x (E+1)
+	Eigen::ArrayXXd s_sq;    // P x (E+1)
 
 	// Variational parameters for spike (MoG prior mode)
 	Eigen::ArrayXXd mup;    // P x (E+1)
+	Eigen::ArrayXXd sp_sq;    // P x (E+1)
 
 	// Variational parameters for covariate main effects
 	Eigen::ArrayXd  muc;    // C x 1
@@ -84,7 +86,9 @@ public:
 		vplite.yx    = yx;
 		vplite.alpha = alpha;
 		vplite.mu    = mu;
+		vplite.s_sq  = s_sq;
 		vplite.mup   = mup;
+		vplite.sp_sq = sp_sq;
 		vplite.muc   = muc;
 		vplite.muw   = muw;
 		vplite.eta   = eta;

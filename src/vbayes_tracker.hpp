@@ -131,16 +131,21 @@ public:
 
 		outf_inits << "chr rsid pos a0 a1";
 		for (int ee = 0; ee < n_effects; ee++){
-			outf_inits << " alpha" << ee << " mu" << ee << " s_sq" << ee;
+			outf_inits << " beta" << ee << " alpha" << ee << " mu" << ee;
+ 			outf_inits << " s_sq" << ee;
 			if(p.mode_mog_prior){
 				outf_inits << " mu_spike" << ee << " s_sq_spike" << ee;
 			}
 		}
 		outf_inits << std::endl;
+		Eigen::ArrayXXd      beta_vec  = vp.alpha * vp.mu;
+		if(p.mode_mog_prior) beta_vec += (1 - vp.alpha) * vp.mup;
+
 		for (std::uint32_t kk = 0; kk < n_var; kk++){
 			outf_inits << chromosome[kk] << " " << rsid[kk] << " " << position[kk];
 			outf_inits << " " << al_0[kk] << " " << al_1[kk];
 			for (int ee = 0; ee < n_effects; ee++){
+				outf_inits << " " << beta_vec(kk, ee);
 				outf_inits << " " << vp.alpha(kk, ee);
 				outf_inits << " " << vp.mu(kk, ee);
 				outf_inits << " " << vp.s_sq(kk, ee);
@@ -176,7 +181,6 @@ public:
                                   const double& c_logw,
                                   const double& c_alpha_diff,
                                   const double& lap_seconds,
-                                  const long int hty_counter,
                                   const int& n_effects,
                                   const int& n_var,
                                   const int& n_env,
@@ -199,8 +203,7 @@ public:
 		outf_iter << i_hyps.s_x(0) << "\t" << i_hyps.s_x(1) << "\t";
 		outf_iter << std::setprecision(3) << std::fixed << c_logw << "\t";
 		outf_iter << c_alpha_diff << "\t";
-		outf_iter << lap_seconds << "\t";
-		outf_iter << hty_counter << std::endl;
+		outf_iter << lap_seconds << std::endl;
 
 		for (int ll = 0; ll < n_env; ll++){
 			outf_w << vp.muw(ll);
@@ -232,7 +235,10 @@ public:
 		fstream_init(outf_inits, dir, "_inits", true);
 		outf_inits << "chr rsid pos a0 a1";
 		for(int ee = 0; ee < n_effects; ee++){
-			outf_inits << " alpha" << ee << " mu" << ee;
+			outf_inits << " alpha" << ee << " mu" << ee << " s_sq" << ee;
+			if(p.mode_mog_prior){
+				outf_inits << " mu_spike" << ee << " s_sq_spike" << ee;
+			}
 		}
 		outf_inits << std::endl;
 		for (std::uint32_t kk = 0; kk < n_var; kk++){
@@ -241,6 +247,11 @@ public:
 			for (int ee = 0; ee < n_effects; ee++){
 				outf_inits << " " << vp_list[ii].alpha(kk, ee);
 				outf_inits << " " << vp_list[ii].mu(kk, ee);
+				outf_inits << " " << vp_list[ii].s_sq(kk, ee);
+				if(p.mode_mog_prior){
+					outf_inits << " " << vp_list[ii].mup(kk, ee);
+					outf_inits << " " << vp_list[ii].sp_sq(kk, ee);
+				}
 			}
  			outf_inits << std::endl;
 		}
@@ -299,7 +310,7 @@ public:
 			outf_iter << "\tlambda" << ee;
 		}
 		outf_iter << "\ts_x" << "\ts_z";
-		outf_iter << "\telbo\tmax_alpha_diff\tseconds\tHty_hits" << std::endl;
+		outf_iter << "\telbo\tmax_alpha_diff\tseconds" << std::endl;
 
 		// outf_inits << "chr rsid pos a0 a1";
 		// for(int ee = 0; ee < n_effects; ee++){
