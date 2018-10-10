@@ -446,13 +446,13 @@ TEST_CASE( "Example 3: multi-env w/ covars" ){
 	}
 }
 
-
-TEST_CASE( "Example 6: single-env w MoG" ){
+TEST_CASE( "Example 6: single-env w MoG + hyps max" ){
 	parameters p;
 
 	SECTION("Ex6. No filters applied, high mem mode"){
 		char* argv[] = { (char*) "bin/bgen_prog", (char*) "--mode_vb", (char*) "--effects_prior_mog",
 						 (char*) "--interaction", (char*) "x",
+						 (char*) "--mode_empirical_bayes",
 						 (char*) "--bgen", (char*) "data/io_test/n50_p100.bgen",
 						 (char*) "--out", (char*) "data/io_test/fake_age.out",
 						 (char*) "--pheno", (char*) "data/io_test/pheno.txt",
@@ -569,27 +569,36 @@ TEST_CASE( "Example 6: single-env w MoG" ){
 			CHECK(vp.mu( 1, 0) == Approx(-0.0356183259));
 			CHECK(vp.mup(1, 0) == Approx(-0.0004194363));
 			CHECK(vp.alpha(63, 0) == Approx(0.1762251019));
-			CHECK(VB.calc_logw(hyps, vp) == Approx(-60.94557141));
+			CHECK(hyps.sigma == Approx(0.3994029731));
+			CHECK(hyps.lambda(0) == Approx(0.1693099847));
+			CHECK(hyps.slab_var(0) == Approx(0.0056085838));
+			CHECK(hyps.spike_var(0) == Approx(0.0000368515));
+			CHECK(VB.calc_logw(hyps, vp) == Approx(-52.129381445));
 
 			VB.updateAllParams(1, round_index, vp, hyps, logw_prev, logw_updates);
 
-			CHECK(vp.alpha(0, 0) == Approx(0.1349655541));
-			CHECK(vp.mu( 0, 0) == Approx(-0.0203854658));
-			CHECK(vp.mup(0, 0) == Approx(-0.0002400563));
-			CHECK(vp.alpha(1, 0) == Approx(0.1398643952));
-			CHECK(vp.alpha(63, 0) == Approx(0.1746918499));
-			CHECK(VB.calc_logw(hyps, vp) == Approx(-60.5505926068));
+			CHECK(vp.alpha(0, 0) == Approx(0.1428104733));
+			CHECK(vp.mu( 0, 0) == Approx(-0.01972825));
+			CHECK(vp.mup(0, 0) == Approx(-0.0002178332));
+			CHECK(vp.alpha(1, 0) == Approx(0.1580997887));
+			CHECK(vp.alpha(63, 0) == Approx(0.6342565543));
+			CHECK(hyps.sigma == Approx(0.2888497603));
+			CHECK(hyps.lambda(0) == Approx(0.2065007836));
+			CHECK(hyps.slab_var(0) == Approx(0.0077922078));
+			CHECK(hyps.spike_var(0) == Approx(0.0000369985));
+			CHECK(VB.calc_logw(hyps, vp) == Approx(-48.0705874648));
 		}
 
 		std::vector< VbTracker > trackers(p.n_thread);
 		VB.run_inference(VB.hyps_grid, false, 2, trackers);
 		SECTION("Ex6. Vbayes_X2 inference correct"){
-			CHECK(trackers[0].counts_list[0] == 11);
-			CHECK(trackers[0].counts_list[3] == 31);
-			CHECK(trackers[0].logw_list[0] == Approx(-60.4633715731));
-			CHECK(trackers[0].logw_list[1] == Approx(-59.9834863643));
-			CHECK(trackers[0].logw_list[2] == Approx(-60.4320375488));
-			CHECK(trackers[0].logw_list[3] == Approx(-61.3469099138));
+			CHECK(trackers[0].counts_list[0] == 741);
+			CHECK(trackers[0].counts_list[3] == 71);
+			CHECK(trackers[0].logw_list[0] == Approx(-45.2036994175));
+			CHECK(trackers[0].logw_list[1] == Approx(-40.8450319874));
+			CHECK(trackers[0].logw_list[2] == Approx(-40.960377414));
+			CHECK(trackers[0].logw_list[3] == Approx(-40.9917439828));
 		}
 	}
 }
+

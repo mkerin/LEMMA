@@ -11,7 +11,7 @@ set(CMAKE_CXX_STANDARD 11)
 if(CMAKE_CURRENT_SOURCE_DIR MATCHES /Users/kerin)
     # OSX File System - Laptop
     set(BGEN /Users/kerin/software/bgen)
-    set(LOC_COMPILE_OPTS -DOSX)
+    set(LOC_COMPILE_OPTS -DOSX -DDEBUG)
     set(LIB-DIRS "-L${BGEN}/build/3rd_party/boost_1_55_0")
 elseif(CMAKE_CURRENT_SOURCE_DIR MATCHES /well/marchini/kebl4230)
     # LINUX File System - Rescomp
