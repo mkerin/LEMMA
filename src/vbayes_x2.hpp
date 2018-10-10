@@ -758,10 +758,6 @@ public:
 		hyps.slab_var.resize(2);
 		hyps.spike_var.resize(2);
 		for (int ee = 0; ee < n_effects; ee++){
-			double diff;
-			if(p.mode_mog_prior){
-				diff = hyps.slab_var[ee] / hyps.spike_var[ee];
-			}
 
 			// Initial unconstrained max
 			hyps.slab_var[ee]  = (vp.alpha.col(ee) * (vp.s_sq.col(ee) + vp.mu.col(ee).square())).sum();
@@ -774,9 +770,9 @@ public:
 			// Remaxise while maintaining same diff in MoG variances if getting too close
 			if(p.mode_mog_prior && hyps.slab_var[ee] < p.min_spike_diff_factor * hyps.spike_var[ee]){
 				hyps.slab_var[ee]  = (vp.alpha.col(ee) * (vp.s_sq.col(ee) + vp.mu.col(ee).square())).sum();
-				hyps.slab_var[ee] += diff * ((1.0 - vp.alpha.col(ee)) * (vp.sp_sq.col(ee) + vp.mup.col(ee).square())).sum();
+				hyps.slab_var[ee] += p.min_spike_diff_factor * ((1.0 - vp.alpha.col(ee)) * (vp.sp_sq.col(ee) + vp.mup.col(ee).square())).sum();
 				hyps.slab_var[ee] /= (double) n_var;
-				hyps.spike_var[ee] = hyps.slab_var[ee] / diff;
+				hyps.spike_var[ee] = hyps.slab_var[ee] / p.min_spike_diff_factor;
 			}
 		}
 
