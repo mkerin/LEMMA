@@ -24,9 +24,9 @@ class parameters {
 		bool keep_constant_variants, user_requests_round1, scale_pheno, mode_mog_prior;
 		bool mode_alternating_updates, mode_sgd, sgd_delay_set, sgd_forgetting_rate_set;
 		bool sgd_minibatch_size_set, rescale_eta, restrict_gamma_updates;
-		bool init_weights_with_snpwise_scan, flip_high_maf_variants;
+		bool init_weights_with_snpwise_scan, flip_high_maf_variants, min_spike_diff_set;
 		double min_maf, min_info, elbo_tol, alpha_tol, gamma_updates_thresh;
-		double sgd_delay, sgd_forgetting_rate, spike_diff_factor;
+		double sgd_delay, sgd_forgetting_rate, spike_diff_factor, min_spike_diff_factor;
 		std::vector < std::string > incl_sample_ids, gconf;
 		long int sgd_minibatch_size;
 
@@ -63,6 +63,7 @@ class parameters {
 		vb_iter_max = 10000;
 		spike_diff_factor = 1000000.0; // Initial diff in variance of spike & slab
 		range = false;
+		min_spike_diff_set = false;
 		maf_lim = false;
 		info_lim = false;
 		mode_empirical_bayes = false;

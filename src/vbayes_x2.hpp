@@ -755,12 +755,33 @@ public:
 		hyps.lambda = vp.alpha.colwise().sum();
 
 		// max spike & slab variances
-		hyps.slab_var  = (vp.alpha * (vp.s_sq + vp.mu.square())).colwise().sum();
-		hyps.slab_var /= hyps.lambda;
+		hyps.slab_var.resize(2);
+		hyps.spike_var.resize(2);
+		for (int ee = 0; ee < n_effects; ee++){
+			double diff;
+			if(p.mode_mog_prior){
+				diff = hyps.slab_var[ee] / hyps.spike_var[ee];
+			}
+
+			// Initial unconstrained max
+			hyps.slab_var[ee]  = (vp.alpha.col(ee) * (vp.s_sq.col(ee) + vp.mu.col(ee).square())).sum();
+			hyps.slab_var[ee] /= hyps.lambda[ee];
+			if(p.mode_mog_prior){
+				hyps.spike_var[ee]  = ((1.0 - vp.alpha.col(ee)) * (vp.sp_sq.col(ee) + vp.mup.col(ee).square())).sum();
+				hyps.spike_var[ee] /= ( (double)n_var - hyps.lambda[ee]);
+			}
+
+			// Remaxise while maintaining same diff in MoG variances if getting too close
+			if(p.mode_mog_prior && hyps.slab_var[ee] < p.min_spike_diff_factor * hyps.spike_var[ee]){
+				hyps.slab_var[ee]  = (vp.alpha.col(ee) * (vp.s_sq.col(ee) + vp.mu.col(ee).square())).sum();
+				hyps.slab_var[ee] += diff * ((1.0 - vp.alpha.col(ee)) * (vp.sp_sq.col(ee) + vp.mup.col(ee).square())).sum();
+				hyps.slab_var[ee] /= (double) n_var;
+				hyps.spike_var[ee] = hyps.slab_var[ee] / diff;
+			}
+		}
+
 		hyps.slab_relative_var = hyps.slab_var / hyps.sigma;
 		if(p.mode_mog_prior){
-			hyps.spike_var  = ((1.0 - vp.alpha) * (vp.sp_sq + vp.mup.square())).colwise().sum();
-			hyps.spike_var /= ( (double)n_var - hyps.lambda);
 			hyps.spike_relative_var = hyps.spike_var / hyps.sigma;
 		}
 

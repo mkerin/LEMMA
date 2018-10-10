@@ -128,7 +128,8 @@ void parse_arguments(parameters &p, int argc, char *argv[]) {
 		"--gamma_updates_thresh",
 		"--init_weights_with_snpwise_scan",
 		"--dxteex",
-		"--spike_diff_factor"
+		"--spike_diff_factor",
+		"--min_spike_diff_factor",
 	};
 
 	std::set<std::string>::iterator set_it;
@@ -285,7 +286,14 @@ void parse_arguments(parameters &p, int argc, char *argv[]) {
 
 			if(strcmp(in_str, "--spike_diff_factor") == 0) {
 				p.spike_diff_factor = std::stod(argv[i + 1]);
-				std::cout << "Slab variance will be " << p.spike_diff_factor << " x spike variance" << std::endl;
+				std::cout << "Initial slab variance " << p.spike_diff_factor << "x spike variance" << std::endl;
+				i += 1;
+			}
+
+			if(strcmp(in_str, "--min_spike_diff_factor") == 0) {
+				p.min_spike_diff_factor = std::stod(argv[i + 1]);
+				p.min_spike_diff_set = true;
+				std::cout << "Slab variance constrained to atleast " << p.min_spike_diff_factor << "x spike variance" << std::endl;
 				i += 1;
 			}
 

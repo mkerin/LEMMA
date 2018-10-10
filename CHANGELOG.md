@@ -1,3 +1,7 @@
+# Version 0.9.3
+Changes:
+- Ability to set minimum difference in variances of MoG.
+
 # Version 0.9.2
 Bugfixes:
 - CMakeLists; hardcoding of ${BGEN} + included rescomp path to boost
