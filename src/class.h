@@ -26,7 +26,7 @@ class parameters {
 		bool sgd_minibatch_size_set, rescale_eta, restrict_gamma_updates;
 		bool init_weights_with_snpwise_scan, flip_high_maf_variants;
 		double min_maf, min_info, elbo_tol, alpha_tol, gamma_updates_thresh;
-		double sgd_delay, sgd_forgetting_rate;
+		double sgd_delay, sgd_forgetting_rate, spike_diff_factor;
 		std::vector < std::string > incl_sample_ids, gconf;
 		long int sgd_minibatch_size;
 
@@ -61,6 +61,7 @@ class parameters {
 		chunk_size = 256;
 		missing_code = -999;
 		vb_iter_max = 10000;
+		spike_diff_factor = 1000000.0; // Initial diff in variance of spike & slab
 		range = false;
 		maf_lim = false;
 		info_lim = false;

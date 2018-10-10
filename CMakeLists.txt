@@ -18,7 +18,7 @@ elseif(CMAKE_CURRENT_SOURCE_DIR MATCHES /well/marchini/kebl4230)
     set(BGEN /well/marchini/kebl4230/software/bgen/)
     set(LIBS rt)
     set(LOC_COMPILE_OPTS -O3 -static -static-libgcc -static-libstdc++ -lz -fopenmp)
-    set(LIB-DIRS "-L${BGEN}/build/3rd_party/boost_1_55_0")
+    set(LIB-DIRS "-L${BGEN}/build/3rd_party/boost_1_55_0 -L/well/marchini/kebl4230/software/boost_1_62_0/stage/lib")
 elseif(CMAKE_CURRENT_SOURCE_DIR MATCHES /homes/kerin)
     # LINUX File System - Garganey
     set(BGEN /homes/kerin/projects/bgen/)
