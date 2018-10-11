@@ -1337,6 +1337,7 @@ public:
 				ofile << " mu_spike" << ee << " s_sq_spike" << ee;
 			}
 		}
+		ofile << std::endl;
 
 		ofile << std::setprecision(9) << std::fixed;
 
