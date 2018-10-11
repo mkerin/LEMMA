@@ -1,6 +1,7 @@
 # Version 0.9.3
 Changes:
 - Ability to set minimum difference in variances of MoG.
+- Start of creating functions to write output to file.
 
 # Version 0.9.2
 Bugfixes:

@@ -161,11 +161,13 @@ public:
 		if(p.vb_init_file != "NULL"){
 			vp_init.alpha         = dat.alpha_init;
 			vp_init.mu            = dat.mu_init;
+			vp_init.s_sq          = Eigen::ArrayXXd::Zero(n_var, n_effects);
 			if(p.mode_mog_prior){
 				vp_init.mup   = Eigen::ArrayXXd::Zero(n_var, n_effects);
+				vp_init.sp_sq = Eigen::ArrayXXd::Zero(n_var, n_effects);
 			}
 			if(p.use_vb_on_covars){
-				vp_init.muc = Eigen::ArrayXd::Zero(n_covar);
+				vp_init.muc   = Eigen::ArrayXd::Zero(n_covar);
 			}
 
 			if(p.env_weights_file != "NULL"){
@@ -266,60 +268,13 @@ public:
 			// gen initial predicted effects
 			calcPredEffects(vp_init);
 
-			// Write inits to file
-			std::string ofile_inits = fstream_init(outf_inits, "", "_inits");
-			std::cout << "Writing start points for alpha and mu to " << ofile_inits << std::endl;
-			// outf_inits << "chr rsid pos a0 a1 alpha mu" << std::endl;
-			// for (std::uint32_t kk = 0; kk < n_var2; kk++){
-			// 	std::uint32_t kk1 = kk % n_var;
-			// 	outf_inits << X.chromosome[kk1] << " " << X.rsid[kk1]<< " " << X.position[kk1];
-			// 	outf_inits << " " << X.al_0[kk1] << " " << X.al_1[kk1] << " ";
-			// 	outf_inits << vp_init.alpha[kk] << " " << vp_init.mu[kk] << std::endl;
-			// }
-
-			outf_inits << "chr rsid pos a0 a1";
-			for (int ee = 0; ee < n_effects; ee++){
-				outf_inits << " alpha" << ee << " mu" << ee;
-			}
-			outf_inits << std::endl;
-			for (std::uint32_t kk = 0; kk < n_var; kk++){
-				outf_inits << X.chromosome[kk] << " " << X.rsid[kk] << " " << X.position[kk];
-				outf_inits << " " << X.al_0[kk] << " " << X.al_1[kk];
-				for (int ee = 0; ee < n_effects; ee++){
-					outf_inits << " " << vp_init.alpha(kk, ee);
-					outf_inits << " " << vp_init.mu(kk, ee);
-				}
-				outf_inits << std::endl;
-			}
-
 			print_time_check();
 		}
 
-		// Write inits to file
+		// Write inits to file - exclude covar values
 		std::string ofile_inits = fstream_init(outf_inits, "", "_inits");
 		std::cout << "Writing start points for alpha and mu to " << ofile_inits << std::endl;
-		// outf_inits << "chr rsid pos a0 a1 alpha mu" << std::endl;
-		// for (std::uint32_t kk = 0; kk < n_var2; kk++){
-		// 	std::uint32_t kk1 = kk % n_var;
-		// 	outf_inits << X.chromosome[kk1] << " " << X.rsid[kk1]<< " " << X.position[kk1];
-		// 	outf_inits << " " << X.al_0[kk1] << " " << X.al_1[kk1] << " ";
-		// 	outf_inits << vp_init.alpha[kk] << " " << vp_init.mu[kk] << std::endl;
-		// }
-
-		outf_inits << "chr rsid pos a0 a1";
-		for (int ee = 0; ee < n_effects; ee++){
-			outf_inits << " alpha" << ee << " mu" << ee;
-		}
-		outf_inits << std::endl;
-		for (std::uint32_t kk = 0; kk < n_var; kk++){
-			outf_inits << X.chromosome[kk] << " " << X.rsid[kk] << " " << X.position[kk];
-			outf_inits << " " << X.al_0[kk] << " " << X.al_1[kk];
-			for (int ee = 0; ee < n_effects; ee++){
-				outf_inits << " " << vp_init.alpha(kk, ee);
-				outf_inits << " " << vp_init.mu(kk, ee);
-			}
-			outf_inits << std::endl;
-		}
+		write_snp_stats_to_file(outf_inits, vp_init, false, false);
 
 		std::vector< VbTracker > trackers(p.n_thread);
 		run_inference(hyps_grid, false, 2, trackers);
@@ -1285,9 +1240,9 @@ public:
 		nmean_alpha_sd /= (double) (my_n_grid - 1);
 		nmean_beta_sd  /= (double) (my_n_grid - 1);
 
-		// MAP snp-stats to file
+		// MAP snp-stats to file (inclu covars)
 		int ii_map = std::distance(weights.begin(), std::max_element(weights.begin(), weights.end()));
-		write_snp_stats_to_file(outf_map, stitched_tracker.vp_list[ii_map]);
+		write_snp_stats_to_file(outf_map, stitched_tracker.vp_list[ii_map], true, true);
 
 
 		// Weighted mean snp-stats to file
@@ -1369,14 +1324,16 @@ public:
 	}
 
 	void write_snp_stats_to_file(boost_io::filtering_ostream& ofile,
-			VariationalParametersLite vp){
+			VariationalParametersLite vp,
+			const bool& write_covars,
+			const bool& write_mog){
 		// Assumes ofile has been initialised.
 
 		// Header
 		ofile << "chr rsid pos a0 a1";
 		for (int ee = 0; ee < n_effects; ee++){
 			ofile << " beta" << ee << " alpha" << ee << " mu" << ee << " s_sq" << ee;
-			if(p.mode_mog_prior){
+			if(write_mog && p.mode_mog_prior){
 				ofile << " mu_spike" << ee << " s_sq_spike" << ee;
 			}
 		}
@@ -1384,7 +1341,7 @@ public:
 		ofile << std::setprecision(9) << std::fixed;
 
 		// Covars if appropriate
-		if(p.use_vb_on_covars){
+		if(write_covars && p.use_vb_on_covars){
 			for (int cc = 0; cc < n_covar; cc++){
 				ofile << "NA " << covar_names[cc] << " NA NA NA " << 1;
 				ofile <<  " " << vp.muc(cc);
@@ -1396,7 +1353,7 @@ public:
 		}
 
 		// Genetic params
-		Eigen::ArrayXd       beta_vec  = vp.alpha * vp.mu;
+		Eigen::ArrayXXd       beta_vec  = vp.alpha * vp.mu;
 		if(p.mode_mog_prior) beta_vec += (1 - vp.alpha) * vp.mup;
 
 		outf_inits << std::endl;
@@ -1408,7 +1365,7 @@ public:
 				ofile << " " << vp.alpha(kk, ee);
 				ofile << " " << vp.mu(kk, ee);
 				ofile << " " << vp.s_sq(kk, ee);
-				if (p.mode_mog_prior) {
+				if (write_mog && p.mode_mog_prior) {
 					ofile << " " << vp.mup(kk, ee);
 					ofile << " " << vp.sp_sq(kk, ee);
 				}
