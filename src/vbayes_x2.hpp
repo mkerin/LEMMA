@@ -724,8 +724,8 @@ public:
 		hyps.lambda = vp.alpha.colwise().sum();
 
 		// max spike & slab variances
-		hyps.slab_var.resize(2);
-		hyps.spike_var.resize(2);
+		hyps.slab_var.resize(n_effects);
+		hyps.spike_var.resize(n_effects);
 		for (int ee = 0; ee < n_effects; ee++){
 
 			// Initial unconstrained max
