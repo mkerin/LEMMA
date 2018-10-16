@@ -1,7 +1,13 @@
 # Version 0.9.3
+Bugfix:
+- Don't try to regress out covars when not present
+- Now able to run only main effects model
+
 Changes:
 - Ability to set minimum difference in variances of MoG.
 - Start of creating functions to write output to file.
+- pve2 computed as var_q(Xb) and var_q(Zg) (only correct for single env)
+- predicted values stratified into Xbeta and Zgamma.
 
 # Version 0.9.2
 Bugfixes:

@@ -56,10 +56,9 @@ class Data
 	int n_covar; // number of covariates
 	int n_env; // number of env variables
 	int n_effects;   // number of environmental interactions
-	long int n_samples; // number of samples
-	long int n_snps; // number of snps
+	std::uint32_t n_samples; // number of samples
 	bool bgen_pass;
-	int n_var;
+	std::uint32_t n_var;
 	std::size_t n_var_parsed; // Track progress through IndexQuery
 	long int n_dxteex_computed;
 	long int n_snpstats_computed;
@@ -152,7 +151,6 @@ class Data
 		n_effects = -1;
 		n_covar   = -1;
 		n_env   = -1;
-		n_snps    = -1;
 		n_var     = -1;
 		Y_reduced = false;
 		W_reduced = false;
@@ -195,7 +193,9 @@ class Data
 		if(params.select_rsid){
 			std::sort(params.rsid.begin(), params.rsid.end());
 			std::cout << "Filtering to rsids:" << std::endl;
-			for (int kk = 0; kk < params.rsid.size(); kk++) std::cout << params.rsid[kk]<< std::endl;
+			for(int kk = 0; kk < params.rsid.size(); kk++){
+				std::cout << params.rsid[kk]<< std::endl;
+			}
 			genfile::bgen::IndexQuery::UniquePtr query = genfile::bgen::IndexQuery::create(params.bgi_file);
 			query->include_rsids( params.rsid ).initialise();
 			bgenView->set_query( query );
@@ -288,11 +288,9 @@ class Data
 		if(params.covar_file != "NULL" && !params.use_vb_on_covars){
 			regress_out_covars(Y);
 			Y2 = Y;
-		} else {
+		} else if (params.covar_file != "NULL"){
 			Y2 = Y;
 			regress_out_covars(Y2);
-//			Eigen::MatrixXd coeff = solve(W.transpose() * W, W.transpose() * Y);
-//			Y2 = Y - W * coeff;
 		}
 	}
 
@@ -323,13 +321,12 @@ class Data
 
 		// Temporary variables to store info from read_variant()
 		std::string chr_j ;
-		uint32_t pos_j ;
+		std::uint32_t pos_j ;
 		std::string rsid_j ;
 		std::vector< std::string > alleles_j ;
 		std::string SNPID_j ; // read but ignored
 		std::vector< std::vector< double > > probs ;
 		ProbSetter setter( &probs );
-		std::map<int, bool> missing_genos;
 
 		double x, dosage, check, info_j, f1, chunk_missingness;
 		double dosage_mean, dosage_sigma, missing_calls = 0.0;
@@ -352,7 +349,6 @@ class Data
 			bgen_pass = bgenView->read_variant( &SNPID_j, &rsid_j, &chr_j, &pos_j, &alleles_j );
 			if (!bgen_pass) break;
 			n_var_parsed++;
-			assert( alleles_j.size() > 0 );
 
 			// Read probs + check maf filter
 			bgenView->read_genotype_data_block( setter );
@@ -448,7 +444,7 @@ class Data
 			// filters passed; write dosage to G
 			// Note that we only write dosage for valid sample ids
 			// Scale + center dosage, set missing to mean
-			if(missing_genos.size() > 0){
+			if(!missing_genos.empty()){
 				n_var_incomplete += 1;
 				missing_calls += (double) missing_genos.size();
 				for (std::uint32_t ii = 0; ii < n_samples; ii++){
@@ -498,7 +494,7 @@ class Data
 
 	void read_incl_rsids(){
 		boost_io::filtering_istream fg;
-		fg.push(boost_io::file_source(params.incl_rsids_file.c_str()));
+		fg.push(boost_io::file_source(params.incl_rsids_file));
 		if (!fg) {
 			std::cout << "ERROR: " << params.incl_rsids_file << " not opened." << std::endl;
 			std::exit(EXIT_FAILURE);
@@ -521,7 +517,7 @@ class Data
 
 	void read_incl_sids(){
 		boost_io::filtering_istream fg;
-		fg.push(boost_io::file_source(params.incl_sids_file.c_str()));
+		fg.push(boost_io::file_source(params.incl_sids_file));
 		if (!fg) {
 			std::cout << "ERROR: " << params.incl_sids_file << " not opened." << std::endl;
 			std::exit(EXIT_FAILURE);
@@ -581,7 +577,7 @@ class Data
 		std::cout << std::endl;
 	}
 
-	void read_grid_file( std::string filename,
+	void read_grid_file( const std::string& filename,
 						 Eigen::MatrixXd& M,
 						 std::vector< std::string >& col_names){
 		// Used in mode_vb only.
@@ -589,7 +585,7 @@ class Data
 		// how many rows there will be and we can assume no missing values.
 
 		boost_io::filtering_istream fg;
-		fg.push(boost_io::file_source(filename.c_str()));
+		fg.push(boost_io::file_source(filename));
 		if (!fg) {
 			std::cout << "ERROR: " << filename << " not opened." << std::endl;
 			std::exit(EXIT_FAILURE);
@@ -603,7 +599,7 @@ class Data
 			n_grid++;
 		}
 		fg.reset();
-		fg.push(boost_io::file_source(filename.c_str()));
+		fg.push(boost_io::file_source(filename));
 
 		// Reading column names
 		if (!getline(fg, line)) {
@@ -654,7 +650,7 @@ class Data
 		}
 	}
 
-	void read_grid_file( std::string filename,
+	void read_grid_file( const std::string& filename,
 						 Eigen::ArrayXXd& M,
 						 std::vector< std::string >& col_names){
 		// Used in mode_vb only.
@@ -662,7 +658,7 @@ class Data
 		// how many rows there will be and we can assume no missing values.
 
 		boost_io::filtering_istream fg;
-		fg.push(boost_io::file_source(filename.c_str()));
+		fg.push(boost_io::file_source(filename));
 		if (!fg) {
 			std::cout << "ERROR: " << filename << " not opened." << std::endl;
 			std::exit(EXIT_FAILURE);
@@ -676,7 +672,7 @@ class Data
 			n_grid++;
 		}
 		fg.reset();
-		fg.push(boost_io::file_source(filename.c_str()));
+		fg.push(boost_io::file_source(filename));
 
 		// Reading column names
 		if (!getline(fg, line)) {
@@ -727,7 +723,7 @@ class Data
 		}
 	}
 
-	void read_vb_init_file(std::string filename,
+	void read_vb_init_file(const std::string& filename,
                            Eigen::MatrixXd& M,
                            std::vector< std::string >& col_names,
                         //    std::vector< int >& init_chr,
@@ -740,7 +736,7 @@ class Data
 		// init_chr, init_pos, init_a0, init_a1;
 
 		boost_io::filtering_istream fg;
-		fg.push(boost_io::file_source(filename.c_str()));
+		fg.push(boost_io::file_source(filename));
 		if (!fg) {
 			std::cout << "ERROR: " << filename << " not opened." << std::endl;
 			std::exit(EXIT_FAILURE);
@@ -754,7 +750,7 @@ class Data
 			n_grid++;
 		}
 		fg.reset();
-		fg.push(boost_io::file_source(filename.c_str()));
+		fg.push(boost_io::file_source(filename));
 
 		// Reading column names
 		if (!getline(fg, line)) {
@@ -830,7 +826,7 @@ class Data
 		}
 	}
 
-	void read_txt_file( std::string filename,
+	void read_txt_file( const std::string& filename,
 						Eigen::MatrixXd& M,
 						int& n_cols,
 						std::vector< std::string >& col_names,
@@ -839,7 +835,7 @@ class Data
 		// TODO: Implement how to deal with missing values.
 
 		boost_io::filtering_istream fg;
-		fg.push(boost_io::file_source(filename.c_str()));
+		fg.push(boost_io::file_source(filename));
 		if (!fg) {
 			std::cout << "ERROR: " << filename << " not opened." << std::endl;
 			std::exit(EXIT_FAILURE);
@@ -1079,7 +1075,7 @@ class Data
 		read_txt_file( params.env_file, E_weights, n_cols, col_names, missing_rows );
 
 		assert(n_cols == 1);
-		assert(missing_rows.size() == 0);
+		assert(missing_rows.empty());
 	}
 
 	void read_external_dxteex( ){
@@ -1324,9 +1320,20 @@ class Data
 			}
 		} else {
 			if(hyps_names != true_fixed_names){
-				throw std::runtime_error("Column names of --hyps_grid must be sigma sigma_b lambda");
+				// Allow gxe params if coeffs set to zero
+				if(std::includes(hyps_names.begin(), hyps_names.end(), true_gxage_names.begin(), true_gxage_names.end())){
+					double sigma_g_sum  = hyps_grid.col(2).array().abs().sum();
+					double lambda_g_sum = hyps_grid.col(4).array().abs().sum();
+					if(sigma_g_sum > 1e-6 || lambda_g_sum > 1e-6){
+						throw std::runtime_error("In a main effects only analysis columns for sigma_g and lambda_g should either be absent or contain zeros");
+					}
+				} else {
+					throw std::runtime_error("Column names of --hyps_grid must be sigma sigma_b lambda_b or sigma sigma_b sigma_g lambda_b lambda_g");
+				}
 			}
 		}
+
+		// If
 
 		// Option to provide separate grid to evaluate in round 1
 		std::vector< std::string > r1_hyps_names, r1_probs_names;

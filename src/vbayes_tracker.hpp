@@ -33,6 +33,7 @@ struct Hyps{
 	// Not hyperparameters, but things that depend on them
 	Eigen::ArrayXd s_x;
 	Eigen::ArrayXd pve;
+	Eigen::ArrayXd pve2;
 	Eigen::ArrayXd pve_large;
 
 	// Hyps();
@@ -188,20 +189,27 @@ public:
 		t_interimOutput.resume();
 
 		outf_iter << cnt << "\t" << std::setprecision(3) << std::fixed;
-		outf_iter << i_hyps.sigma << "\t" << std::setprecision(12) << std::fixed;
+		outf_iter << i_hyps.sigma << "\t" << std::setprecision(6) << std::fixed;
+		for(int ee = 0; ee < n_effects; ee++) {
+			outf_iter << i_hyps.pve2[ee] << "\t";
+			outf_iter << i_hyps.pve2[ee] << "\t";
+		}
 		for (int ee = 0; ee < n_effects; ee++){
-			outf_iter << i_hyps.pve(ee) << "\t";
+			outf_iter << std::setprecision(6) << std::fixed << i_hyps.pve(ee) << "\t";
 			if(p.mode_mog_prior){
 				outf_iter << i_hyps.pve_large(ee) << "\t";
 			}
-			outf_iter << i_hyps.slab_relative_var(ee) << "\t";
+			outf_iter << std::setprecision(12) << std::fixed << i_hyps.slab_relative_var(ee) << "\t";
 			if(p.mode_mog_prior){
 				outf_iter << i_hyps.spike_relative_var(ee) << "\t";
 			}
 			outf_iter << i_hyps.lambda(ee) << "\t";
 		}
-		outf_iter << i_hyps.s_x(0) << "\t" << i_hyps.s_x(1) << "\t";
-		outf_iter << std::setprecision(3) << std::fixed << c_logw << "\t";
+		outf_iter << std::setprecision(3) << std::fixed;
+		for( int ee = 0; ee < n_effects; ee++) {
+			outf_iter << i_hyps.s_x(ee) << "\t";
+		}
+		outf_iter << c_logw << "\t";
 		outf_iter << c_alpha_diff << "\t";
 		outf_iter << lap_seconds << std::endl;
 
@@ -298,6 +306,9 @@ public:
 
 		outf_weights << "weights logw log_prior count time" << std::endl;
 		outf_iter    << "count\tsigma";
+		for (int ee = 0; ee < n_effects; ee++) {
+			outf_iter << "\thb" << ee;
+		}
 		for (int ee = 0; ee < n_effects; ee++){
 			outf_iter << "\tpve" << ee;
 			if(p.mode_mog_prior){

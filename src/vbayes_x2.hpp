@@ -63,8 +63,8 @@ public:
 	int           n_grid;            // size of hyperparameter grid
 	int           n_effects;             // no. interaction variables + 1
 	std::uint32_t n_samples;
-	std::uint32_t n_covar;
-	std::uint32_t n_env;
+	int n_covar;
+	int n_env;
 	std::uint32_t n_var;
 	std::uint32_t n_var2;
 	bool          random_params_init;
@@ -82,7 +82,6 @@ public:
 	// Data
 	GenotypeMatrix& X;
 	Eigen::VectorXd Y;          // residual phenotype matrix
-	Eigen::ArrayXXd dXtX;       // diagonal of X^T x X
 	Eigen::ArrayXXd& dXtEEX;     // P x n_env^2; col (l * n_env + m) is the diagonal of X^T * diag(E_l * E_m) * X
 	Eigen::ArrayXd  Cty;         // vector of W^T x y where C the matrix of covariates
 	Eigen::ArrayXXd E;          // matrix of variables used for GxE interactions
@@ -127,7 +126,6 @@ public:
                             t_InnerLoop("runInnerLoop: %ts \n"),
                             t_snpwise_regression("calc_snpwise_regression: %ts \n") {
 		assert(std::includes(dat.hyps_names.begin(), dat.hyps_names.end(), hyps_names.begin(), hyps_names.end()));
-		assert(p.interaction_analysis);
 		std::cout << "Initialising vbayes object" << std::endl;
 
 		// Data size params
@@ -206,7 +204,9 @@ public:
 			r1_probs_grid   = dat.r1_probs_grid;
 		}
 
-		Cty = C.transpose() * Y;
+		if(p.use_vb_on_covars){
+			Cty = C.transpose() * Y;
+		}
 
 		// sgd
 		if(p.mode_sgd){
@@ -348,7 +348,7 @@ public:
 			i_hyps.slab_relative_var.resize(n_effects);
 			i_hyps.spike_relative_var.resize(n_effects);
 			i_hyps.lambda.resize(n_effects);
-			i_hyps.s_x.resize(2);
+			i_hyps.s_x.resize(n_effects);
 
 			Eigen::ArrayXd muw_sq(n_env * n_env);
 			for (int ll = 0; ll < n_env; ll++){
@@ -356,15 +356,24 @@ public:
 					muw_sq(mm*n_env + ll) = vp_init.muw(mm) * vp_init.muw(ll);
 				}
 			}
-				//
-			i_hyps.sigma = sigma;
-			i_hyps.slab_var           << sigma * sigma_b, sigma * sigma_g;
-			i_hyps.spike_var          << sigma * sigma_b / p.spike_diff_factor, sigma * sigma_g / p.spike_diff_factor;
-			i_hyps.slab_relative_var  << sigma_b, sigma_g;
-			i_hyps.spike_relative_var << sigma_b / p.spike_diff_factor, sigma_g / p.spike_diff_factor;
-			i_hyps.lambda             << lam_b, lam_g;
-			i_hyps.s_x                << n_var, (dXtEEX.rowwise() * muw_sq.transpose()).sum() / (N - 1.0);
-				// }
+
+			if (n_effects == 2) {
+				i_hyps.sigma = sigma;
+				i_hyps.slab_var << sigma * sigma_b, sigma * sigma_g;
+				i_hyps.spike_var << sigma * sigma_b / p.spike_diff_factor, sigma * sigma_g / p.spike_diff_factor;
+				i_hyps.slab_relative_var << sigma_b, sigma_g;
+				i_hyps.spike_relative_var << sigma_b / p.spike_diff_factor, sigma_g / p.spike_diff_factor;
+				i_hyps.lambda << lam_b, lam_g;
+				i_hyps.s_x << n_var, (dXtEEX.rowwise() * muw_sq.transpose()).sum() / (N - 1.0);
+			} else if (n_effects == 1){
+				i_hyps.sigma = sigma;
+				i_hyps.slab_var << sigma * sigma_b;
+				i_hyps.spike_var << sigma * sigma_b / p.spike_diff_factor;
+				i_hyps.slab_relative_var << sigma_b;
+				i_hyps.spike_relative_var << sigma_b / p.spike_diff_factor;
+				i_hyps.lambda << lam_b;
+				i_hyps.s_x << n_var;
+			}
 
 			// Run outer loop - don't update trackers
 			runInnerLoop(ii, random_init, round_index, i_hyps, tracker);
@@ -509,7 +518,7 @@ public:
 		i_logw     = calc_logw(hyps, vp);
 		double alpha_diff = 0;
 
-		compute_pve(hyps);
+		compute_pve(vp, hyps);
 
 		// Maximise hyps
 		if(round_index > 1 && p.mode_empirical_bayes){
@@ -517,7 +526,7 @@ public:
 
 			i_logw     = calc_logw(hyps, vp);
 
-			compute_pve(hyps);
+			compute_pve(vp, hyps);
 		}
 		logw_updates.push_back(i_logw);
 	}
@@ -576,8 +585,8 @@ public:
 			_internal_updateAlphaMu(X_kk, ee, jj, vp, hyps, alpha_cnst);
 
 			if(p.mode_alternating_updates){
-				for(int ee = 1; ee < n_effects; ee++){
-					_internal_updateAlphaMu(X_kk, ee, jj, vp, hyps, alpha_cnst);
+				for(int eee = 1; eee < n_effects; eee++){
+					_internal_updateAlphaMu(X_kk, eee, jj, vp, hyps, alpha_cnst);
 				}
 			}
 		}
@@ -616,9 +625,14 @@ public:
 
 		// Update mu
 		double A;
-		if(ee == 0){
+		if(n_effects == 1){
+			// Main effects update in main effects only model
+			A  = (Y - vp.ym).dot(X_kk) + rr_k * (N - 1.0);
+		} else if(ee == 0){
+			// Main effects update in interaction model
 			A  = (Y - vp.ym - vp.yx.cwiseProduct(vp.eta)).dot(X_kk) + rr_k * (N - 1.0);
 		} else {
+			// Interaction effects update in interaction model
 			A  = (Y - vp.ym).cwiseProduct(vp.eta).dot(X_kk);
 			A -= (vp.yx.cwiseProduct(vp.eta_sq).dot(X_kk) - rr_k * vp.EdZtZ(jj));
 		}
@@ -936,31 +950,31 @@ public:
 		} else {
 			rr = vp.alpha * vp.mu;
 		}
-		assert(rr.cols() == 2);
 
 		vp.ym = X * rr.col(0);
 		if(p.use_vb_on_covars){
 			vp.ym += C * vp.muc.matrix();
 		}
-
-		vp.yx = X * rr.col(1);
+		if(n_effects > 1) {
+			vp.yx = X * rr.col(1);
+		}
 	}
 
-	void calcPredEffects(VariationalParametersLite& vp){
+	void calcPredEffects(VariationalParametersLite& vp) {
 		Eigen::MatrixXd rr;
-		if(p.mode_mog_prior){
+		if (p.mode_mog_prior) {
 			rr = vp.alpha * (vp.mu - vp.mup) + vp.mup;
 		} else {
 			rr = vp.alpha * vp.mu;
 		}
-		assert(rr.cols() == 2);
 
 		vp.ym = X * rr.col(0);
-		if(p.use_vb_on_covars){
+		if (p.use_vb_on_covars) {
 			vp.ym += C * vp.muc.matrix();
 		}
-
-		vp.yx = X * rr.col(1);
+		if (n_effects > 1){
+			vp.yx = X * rr.col(1);
+		}
 	}
 
 	void check_monotonic_elbo(const Hyps& hyps,
@@ -1031,11 +1045,13 @@ public:
 
 		// Expectation of linear regression log-likelihood
 		int_linear  = (Y - vp.ym).squaredNorm();
-		int_linear -= 2.0 * (Y - vp.ym).cwiseProduct(vp.eta).dot(vp.yx);
-		if(n_env > 1) {
-			int_linear += vp.yx.cwiseProduct(vp.eta_sq).dot(vp.yx);
-		} else {
-			int_linear += vp.yx.cwiseProduct(vp.eta).squaredNorm();
+		if(n_effects > 1) {
+			int_linear -= 2.0 * (Y - vp.ym).cwiseProduct(vp.eta).dot(vp.yx);
+			if (n_env > 1) {
+				int_linear += vp.yx.cwiseProduct(vp.eta_sq).dot(vp.yx);
+			} else {
+				int_linear += vp.yx.cwiseProduct(vp.eta).squaredNorm();
+			}
 		}
 
 		// variances
@@ -1043,7 +1059,9 @@ public:
 			int_linear += (N - 1.0) * vp.sc_sq.sum(); // covar main
 		}
 		int_linear += (N - 1.0) * vp.varB.col(0).sum();  // beta
-		int_linear += (vp.EdZtZ * vp.varB.col(1)).sum(); // gamma
+		if(n_effects > 1) {
+			int_linear += (vp.EdZtZ * vp.varB.col(1)).sum(); // gamma
+		}
 
 		return int_linear;
 	}
@@ -1086,7 +1104,7 @@ public:
 		return int_klbeta;
 	}
 
-	void compute_pve(Hyps& hyps){
+	void compute_pve(const VariationalParameters& vp, Hyps& hyps){
 		// Compute heritability
 		hyps.pve.resize(n_effects);
 		hyps.pve_large.resize(n_effects);
@@ -1098,6 +1116,19 @@ public:
 			hyps.pve_large /= (hyps.pve.sum() + 1.0);
 		}
 		hyps.pve /= (hyps.pve.sum() + 1.0);
+
+		// The second version of computing heritability
+		hyps.pve2.resize(n_effects);
+
+		int ee = 0;
+		hyps.pve2[ee] = (vp.ym.array() - vp.ym.mean()).square().sum() / (N-1) + vp.varB.col(ee).sum();
+		if(n_effects > 1) {
+			ee = 1;
+			Eigen::ArrayXd eta_yx = vp.yx.cwiseProduct(vp.eta).array();
+			hyps.pve2[ee] =
+					(eta_yx - eta_yx.mean()).square().sum() / (N - 1) + (vp.EdZtZ * vp.varB.col(ee)).sum() / (N - 1);
+		}
+		hyps.pve2 /= (hyps.pve2.sum() + hyps.sigma);
 	}
 
 	/********** Output functions ************/
@@ -1174,7 +1205,7 @@ public:
 		if(!p.mode_empirical_bayes){
 			outf << " log_prior";
 		}
-		outf << " count time sigma";
+		outf << " count time sigma hb2 hg2";
 		for (int ee = 0; ee < n_effects; ee++){
 			outf << " pve" << ee;
 			if(p.mode_mog_prior){
@@ -1197,6 +1228,9 @@ public:
 			outf << stitched_tracker.counts_list[ii] << " ";
 			outf << stitched_tracker.elapsed_time_list[ii] <<  " ";
 			outf << stitched_tracker.hyps_list[ii].sigma;
+			for (int ee = 0; ee < n_effects; ee++) {
+				outf << " " << stitched_tracker.hyps_list[ii].pve2[0];
+			}
 
 			outf << std::setprecision(8) << std::fixed;
 			for (int ee = 0; ee < n_effects; ee++){
@@ -1241,7 +1275,7 @@ public:
 		nmean_beta_sd  /= (double) (my_n_grid - 1);
 
 		// MAP snp-stats to file (inclu covars)
-		int ii_map = std::distance(weights.begin(), std::max_element(weights.begin(), weights.end()));
+		long int ii_map = std::distance(weights.begin(), std::max_element(weights.begin(), weights.end()));
 		write_snp_stats_to_file(outf_map, stitched_tracker.vp_list[ii_map], true, true);
 
 
@@ -1285,11 +1319,18 @@ public:
 		}
 
 		// Predicted effects to file
-		outf_map_pred << "pred" << std::endl;
 		VariationalParametersLite vp_map = stitched_tracker.vp_list[ii_map];
 		calcPredEffects(vp_map);
-		for (std::uint32_t ii = 0; ii < n_samples; ii++ ){
-			outf_map_pred << vp_map.ym(ii) + vp_map.eta(ii) * vp_map.yx(ii) << std::endl;
+		if(n_effects == 1) {
+			outf_map_pred << "Xbeta" << std::endl;
+			for (std::uint32_t ii = 0; ii < n_samples; ii++) {
+				outf_map_pred << vp_map.ym(ii) << std::endl;
+			}
+		} else {
+			outf_map_pred << "Xbeta Zgamma" << std::endl;
+			for (std::uint32_t ii = 0; ii < n_samples; ii++) {
+				outf_map_pred << vp_map.ym(ii) << " " << vp_map.eta(ii) * vp_map.yx(ii) << std::endl;
+			}
 		}
 
 		// weights to file
@@ -1406,12 +1447,12 @@ public:
 		probs_grid          = subset_matrix(probs_grid, valid_points);
 		hyps_grid           = subset_matrix(hyps_grid, valid_points);
 
-		if(valid_points.size() == 0){
+		if(valid_points.empty()){
 			throw std::runtime_error("No valid grid points in hyps_grid.");
 		} else if(n_grid > valid_points.size()){
 			std::cout << "WARNING: " << n_grid - valid_points.size();
 			std::cout << " invalid grid points removed from hyps_grid." << std::endl;
-			n_grid = valid_points.size();
+			n_grid = (int) valid_points.size();
 
 			// update print interval
 			print_interval = std::max(1, n_grid / 10);
@@ -1422,7 +1463,7 @@ public:
 		r1_valid_points = validate_grid(r1_hyps_grid, n_var);
 		r1_hyps_grid    = subset_matrix(r1_hyps_grid, r1_valid_points);
 
-		if(r1_valid_points.size() == 0){
+		if(r1_valid_points.empty()){
 			throw std::runtime_error("No valid grid points in r1_hyps_grid.");
 		} else if(r1_n_grid > r1_valid_points.size()){
 			std::cout << "WARNING: " << r1_n_grid - r1_valid_points.size();
@@ -1514,7 +1555,7 @@ inline std::vector<int> validate_grid(const Eigen::MatrixXd &grid, const T n_var
 		bool chck_sigma_b = (grid(ii, sigma_b_ind) >  0.0);
 		bool chck_sigma_g = (grid(ii, sigma_g_ind) >= 0.0);
 		bool chck_lam_b   = (lam_b >= 1.0 / (double) n_var) && (lam_b < 1.0);
-		bool chck_lam_g   = (lam_g >= 1.0 / (double) n_var) && (lam_g < 1.0);
+		bool chck_lam_g   = (lam_g >= 0) && (lam_g < 1.0);
 		if(chck_lam_b && chck_lam_g && chck_sigma && chck_sigma_g && chck_sigma_b){
 			valid_points.push_back(ii);
 		}

@@ -126,7 +126,7 @@ TEST_CASE( "Example 1: single-env" ){
 			CHECK(VB.vp_init.muw(0) == 1.0);
 			CHECK(VB.p.init_weights_with_snpwise_scan == false);
 			CHECK(VB.dXtEEX(0, 0) == Approx(87.204591182113916));
-			CHECK(VB.Cty(0, 0) == Approx(-5.3290705182007514e-15));
+//			CHECK(VB.Cty(0, 0) == Approx(-5.3290705182007514e-15));
 		}
 
 //		SECTION("Checking output"){
@@ -510,7 +510,7 @@ TEST_CASE( "Example 6: single-env w MoG + hyps max" ){
 			CHECK(VB.vp_init.muw(0) == 1.0);
 			CHECK(VB.p.init_weights_with_snpwise_scan == false);
 			CHECK(VB.dXtEEX(0, 0) == Approx(87.204591182113916));
-			CHECK(VB.Cty(0, 0) == Approx(-5.3290705182007514e-15));
+//			CHECK(VB.Cty(0, 0) == Approx(-5.3290705182007514e-15));
 		}
 
 //		SECTION("Checking output"){
