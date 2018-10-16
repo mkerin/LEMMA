@@ -1394,9 +1394,11 @@ class Data
 						index_kk = it - G.SNPKEY.begin();
 
 						alpha_init(index_kk, 0)      = 1.0;
-						alpha_init(index_kk, 1)      = 1.0;
 						mu_init(index_kk, 0)         = vb_init_mat(kk, 5);
-						mu_init(index_kk, 1)         = vb_init_mat(kk, 6);
+						if(n_effects > 1) {
+							alpha_init(index_kk, 1) = 1.0;
+							mu_init(index_kk, 1) = vb_init_mat(kk, 6);
+						}
 					}
 				}
 			}
