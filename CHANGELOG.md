@@ -6,8 +6,10 @@ Bugfix:
 Changes:
 - Ability to set minimum difference in variances of MoG.
 - Start of creating functions to write output to file.
-- pve2 computed as var_q(Xb) and var_q(Zg) (only correct for single env)
 - predicted values stratified into Xbeta and Zgamma.
+- 'Rescan' GWAS of Z on y-ym for MAP iteration.
+- Removed dependence on probs grid
+- All variant metadata stored in genotype matrix object.
 
 # Version 0.9.2
 Bugfixes:
@@ -26,3 +28,8 @@ Minor bugfix in hyps maxizing hyps.
 
 # Version 0.9.0
 Each run assigned to a single core. Think this is highly wasteful.
+
+Ordered todo list:
+1. Profile code
+2. Output runtime of component functions to text file
+3. Allow Catch2 tests to be separated into new files

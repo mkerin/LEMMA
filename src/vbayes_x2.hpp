@@ -87,9 +87,7 @@ public:
 	Eigen::ArrayXXd E;          // matrix of variables used for GxE interactions
 	Eigen::MatrixXd& C;          // matrix of covariates (superset of GxE variables)
 	Eigen::MatrixXd r1_hyps_grid;
-	Eigen::MatrixXd r1_probs_grid;
 	Eigen::MatrixXd hyps_grid;
-	Eigen::MatrixXd probs_grid; // prob of each point in grid under hyps
 
 	// genome wide scan computed upstream
 	Eigen::ArrayXXd& snpstats;
@@ -193,15 +191,12 @@ public:
 		}
 
 		// Assign data - hyperparameters
-		probs_grid          = dat.imprt_grid;
 		hyps_grid           = dat.hyps_grid;
 
 		if(p.r1_hyps_grid_file == "NULL"){
 			r1_hyps_grid    = hyps_grid;
-			r1_probs_grid   = probs_grid;
 		} else {
 			r1_hyps_grid    = dat.r1_hyps_grid;
-			r1_probs_grid   = dat.r1_probs_grid;
 		}
 
 		if(p.use_vb_on_covars){
@@ -245,7 +240,7 @@ public:
 			run_inference(r1_hyps_grid, true, 1, trackers);
 
 			if(p.verbose){
-				write_trackers_to_file("round1_", trackers, r1_hyps_grid, r1_probs_grid);
+				write_trackers_to_file("round1_", trackers, r1_hyps_grid);
 			}
 
 			// Find best init
@@ -279,7 +274,7 @@ public:
 		std::vector< VbTracker > trackers(p.n_thread);
 		run_inference(hyps_grid, false, 2, trackers);
 
-		write_trackers_to_file("", trackers, hyps_grid, probs_grid);
+		write_trackers_to_file("", trackers, hyps_grid);
 
 		std::cout << "Variational inference finished" << std::endl;
 	}
@@ -476,9 +471,36 @@ public:
 			tracker.alpha_diff_list[ii] = alpha_diff_updates;
 		}
 		tracker.push_interim_output(ii, X.chromosome, X.rsid, X.position, X.al_0, X.al_1, n_var, n_effects);
+
+		// 'rescan' GWAS of Z on y-ym
+		if(n_effects > 1) {
+			Eigen::VectorXd gam_neglogp(n_var);
+			rescanGWAS(vp, gam_neglogp);
+			tracker.push_rescan_gwas(X, n_var, gam_neglogp);
+		}
 	}
 
 	/********** VB update functions ************/
+	void rescanGWAS(const VariationalParameters& vp,
+			Eigen::Ref<Eigen::VectorXd> neglogp){
+		Eigen::VectorXd pheno = Y - vp.ym;
+		Eigen::VectorXd Z_kk(n_samples);
+
+		for(std::uint32_t jj = 0; jj < n_var; jj++ ){
+			Z_kk = X.col(jj).cwiseProduct(vp.eta);
+			double gam = Z_kk.dot(pheno) / Z_kk.dot(Z_kk);
+			double rss_null = (pheno - Z_kk * gam).squaredNorm();
+
+			// T-test of variant j
+			boost_m::students_t t_dist(n_samples - 1);
+			double main_se_j    = std::sqrt(rss_null) / (N - 1.0);
+			double main_tstat_j = gam / main_se_j;
+			double main_pval_j  = 2 * boost_m::cdf(boost_m::complement(t_dist, fabs(main_tstat_j)));
+
+			neglogp(jj) = -1 * std::log10(main_pval_j);
+		}
+	}
+
 	void updateAllParams(const int& count,
 			             const int& round_index,
 			             VariationalParameters& vp,
@@ -1116,29 +1138,27 @@ public:
 			hyps.pve_large /= (hyps.pve.sum() + 1.0);
 		}
 		hyps.pve /= (hyps.pve.sum() + 1.0);
-
-		// The second version of computing heritability
-		hyps.pve2.resize(n_effects);
-
-		int ee = 0;
-		hyps.pve2[ee] = (vp.ym.array() - vp.ym.mean()).square().sum() / (N-1) + vp.varB.col(ee).sum();
-		if(n_effects > 1) {
-			ee = 1;
-			Eigen::ArrayXd eta_yx = vp.yx.cwiseProduct(vp.eta).array();
-			hyps.pve2[ee] =
-					(eta_yx - eta_yx.mean()).square().sum() / (N - 1) + (vp.EdZtZ * vp.varB.col(ee)).sum() / (N - 1);
-		}
-		hyps.pve2 /= (hyps.pve2.sum() + hyps.sigma);
+//
+//		// The second version of computing heritability
+//		hyps.pve2.resize(n_effects);
+//
+//		int ee = 0;
+//		hyps.pve2[ee] = (vp.ym.array() - vp.ym.mean()).square().sum() / (N-1) + vp.varB.col(ee).sum();
+//		if(n_effects > 1) {
+//			ee = 1;
+//			Eigen::ArrayXd eta_yx = vp.yx.cwiseProduct(vp.eta).array();
+//			hyps.pve2[ee] =
+//					(eta_yx - eta_yx.mean()).square().sum() / (N - 1) + (vp.EdZtZ * vp.varB.col(ee)).sum() / (N - 1);
+//		}
+//		hyps.pve2 /= (hyps.pve2.sum() + hyps.sigma);
 	}
 
 	/********** Output functions ************/
 	void write_trackers_to_file(const std::string& file_prefix,
                                 const std::vector< VbTracker >& trackers,
-                                const Eigen::Ref<const Eigen::MatrixXd>& hyps_grid,
-                                const Eigen::Ref<const Eigen::VectorXd>& my_probs_grid){
+                                const Eigen::Ref<const Eigen::MatrixXd>& hyps_grid){
 		// Stitch trackers back together if using multithreading
 		int my_n_grid = hyps_grid.rows();
-		assert(my_n_grid == my_probs_grid.rows());
 		VbTracker stitched_tracker;
 		stitched_tracker.resize(my_n_grid);
 		for (int ii = 0; ii < my_n_grid; ii++){
@@ -1147,7 +1167,7 @@ public:
 		}
 
 		output_init(file_prefix);
-		output_results(stitched_tracker, my_n_grid, my_probs_grid);
+		output_results(stitched_tracker, my_n_grid);
 	}
 
 	void output_init(const std::string& file_prefix){
@@ -1175,8 +1195,7 @@ public:
 		}
 	}
 
-	void output_results(const VbTracker& stitched_tracker, const int my_n_grid,
-						const Eigen::Ref<const Eigen::VectorXd>& my_probs_grid){
+	void output_results(const VbTracker& stitched_tracker, const int my_n_grid){
 		// Write;
 		// main output; weights logw converged_hyps counts time (currently no prior)
 		// snps;
@@ -1191,8 +1210,6 @@ public:
 			for (int ii = 0; ii < my_n_grid; ii++){
 				if(p.mode_empirical_bayes){
 					weights[ii] = stitched_tracker.logw_list[ii];
-				} else {
-					weights[ii] = stitched_tracker.logw_list[ii] + std::log(my_probs_grid(ii,0) + eps);
 				}
 			}
 			normaliseLogWeights(weights);
@@ -1205,7 +1222,7 @@ public:
 		if(!p.mode_empirical_bayes){
 			outf << " log_prior";
 		}
-		outf << " count time sigma hb2 hg2";
+		outf << " count time sigma";
 		for (int ee = 0; ee < n_effects; ee++){
 			outf << " pve" << ee;
 			if(p.mode_mog_prior){
@@ -1222,15 +1239,12 @@ public:
 		for (int ii = 0; ii < my_n_grid; ii++){
 			outf << std::setprecision(4) << weights[ii] << " ";
 			outf << stitched_tracker.logw_list[ii] << " ";
-			if(!p.mode_empirical_bayes){
-				outf << std::log(my_probs_grid(ii,0) + eps) << " ";
-			}
 			outf << stitched_tracker.counts_list[ii] << " ";
 			outf << stitched_tracker.elapsed_time_list[ii] <<  " ";
 			outf << stitched_tracker.hyps_list[ii].sigma;
-			for (int ee = 0; ee < n_effects; ee++) {
-				outf << " " << stitched_tracker.hyps_list[ii].pve2[0];
-			}
+//			for (int ee = 0; ee < n_effects; ee++) {
+//				outf << " " << stitched_tracker.hyps_list[ii].pve2[ee];
+//			}
 
 			outf << std::setprecision(8) << std::fixed;
 			for (int ee = 0; ee < n_effects; ee++){
@@ -1274,7 +1288,7 @@ public:
 		nmean_alpha_sd /= (double) (my_n_grid - 1);
 		nmean_beta_sd  /= (double) (my_n_grid - 1);
 
-		// MAP snp-stats to file (inclu covars)
+		// MAP snp-stats to file (include covars)
 		long int ii_map = std::distance(weights.begin(), std::max_element(weights.begin(), weights.end()));
 		write_snp_stats_to_file(outf_map, stitched_tracker.vp_list[ii_map], true, true);
 
@@ -1371,7 +1385,7 @@ public:
 		// Assumes ofile has been initialised.
 
 		// Header
-		ofile << "chr rsid pos a0 a1";
+		ofile << "chr rsid pos a0 a1 maf info";
 		for (int ee = 0; ee < n_effects; ee++){
 			ofile << " beta" << ee << " alpha" << ee << " mu" << ee << " s_sq" << ee;
 			if(write_mog && p.mode_mog_prior){
@@ -1401,7 +1415,7 @@ public:
 		outf_inits << std::endl;
 		for (std::uint32_t kk = 0; kk < n_var; kk++) {
 			ofile << X.chromosome[kk] << " " << X.rsid[kk] << " " << X.position[kk];
-			ofile << " " << X.al_0[kk] << " " << X.al_1[kk];
+			ofile << " " << X.al_0[kk] << " " << X.al_1[kk] << " " << X.maf[kk] << " " << X.info[kk];
 			for (int ee = 0; ee < n_effects; ee++) {
 				ofile << " " << beta_vec(kk, ee);
 				ofile << " " << vp.alpha(kk, ee);
@@ -1444,7 +1458,6 @@ public:
 
 		std::vector<int> valid_points, r1_valid_points;
 		valid_points        = validate_grid(hyps_grid, n_var);
-		probs_grid          = subset_matrix(probs_grid, valid_points);
 		hyps_grid           = subset_matrix(hyps_grid, valid_points);
 
 		if(valid_points.empty()){

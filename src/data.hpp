@@ -67,8 +67,6 @@ class Data
 	bool W_reduced;   // reduced to complete cases or not.
 	bool E_reduced;
 
-	std::vector< double > info;
-	std::vector< double > maf;
 	std::vector< std::string > chromosome, rsid, SNPID;
 	std::vector< std::string > external_dXtEEX_SNPID;
 	std::vector< uint32_t > position;
@@ -88,14 +86,11 @@ class Data
 	Eigen::MatrixXd Y, Y2; // phenotype matrix (#2 always has covars regressed)
 	Eigen::MatrixXd W; // covariate matrix
 	Eigen::MatrixXd E; // env matrix
-	Eigen::VectorXd Z; // interaction vector
 	Eigen::MatrixXd R; // recombination map
 	Eigen::ArrayXXd dXtEEX;
 	Eigen::ArrayXXd external_dXtEEX;
 	Eigen::MatrixXd E_weights;
 	genfile::bgen::View::UniquePtr bgenView;
-	std::vector< double > beta, tau, neglogP, neglogP_2dof;
-	std::vector< std::vector< double > > gamma;
 
 	// For gxe genome-wide scan
 	// cols: neglogp-main, neglogp-gxe, coeff-gxe-main, coeff-gxe-env..
@@ -109,8 +104,8 @@ class Data
 	bool filters_applied;
 
 	// grid things for vbayes
-	std::vector< std::string > hyps_names, imprt_names;
-	Eigen::MatrixXd r1_hyps_grid, r1_probs_grid, hyps_grid, imprt_grid;
+	std::vector< std::string > hyps_names;
+	Eigen::MatrixXd r1_hyps_grid, hyps_grid;
 	Eigen::ArrayXXd alpha_init, mu_init;
 
 
@@ -142,7 +137,7 @@ class Data
 
 		bgenView = genfile::bgen::View::create(p.bgen_file);
 		bgen_pass = true;
-		n_samples = bgenView->number_of_samples();
+		n_samples = (std::uint32_t) bgenView->number_of_samples();
 		n_var_parsed = 0;
 		filters_applied = false;
 
@@ -151,7 +146,7 @@ class Data
 		n_effects = -1;
 		n_covar   = -1;
 		n_env   = -1;
-		n_var     = -1;
+		n_var     = 0;
 		Y_reduced = false;
 		W_reduced = false;
 	}
@@ -193,7 +188,8 @@ class Data
 		if(params.select_rsid){
 			std::sort(params.rsid.begin(), params.rsid.end());
 			std::cout << "Filtering to rsids:" << std::endl;
-			for(int kk = 0; kk < params.rsid.size(); kk++){
+			long int n_rsids = params.rsid.size();
+			for (long int kk = 0; kk < n_rsids; kk++){
 				std::cout << params.rsid[kk]<< std::endl;
 			}
 			genfile::bgen::IndexQuery::UniquePtr query = genfile::bgen::IndexQuery::create(params.bgi_file);
@@ -332,19 +328,11 @@ class Data
 		double dosage_mean, dosage_sigma, missing_calls = 0.0;
 		int n_var_incomplete = 0;
 
-		// Wipe variant context from last chunk
-		maf.clear();
-		info.clear();
-		rsid.clear();
-		chromosome.clear();
-		position.clear();
-		alleles.clear();
-
 		// Resize genotype matrix
 		G.resize(n_samples, params.chunk_size);
 
 		long int n_constant_variance = 0;
-		std::size_t jj = 0;
+		std::uint32_t jj = 0;
 		while ( jj < params.chunk_size && bgen_pass ) {
 			bgen_pass = bgenView->read_variant( &SNPID_j, &rsid_j, &chr_j, &pos_j, &alleles_j );
 			if (!bgen_pass) break;
@@ -425,15 +413,10 @@ class Data
 			}
 
 			// filters passed; write contextual info
-			maf.push_back(maf_j);
-			info.push_back(info_j);
-			rsid.push_back(rsid_j);
-			chromosome.push_back(chr_j);
-			SNPID.push_back(SNPID_j);
-			position.push_back(pos_j);
-			alleles.push_back(alleles_j);
 			G.al_0.push_back(alleles_j[0]);
 			G.al_1.push_back(alleles_j[1]);
+			G.maf.push_back(maf_j);
+			G.info.push_back(info_j);
 			G.rsid.push_back(rsid_j);
 			G.chromosome.push_back(std::stoi(chr_j));
 			G.position.push_back(pos_j);
@@ -466,10 +449,7 @@ class Data
 		// need to resize G whilst retaining existing coefficients if while
 		// loop exits early due to EOF.
 		G.conservativeResize(n_samples, jj);
-		assert( rsid.size() == jj );
-		assert( chromosome.size() == jj );
-		assert( position.size() == jj );
-		assert( alleles.size() == jj );
+		assert( G.rsid.size() == jj );
 		n_var = jj;
 
 		chunk_missingness = missing_calls / (double) (n_var * n_samples);
@@ -1243,7 +1223,7 @@ class Data
 			for (std::uint32_t kk = 0; kk < n_var; kk++){
 				outf_scan << G.chromosome[kk] << " " << G.rsid[kk] << " " << G.position[kk];
 				outf_scan << " " << G.al_0[kk] << " " << G.al_1[kk];
-				outf_scan << " " << maf[kk] << " " << info[kk];
+				outf_scan << " " << G.maf[kk] << " " << G.info[kk];
 				outf_scan << " " << snpstats(kk, 0) << " " << snpstats(kk, 1);
 				outf_scan << std::endl;
 			}
@@ -1299,19 +1279,9 @@ class Data
 		std::vector< std::string > true_fixed_names = {"sigma", "sigma_b", "lambda_b"};
 		std::vector< std::string > true_gxage_names = {"sigma", "sigma_b", "sigma_g", "lambda_b", "lambda_g"};
 
-		if ( params.hyps_grid_file == "NULL" ) {
-			throw std::invalid_argument( "Must provide hyperparameter grid file." );
-		}
-		if ( params.hyps_probs_file == "NULL" ) {
-			throw std::invalid_argument( "Must provide hyperparameter probabilities file." );
-		}
-
 
 		read_grid_file( params.hyps_grid_file, hyps_grid, hyps_names );
-		read_grid_file( params.hyps_probs_file, imprt_grid, imprt_names );
-
-		assert(imprt_grid.cols() == 1);
-		assert(hyps_grid.rows() == imprt_grid.rows());
+//		read_grid_file( params.hyps_probs_file, imprt_grid, imprt_names );
 
 		// Verify header of grid file as expected
 		if(params.interaction_analysis){
@@ -1342,7 +1312,7 @@ class Data
 			if(hyps_names != r1_hyps_names){
 				throw std::invalid_argument( "Header of --r1_hyps_grid must match --hyps_grid." );
 			}
-			read_grid_file( params.r1_probs_grid_file, r1_probs_grid, r1_probs_names );
+//			read_grid_file( params.r1_probs_grid_file, r1_probs_grid, r1_probs_names );
 		}
 	}
 

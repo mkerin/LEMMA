@@ -71,6 +71,7 @@ public:
 	std::vector< int > chromosome;
 	std::vector< std::string > al_0, al_1, rsid;
 	std::vector< std::uint32_t > position;
+	std::vector< double > maf, info;
 	// chr~pos~a0~a1
 	std::vector< std::string > SNPKEY;
 	std::vector< std::string > SNPID;

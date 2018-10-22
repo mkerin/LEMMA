@@ -10,6 +10,7 @@
 #include "variational_parameters.hpp"
 #include "tools/eigen3.3/Dense"
 #include "my_timer.hpp"
+#include "genotype_matrix.hpp"
 #include <boost/iostreams/filtering_stream.hpp>
 #include <boost/iostreams/device/file_descriptor.hpp>
 #include <boost/iostreams/device/file.hpp>
@@ -33,7 +34,7 @@ struct Hyps{
 	// Not hyperparameters, but things that depend on them
 	Eigen::ArrayXd s_x;
 	Eigen::ArrayXd pve;
-	Eigen::ArrayXd pve2;
+//	Eigen::ArrayXd pve2;
 	Eigen::ArrayXd pve_large;
 
 	// Hyps();
@@ -72,7 +73,7 @@ public:
 	// For writing interim output
 	boost::filesystem::path dir;
 	io::filtering_ostream outf_elbo, outf_alpha_diff, outf_weights, outf_inits, outf_iter, outf_alpha;
-	io::filtering_ostream outf_w;
+	io::filtering_ostream outf_w, outf_rescan;
 	std::string main_out_file;
 	bool allow_interim_push;
 
@@ -111,6 +112,7 @@ public:
 		io::close(outf_iter);
 		io::close(outf_alpha);
 		io::close(outf_w);
+		io::close(outf_rescan);
 	};
 
 	void set_main_filepath(const std::string &ofile){
@@ -190,10 +192,9 @@ public:
 
 		outf_iter << cnt << "\t" << std::setprecision(3) << std::fixed;
 		outf_iter << i_hyps.sigma << "\t" << std::setprecision(6) << std::fixed;
-		for(int ee = 0; ee < n_effects; ee++) {
-			outf_iter << i_hyps.pve2[ee] << "\t";
-			outf_iter << i_hyps.pve2[ee] << "\t";
-		}
+//		for(int ee = 0; ee < n_effects; ee++) {
+//			outf_iter << i_hyps.pve2[ee] << "\t";
+//		}
 		for (int ee = 0; ee < n_effects; ee++){
 			outf_iter << std::setprecision(6) << std::fixed << i_hyps.pve(ee) << "\t";
 			if(p.mode_mog_prior){
@@ -267,6 +268,25 @@ public:
 		t_interimOutput.stop();
 	}
 
+	void push_rescan_gwas(const GenotypeMatrix& X,
+							 const std::uint32_t n_var,
+							 const Eigen::Ref<const Eigen::VectorXd>& neglogp){
+		// Assumes that information for all measures that we track have between
+		// added to VbTracker at index ii.
+		t_interimOutput.resume();
+
+		fstream_init(outf_rescan, dir, "_rescan", true);
+		outf_rescan << "chr rsid pos a0 a1 maf info neglogp" << std::endl;
+		for (std::uint32_t kk = 0; kk < n_var; kk++){
+			outf_rescan << X.chromosome[kk] << " " << X.rsid[kk]<< " " << X.position[kk];
+			outf_rescan << " " << X.al_0[kk] << " " << X.al_1[kk] << " ";
+			outf_rescan << X.maf[kk] << " " << X.info[kk] << " " << neglogp(kk);
+			outf_rescan << std::endl;
+		}
+
+		t_interimOutput.stop();
+	}
+
 	void interim_output_init(const int ii,
                              const int round_index,
                              const int n_effects,
@@ -306,9 +326,6 @@ public:
 
 		outf_weights << "weights logw log_prior count time" << std::endl;
 		outf_iter    << "count\tsigma";
-		for (int ee = 0; ee < n_effects; ee++) {
-			outf_iter << "\thb" << ee;
-		}
 		for (int ee = 0; ee < n_effects; ee++){
 			outf_iter << "\tpve" << ee;
 			if(p.mode_mog_prior){
