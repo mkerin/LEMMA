@@ -635,7 +635,7 @@ TEST_CASE( "Example 6: single-env w MoG + hyps max" ){
 			Eigen::VectorXd gam_neglogp(VB.n_var);
 			VB.rescanGWAS(tracker.vp_list[ii], gam_neglogp);
 
-			CHECK(gam_neglogp[1] == Approx(-0.933592));
+			CHECK(gam_neglogp[1] == Approx(0.3038129038));
 
 			Eigen::VectorXd pheno = VB.Y - tracker.vp_list[1].ym;
 			Eigen::VectorXd Z_kk(n_samples);
