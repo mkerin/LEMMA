@@ -373,6 +373,13 @@ public:
 			// Run outer loop - don't update trackers
 			runInnerLoop(ii, random_init, round_index, i_hyps, tracker);
 
+			// 'rescan' GWAS of Z on y-ym
+			if(n_effects > 1) {
+				Eigen::VectorXd gam_neglogp(n_var);
+				rescanGWAS(tracker.vp_list[ii], gam_neglogp);
+				tracker.push_rescan_gwas(X, n_var, gam_neglogp);
+			}
+
 			if((ii + 1) % print_interval == 0){
 				std::cout << "\rRound " << round_index << ": grid point " << ii+1 << "/" << outer_n_grid;
 				print_time_check();
@@ -471,29 +478,23 @@ public:
 			tracker.alpha_diff_list[ii] = alpha_diff_updates;
 		}
 		tracker.push_interim_output(ii, X.chromosome, X.rsid, X.position, X.al_0, X.al_1, n_var, n_effects);
-
-		// 'rescan' GWAS of Z on y-ym
-		if(n_effects > 1) {
-			Eigen::VectorXd gam_neglogp(n_var);
-			rescanGWAS(vp, gam_neglogp);
-			tracker.push_rescan_gwas(X, n_var, gam_neglogp);
-		}
 	}
 
 	/********** VB update functions ************/
-	void rescanGWAS(const VariationalParameters& vp,
+	void rescanGWAS(const VariationalParametersLite& vp,
 			Eigen::Ref<Eigen::VectorXd> neglogp){
 		Eigen::VectorXd pheno = Y - vp.ym;
 		Eigen::VectorXd Z_kk(n_samples);
 
 		for(std::uint32_t jj = 0; jj < n_var; jj++ ){
 			Z_kk = X.col(jj).cwiseProduct(vp.eta);
-			double gam = Z_kk.dot(pheno) / Z_kk.dot(Z_kk);
+			double ztz_inv = 1.0 / Z_kk.dot(Z_kk);
+			double gam = Z_kk.dot(pheno) * ztz_inv;
 			double rss_null = (pheno - Z_kk * gam).squaredNorm();
 
 			// T-test of variant j
 			boost_m::students_t t_dist(n_samples - 1);
-			double main_se_j    = std::sqrt(rss_null) / (N - 1.0);
+			double main_se_j    = std::sqrt(rss_null / (N - 1.0) * ztz_inv);
 			double main_tstat_j = gam / main_se_j;
 			double main_pval_j  = 2 * boost_m::cdf(boost_m::complement(t_dist, fabs(main_tstat_j)));
 
@@ -1341,9 +1342,9 @@ public:
 				outf_map_pred << vp_map.ym(ii) << std::endl;
 			}
 		} else {
-			outf_map_pred << "Xbeta Zgamma" << std::endl;
+			outf_map_pred << "Xbeta eta Xgamma" << std::endl;
 			for (std::uint32_t ii = 0; ii < n_samples; ii++) {
-				outf_map_pred << vp_map.ym(ii) << " " << vp_map.eta(ii) * vp_map.yx(ii) << std::endl;
+				outf_map_pred << vp_map.ym(ii) << " " << vp_map.eta(ii) << " " << vp_map.yx(ii) << std::endl;
 			}
 		}
 

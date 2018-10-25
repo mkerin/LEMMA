@@ -11,19 +11,22 @@ set(CMAKE_CXX_STANDARD 11)
 if(CMAKE_CURRENT_SOURCE_DIR MATCHES /Users/kerin)
     # OSX File System - Laptop
     set(BGEN /Users/kerin/software/bgen)
-    set(LOC_COMPILE_OPTS -DOSX -DDEBUG)
+    set(LOC_COMPILE_OPTS -DOSX -DDEBUG -pg -Og -g)
+    set(LINKER_OPTS -pg -O3 -g)
     set(LIB-DIRS "-L${BGEN}/build/3rd_party/boost_1_55_0")
 elseif(CMAKE_CURRENT_SOURCE_DIR MATCHES /well/marchini/kebl4230)
     # LINUX File System - Rescomp
     set(BGEN /well/marchini/kebl4230/software/bgen/)
     set(LIBS rt)
     set(LOC_COMPILE_OPTS -O3 -static -static-libgcc -static-libstdc++ -lz -fopenmp)
+    set(LINKER_OPTS -O3 -fopenmp)
     set(LIB-DIRS "-L${BGEN}/build/3rd_party/boost_1_55_0 -L/well/marchini/kebl4230/software/boost_1_62_0/stage/lib")
 elseif(CMAKE_CURRENT_SOURCE_DIR MATCHES /homes/kerin)
     # LINUX File System - Garganey
     set(BGEN /homes/kerin/projects/bgen/)
     set(LIBS rt)
     set(LOC_COMPILE_OPTS -O3 -fopenmp)
+    set(LINKER_OPTS -O3 -fopenmp)
     set(LIB-DIRS "-L${BGEN}/build/3rd_party/boost_1_55_0")
 else()
     message( FATAL_ERROR "Unexpected root directory structure. Where is the BGEN lib located?")
@@ -52,7 +55,7 @@ target_include_directories(${TARGET} PRIVATE ${BGEN}/genfile/include ${BGEN}/3rd
 set_target_properties(${TARGET} PROPERTIES LINK_FLAGS "${LIB-DIRS}")
 
 #Link libs
-target_link_libraries(${TARGET} ${BGEN_LIB} ${DB_LIB} ${SQLITE_LIB} ${ZSTD_LIB} ${LIBS})
+target_link_libraries(${TARGET} ${BGEN_LIB} ${DB_LIB} ${SQLITE_LIB} ${ZSTD_LIB} ${LIBS} ${LINKER_OPTS})
 
 ## Catch Unit Tests
 add_executable(catch_tests tests/tests-main.cpp)
