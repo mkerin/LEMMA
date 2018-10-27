@@ -1237,6 +1237,7 @@ public:
  			}
 			outf << " sigma" << ee;
 			if(p.mode_mog_prior){
+				outf << " sigma_spike" << ee;
 				outf << " sigma_spike_dilution" << ee;
 			}
 			outf << " lambda" << ee;
@@ -1261,7 +1262,10 @@ public:
 				}
 				outf << " " << tracker.hyps_list[ii].slab_relative_var(ee);
 				if(p.mode_mog_prior){
+					outf << std::setprecision(2);
+					outf << " " << tracker.hyps_list[ii].slab_relative_var(ee);
 					outf << " " << tracker.hyps_list[ii].slab_relative_var(ee) / tracker.hyps_list[ii].spike_relative_var(ee);
+					outf << std::setprecision(4);
 				}
 				outf << " " << tracker.hyps_list[ii].lambda(ee);
 			}
