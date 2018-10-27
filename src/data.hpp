@@ -1227,6 +1227,7 @@ class Data
 				outf_scan << " " << snpstats(kk, 0) << " " << snpstats(kk, 1);
 				outf_scan << std::endl;
 			}
+			io::close(outf_scan);
 		}
 	}
 

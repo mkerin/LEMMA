@@ -11,6 +11,7 @@ Changes:
 - 'Rescan' GWAS of Z on y-ym for MAP iteration.
 - Removed dependence on probs grid
 - All variant metadata stored in genotype matrix object.
+- Close outf_scan after writing.
 
 # Version 0.9.2
 Bugfixes:
