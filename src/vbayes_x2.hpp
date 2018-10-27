@@ -139,6 +139,8 @@ public:
 		env_names      = dat.env_names;
 		N              = (double) n_samples;
 
+		std::cout << "snpstats: " << snpstats.rows() << " x " << snpstats.cols() << std::endl;
+
 
 		// Read environmental variables
 		E = dat.E;
@@ -904,11 +906,12 @@ public:
 		t_snpwise_regression.resume();
 
 		// Keep values from point with highest p-val
+		vp.muw = Eigen::ArrayXd::Zero(n_env);
 		double vv = 0.0;
 		for (long int jj = 0; jj < n_var; jj++){
 			if (snpstats(jj, 1) > vv){
 				vv = snpstats(jj, 1);
-				vp.muw = snpstats.block(jj, 3, 1, n_env);
+				vp.muw = snpstats.block(jj, 2, 1, n_env).transpose();
 
 				std::cout << "neglogp at variant " << jj << ": " << vv;
 				std::cout << std::endl << vp.muw.transpose() << std::endl;

@@ -2,6 +2,7 @@
 Bugfix:
 - Don't try to regress out covars when not present
 - Now able to run only main effects model
+- Need to transpose snpstats.row() to assign to Eigen::ArrayXd vp.muw
 
 Changes:
 - Ability to set minimum difference in variances of MoG.
