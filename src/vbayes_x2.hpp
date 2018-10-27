@@ -98,7 +98,7 @@ public:
 	// boost fstreams
 	boost_io::filtering_ostream outf, outf_map, outf_wmean, outf_nmean, outf_inits;
 	boost_io::filtering_ostream outf_elbo, outf_alpha_diff, outf_map_pred, outf_w;
-	boost_io::filtering_ostream outf_scan;
+	boost_io::filtering_ostream outf_rescan;
 
 	// Monitoring
 	std::chrono::system_clock::time_point time_check;
@@ -226,6 +226,7 @@ public:
 		io::close(outf_elbo);
 		io::close(outf_alpha_diff);
 		io::close(outf_inits);
+		io::close(outf_rescan);
 	}
 
 	void run(){
@@ -1183,12 +1184,14 @@ public:
 		std::string ofile_nmean = fstream_init(outf_nmean, file_prefix, "_niave_mean_snp_stats");
 		std::string ofile_map_yhat = fstream_init(outf_map_pred, file_prefix, "_map_yhat");
 		std::string ofile_w = fstream_init(outf_w, file_prefix, "_env_weights");
+		std::string ofile_rescan = fstream_init(outf_rescan, file_prefix, "_map_rescan");
 		std::cout << "Writing converged hyperparameter values to " << ofile << std::endl;
 		std::cout << "Writing MAP snp stats to " << ofile_map << std::endl;
 		std::cout << "Writing (weighted) average snp stats to " << ofile_wmean << std::endl;
 		std::cout << "Writing (niave) average snp stats to " << ofile_nmean << std::endl;
 		std::cout << "Writing yhat from map to " << ofile_map_yhat << std::endl;
 		std::cout << "Writing env weights to " << ofile_w << std::endl;
+		std::cout << "Writing 'rescan' p-values of MAP to " << ofile_rescan << std::endl;
 
 		if(p.verbose){
 			std::string ofile_elbo = fstream_init(outf_elbo, file_prefix, "_elbo");
@@ -1199,7 +1202,7 @@ public:
 		}
 	}
 
-	void output_results(const VbTracker& stitched_tracker, const int my_n_grid){
+	void output_results(const VbTracker& tracker, const int my_n_grid){
 		// Write;
 		// main output; weights logw converged_hyps counts time (currently no prior)
 		// snps;
@@ -1213,7 +1216,7 @@ public:
 		if(n_grid > 1){
 			for (int ii = 0; ii < my_n_grid; ii++){
 				if(p.mode_empirical_bayes){
-					weights[ii] = stitched_tracker.logw_list[ii];
+					weights[ii] = tracker.logw_list[ii];
 				}
 			}
 			normaliseLogWeights(weights);
@@ -1242,25 +1245,25 @@ public:
 
 		for (int ii = 0; ii < my_n_grid; ii++){
 			outf << std::setprecision(4) << weights[ii] << " ";
-			outf << stitched_tracker.logw_list[ii] << " ";
-			outf << stitched_tracker.counts_list[ii] << " ";
-			outf << stitched_tracker.elapsed_time_list[ii] <<  " ";
-			outf << stitched_tracker.hyps_list[ii].sigma;
+			outf << tracker.logw_list[ii] << " ";
+			outf << tracker.counts_list[ii] << " ";
+			outf << tracker.elapsed_time_list[ii] <<  " ";
+			outf << tracker.hyps_list[ii].sigma;
 //			for (int ee = 0; ee < n_effects; ee++) {
-//				outf << " " << stitched_tracker.hyps_list[ii].pve2[ee];
+//				outf << " " << tracker.hyps_list[ii].pve2[ee];
 //			}
 
 			outf << std::setprecision(8) << std::fixed;
 			for (int ee = 0; ee < n_effects; ee++){
-				outf << " " << stitched_tracker.hyps_list[ii].pve(ee);
+				outf << " " << tracker.hyps_list[ii].pve(ee);
 				if(p.mode_mog_prior){
-					outf << " " << stitched_tracker.hyps_list[ii].pve_large(ee);
+					outf << " " << tracker.hyps_list[ii].pve_large(ee);
 				}
-				outf << " " << stitched_tracker.hyps_list[ii].slab_relative_var(ee);
+				outf << " " << tracker.hyps_list[ii].slab_relative_var(ee);
 				if(p.mode_mog_prior){
-					outf << " " << stitched_tracker.hyps_list[ii].spike_relative_var(ee);
+					outf << " " << tracker.hyps_list[ii].spike_relative_var(ee);
 				}
-				outf << " " << stitched_tracker.hyps_list[ii].lambda(ee);
+				outf << " " << tracker.hyps_list[ii].lambda(ee);
 			}
 			outf << std::endl;
 		}
@@ -1272,10 +1275,10 @@ public:
 		Eigen::ArrayXXd nmean_beta  = Eigen::ArrayXXd::Zero(n_var, n_effects);
 		for (int ii = 0; ii < my_n_grid; ii++){
 			if(std::isfinite(weights[ii])){
-				wmean_alpha += weights[ii] * stitched_tracker.vp_list[ii].alpha;
-				wmean_beta  += weights[ii] * stitched_tracker.vp_list[ii].alpha * stitched_tracker.vp_list[ii].mu;
-				nmean_alpha += stitched_tracker.vp_list[ii].alpha;
-				nmean_beta  += stitched_tracker.vp_list[ii].alpha * stitched_tracker.vp_list[ii].mu;
+				wmean_alpha += weights[ii] * tracker.vp_list[ii].alpha;
+				wmean_beta  += weights[ii] * tracker.vp_list[ii].alpha * tracker.vp_list[ii].mu;
+				nmean_alpha += tracker.vp_list[ii].alpha;
+				nmean_beta  += tracker.vp_list[ii].alpha * tracker.vp_list[ii].mu;
 			}
 		}
 		nmean_alpha /= (double) my_n_grid;
@@ -1285,8 +1288,8 @@ public:
 		Eigen::ArrayXXd nmean_beta_sd  = Eigen::ArrayXXd::Zero(n_var, n_effects);
 		for (int ii = 0; ii < my_n_grid; ii++){
 			if(std::isfinite(weights[ii])){
-				nmean_alpha_sd += (stitched_tracker.vp_list[ii].alpha - nmean_alpha).square();
-				nmean_beta_sd  += (stitched_tracker.vp_list[ii].alpha * stitched_tracker.vp_list[ii].mu - nmean_beta).square();
+				nmean_alpha_sd += (tracker.vp_list[ii].alpha - nmean_alpha).square();
+				nmean_beta_sd  += (tracker.vp_list[ii].alpha * tracker.vp_list[ii].mu - nmean_beta).square();
 			}
 		}
 		nmean_alpha_sd /= (double) (my_n_grid - 1);
@@ -1294,7 +1297,7 @@ public:
 
 		// MAP snp-stats to file (include covars)
 		long int ii_map = std::distance(weights.begin(), std::max_element(weights.begin(), weights.end()));
-		write_snp_stats_to_file(outf_map, stitched_tracker.vp_list[ii_map], true, true);
+		write_snp_stats_to_file(outf_map, tracker.vp_list[ii_map], true, true);
 
 
 		// Weighted mean snp-stats to file
@@ -1337,7 +1340,7 @@ public:
 		}
 
 		// Predicted effects to file
-		VariationalParametersLite vp_map = stitched_tracker.vp_list[ii_map];
+		VariationalParametersLite vp_map = tracker.vp_list[ii_map];
 		calcPredEffects(vp_map);
 		if(n_effects == 1) {
 			outf_map_pred << "Xbeta" << std::endl;
@@ -1363,19 +1366,31 @@ public:
 		}
 		outf_w << std::endl;
 
+		// Rescan of map
+		Eigen::VectorXd gam_neglogp(n_var);
+		rescanGWAS(tracker.vp_list[ii_map], gam_neglogp);
+		outf_rescan << "chr rsid pos a0 a1 maf info neglogp" << std::endl;
+		for (std::uint32_t kk = 0; kk < n_var; kk++){
+			outf_rescan << X.chromosome[kk] << " " << X.rsid[kk]<< " " << X.position[kk];
+			outf_rescan << " " << X.al_0[kk] << " " << X.al_1[kk] << " ";
+			outf_rescan << X.maf[kk] << " " << X.info[kk] << " " << gam_neglogp(kk);
+			outf_rescan << std::endl;
+		}
+
+
 		if(p.verbose){
 			outf_elbo << std::setprecision(4) << std::fixed;
 			for (int ii = 0; ii < my_n_grid; ii++){
-				for (int cc = 0; cc < stitched_tracker.logw_updates_list[ii].size(); cc++){
-					outf_elbo << stitched_tracker.logw_updates_list[ii][cc] << " ";
+				for (int cc = 0; cc < tracker.logw_updates_list[ii].size(); cc++){
+					outf_elbo << tracker.logw_updates_list[ii][cc] << " ";
 				}
 				outf_elbo << std::endl;
 			}
 
 			outf_alpha_diff << std::setprecision(4) << std::fixed;
 			for (int ii = 0; ii < my_n_grid; ii++){
-				for (int cc = 0; cc < stitched_tracker.alpha_diff_list[ii].size(); cc++){
-					outf_alpha_diff << stitched_tracker.alpha_diff_list[ii][cc] << " ";
+				for (int cc = 0; cc < tracker.alpha_diff_list[ii].size(); cc++){
+					outf_alpha_diff << tracker.alpha_diff_list[ii][cc] << " ";
 				}
 				outf_alpha_diff << std::endl;
 			}
