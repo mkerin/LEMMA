@@ -1237,7 +1237,7 @@ public:
  			}
 			outf << " sigma" << ee;
 			if(p.mode_mog_prior){
-				outf << " sigma_spike" << ee;
+				outf << " sigma_spike_dilution" << ee;
 			}
 			outf << " lambda" << ee;
 		}
@@ -1261,7 +1261,7 @@ public:
 				}
 				outf << " " << tracker.hyps_list[ii].slab_relative_var(ee);
 				if(p.mode_mog_prior){
-					outf << " " << tracker.hyps_list[ii].spike_relative_var(ee);
+					outf << " " << tracker.hyps_list[ii].slab_relative_var(ee) / tracker.hyps_list[ii].spike_relative_var(ee);
 				}
 				outf << " " << tracker.hyps_list[ii].lambda(ee);
 			}
@@ -1367,14 +1367,16 @@ public:
 		outf_w << std::endl;
 
 		// Rescan of map
-		Eigen::VectorXd gam_neglogp(n_var);
-		rescanGWAS(tracker.vp_list[ii_map], gam_neglogp);
-		outf_rescan << "chr rsid pos a0 a1 maf info neglogp" << std::endl;
-		for (std::uint32_t kk = 0; kk < n_var; kk++){
-			outf_rescan << X.chromosome[kk] << " " << X.rsid[kk]<< " " << X.position[kk];
-			outf_rescan << " " << X.al_0[kk] << " " << X.al_1[kk] << " ";
-			outf_rescan << X.maf[kk] << " " << X.info[kk] << " " << gam_neglogp(kk);
-			outf_rescan << std::endl;
+		if(n_env > 1) {
+			Eigen::VectorXd gam_neglogp(n_var);
+			rescanGWAS(tracker.vp_list[ii_map], gam_neglogp);
+			outf_rescan << "chr rsid pos a0 a1 maf info neglogp" << std::endl;
+			for (std::uint32_t kk = 0; kk < n_var; kk++) {
+				outf_rescan << X.chromosome[kk] << " " << X.rsid[kk] << " " << X.position[kk];
+				outf_rescan << " " << X.al_0[kk] << " " << X.al_1[kk] << " ";
+				outf_rescan << X.maf[kk] << " " << X.info[kk] << " " << gam_neglogp(kk);
+				outf_rescan << std::endl;
+			}
 		}
 
 
