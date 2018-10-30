@@ -170,7 +170,7 @@ public:
 
 			if(p.env_weights_file != "NULL"){
 				vp_init.muw     = dat.E_weights.col(0);
-			} else if (p.init_weights_with_snpwise_scan){
+			} else if (n_env > 1 && p.init_weights_with_snpwise_scan){
 				calc_snpwise_regression(vp_init);
 			} else {
 				vp_init.muw.resize(n_env);
@@ -1263,7 +1263,7 @@ public:
 				outf << " " << tracker.hyps_list[ii].slab_relative_var(ee);
 				if(p.mode_mog_prior){
 					outf << std::setprecision(2);
-					outf << " " << tracker.hyps_list[ii].slab_relative_var(ee);
+					outf << " " << tracker.hyps_list[ii].spike_relative_var(ee);
 					outf << " " << tracker.hyps_list[ii].slab_relative_var(ee) / tracker.hyps_list[ii].spike_relative_var(ee);
 					outf << std::setprecision(4);
 				}
