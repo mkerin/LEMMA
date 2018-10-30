@@ -273,6 +273,7 @@ public:
 		std::string ofile_inits = fstream_init(outf_inits, "", "_inits");
 		std::cout << "Writing start points for alpha and mu to " << ofile_inits << std::endl;
 		write_snp_stats_to_file(outf_inits, vp_init, false, false);
+		io::close(outf_inits);
 
 		std::vector< VbTracker > trackers(p.n_thread);
 		run_inference(hyps_grid, false, 2, trackers);
@@ -724,6 +725,10 @@ public:
 		vp.varB.resize(n_var, n_effects);
 		calcVarqBeta(hyps, vp, vp.varB);
 
+		std::cout << vp.varB.col(0).sum() << std::endl;
+		std::cout << vp.varB.col(1).sum() << std::endl;
+		std::cout << vp.varB.block(0, 0, 5, 2) << std::endl;
+
 		// for covars
 		if(p.use_vb_on_covars){
 			vp.sc_sq.resize(n_covar);
@@ -1086,6 +1091,9 @@ public:
 			int_linear += (N - 1.0) * vp.sc_sq.sum(); // covar main
 		}
 		int_linear += (N - 1.0) * vp.varB.col(0).sum();  // beta
+		std::cout << int_linear << std::endl;
+		std::cout << vp.varB.col(1).sum() << std::endl;
+		std::cout << vp.EdZtZ.sum() << std::endl;
 		if(n_effects > 1) {
 			int_linear += (vp.EdZtZ * vp.varB.col(1)).sum(); // gamma
 		}
@@ -1589,11 +1597,11 @@ inline std::vector<int> validate_grid(const Eigen::MatrixXd &grid, const T n_var
 		double lam_b = grid(ii, lam_b_ind);
 		double lam_g = grid(ii, lam_g_ind);
 
-		bool chck_sigma   = (grid(ii, sigma_ind)   >  0.0);
-		bool chck_sigma_b = (grid(ii, sigma_b_ind) >  0.0);
-		bool chck_sigma_g = (grid(ii, sigma_g_ind) >= 0.0);
-		bool chck_lam_b   = (lam_b >= 1.0 / (double) n_var) && (lam_b < 1.0);
-		bool chck_lam_g   = (lam_g >= 0) && (lam_g < 1.0);
+		bool chck_sigma   = (grid(ii, sigma_ind)   >  0.0 && std::isfinite(grid(ii, sigma_ind)));
+		bool chck_sigma_b = (grid(ii, sigma_b_ind) >  0.0 && std::isfinite(grid(ii, sigma_b_ind)));
+		bool chck_sigma_g = (grid(ii, sigma_g_ind) >= 0.0 && std::isfinite(grid(ii, sigma_g_ind)));
+		bool chck_lam_b   = (lam_b >= 1.0 / (double) n_var) && (lam_b < 1.0) && std::isfinite(lam_b);
+		bool chck_lam_g   = (lam_g >= 0) && (lam_g < 1.0) && std::isfinite(lam_g);
 		if(chck_lam_b && chck_lam_g && chck_sigma && chck_sigma_g && chck_sigma_b){
 			valid_points.push_back(ii);
 		}

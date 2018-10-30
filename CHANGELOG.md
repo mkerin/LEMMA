@@ -3,6 +3,7 @@ Bugfix:
 - Don't try to regress out covars when not present
 - Now able to run only main effects model
 - Need to transpose snpstats.row() to assign to Eigen::ArrayXd vp.muw
+- Init weights from sumstats if n_env > 1
 
 Changes:
 - Ability to set minimum difference in variances of MoG.
@@ -12,6 +13,7 @@ Changes:
 - Removed dependence on probs grid
 - All variant metadata stored in genotype matrix object.
 - Close outf_scan after writing.
+- Check hyp grid values are finite
 
 # Version 0.9.2
 Bugfixes:
