@@ -139,9 +139,6 @@ public:
 		env_names      = dat.env_names;
 		N              = (double) n_samples;
 
-		std::cout << "snpstats: " << snpstats.rows() << " x " << snpstats.cols() << std::endl;
-
-
 		// Read environmental variables
 		E = dat.E;
 
@@ -724,10 +721,6 @@ public:
 		}
 		vp.varB.resize(n_var, n_effects);
 		calcVarqBeta(hyps, vp, vp.varB);
-
-		std::cout << vp.varB.col(0).sum() << std::endl;
-		std::cout << vp.varB.col(1).sum() << std::endl;
-		std::cout << vp.varB.block(0, 0, 5, 2) << std::endl;
 
 		// for covars
 		if(p.use_vb_on_covars){
