@@ -1084,9 +1084,6 @@ public:
 			int_linear += (N - 1.0) * vp.sc_sq.sum(); // covar main
 		}
 		int_linear += (N - 1.0) * vp.varB.col(0).sum();  // beta
-		std::cout << int_linear << std::endl;
-		std::cout << vp.varB.col(1).sum() << std::endl;
-		std::cout << vp.EdZtZ.sum() << std::endl;
 		if(n_effects > 1) {
 			int_linear += (vp.EdZtZ * vp.varB.col(1)).sum(); // gamma
 		}
@@ -1438,7 +1435,6 @@ public:
 		Eigen::ArrayXXd       beta_vec  = vp.alpha * vp.mu;
 		if(p.mode_mog_prior) beta_vec += (1 - vp.alpha) * vp.mup;
 
-		outf_inits << std::endl;
 		for (std::uint32_t kk = 0; kk < n_var; kk++) {
 			ofile << X.chromosome[kk] << " " << X.rsid[kk] << " " << X.position[kk];
 			ofile << " " << X.al_0[kk] << " " << X.al_1[kk] << " " << X.maf[kk] << " " << X.info[kk];
