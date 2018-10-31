@@ -98,7 +98,7 @@ public:
 	// boost fstreams
 	boost_io::filtering_ostream outf, outf_map, outf_wmean, outf_nmean, outf_inits;
 	boost_io::filtering_ostream outf_elbo, outf_alpha_diff, outf_map_pred, outf_w;
-	boost_io::filtering_ostream outf_rescan;
+	boost_io::filtering_ostream outf_rescan, outf_map_covar;
 
 	// Monitoring
 	std::chrono::system_clock::time_point time_check;
@@ -224,6 +224,7 @@ public:
 		io::close(outf_alpha_diff);
 		io::close(outf_inits);
 		io::close(outf_rescan);
+		io::close(outf_map_covar);
 	}
 
 	void run(){
@@ -269,7 +270,7 @@ public:
 		// Write inits to file - exclude covar values
 		std::string ofile_inits = fstream_init(outf_inits, "", "_inits");
 		std::cout << "Writing start points for alpha and mu to " << ofile_inits << std::endl;
-		write_snp_stats_to_file(outf_inits, vp_init, false, false);
+		write_snp_stats_to_file(outf_inits, vp_init, false);
 		io::close(outf_inits);
 
 		std::vector< VbTracker > trackers(p.n_thread);
@@ -1183,8 +1184,10 @@ public:
 		std::string ofile_map_yhat = fstream_init(outf_map_pred, file_prefix, "_map_yhat");
 		std::string ofile_w = fstream_init(outf_w, file_prefix, "_env_weights");
 		std::string ofile_rescan = fstream_init(outf_rescan, file_prefix, "_map_rescan");
+		std::string ofile_map_covar = fstream_init(outf_map_covar, file_prefix, "_map_covar");
 		std::cout << "Writing converged hyperparameter values to " << ofile << std::endl;
 		std::cout << "Writing MAP snp stats to " << ofile_map << std::endl;
+		std::cout << "Writing MAP covar coefficients to " << ofile_map_covar << std::endl;
 		std::cout << "Writing (weighted) average snp stats to " << ofile_wmean << std::endl;
 		std::cout << "Writing (niave) average snp stats to " << ofile_nmean << std::endl;
 		std::cout << "Writing yhat from map to " << ofile_map_yhat << std::endl;
@@ -1299,8 +1302,8 @@ public:
 
 		// MAP snp-stats to file (include covars)
 		long int ii_map = std::distance(weights.begin(), std::max_element(weights.begin(), weights.end()));
-		write_snp_stats_to_file(outf_map, tracker.vp_list[ii_map], true, true);
-
+		write_snp_stats_to_file(outf_map, tracker.vp_list[ii_map], true);
+		write_covars_to_file(outf_map_covar, tracker.vp_list[ii_map]);
 
 		// Weighted mean snp-stats to file
 		outf_wmean << "chr rsid pos a0 a1";
@@ -1401,9 +1404,21 @@ public:
 		}
 	}
 
+	void write_covars_to_file(boost_io::filtering_ostream& ofile,
+								 VariationalParametersLite vp) {
+		// Assumes ofile has been initialised.
+
+		// Header
+		ofile << "covar beta" << std::endl;
+
+		ofile << std::setprecision(9) << std::fixed;
+		for (int cc = 0; cc < n_covar; cc++) {
+			ofile << covar_names[cc] << vp.muc(cc) << std::endl;
+		}
+	}
+
 	void write_snp_stats_to_file(boost_io::filtering_ostream& ofile,
 			VariationalParametersLite vp,
-			const bool& write_covars,
 			const bool& write_mog){
 		// Assumes ofile has been initialised.
 
@@ -1419,18 +1434,6 @@ public:
 
 		ofile << std::setprecision(9) << std::fixed;
 
-		// Covars if appropriate
-		if(write_covars && p.use_vb_on_covars){
-			for (int cc = 0; cc < n_covar; cc++){
-				ofile << "NA " << covar_names[cc] << " NA NA NA " << 1;
-				ofile <<  " " << vp.muc(cc);
-				for (int ee = 1; ee < n_effects; ee++){
-					ofile << " NA NA";
-				}
-				ofile << std::endl;
-			}
-		}
-
 		// Genetic params
 		Eigen::ArrayXXd       beta_vec  = vp.alpha * vp.mu;
 		if(p.mode_mog_prior) beta_vec += (1 - vp.alpha) * vp.mup;
@@ -1442,10 +1445,14 @@ public:
 				ofile << " " << beta_vec(kk, ee);
 				ofile << " " << vp.alpha(kk, ee);
 				ofile << " " << vp.mu(kk, ee);
+				ofile << std::scientific << std::setprecision(4);
 				ofile << " " << vp.s_sq(kk, ee);
+				ofile << std::setprecision(9) << std::fixed;
 				if (write_mog && p.mode_mog_prior) {
 					ofile << " " << vp.mup(kk, ee);
+					ofile << std::scientific << std::setprecision(4);
 					ofile << " " << vp.sp_sq(kk, ee);
+					ofile << std::setprecision(9) << std::fixed;
 				}
 			}
 			ofile << std::endl;
