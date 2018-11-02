@@ -1413,7 +1413,7 @@ public:
 
 		ofile << std::setprecision(9) << std::fixed;
 		for (int cc = 0; cc < n_covar; cc++) {
-			ofile << covar_names[cc] << vp.muc(cc) << std::endl;
+			ofile << covar_names[cc] << " " << vp.muc(cc) << std::endl;
 		}
 	}
 

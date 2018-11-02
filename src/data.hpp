@@ -1192,9 +1192,9 @@ class Data
 				// F-test; joint interaction effect of variant j
 				double f_stat        = (rss_null - rss_alt) / (double) n_env;
 				f_stat              /= rss_alt / (double) (n_samples - n_env - 1);
-				double gxe_pval_j    = boost_m::cdf(boost_m::complement(f_dist, f_stat));
+				double gxe_pval_j    = boost_m::cdf(boost_m::complement(f_dist, fabs(f_stat)));
 				double gxe_neglogp_j = -1 * std::log10(gxe_pval_j);
-				if(!std::isfinite(gxe_neglogp_j)){
+				if(!std::isfinite(gxe_neglogp_j) || f_stat < 0){
 					std::cout << "Warning: neglog-p = " << gxe_neglogp_j << std::endl;
 					std::cout << "Warning: p-val = "    << gxe_pval_j << std::endl;
 					std::cout << "Warning: rss_null = " << rss_null << std::endl;
