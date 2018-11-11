@@ -198,7 +198,7 @@ public:
 			calc_scaled_values();
 		}
 
-		t_readXk.resume();
+//		t_readXk.resume();
 		if(low_mem){
 			if(mode_sgd){
 				vec = M.cast<double>().block(batch_start, jj, nBatch, 1);
@@ -214,7 +214,7 @@ public:
 				vec = G.col(jj);
 			}
 		}
-		t_readXk.stop();
+//		t_readXk.stop();
 		return vec;
 	}
 

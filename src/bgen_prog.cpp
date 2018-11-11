@@ -38,6 +38,7 @@ int main( int argc, char** argv ) {
 	parameters p;
 
 	try {
+		auto data_start = std::chrono::system_clock::now();
 		parse_arguments(p, argc, argv);
 		Data data( p );
 
@@ -62,6 +63,9 @@ int main( int argc, char** argv ) {
 			data.read_alpha_mu();
 		}
 
+		auto data_end = std::chrono::system_clock::now();
+		auto elapsed_reading_data = data_end - data_start;
+
 
 		// Pass data to VBayes object
 		VBayesX2 VB(data);
@@ -70,8 +74,15 @@ int main( int argc, char** argv ) {
 		// VB.output_init();
 
 		// Run inference
+		auto vb_start = std::chrono::system_clock::now();
 		VB.run();
+		auto vb_end = std::chrono::system_clock::now();
+		auto elapsed_vb = vb_end - vb_start;
 		// VB.output_results();
+
+		std::cout << std::endl << "Time expenditure:" << std::endl;
+		std::cout << "Reading data: " << elapsed_reading_data.count() << std::endl;
+		std::cout << "VB inference: " << elapsed_vb.count() << std::endl;
 
 		return 0 ;
 	}
