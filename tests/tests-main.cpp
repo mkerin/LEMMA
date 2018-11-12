@@ -178,8 +178,10 @@ TEST_CASE( "Example 1: single-env" ){
 
 			VB.updateAllParams(0, round_index, vp, hyps, logw_prev, logw_updates);
 
-			CHECK(vp.alpha(0, 0) == Approx(0.14485896221944508));
+			CHECK(VB.X.col(0)(0) == Approx(1.8604233373));
+			CHECK(vp.s_sq(0, 0) == Approx(0.0031087381));
 			CHECK(vp.mu(0, 0) == Approx(-0.0304566021));
+			CHECK(vp.alpha(0, 0) == Approx(0.14485896221944508));
 			CHECK(vp.alpha(1, 0) == Approx(0.15184033622793655));
 			CHECK(vp.mu(1, 0) == Approx(-0.035654208));
 			CHECK(vp.alpha(63, 0) == Approx(0.17836527480696865));
