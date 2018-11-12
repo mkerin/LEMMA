@@ -17,8 +17,12 @@ Makefile
 .DS_Store*
 .Rproj.user
 .Rhistory
-*.Rproj
+*.Rpoj
+.DS_Store
+.idea/*
 latest_compile_branch.txt
+Cmakefiles/*
+Makefile
 
 # tests/ executables
 tests/tests-main.o

@@ -43,7 +43,7 @@ inline size_t numCols(const Eigen::MatrixXd &A);
 inline void setCol(Eigen::MatrixXd &A, const Eigen::VectorXd &v, size_t col);
 inline Eigen::VectorXd getCol(const Eigen::MatrixXd &A, size_t col);
 inline Eigen::MatrixXd solve(const Eigen::MatrixXd &A, const Eigen::MatrixXd &b);
-inline std::size_t find_covar_index( std::string colname, std::vector< std::string > col_names );
+inline std::size_t find_covar_index( const std::string& colname, std::vector< std::string > col_names );
 
 
 class Data
@@ -128,12 +128,15 @@ class Data
 	// 	filters_applied = false;
 	// }
 
-	explicit Data( const parameters& p ) : params(p), G(p.low_mem) {
+	explicit Data( const parameters& p ) : params(p), G(p) {
 		// system time at start
 		start = std::chrono::system_clock::now();
 		std::time_t start_time = std::chrono::system_clock::to_time_t(start);
 		std::cout << "Starting analysis at " << std::ctime(&start_time) << std::endl;
 		std::cout << "Compiled from git branch: master" << std::endl;
+
+		int n = Eigen::nbThreads( );
+		std::cout << "Threads detected by eigen: " << n << std::endl;
 
 		bgenView = genfile::bgen::View::create(p.bgen_file);
 		bgen_pass = true;
@@ -240,6 +243,7 @@ class Data
 			n_effects = 2;  // 1 more than actually present... n_effects?
 		} else {
 			n_effects = 1;
+			assert(n_env = 0);
 		}
 
 		// Exclude samples with missing values in phenos / covars / filters
@@ -281,12 +285,12 @@ class Data
 		}
 
 		// Y2 always contains the controlled phenotype
-		if(params.covar_file != "NULL" && !params.use_vb_on_covars){
-			regress_out_covars(Y);
-			Y2 = Y;
-		} else if (params.covar_file != "NULL"){
+		if(n_covar > 0 && params.use_vb_on_covars){
 			Y2 = Y;
 			regress_out_covars(Y2);
+		} else if (n_covar > 0){
+			regress_out_covars(Y);
+			Y2 = Y;
 		}
 	}
 
@@ -1439,13 +1443,13 @@ class Data
 			incomplete_cases.insert(missing_envs.begin(), missing_envs.end());
 		}
 
-		if(params.pheno_file != "NULL"){
+		if(n_pheno > 0){
 			Y = reduce_mat_to_complete_cases( Y, Y_reduced, n_pheno, incomplete_cases );
 		}
-		if(params.covar_file != "NULL"){
+		if(n_covar > 0){
 			W = reduce_mat_to_complete_cases( W, W_reduced, n_covar, incomplete_cases );
 		}
-		if(params.env_file != "NULL"){
+		if(n_env > 0){
 			E = reduce_mat_to_complete_cases( E, E_reduced, n_env, incomplete_cases );
 		}
 		n_samples -= incomplete_cases.size();
@@ -1537,7 +1541,7 @@ inline Eigen::MatrixXd solve(const Eigen::MatrixXd &A, const Eigen::MatrixXd &b)
 	return x;
 }
 
-inline std::size_t find_covar_index( std::string colname, std::vector< std::string > col_names ){
+inline std::size_t find_covar_index(const std::string& colname, std::vector< std::string > col_names ){
 	std::size_t x_col;
 	std::vector<std::string>::iterator it;
 	it = std::find(col_names.begin(), col_names.end(), colname);

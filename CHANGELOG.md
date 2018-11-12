@@ -1,3 +1,6 @@
+# Version 0.10.1
+All threads used to decompress genotype columns. Major refactoring to prepare for multi-phenos (eg. main and interaction effect parameters separated into separate objects).
+
 # Version 0.9.3
 Bugfix:
 - Don't try to regress out covars when not present

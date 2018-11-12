@@ -128,6 +128,9 @@ void parse_arguments(parameters &p, int argc, char *argv[]) {
 		"--gamma_updates_thresh",
 		"--init_weights_with_snpwise_scan",
 		"--dxteex",
+		"--mode_mog_beta",
+		"--mode_mog_gamma",
+		"--vb_chunk_size"
 		"--spike_diff_factor",
 		"--min_spike_diff_factor",
 	};
@@ -153,6 +156,11 @@ void parse_arguments(parameters &p, int argc, char *argv[]) {
 		std::cout << "Not supported:" << std::endl;
 		std::cout << "- vectorization with SSE" << std::endl;
 #endif
+
+#ifdef DEBUG
+		std::cout << "DEBUG mode ON - multithreading not used" << std::endl;
+#endif
+
 
 		// For vectorise profiling
 		Eigen::VectorXi aa1 = Eigen::VectorXi::Random(256000);
@@ -241,6 +249,11 @@ void parse_arguments(parameters &p, int argc, char *argv[]) {
 				i += 1;
 			}
 
+			if(strcmp(in_str, "--vb_chunk_size") == 0) {
+				p.vb_chunk_size = std::stoi(argv[i + 1]);
+				i += 1;
+			}
+
 			if(strcmp(in_str, "--burnin_maxhyps") == 0) {
 				p.burnin_maxhyps = std::stoi(argv[i + 1]);
 				i += 1;
@@ -303,7 +316,18 @@ void parse_arguments(parameters &p, int argc, char *argv[]) {
 			}
 
 			if(strcmp(in_str, "--effects_prior_mog") == 0) {
-				p.mode_mog_prior = true;
+				p.mode_mog_prior_beta = true;
+				p.mode_mog_prior_gam = true;
+				i += 0;
+			}
+
+			if(strcmp(in_str, "--mode_mog_beta") == 0) {
+				p.mode_mog_prior_beta = true;
+				i += 0;
+			}
+
+			if(strcmp(in_str, "--mode_mog_gamma") == 0) {
+				p.mode_mog_prior_gam = true;
 				i += 0;
 			}
 

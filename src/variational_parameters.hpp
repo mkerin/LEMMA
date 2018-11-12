@@ -13,13 +13,18 @@ struct VariationalParametersLite {
 	Eigen::VectorXd eta_sq;
 
 	// Variational parameters for slab
-	Eigen::ArrayXXd alpha; // P x (E+1)
-	Eigen::ArrayXXd mu;    // P x (E+1)
-	Eigen::ArrayXXd s_sq;    // P x (E+1)
+	Eigen::ArrayXd alpha_beta; // P x (E+1)
+	Eigen::ArrayXd mu1_beta;    // P x (E+1)
+	Eigen::ArrayXd mu2_beta;    // P x (E+1)
+	Eigen::ArrayXd s1_beta_sq;    // P x (E+1)
+	Eigen::ArrayXd s2_beta_sq;    // P x (E+1)
 
 	// Variational parameters for spike (MoG prior mode)
-	Eigen::ArrayXXd mup;    // P x (E+1)
-	Eigen::ArrayXXd sp_sq;    // P x (E+1)
+	Eigen::ArrayXd alpha_gam; // P x (E+1)
+	Eigen::ArrayXd mu1_gam;    // P x (E+1)
+	Eigen::ArrayXd mu2_gam;    // P x (E+1)
+	Eigen::ArrayXd s1_gam_sq;    // P x (E+1)
+	Eigen::ArrayXd s2_gam_sq;    // P x (E+1)
 
 	// Variational parameters for covariate main effects
 	Eigen::ArrayXd  muc;    // C x 1
@@ -33,14 +38,19 @@ public:
 	// This stores parameters used in VB and some summary quantities that
 	// depend on those parameters.
 
-	// Variational parameters for slab
-	Eigen::ArrayXXd alpha; // P x (E+1)
-	Eigen::ArrayXXd mu;    // P x (E+1)
-	Eigen::ArrayXXd s_sq;  // P x (E+1)
+	// Variational parameters for slab (params 1)
+	Eigen::ArrayXd alpha_beta; // P x (E+1)
+	Eigen::ArrayXd mu1_beta;    // P x (E+1)
+	Eigen::ArrayXd s1_beta_sq;  // P x (E+1)
+	Eigen::ArrayXd mu2_beta;    // P x (E+1)
+	Eigen::ArrayXd s2_beta_sq;  // P x (E+1)
 
-	// Variational parameters for spike (MoG prior mode)
-	Eigen::ArrayXXd mup;    // P x (E+1)
-	Eigen::ArrayXXd sp_sq;  // P x (E+1)
+	// Variational parameters for spike (MoG prior mode; params 2)
+	Eigen::ArrayXd alpha_gam; // P x (E+1)
+	Eigen::ArrayXd mu1_gam;    // P x (E+1)
+	Eigen::ArrayXd s1_gam_sq;  // P x (E+1)
+	Eigen::ArrayXd mu2_gam;    // P x (E+1)
+	Eigen::ArrayXd s2_gam_sq;  // P x (E+1)
 
 	// Variational parameters for covariate main effects
 	Eigen::ArrayXd  muc;    // C x 1
@@ -51,26 +61,32 @@ public:
 	Eigen::ArrayXd  sw_sq;    // n_env x 1
 
 	// Summary quantities
-	Eigen::VectorXd yx;      // N x 1
-	Eigen::VectorXd ym;      // N x 1
+	Eigen::Ref<Eigen::VectorXd> yx;      // N x 1
+	Eigen::Ref<Eigen::VectorXd> ym;      // N x 1
 	Eigen::VectorXd eta;     // expected value of matrix product E x w
 	Eigen::VectorXd eta_sq;  // expected value (E x w) cdot (E x w)
 	Eigen::ArrayXd  EdZtZ;   // expectation of the diagonal of Z^t Z
-	Eigen::ArrayXXd varB;    // variance of beta, gamma under approximating distn
+	Eigen::ArrayXd varB;    // variance of beta, gamma under approximating distn
+	Eigen::ArrayXd varG;    // variance of beta, gamma under approximating distn
 
 
 	// sgd
 	long int count;
 
-	VariationalParameters(){};
+	VariationalParameters(Eigen::Ref<Eigen::VectorXd> my_yx,
+			Eigen::Ref<Eigen::VectorXd> my_ym) : yx(my_yx), ym(my_ym){};
 	~VariationalParameters(){};
 
 	void init_from_lite(const VariationalParametersLite& init) {
-		ym    = init.ym;
-		yx    = init.yx;
-		alpha = init.alpha;
-		mu    = init.mu;
-		mup   = init.mup;
+		// yx and ym set to point to appropriate col of VBayesX2::YM and VBayesX2::YX in constructor
+
+		alpha_beta = init.alpha_beta;
+		mu1_beta   = init.mu1_beta;
+		mu2_beta   = init.mu2_beta;
+		alpha_gam  = init.alpha_gam;
+		mu1_gam    = init.mu1_gam;
+		mu2_gam    = init.mu2_gam;
+
 		muc   = init.muc;
 
 		count = 0;
@@ -82,13 +98,20 @@ public:
 
 	VariationalParametersLite convert_to_lite(){
 		VariationalParametersLite vplite;
-		vplite.ym    = ym;
-		vplite.yx    = yx;
-		vplite.alpha = alpha;
-		vplite.mu    = mu;
-		vplite.s_sq  = s_sq;
-		vplite.mup   = mup;
-		vplite.sp_sq = sp_sq;
+		vplite.ym         = ym;
+		vplite.yx         = yx;
+		vplite.alpha_beta = alpha_beta;
+		vplite.alpha_gam  = alpha_gam;
+		vplite.mu1_beta   = mu1_beta;
+		vplite.mu1_gam    = mu1_gam;
+		vplite.mu2_beta   = mu2_beta;
+		vplite.mu2_gam    = mu2_gam;
+		vplite.s1_beta_sq = s1_beta_sq;
+		vplite.s1_gam_sq  = s1_gam_sq;
+		vplite.s2_beta_sq = s2_beta_sq;
+		vplite.s2_gam_sq  = s2_gam_sq;
+
+
 		vplite.muc   = muc;
 		vplite.muw   = muw;
 		vplite.eta   = eta;

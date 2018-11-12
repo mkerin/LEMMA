@@ -10,6 +10,7 @@
 #include "variational_parameters.hpp"
 #include "tools/eigen3.3/Dense"
 #include "my_timer.hpp"
+#include "misc_utils.hpp"
 #include "genotype_matrix.hpp"
 #include <boost/iostreams/filtering_stream.hpp>
 #include <boost/iostreams/device/file_descriptor.hpp>
@@ -19,11 +20,17 @@
 #include "class.h"
 
 
-namespace io = boost::iostreams;
+namespace boost_io = boost::iostreams;
 
 
-struct Hyps{
-// public:
+class Hyps{
+	int sigma_ind   = 0;
+	int sigma_b_ind = 1;
+	int sigma_g_ind = 2;
+	int lam_b_ind   = 3;
+	int lam_g_ind   = 4;
+
+public:
 	double sigma;
 	Eigen::ArrayXd slab_var;
 	Eigen::ArrayXd spike_var;
@@ -34,25 +41,74 @@ struct Hyps{
 	// Not hyperparameters, but things that depend on them
 	Eigen::ArrayXd s_x;
 	Eigen::ArrayXd pve;
-//	Eigen::ArrayXd pve2;
 	Eigen::ArrayXd pve_large;
 
-	// Hyps();
+	Hyps(){};
 
-	// Hyps(int n_effects, double my_sigma, double sigma_b, double sigma_g, double lam_b, double lam_g){
-	// 	slab_var.resize(n_effects);
-	// 	spike_var.resize(n_effects);
-	// 	slab_relative_var.resize(n_effects);
-	// 	spike_relative_var.resize(n_effects);
-	// 	lambda.resize(n_effects);
-	//
-	// 	sigma = my_sigma;
-	// 	slab_var           << sigma * sigma_b, sigma * sigma_g;
-	// 	spike_var          << sigma * sigma_b / 100.0, sigma * sigma_g / 100.0;
-	// 	slab_relative_var  << sigma_b, sigma_g;
-	// 	spike_relative_var << sigma_b, sigma_g;
-	// 	lambda             << lam_b, lam_g;
-	// }
+	void init_from_grid(int n_effects,
+			int ii,
+			int n_var,
+			const Eigen::Ref<const Eigen::MatrixXd>& hyps_grid,
+			const parameters& p,
+			const double& my_s_z){
+		// Implicit that n_effects > 1
+
+		// Unpack
+		double my_sigma = hyps_grid(ii, sigma_ind);
+		double my_sigma_b = hyps_grid(ii, sigma_b_ind);
+		double my_sigma_g = hyps_grid(ii, sigma_g_ind);
+		double my_lam_b = hyps_grid(ii, lam_b_ind);
+		double my_lam_g = hyps_grid(ii, lam_g_ind);
+
+		// Resize
+		slab_var.resize(n_effects);
+		spike_var.resize(n_effects);
+		slab_relative_var.resize(n_effects);
+		spike_relative_var.resize(n_effects);
+		lambda.resize(n_effects);
+		s_x.resize(n_effects);
+
+		// Assign initial hyps
+		sigma = my_sigma;
+		slab_var << my_sigma * my_sigma_b, my_sigma * my_sigma_g;
+		spike_var << my_sigma * my_sigma_b / p.spike_diff_factor, my_sigma * my_sigma_g / p.spike_diff_factor;
+		slab_relative_var << my_sigma_b, my_sigma_g;
+		spike_relative_var << my_sigma_b / p.spike_diff_factor, my_sigma_g / p.spike_diff_factor;
+		lambda << my_lam_b, my_lam_g;
+		s_x << n_var, my_s_z;
+	}
+
+	void init_from_grid(int n_effects,
+			int ii,
+			int n_var,
+			const Eigen::Ref<const Eigen::MatrixXd>& hyps_grid,
+			const parameters& p){
+		/*** Implicit that n_effects == 1 ***/
+
+		// Unpack
+		double my_sigma = hyps_grid(ii, sigma_ind);
+		double my_sigma_b = hyps_grid(ii, sigma_b_ind);
+		double my_sigma_g = hyps_grid(ii, sigma_g_ind);
+		double my_lam_b = hyps_grid(ii, lam_b_ind);
+		double my_lam_g = hyps_grid(ii, lam_g_ind);
+
+		// Resize
+		slab_var.resize(n_effects);
+		spike_var.resize(n_effects);
+		slab_relative_var.resize(n_effects);
+		spike_relative_var.resize(n_effects);
+		lambda.resize(n_effects);
+		s_x.resize(n_effects);
+
+		// Assign initial hyps
+		sigma = my_sigma;
+		slab_var << my_sigma * my_sigma_b;
+		spike_var << my_sigma * my_sigma_b / p.spike_diff_factor;
+		slab_relative_var << my_sigma_b;
+		spike_relative_var << my_sigma_b / p.spike_diff_factor;
+		lambda << my_lam_b;
+		s_x << n_var;
+	}
 };
 
 
@@ -62,8 +118,6 @@ public:
 	std::vector< std::vector< double > > logw_updates_list;  // elbo updates at each ii
 	std::vector< std::vector< double > > alpha_diff_list;  // elbo updates at each ii
 	std::vector< VariationalParametersLite > vp_list;                  // best mu at each ii
-	// std::vector< Eigen::VectorXd > mu_list;                  // best mu at each ii
-	// std::vector< Eigen::VectorXd > alpha_list;               // best alpha at each ii
 	std::vector< double >          logw_list;                // best logw at each ii
 	std::vector< double >          elapsed_time_list;        // time to compute grid point
 	std::vector< Hyps >            hyps_list;                // hyps values at end of VB inference.
@@ -72,8 +126,8 @@ public:
 
 	// For writing interim output
 	boost::filesystem::path dir;
-	io::filtering_ostream outf_elbo, outf_alpha_diff, outf_weights, outf_inits, outf_iter, outf_alpha;
-	io::filtering_ostream outf_w, outf_rescan;
+	boost_io::filtering_ostream outf_elbo, outf_alpha_diff, outf_inits, outf_iter, outf_alpha;
+	boost_io::filtering_ostream outf_weights, outf_rescan;
 	std::string main_out_file;
 	bool allow_interim_push;
 
@@ -84,35 +138,14 @@ public:
 		allow_interim_push = false;
 	}
 
-	VbTracker(const std::string& ofile) : main_out_file(ofile),
-                                          t_interimOutput("interinOutput: %ts \n"){
-		allow_interim_push = true;
-	}
-
-	VbTracker(int n_list, const std::string& ofile) : main_out_file(ofile),
-                                                      t_interimOutput("interinOutput: %ts \n"){
-		counts_list.resize(n_list);
-		vp_list.resize(n_list);
-		// mu_list.resize(n_list);
-		// alpha_list.resize(n_list);
-		logw_list.resize(n_list);
-		logw_updates_list.resize(n_list);
-		alpha_diff_list.resize(n_list);
-		elapsed_time_list.resize(n_list);
-		hyps_list.resize(n_list);
-
-		allow_interim_push = true;
-	}
-
 	~VbTracker(){
-		io::close(outf_elbo);
-		io::close(outf_alpha_diff);
-		io::close(outf_weights);
-		io::close(outf_inits);
-		io::close(outf_iter);
-		io::close(outf_alpha);
-		io::close(outf_w);
-		io::close(outf_rescan);
+		boost_io::close(outf_elbo);
+		boost_io::close(outf_alpha_diff);
+		boost_io::close(outf_inits);
+		boost_io::close(outf_iter);
+		boost_io::close(outf_alpha);
+		boost_io::close(outf_weights);
+		boost_io::close(outf_rescan);
 	};
 
 	void set_main_filepath(const std::string &ofile){
@@ -124,41 +157,13 @@ public:
                                   const int& n_effects,
                                   const int& n_var,
                                   const VariationalParameters& vp,
-                                  const std::vector< int >& chromosome,
-                                  const std::vector< std::string >& rsid,
-                                  const std::vector< std::string >& al_0,
-                                  const std::vector< std::string >& al_1,
-                                  const std::vector< std::uint32_t >& position){
+                                  const GenotypeMatrix& X){
 		t_interimOutput.resume();
+
 		fstream_init(outf_inits, dir, "_params_iter" + std::to_string(cnt), true);
+		write_snp_stats_to_file(outf_inits, n_effects, n_var, vp, X, p, true);
+		boost_io::close(outf_inits);
 
-		outf_inits << "chr rsid pos a0 a1";
-		for (int ee = 0; ee < n_effects; ee++){
-			outf_inits << " beta" << ee << " alpha" << ee << " mu" << ee;
- 			outf_inits << " s_sq" << ee;
-			if(p.mode_mog_prior){
-				outf_inits << " mu_spike" << ee << " s_sq_spike" << ee;
-			}
-		}
-		outf_inits << std::endl;
-		Eigen::ArrayXXd      beta_vec  = vp.alpha * vp.mu;
-		if(p.mode_mog_prior) beta_vec += (1 - vp.alpha) * vp.mup;
-
-		for (std::uint32_t kk = 0; kk < n_var; kk++){
-			outf_inits << chromosome[kk] << " " << rsid[kk] << " " << position[kk];
-			outf_inits << " " << al_0[kk] << " " << al_1[kk];
-			for (int ee = 0; ee < n_effects; ee++){
-				outf_inits << " " << beta_vec(kk, ee);
-				outf_inits << " " << vp.alpha(kk, ee);
-				outf_inits << " " << vp.mu(kk, ee);
-				outf_inits << " " << vp.s_sq(kk, ee);
-				if(p.mode_mog_prior){
-					outf_inits << " " << vp.mup(kk, ee);
-					outf_inits << " " << vp.sp_sq(kk, ee);
-				}
-			}
-			outf_inits << std::endl;
-		}
 		t_interimOutput.stop();
 	}
 
@@ -188,24 +193,32 @@ public:
                                   const int& n_var,
                                   const int& n_env,
                                   const VariationalParameters& vp){
+		// Diagnostics + env-weights from latest vb iteration
 		t_interimOutput.resume();
 
-		outf_iter << cnt << "\t" << std::setprecision(3) << std::fixed;
-		outf_iter << i_hyps.sigma << "\t" << std::setprecision(6) << std::fixed;
-//		for(int ee = 0; ee < n_effects; ee++) {
-//			outf_iter << i_hyps.pve2[ee] << "\t";
-//		}
-		for (int ee = 0; ee < n_effects; ee++){
-			outf_iter << std::setprecision(6) << std::fixed << i_hyps.pve(ee) << "\t";
-			if(p.mode_mog_prior){
+		outf_iter << cnt << "\t";
+		outf_iter << std::setprecision(3) << std::fixed;
+		outf_iter << i_hyps.sigma << "\t";
+
+		for (int ee = 0; ee < n_effects; ee++) {
+			// PVE
+			outf_iter << std::setprecision(6) << std::fixed;
+			outf_iter << i_hyps.pve(ee) << "\t";
+			if ((ee == 0 && p.mode_mog_prior_beta) || (ee == 1 && p.mode_mog_prior_gam)) {
 				outf_iter << i_hyps.pve_large(ee) << "\t";
 			}
-			outf_iter << std::setprecision(12) << std::fixed << i_hyps.slab_relative_var(ee) << "\t";
-			if(p.mode_mog_prior){
+
+			// Relative variance
+			outf_iter << std::setprecision(12) << std::fixed;
+			outf_iter << i_hyps.slab_relative_var(ee) << "\t";
+			if((ee == 0 && p.mode_mog_prior_beta) || (ee == 1 && p.mode_mog_prior_gam)){
 				outf_iter << i_hyps.spike_relative_var(ee) << "\t";
 			}
+
+			// Lambda
 			outf_iter << i_hyps.lambda(ee) << "\t";
 		}
+
 		outf_iter << std::setprecision(3) << std::fixed;
 		for( int ee = 0; ee < n_effects; ee++) {
 			outf_iter << i_hyps.s_x(ee) << "\t";
@@ -214,56 +227,31 @@ public:
 		outf_iter << c_alpha_diff << "\t";
 		outf_iter << lap_seconds << std::endl;
 
+
+		// Weights
 		for (int ll = 0; ll < n_env; ll++){
-			outf_w << vp.muw(ll);
-			if(ll < n_env - 1) outf_w << "\t";
+			outf_weights << vp.muw(ll);
+			if(ll < n_env - 1) outf_weights << "\t";
 		}
-		outf_w << std::endl;
+		outf_weights << std::endl;
 
 		t_interimOutput.stop();
 	}
 
 	void push_interim_output(int ii,
-                             const std::vector< int >& chromosome,
-                             const std::vector< std::string >& rsid,
-                             const std::vector< std::uint32_t >& position,
-                             const std::vector< std::string >& al_0,
-                             const std::vector< std::string >& al_1,
+                             const GenotypeMatrix& X,
                              const std::uint32_t n_var,
-													   const std::uint32_t n_effects){
+							 const std::uint32_t n_effects){
 		// Assumes that information for all measures that we track have between
 		// added to VbTracker at index ii.
 		t_interimOutput.resume();
 
-		// Write output to file
-		outf_weights << "NA" << " " << logw_list[ii] << " ";
-		outf_weights << "NA" << " ";
-		outf_weights << counts_list[ii] << " ";
-		outf_weights << elapsed_time_list[ii] << std::endl;
+		// TODO: Add converged covar values?
 
-		fstream_init(outf_inits, dir, "_inits", true);
-		outf_inits << "chr rsid pos a0 a1";
-		for(int ee = 0; ee < n_effects; ee++){
-			outf_inits << " alpha" << ee << " mu" << ee << " s_sq" << ee;
-			if(p.mode_mog_prior){
-				outf_inits << " mu_spike" << ee << " s_sq_spike" << ee;
-			}
-		}
-		outf_inits << std::endl;
-		for (std::uint32_t kk = 0; kk < n_var; kk++){
-			outf_inits << chromosome[kk] << " " << rsid[kk]<< " " << position[kk];
-			outf_inits << " " << al_0[kk] << " " << al_1[kk];
-			for (int ee = 0; ee < n_effects; ee++){
-				outf_inits << " " << vp_list[ii].alpha(kk, ee);
-				outf_inits << " " << vp_list[ii].mu(kk, ee);
-				outf_inits << " " << vp_list[ii].s_sq(kk, ee);
-				if(p.mode_mog_prior){
-					outf_inits << " " << vp_list[ii].mup(kk, ee);
-					outf_inits << " " << vp_list[ii].sp_sq(kk, ee);
-				}
-			}
- 			outf_inits << std::endl;
-		}
+		// Converged snp-stats to file
+		fstream_init(outf_inits, dir, "_converged", true);
+		write_snp_stats_to_file(outf_inits, n_effects, n_var, vp_list[ii], X, p, true);
+		boost_io::close(outf_inits);
 
 		t_interimOutput.stop();
 	}
@@ -305,34 +293,30 @@ public:
 		boost::filesystem::create_directories(dir);
 
 		// Initialise fstreams
-		fstream_init(outf_weights, dir, "_hyps", false);
 		fstream_init(outf_iter, dir, "_iter_updates", false);
-		fstream_init(outf_w, dir, "_env_weights", false);
-		// fstream_init(outf_inits, dir, "_inits", true);
-		// if(p.xtra_verbose){
-		// 	fstream_init(outf_alpha, dir, "_alpha", true);
-		// }
+		fstream_init(outf_weights, dir, "_env_weights", false);
 
+		// Weights - add header + initial values
 		for (int ll = 0; ll < n_env; ll++){
-			outf_w << env_names[ll];
-			if(ll + 1 < n_env) outf_w << " ";
+			outf_weights << env_names[ll];
+			if(ll + 1 < n_env) outf_weights << " ";
 		}
-		outf_w << std::endl;
+		outf_weights << std::endl;
 		for (int ll = 0; ll < n_env; ll++){
-			outf_w << vp.muw(ll);
-			if(ll + 1 < n_env) outf_w << " ";
+			outf_weights << vp.muw(ll);
+			if(ll + 1 < n_env) outf_weights << " ";
 		}
-		outf_w << std::endl;
+		outf_weights << std::endl;
 
-		outf_weights << "weights logw log_prior count time" << std::endl;
+		// Diagnostics - add header
 		outf_iter    << "count\tsigma";
 		for (int ee = 0; ee < n_effects; ee++){
 			outf_iter << "\tpve" << ee;
-			if(p.mode_mog_prior){
+			if((ee == 0 && p.mode_mog_prior_beta) || (ee == 1 && p.mode_mog_prior_gam)){
 				outf_iter << "\tpve_large" << ee;
  			}
 			outf_iter << "\tsigma" << ee;
-			if(p.mode_mog_prior){
+			if((ee == 0 && p.mode_mog_prior_beta) || (ee == 1 && p.mode_mog_prior_gam)){
 				outf_iter << "\tsigma_spike" << ee;
 			}
 			outf_iter << "\tlambda" << ee;
@@ -340,14 +324,9 @@ public:
 		outf_iter << "\ts_x" << "\ts_z";
 		outf_iter << "\telbo\tmax_alpha_diff\tseconds" << std::endl;
 
-		// outf_inits << "chr rsid pos a0 a1";
-		// for(int ee = 0; ee < n_effects; ee++){
-		// 	outf_inits << " alpha" << ee << " mu" << ee;
-		// }
-		// outf_inits << std::endl;
 	}
 
-	void fstream_init(io::filtering_ostream& my_outf,
+	void fstream_init(boost_io::filtering_ostream& my_outf,
                              const boost::filesystem::path& dir,
                              const std::string& file_suffix,
                              const bool& allow_gzip){
@@ -364,16 +343,14 @@ public:
 		std::string ofile      = dir.string() + "/" + stem + file_suffix + ext;
 
 		if (ext.find(".gz") != std::string::npos) {
-			my_outf.push(io::gzip_compressor());
+			my_outf.push(boost_io::gzip_compressor());
 		}
-		my_outf.push(io::file_sink(ofile.c_str()));
+		my_outf.push(boost_io::file_sink(ofile));
 	}
 
 	void resize(int n_list){
 		counts_list.resize(n_list);
 		vp_list.resize(n_list);
-		// mu_list.resize(n_list);
-		// alpha_list.resize(n_list);
 		logw_updates_list.resize(n_list);
 		alpha_diff_list.resize(n_list);
 		logw_list.resize(n_list);
@@ -384,28 +361,14 @@ public:
 		}
 	}
 
-	void clear(){
-		counts_list.clear();
-		vp_list.clear();
-		// mu_list.clear();
-		// alpha_list.clear();
-		logw_list.clear();
-		logw_updates_list.clear();
-		alpha_diff_list.clear();
-		elapsed_time_list.clear();
-		hyps_list.clear();
-	}
-
-	void copy_ith_element(int ii, const VbTracker& other_tracker){
-		counts_list[ii]       = other_tracker.counts_list[ii];
-		vp_list[ii]           = other_tracker.vp_list[ii];
-		// mu_list[ii]           = other_tracker.mu_list[ii];
-		// alpha_list[ii]        = other_tracker.alpha_list[ii];
-		logw_list[ii]         = other_tracker.logw_list[ii];
-		logw_updates_list[ii] = other_tracker.logw_updates_list[ii];
-		alpha_diff_list[ii]   = other_tracker.alpha_diff_list[ii];
-		elapsed_time_list[ii] = other_tracker.elapsed_time_list[ii];
-		hyps_list[ii]         = other_tracker.hyps_list[ii];
+	void copy_ith_element(int jj, int ii, const VbTracker& other_tracker){
+		counts_list[jj]       = other_tracker.counts_list[ii];
+		vp_list[jj]           = other_tracker.vp_list[ii];
+		logw_list[jj]         = other_tracker.logw_list[ii];
+		logw_updates_list[jj] = other_tracker.logw_updates_list[ii];
+		alpha_diff_list[jj]   = other_tracker.alpha_diff_list[ii];
+		elapsed_time_list[jj] = other_tracker.elapsed_time_list[ii];
+		hyps_list[jj]         = other_tracker.hyps_list[ii];
 	}
 };
 
