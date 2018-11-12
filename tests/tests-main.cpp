@@ -76,8 +76,8 @@ TEST_CASE( "Algebra in Eigen3" ) {
 TEST_CASE( "Example 1: single-env" ){
 	parameters p;
 
-	SECTION("Ex1. No filters applied, high mem mode"){
-		char* argv[] = { (char*) "bin/bgen_prog", (char*) "--mode_vb",
+	SECTION("Ex1. No filters applied, low mem mode"){
+		char* argv[] = { (char*) "bin/bgen_prog", (char*) "--mode_vb", (char*) "--low_mem",
 						 (char*) "--interaction", (char*) "x",
 						 (char*) "--bgen", (char*) "data/io_test/n50_p100.bgen",
 						 (char*) "--out", (char*) "data/io_test/fake_age.out",
@@ -118,10 +118,10 @@ TEST_CASE( "Example 1: single-env" ){
 
 		data.read_full_bgen();
 		SECTION( "Ex1. bgen read in & standardised correctly"){
-			CHECK(data.G.low_mem == false);
-			CHECK(data.params.low_mem == false);
-            CHECK(data.params.flip_high_maf_variants == true);
-			CHECK(data.G(0, 0) == Approx(1.8604233373));
+			CHECK(data.G.low_mem);
+			CHECK(data.params.low_mem);
+            CHECK(data.params.flip_high_maf_variants);
+			CHECK(data.G(0, 0) == Approx(1.8570984229));
 		}
 
 		SECTION( "Ex1. Confirm calc_dxteex() reorders properly"){
@@ -146,7 +146,7 @@ TEST_CASE( "Example 1: single-env" ){
 			CHECK(VB.n_effects == 2);
 			CHECK(VB.vp_init.muw(0) == 1.0);
 			CHECK(VB.p.init_weights_with_snpwise_scan == false);
-			CHECK(VB.dXtEEX(0, 0) == Approx(87.204591182113916));
+			CHECK(VB.dXtEEX(0, 0) == Approx(87.1907593967));
 //			CHECK(VB.Cty(0, 0) == Approx(-5.3290705182007514e-15));
 		}
 
@@ -157,6 +157,7 @@ TEST_CASE( "Example 1: single-env" ){
         SECTION("Ex1. Explicitly checking updates"){
 			// Set up for RunInnerLoop
 			long n_grid = VB.hyps_grid.rows();
+			long n_samples = VB.n_samples;
 			std::vector<Hyps> all_hyps;
 			VB.unpack_hyps(VB.hyps_grid, all_hyps);
 
@@ -172,32 +173,70 @@ TEST_CASE( "Example 1: single-env" ){
 			VariationalParameters& vp = all_vp[0];
 			Hyps& hyps = all_hyps[0];
 
-			vp.s1_beta_sq(0) == Approx
-			CHECK(vp.alpha_beta(0) == Approx(0.14485896221944508));
-			CHECK(vp.mu1_beta(0) == Approx(-0.0304566021));
-			CHECK(vp.alpha_beta(1) == Approx(0.15184033622793655));
-			CHECK(vp.mu1_beta(1) == Approx(-0.035654208));
-			CHECK(vp.alpha_beta(63) == Approx(0.17836527480696865));
-//			CHECK(VB.calc_logw(hyps, vp) == Approx(-60.9810031189));
+			SECTION("A computed correctly"){
+				Eigen::MatrixXd D;
+				Eigen::Ref<Eigen::MatrixXd> Y = VB.Y;
+				std::vector< std::uint32_t > chunk = VB.fwd_pass_chunks[0];
+				unsigned long ch_len   = chunk.size();
+
+				// D is n_samples x snp_batch
+				if(D.cols() != ch_len){
+					D.resize(n_samples, ch_len);
+				}
+				VB.X.col_block3(chunk, D);
+
+				CHECK(D(0, 0) == Approx(1.8570984229));
+
+//				// Most work done here
+//				// variant correlations with residuals
+//				Eigen::MatrixXd residual(n_samples, n_grid);
+//				if(n_effects == 1){
+//					// Main effects update in main effects only model
+//					for(int nn = 0; nn < n_grid; nn++) {
+//						residual.col(nn) = Y - all_vp[nn].ym;
+//					}
+//				} else if (ee == 0){
+//					// Main effects update in interaction model
+//					for(int nn = 0; nn < n_grid; nn++){
+//						residual.col(nn) = Y - all_vp[nn].ym - all_vp[nn].yx.cwiseProduct(all_vp[nn].eta);
+//					}
+//				} else {
+//					// Interaction effects
+//					for (int nn = 0; nn < n_grid; nn++){
+//						residual.col(nn) = (Y - all_vp[nn].ym).cwiseProduct(all_vp[nn].eta) - all_vp[nn].yx.cwiseProduct(all_vp[nn].eta_sq);
+//					}
+//				}
+//				Eigen::MatrixXd AA = residual.transpose() * D; // n_grid x snp_batch
+//				AA.transposeInPlace();                         // convert to snp_batch x n_grid
+			}
+
+			CHECK(VB.X.col(0)(0) == Approx(1.8570984229));
+			CHECK(vp.s1_beta_sq(0) == Approx(0.0031087381));
+			CHECK(vp.mu1_beta(0) == Approx(-0.0303900712));
+			CHECK(vp.alpha_beta(0) == Approx(0.1447783263));
+			CHECK(vp.alpha_beta(1) == Approx(0.1517251004));
+			CHECK(vp.mu1_beta(1) == Approx(-0.0355760798));
+			CHECK(vp.alpha_beta(63) == Approx(0.1784518373));
+			CHECK(VB.calc_logw(hyps, vp) == Approx(-60.983398393));
 
 			VB.updateAllParams(1, round_index, all_vp, all_hyps, logw_prev, logw_updates);
 
-			CHECK(vp.alpha_beta(0) == Approx(0.1351221581));
-			CHECK(vp.mu1_beta(0) == Approx(-0.0206056016));
-			CHECK(vp.alpha_beta(1) == Approx(0.1401495216));
-			CHECK(vp.alpha_beta(63) == Approx(0.1769087833));
-//			CHECK(VB.calc_logw(hyps, vp) == Approx(-60.6030355156));
+			CHECK(vp.alpha_beta(0) == Approx(0.1350711123));
+			CHECK(vp.mu1_beta(0) == Approx(-0.0205395866));
+			CHECK(vp.alpha_beta(1) == Approx(0.1400764528));
+			CHECK(vp.alpha_beta(63) == Approx(0.1769882239));
+			CHECK(VB.calc_logw(hyps, vp) == Approx(-60.606081598));
 		}
-//
+
 //		std::vector< VbTracker > trackers(p.n_thread);
 //		VB.run_inference(VB.hyps_grid, false, 2, trackers);
-//		SECTION("Ex1. Vbayes_X2 inference correct"){
+//		SECTION("Ex1. Vbayes_X2 inference correct") {
 //			CHECK(trackers[0].counts_list[0] == 11);
 //			CHECK(trackers[0].counts_list[3] == 33);
-//			CHECK(trackers[0].logw_list[0] == Approx(-60.5189122149));
-//			CHECK(trackers[0].logw_list[1] == Approx(-59.9653759921));
-//			CHECK(trackers[0].logw_list[2] == Approx(-60.3020600309));
-//			CHECK(trackers[0].logw_list[3] == Approx(-61.0641461747));
+//			CHECK(trackers[0].logw_list[0] == Approx(-60.522210486));
+//			CHECK(trackers[0].logw_list[1] == Approx(-59.9696083263));
+//			CHECK(trackers[0].logw_list[2] == Approx(-60.30658117));
+//			CHECK(trackers[0].logw_list[3] == Approx(-61.0687573393));
 //		}
 	}
 }
