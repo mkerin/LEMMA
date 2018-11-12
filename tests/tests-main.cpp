@@ -55,8 +55,8 @@ TEST_CASE( "Algebra in Eigen3" ) {
 TEST_CASE( "Example 1: single-env" ){
 	parameters p;
 
-	SECTION("Ex1. No filters applied, high mem mode"){
-		char* argv[] = { (char*) "bin/bgen_prog", (char*) "--mode_vb",
+	SECTION("Ex1. No filters applied, low mem mode"){
+		char* argv[] = { (char*) "bin/bgen_prog", (char*) "--mode_vb",(char*) "--low_mem",
 						 (char*) "--interaction", (char*) "x",
 						 (char*) "--bgen", (char*) "data/io_test/n50_p100.bgen",
 						 (char*) "--out", (char*) "data/io_test/fake_age.out",
@@ -97,10 +97,10 @@ TEST_CASE( "Example 1: single-env" ){
 
 		data.read_full_bgen();
 		SECTION( "Ex1. bgen read in & standardised correctly"){
-			CHECK(data.G.low_mem == false);
-			CHECK(data.params.low_mem == false);
+			CHECK(data.G.low_mem == true);
+			CHECK(data.params.low_mem == true);
             CHECK(data.params.flip_high_maf_variants == true);
-			CHECK(data.G(0, 0) == Approx(1.8604233373));
+			CHECK(data.G.col(0)(0) == Approx(1.8570984229));
 		}
 
 		SECTION( "Ex1. Confirm calc_dxteex() reorders properly"){
@@ -125,7 +125,7 @@ TEST_CASE( "Example 1: single-env" ){
 			CHECK(VB.n_effects == 2);
 			CHECK(VB.vp_init.muw(0) == 1.0);
 			CHECK(VB.p.init_weights_with_snpwise_scan == false);
-			CHECK(VB.dXtEEX(0, 0) == Approx(87.204591182113916));
+			CHECK(VB.dXtEEX(0, 0) == Approx(87.1907593967));
 //			CHECK(VB.Cty(0, 0) == Approx(-5.3290705182007514e-15));
 		}
 
@@ -178,22 +178,22 @@ TEST_CASE( "Example 1: single-env" ){
 
 			VB.updateAllParams(0, round_index, vp, hyps, logw_prev, logw_updates);
 
-			CHECK(VB.X.col(0)(0) == Approx(1.8604233373));
+			CHECK(VB.X.col(0)(0) == Approx(1.8570984229));
 			CHECK(vp.s_sq(0, 0) == Approx(0.0031087381));
-			CHECK(vp.mu(0, 0) == Approx(-0.0304566021));
-			CHECK(vp.alpha(0, 0) == Approx(0.14485896221944508));
-			CHECK(vp.alpha(1, 0) == Approx(0.15184033622793655));
-			CHECK(vp.mu(1, 0) == Approx(-0.035654208));
-			CHECK(vp.alpha(63, 0) == Approx(0.17836527480696865));
-			CHECK(VB.calc_logw(hyps, vp) == Approx(-60.9810031189));
+			CHECK(vp.mu(0, 0) == Approx(-0.0303900712));
+			CHECK(vp.alpha(0, 0) == Approx(0.1447783263));
+			CHECK(vp.alpha(1, 0) == Approx(0.1517251004));
+			CHECK(vp.mu(1, 0) == Approx(-0.0355760798));
+			CHECK(vp.alpha(63, 0) == Approx(0.1784518373));
+			CHECK(VB.calc_logw(hyps, vp) == Approx(-60.983398393));
 
 			VB.updateAllParams(1, round_index, vp, hyps, logw_prev, logw_updates);
 
-			CHECK(vp.alpha(0, 0) == Approx(0.1351221581));
-			CHECK(vp.mu(0, 0) == Approx(-0.0206056016));
-			CHECK(vp.alpha(1, 0) == Approx(0.1401495216));
-			CHECK(vp.alpha(63, 0) == Approx(0.1769087833));
-			CHECK(VB.calc_logw(hyps, vp) == Approx(-60.6030355156));
+			CHECK(vp.alpha(0, 0) == Approx(0.1350711123));
+			CHECK(vp.mu(0, 0) == Approx(-0.0205395866));
+			CHECK(vp.alpha(1, 0) == Approx(0.1400764528));
+			CHECK(vp.alpha(63, 0) == Approx(0.1769882239));
+			CHECK(VB.calc_logw(hyps, vp) == Approx(-60.606081598));
 		}
 
 		std::vector< VbTracker > trackers(p.n_thread);
@@ -201,10 +201,10 @@ TEST_CASE( "Example 1: single-env" ){
 		SECTION("Ex1. Vbayes_X2 inference correct"){
 			CHECK(trackers[0].counts_list[0] == 11);
 			CHECK(trackers[0].counts_list[3] == 33);
-			CHECK(trackers[0].logw_list[0] == Approx(-60.5189122149));
-			CHECK(trackers[0].logw_list[1] == Approx(-59.9653759921));
-			CHECK(trackers[0].logw_list[2] == Approx(-60.3020600309));
-			CHECK(trackers[0].logw_list[3] == Approx(-61.0641461747));
+			CHECK(trackers[0].logw_list[0] == Approx(-60.522210486));
+			CHECK(trackers[0].logw_list[1] == Approx(-59.9696083263));
+			CHECK(trackers[0].logw_list[2] == Approx(-60.30658117));
+			CHECK(trackers[0].logw_list[3] == Approx(-61.0687573393));
 		}
 	}
 }
