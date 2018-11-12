@@ -118,8 +118,15 @@ examples/check_nested_classes: examples/check_nested_classes.cpp
 examples/check_eigen: examples/check_eigen.cpp
 	$(CXX) -o $@ $< $(FLAGS)
 
+examples/test_XtDX: examples/test_XtDX.cpp
+	$(CXX) $< -o $@ $(FLAGS)  -fopenmp -O3
+#
+examples/profile_read_cols: examples/profile_read_cols.cpp
+	$(CXX) $< -o $@ -I/homes/kerin/include/boost_1_67_0 -L/homes/kerin/include/boost_1_67_0/stage/lib -lboost_thread -lboost_system $(FLAGS) -fopenmp -O3
+#
 examples/test_matrix_matrix_mult: examples/test_matrix_matrix_mult.cpp
 	$(CXX) $< -o $@ $(FLAGS)  -fopenmp -O3
+
 
 
 # IO Tests
