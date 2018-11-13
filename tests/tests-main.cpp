@@ -574,18 +574,18 @@ TEST_CASE( "Example 6: single-env w MoG + hyps max" ){
 
 
 			CHECK(trackers[1].logw == Approx(-45.7823937859));
-			CHECK(trackers[1].vp.eta[0] == Approx(-0.8185317198));
-			CHECK(trackers[1].vp.ym[0] == Approx(-0.4439596651));
+			CHECK(trackers[1].vp.eta[0] == Approx(-0.5894793969));
+			CHECK(trackers[1].vp.ym[0] == Approx(-0.8185317198));
 
 			Eigen::VectorXd gam_neglogp(VB.n_var);
 			VB.rescanGWAS(trackers[1].vp, gam_neglogp);
 
-			CHECK(gam_neglogp[1] == Approx(0.3038129038));
+			CHECK(gam_neglogp[1] == Approx(0.2392402716));
 
 			Eigen::VectorXd pheno = VB.Y - trackers[1].vp.ym;
 			Eigen::VectorXd Z_kk(n_samples);
 
-			CHECK(pheno[0] == Approx(-0.3288994));
+			CHECK(pheno[0] == Approx(-0.4439596651));
 
 
 			int jj = 1;
