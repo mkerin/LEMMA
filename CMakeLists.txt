@@ -10,9 +10,16 @@ set(CMAKE_CXX_STANDARD 11)
 #Compilation flags
 if(CMAKE_CURRENT_SOURCE_DIR MATCHES /Users/kerin)
     # OSX File System - Laptop
+    if(CMAKE_BUILD_TYPE STREQUAL Release)
+        message("Release build")
+        set(LOC_COMPILE_OPTS -DOSX -O3)
+        set(LINKER_OPTS -O3)
+    else()
+        message("Debug build")
+        set(LOC_COMPILE_OPTS -DOSX -DDEBUG -pg -Og -g)
+        set(LINKER_OPTS -pg -Og -g)
+    endif()
     set(BGEN /Users/kerin/software/bgen)
-    set(LOC_COMPILE_OPTS -DOSX -DDEBUG -pg -Og -g)
-    set(LINKER_OPTS -pg -Og -g)
     set(LIB-DIRS "-L${BGEN}/build/3rd_party/boost_1_55_0")
 elseif(CMAKE_CURRENT_SOURCE_DIR MATCHES /well/marchini/kebl4230)
     # LINUX File System - Rescomp
