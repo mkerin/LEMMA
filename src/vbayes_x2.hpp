@@ -23,7 +23,6 @@ https://stackoverflow.com/questions/3283021/compile-a-standalone-static-executab
 #include "vbayes_tracker.hpp"
 #include "data.hpp"
 #include "utils.hpp"  // sigmoid
-#include "my_timer.hpp"
 #include "variational_parameters.hpp"
 #include "tools/eigen3.3/Dense"
 #include <boost/iostreams/filtering_stream.hpp>
@@ -102,12 +101,7 @@ public:
 
 	// Monitoring
 	std::chrono::system_clock::time_point time_check;
-
-	MyTimer t_updateAlphaMu;
-	MyTimer t_elbo;
-	MyTimer t_maximiseHyps;
-	MyTimer t_InnerLoop;
-	MyTimer t_snpwise_regression;
+	std::chrono::duration<double> elapsed_outerLoop;
 
 	// sgd
 	double minibatch_adjust;
@@ -117,12 +111,7 @@ public:
                             C( dat.W ),
                             dXtEEX( dat.dXtEEX ),
                             snpstats( dat.snpstats ),
-                            p( dat.params ),
-                            t_updateAlphaMu("updateAlphaMu: %ts \n"),
-                            t_elbo("calcElbo: %ts \n"),
-                            t_maximiseHyps("maximiseHyps: %ts \n"),
-                            t_InnerLoop("runInnerLoop: %ts \n"),
-                            t_snpwise_regression("calc_snpwise_regression: %ts \n") {
+                            p( dat.params ){
 		assert(std::includes(dat.hyps_names.begin(), dat.hyps_names.end(), hyps_names.begin(), hyps_names.end()));
 		std::cout << "Initialising vbayes object" << std::endl;
 
@@ -304,6 +293,7 @@ public:
 		}
 
 		// Assign set of start points to each thread & run
+		auto outerLoop_start = std::chrono::system_clock::now();
 		std::thread t2[p.n_thread];
 		for (int ch = 1; ch < p.n_thread; ch++){
 			t2[ch] = std::thread( [this, round_index, hyps_grid, n_grid, chunks, ch, random_init, &trackers] {
@@ -314,6 +304,8 @@ public:
 		for (int ch = 1; ch < p.n_thread; ch++){
 			t2[ch].join();
 		}
+		auto outerLoop_end = std::chrono::system_clock::now();
+		elapsed_outerLoop = outerLoop_end - outerLoop_start;
 	}
 
 	void runOuterLoop(const int round_index,
@@ -394,7 +386,6 @@ public:
                       const int round_index,
                       Hyps hyps,
                       VbTracker& tracker){
-		t_InnerLoop.resume();
 		// minimise KL Divergence and assign elbo estimate
 		// Assumes vp_init already exist
 		VariationalParameters vp;
@@ -438,8 +429,7 @@ public:
 				tracker.push_interim_param_values(count, n_effects, n_var, vp,
 												  X.chromosome, X.rsid, X.al_0, X.al_1, X.position);
 			}
-			tracker.push_interim_iter_update(count, hyps, i_logw, alpha_diff,
-											 t_updateAlphaMu.get_lap_seconds(), n_effects, n_var, n_env, vp);
+			tracker.push_interim_iter_update(count, hyps, i_logw, alpha_diff, n_effects, n_var, n_env, vp);
 
 			// Diagnose convergence
 			double logw_diff  = i_logw - logw_prev;
@@ -468,11 +458,9 @@ public:
 		}
 
 		// Log all things that we want to track
-		t_InnerLoop.stop();
 		tracker.logw_list[ii] = i_logw;
 		tracker.counts_list[ii] = count;
 		tracker.vp_list[ii] = vp.convert_to_lite();
-		tracker.elapsed_time_list[ii] = t_InnerLoop.get_lap_seconds();
 		tracker.hyps_list[ii] = hyps;
 		if(p.verbose){
 			logw_updates.push_back(i_logw);  // adding converged estimate
@@ -577,7 +565,6 @@ public:
 	void updateAlphaMu(const std::vector< std::uint32_t >& iter,
                        const Hyps& hyps,
                        VariationalParameters& vp){
-		t_updateAlphaMu.resume();
 		Eigen::VectorXd X_kk(n_samples);
 		Eigen::VectorXd Z_kk(n_samples);
 
@@ -618,8 +605,6 @@ public:
 
 		// update summary quantity
 		calcVarqBeta(hyps, vp, vp.varB);
-
-		t_updateAlphaMu.stop();
 	}
 
 	void _internal_updateAlphaMu(const Eigen::Ref<const Eigen::VectorXd>& X_kk,
@@ -736,7 +721,6 @@ public:
 
 	void maximiseHyps(Hyps& hyps,
                     const VariationalParameters& vp){
-		t_maximiseHyps.resume();
 
 		// max sigma
 		hyps.sigma  = calcExpLinear(hyps, vp);
@@ -786,8 +770,6 @@ public:
 		// hyps.sigma_g       = hyps.slab_relative_var(1);
 		// hyps.sigma_g_spike = hyps.spike_relative_var(0);
 		// hyps.sigma_g_spike = hyps.spike_relative_var(1);
-
-		t_maximiseHyps.stop();
 	}
 
 	void updateEnvWeights(const std::vector< int >& iter,
@@ -855,7 +837,6 @@ public:
 
 	double calc_logw(const Hyps& hyps,
                      const VariationalParameters& vp){
-		t_elbo.resume();
 
 		// Expectation of linear regression log-likelihood
 		double int_linear = -1.0 * calcExpLinear(hyps, vp) / 2.0 / hyps.sigma;
@@ -892,8 +873,6 @@ public:
 		}
 
 		double res = int_linear + int_gamma + int_klbeta + kl_covar + kl_weights;
-
-		t_elbo.stop();
 		return res;
 	}
 
@@ -905,7 +884,6 @@ public:
 		cols:
 		neglogp-main, neglogp-gxe, coeff-gxe-main, coeff-gxe-env..
 		*/
-		t_snpwise_regression.resume();
 
 		// Keep values from point with highest p-val
 		vp.muw = Eigen::ArrayXd::Zero(n_env);
@@ -919,7 +897,6 @@ public:
 				std::cout << std::endl << vp.muw.transpose() << std::endl;
 			}
 		}
-		t_snpwise_regression.stop();
 	}
 
 	/********** Helper functions ************/
@@ -1251,7 +1228,6 @@ public:
 			outf << std::setprecision(4) << weights[ii] << " ";
 			outf << tracker.logw_list[ii] << " ";
 			outf << tracker.counts_list[ii] << " ";
-			outf << tracker.elapsed_time_list[ii] <<  " ";
 			outf << tracker.hyps_list[ii].sigma;
 //			for (int ee = 0; ee < n_effects; ee++) {
 //				outf << " " << tracker.hyps_list[ii].pve2[ee];
@@ -1305,7 +1281,9 @@ public:
 		// MAP snp-stats to file (include covars)
 		long int ii_map = std::distance(weights.begin(), std::max_element(weights.begin(), weights.end()));
 		write_snp_stats_to_file(outf_map, tracker.vp_list[ii_map], true);
-		write_covars_to_file(outf_map_covar, tracker.vp_list[ii_map]);
+		if(p.use_vb_on_covars) {
+			write_covars_to_file(outf_map_covar, tracker.vp_list[ii_map]);
+		}
 
 		// Weighted mean snp-stats to file
 		outf_wmean << "chr rsid pos a0 a1";

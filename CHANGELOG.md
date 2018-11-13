@@ -14,6 +14,7 @@ Changes:
 - All variant metadata stored in genotype matrix object.
 - Close outf_scan after writing.
 - Check hyp grid values are finite
+- Cleaner timing output
 
 # Version 0.9.2
 Bugfixes:

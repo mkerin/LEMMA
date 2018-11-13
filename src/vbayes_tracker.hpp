@@ -9,7 +9,6 @@
 #include <vector>
 #include "variational_parameters.hpp"
 #include "tools/eigen3.3/Dense"
-#include "my_timer.hpp"
 #include "genotype_matrix.hpp"
 #include <boost/iostreams/filtering_stream.hpp>
 #include <boost/iostreams/device/file_descriptor.hpp>
@@ -65,7 +64,6 @@ public:
 	// std::vector< Eigen::VectorXd > mu_list;                  // best mu at each ii
 	// std::vector< Eigen::VectorXd > alpha_list;               // best alpha at each ii
 	std::vector< double >          logw_list;                // best logw at each ii
-	std::vector< double >          elapsed_time_list;        // time to compute grid point
 	std::vector< Hyps >            hyps_list;                // hyps values at end of VB inference.
 
 	parameters p;
@@ -77,20 +75,15 @@ public:
 	std::string main_out_file;
 	bool allow_interim_push;
 
-	// Timing
-	MyTimer t_interimOutput;
-
-	VbTracker(): t_interimOutput("interimOutput: %ts \n"){
+	VbTracker() {
 		allow_interim_push = false;
 	}
 
-	VbTracker(const std::string& ofile) : main_out_file(ofile),
-                                          t_interimOutput("interinOutput: %ts \n"){
+	VbTracker(const std::string& ofile) : main_out_file(ofile){
 		allow_interim_push = true;
 	}
 
-	VbTracker(int n_list, const std::string& ofile) : main_out_file(ofile),
-                                                      t_interimOutput("interinOutput: %ts \n"){
+	VbTracker(int n_list, const std::string& ofile) : main_out_file(ofile){
 		counts_list.resize(n_list);
 		vp_list.resize(n_list);
 		// mu_list.resize(n_list);
@@ -98,7 +91,6 @@ public:
 		logw_list.resize(n_list);
 		logw_updates_list.resize(n_list);
 		alpha_diff_list.resize(n_list);
-		elapsed_time_list.resize(n_list);
 		hyps_list.resize(n_list);
 
 		allow_interim_push = true;
@@ -129,7 +121,6 @@ public:
                                   const std::vector< std::string >& al_0,
                                   const std::vector< std::string >& al_1,
                                   const std::vector< std::uint32_t >& position){
-		t_interimOutput.resume();
 		fstream_init(outf_inits, dir, "_params_iter" + std::to_string(cnt), true);
 
 		outf_inits << "chr rsid pos a0 a1";
@@ -159,14 +150,12 @@ public:
 			}
 			outf_inits << std::endl;
 		}
-		t_interimOutput.stop();
 	}
 
 	void push_interim_covar_values(const int& cnt,
                                   const int& n_covar,
                                   const VariationalParameters& vp,
                                   const std::vector< std::string >& covar_names){
-		t_interimOutput.resume();
 		fstream_init(outf_inits, dir, "_covars_iter" + std::to_string(cnt), true);
 
 		outf_inits << "covar_name mu_covar s_sq_covar";
@@ -176,19 +165,16 @@ public:
 			outf_inits << " " << vp.sc_sq(cc);
 			outf_inits << std::endl;
 		}
-		t_interimOutput.stop();
 	}
 
 	void push_interim_iter_update(const int& cnt,
                                   const Hyps& i_hyps,
                                   const double& c_logw,
                                   const double& c_alpha_diff,
-                                  const double& lap_seconds,
                                   const int& n_effects,
                                   const int& n_var,
                                   const int& n_env,
                                   const VariationalParameters& vp){
-		t_interimOutput.resume();
 
 		outf_iter << cnt << "\t" << std::setprecision(3) << std::fixed;
 		outf_iter << i_hyps.sigma << "\t" << std::setprecision(6) << std::fixed;
@@ -211,16 +197,13 @@ public:
 			outf_iter << i_hyps.s_x(ee) << "\t";
 		}
 		outf_iter << c_logw << "\t";
-		outf_iter << c_alpha_diff << "\t";
-		outf_iter << lap_seconds << std::endl;
+		outf_iter << c_alpha_diff << std::endl;
 
 		for (int ll = 0; ll < n_env; ll++){
 			outf_w << vp.muw(ll);
 			if(ll < n_env - 1) outf_w << "\t";
 		}
 		outf_w << std::endl;
-
-		t_interimOutput.stop();
 	}
 
 	void push_interim_output(int ii,
@@ -233,13 +216,11 @@ public:
 													   const std::uint32_t n_effects){
 		// Assumes that information for all measures that we track have between
 		// added to VbTracker at index ii.
-		t_interimOutput.resume();
 
 		// Write output to file
 		outf_weights << "NA" << " " << logw_list[ii] << " ";
 		outf_weights << "NA" << " ";
-		outf_weights << counts_list[ii] << " ";
-		outf_weights << elapsed_time_list[ii] << std::endl;
+		outf_weights << counts_list[ii] << std::endl;
 
 		fstream_init(outf_inits, dir, "_inits", true);
 		outf_inits << "chr rsid pos a0 a1";
@@ -264,8 +245,6 @@ public:
 			}
  			outf_inits << std::endl;
 		}
-
-		t_interimOutput.stop();
 	}
 
 	void push_rescan_gwas(const GenotypeMatrix& X,
@@ -273,7 +252,6 @@ public:
 							 const Eigen::Ref<const Eigen::VectorXd>& neglogp){
 		// Assumes that information for all measures that we track have between
 		// added to VbTracker at index ii.
-		t_interimOutput.resume();
 
 		fstream_init(outf_rescan, dir, "_rescan", true);
 		outf_rescan << "chr rsid pos a0 a1 maf info neglogp" << std::endl;
@@ -283,8 +261,6 @@ public:
 			outf_rescan << X.maf[kk] << " " << X.info[kk] << " " << neglogp(kk);
 			outf_rescan << std::endl;
 		}
-
-		t_interimOutput.stop();
 	}
 
 	void interim_output_init(const int ii,
@@ -324,7 +300,7 @@ public:
 		}
 		outf_w << std::endl;
 
-		outf_weights << "weights logw log_prior count time" << std::endl;
+		outf_weights << "weights logw log_prior count" << std::endl;
 		outf_iter    << "count\tsigma";
 		for (int ee = 0; ee < n_effects; ee++){
 			outf_iter << "\tpve" << ee;
@@ -338,7 +314,7 @@ public:
 			outf_iter << "\tlambda" << ee;
 		}
 		outf_iter << "\ts_x" << "\ts_z";
-		outf_iter << "\telbo\tmax_alpha_diff\tseconds" << std::endl;
+		outf_iter << "\telbo\tmax_alpha_diff" << std::endl;
 
 		// outf_inits << "chr rsid pos a0 a1";
 		// for(int ee = 0; ee < n_effects; ee++){
@@ -377,7 +353,6 @@ public:
 		logw_updates_list.resize(n_list);
 		alpha_diff_list.resize(n_list);
 		logw_list.resize(n_list);
-		elapsed_time_list.resize(n_list);
 		hyps_list.resize(n_list);
 		for (int ll = 0; ll < n_list; ll++){
 			logw_list[ll] = -std::numeric_limits<double>::max();
@@ -392,7 +367,6 @@ public:
 		logw_list.clear();
 		logw_updates_list.clear();
 		alpha_diff_list.clear();
-		elapsed_time_list.clear();
 		hyps_list.clear();
 	}
 
@@ -404,7 +378,6 @@ public:
 		logw_list[ii]         = other_tracker.logw_list[ii];
 		logw_updates_list[ii] = other_tracker.logw_updates_list[ii];
 		alpha_diff_list[ii]   = other_tracker.alpha_diff_list[ii];
-		elapsed_time_list[ii] = other_tracker.elapsed_time_list[ii];
 		hyps_list[ii]         = other_tracker.hyps_list[ii];
 	}
 };
