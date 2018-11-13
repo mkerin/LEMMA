@@ -164,14 +164,16 @@ TEST_CASE( "Example 1: single-env" ){
 			// Set up for updateAllParams
 			std::vector<VariationalParameters> all_vp;
 			VB.setup_variational_params(all_hyps, all_vp);
+			VariationalParameters& vp = all_vp[0];
+			Hyps& hyps = all_hyps[0];
 
 			int round_index = 2;
 			std::vector<double> logw_prev(n_grid, -1);
 			std::vector<std::vector< double >> logw_updates(n_grid);
+			
+			CHECK(vp.alpha_beta(0) * vp.mu1_beta(0) == Approx(-0.00015854116408000002));
 
 			VB.updateAllParams(0, round_index, all_vp, all_hyps, logw_prev, logw_updates);
-			VariationalParameters& vp = all_vp[0];
-			Hyps& hyps = all_hyps[0];
 
 			SECTION("A computed correctly"){
 				Eigen::MatrixXd D;
