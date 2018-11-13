@@ -351,7 +351,7 @@ public:
 			indexes[ii % params.n_thread].push_back(ii);
 		}
 
-		// Decompress char to double
+		// Decompress char -> double
 #ifdef DEBUG
 		get_cols(indexes[0], chunk, D);
 		for (int nn = 1; nn < params.n_thread; nn++){

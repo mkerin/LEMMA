@@ -73,8 +73,8 @@ public:
 	// sgd
 	long int count;
 
-	VariationalParameters(Eigen::Ref<Eigen::VectorXd> my_yx,
-			Eigen::Ref<Eigen::VectorXd> my_ym) : yx(my_yx), ym(my_ym){};
+	VariationalParameters(Eigen::Ref<Eigen::VectorXd> my_ym,
+			Eigen::Ref<Eigen::VectorXd> my_yx) : yx(my_yx), ym(my_ym){};
 	~VariationalParameters(){};
 
 	void init_from_lite(const VariationalParametersLite& init) {

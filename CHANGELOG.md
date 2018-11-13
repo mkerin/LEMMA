@@ -1,5 +1,13 @@
 # Version 0.10.1
-All threads used to decompress genotype columns. Major refactoring to prepare for multi-phenos (eg. main and interaction effect parameters separated into separate objects).
+
+Changes:
+- All threads used to decompress genotype columns. 
+- Major refactoring: single array for each parameter (in future allows for mutliple runs in XXd array)
+- Hyps now a class
+- VbTracker stores only a single run
+- We now keep running threads until they all converge
+- Some tests limited to 20 iterations
+- Simplified internal timing
 
 # Version 0.9.3
 Bugfix:

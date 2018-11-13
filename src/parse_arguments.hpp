@@ -130,9 +130,9 @@ void parse_arguments(parameters &p, int argc, char *argv[]) {
 		"--dxteex",
 		"--mode_mog_beta",
 		"--mode_mog_gamma",
-		"--vb_chunk_size"
+		"--vb_chunk_size",
 		"--spike_diff_factor",
-		"--min_spike_diff_factor",
+		"--min_spike_diff_factor"
 	};
 
 	std::set<std::string>::iterator set_it;

@@ -64,7 +64,7 @@ int main( int argc, char** argv ) {
 		}
 
 		auto data_end = std::chrono::system_clock::now();
-		auto elapsed_reading_data = data_end - data_start;
+		std::chrono::duration<double> elapsed_reading_data = data_end - data_start;
 
 
 		// Pass data to VBayes object
@@ -77,12 +77,13 @@ int main( int argc, char** argv ) {
 		auto vb_start = std::chrono::system_clock::now();
 		VB.run();
 		auto vb_end = std::chrono::system_clock::now();
-		auto elapsed_vb = vb_end - vb_start;
+		std::chrono::duration<double> elapsed_vb = vb_end - vb_start;
 		// VB.output_results();
 
 		std::cout << std::endl << "Time expenditure:" << std::endl;
-		std::cout << "Reading data: " << elapsed_reading_data.count() << std::endl;
-		std::cout << "VB inference: " << elapsed_vb.count() << std::endl;
+		std::cout << "Reading data: " << elapsed_reading_data.count() << " secs" << std::endl;
+		std::cout << "VB inference: " << elapsed_vb.count() << " secs" << std::endl;
+		std::cout << "runInnerLoop: " << VB.elapsed_innerLoop.count() << " secs" << std::endl;
 
 		return 0 ;
 	}

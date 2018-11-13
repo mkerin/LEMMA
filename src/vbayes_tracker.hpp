@@ -1,3 +1,10 @@
+//
+// Created by kerin on 13/11/2018.
+//
+// Holds variational_parameters + other diagnostic values that we might want to track
+// Also other auxilliary functions for writing interim output to file
+// One instance per 'run'
+
 #ifndef VBAYES_TRACKER_HPP
 #define VBAYES_TRACKER_HPP
 
@@ -7,120 +14,32 @@
 #include <string>
 #include <limits>
 #include <vector>
+
+
+#include "class.h"
+#include "genotype_matrix.hpp"
+#include "hyps.hpp"
+#include "misc_utils.hpp"
 #include "variational_parameters.hpp"
 #include "tools/eigen3.3/Dense"
-#include "my_timer.hpp"
-#include "misc_utils.hpp"
-#include "genotype_matrix.hpp"
+
 #include <boost/iostreams/filtering_stream.hpp>
 #include <boost/iostreams/device/file_descriptor.hpp>
 #include <boost/iostreams/device/file.hpp>
 #include <boost/iostreams/filter/gzip.hpp>
 #include <boost/filesystem.hpp>
-#include "class.h"
 
 
 namespace boost_io = boost::iostreams;
 
-
-class Hyps{
-	int sigma_ind   = 0;
-	int sigma_b_ind = 1;
-	int sigma_g_ind = 2;
-	int lam_b_ind   = 3;
-	int lam_g_ind   = 4;
-
-public:
-	double sigma;
-	Eigen::ArrayXd slab_var;
-	Eigen::ArrayXd spike_var;
-	Eigen::ArrayXd slab_relative_var;
-	Eigen::ArrayXd spike_relative_var;
-	Eigen::ArrayXd lambda;
-
-	// Not hyperparameters, but things that depend on them
-	Eigen::ArrayXd s_x;
-	Eigen::ArrayXd pve;
-	Eigen::ArrayXd pve_large;
-
-	Hyps(){};
-
-	void init_from_grid(int n_effects,
-			int ii,
-			int n_var,
-			const Eigen::Ref<const Eigen::MatrixXd>& hyps_grid,
-			const parameters& p,
-			const double& my_s_z){
-		// Implicit that n_effects > 1
-
-		// Unpack
-		double my_sigma = hyps_grid(ii, sigma_ind);
-		double my_sigma_b = hyps_grid(ii, sigma_b_ind);
-		double my_sigma_g = hyps_grid(ii, sigma_g_ind);
-		double my_lam_b = hyps_grid(ii, lam_b_ind);
-		double my_lam_g = hyps_grid(ii, lam_g_ind);
-
-		// Resize
-		slab_var.resize(n_effects);
-		spike_var.resize(n_effects);
-		slab_relative_var.resize(n_effects);
-		spike_relative_var.resize(n_effects);
-		lambda.resize(n_effects);
-		s_x.resize(n_effects);
-
-		// Assign initial hyps
-		sigma = my_sigma;
-		slab_var << my_sigma * my_sigma_b, my_sigma * my_sigma_g;
-		spike_var << my_sigma * my_sigma_b / p.spike_diff_factor, my_sigma * my_sigma_g / p.spike_diff_factor;
-		slab_relative_var << my_sigma_b, my_sigma_g;
-		spike_relative_var << my_sigma_b / p.spike_diff_factor, my_sigma_g / p.spike_diff_factor;
-		lambda << my_lam_b, my_lam_g;
-		s_x << n_var, my_s_z;
-	}
-
-	void init_from_grid(int n_effects,
-			int ii,
-			int n_var,
-			const Eigen::Ref<const Eigen::MatrixXd>& hyps_grid,
-			const parameters& p){
-		/*** Implicit that n_effects == 1 ***/
-
-		// Unpack
-		double my_sigma = hyps_grid(ii, sigma_ind);
-		double my_sigma_b = hyps_grid(ii, sigma_b_ind);
-		double my_sigma_g = hyps_grid(ii, sigma_g_ind);
-		double my_lam_b = hyps_grid(ii, lam_b_ind);
-		double my_lam_g = hyps_grid(ii, lam_g_ind);
-
-		// Resize
-		slab_var.resize(n_effects);
-		spike_var.resize(n_effects);
-		slab_relative_var.resize(n_effects);
-		spike_relative_var.resize(n_effects);
-		lambda.resize(n_effects);
-		s_x.resize(n_effects);
-
-		// Assign initial hyps
-		sigma = my_sigma;
-		slab_var << my_sigma * my_sigma_b;
-		spike_var << my_sigma * my_sigma_b / p.spike_diff_factor;
-		slab_relative_var << my_sigma_b;
-		spike_relative_var << my_sigma_b / p.spike_diff_factor;
-		lambda << my_lam_b;
-		s_x << n_var;
-	}
-};
-
-
 class VbTracker {
 public:
-	std::vector< int >             counts_list;              // Number of iterations to convergence at each step
-	std::vector< std::vector< double > > logw_updates_list;  // elbo updates at each ii
-	std::vector< std::vector< double > > alpha_diff_list;  // elbo updates at each ii
-	std::vector< VariationalParametersLite > vp_list;                  // best mu at each ii
-	std::vector< double >          logw_list;                // best logw at each ii
-	std::vector< double >          elapsed_time_list;        // time to compute grid point
-	std::vector< Hyps >            hyps_list;                // hyps values at end of VB inference.
+	int           count;              // Number of iterations to convergence at each step
+	std::vector< double > logw_updates;  // elbo updates at each ii
+	std::vector< double > alpha_diffs;  // elbo updates at each ii
+	VariationalParametersLite vp;                  // best mu at each ii
+	double          logw;                // best logw at each ii
+	Hyps           hyps;                // hyps values at end of VB inference.
 
 	parameters p;
 
@@ -131,10 +50,8 @@ public:
 	std::string main_out_file;
 	bool allow_interim_push;
 
-	// Timing
-	MyTimer t_interimOutput;
 
-	VbTracker(): t_interimOutput("interimOutput: %ts \n"){
+	VbTracker(){
 		allow_interim_push = false;
 	}
 
@@ -158,20 +75,16 @@ public:
                                   const int& n_var,
                                   const VariationalParameters& vp,
                                   const GenotypeMatrix& X){
-		t_interimOutput.resume();
-
 		fstream_init(outf_inits, dir, "_params_iter" + std::to_string(cnt), true);
 		write_snp_stats_to_file(outf_inits, n_effects, n_var, vp, X, p, true);
 		boost_io::close(outf_inits);
 
-		t_interimOutput.stop();
 	}
 
 	void push_interim_covar_values(const int& cnt,
                                   const int& n_covar,
                                   const VariationalParameters& vp,
                                   const std::vector< std::string >& covar_names){
-		t_interimOutput.resume();
 		fstream_init(outf_inits, dir, "_covars_iter" + std::to_string(cnt), true);
 
 		outf_inits << "covar_name mu_covar s_sq_covar";
@@ -181,20 +94,17 @@ public:
 			outf_inits << " " << vp.sc_sq(cc);
 			outf_inits << std::endl;
 		}
-		t_interimOutput.stop();
 	}
 
 	void push_interim_iter_update(const int& cnt,
                                   const Hyps& i_hyps,
                                   const double& c_logw,
                                   const double& c_alpha_diff,
-                                  const double& lap_seconds,
                                   const int& n_effects,
                                   const int& n_var,
                                   const int& n_env,
                                   const VariationalParameters& vp){
 		// Diagnostics + env-weights from latest vb iteration
-		t_interimOutput.resume();
 
 		outf_iter << cnt << "\t";
 		outf_iter << std::setprecision(3) << std::fixed;
@@ -224,8 +134,7 @@ public:
 			outf_iter << i_hyps.s_x(ee) << "\t";
 		}
 		outf_iter << c_logw << "\t";
-		outf_iter << c_alpha_diff << "\t";
-		outf_iter << lap_seconds << std::endl;
+		outf_iter << c_alpha_diff << std::endl;
 
 
 		// Weights
@@ -234,26 +143,20 @@ public:
 			if(ll < n_env - 1) outf_weights << "\t";
 		}
 		outf_weights << std::endl;
-
-		t_interimOutput.stop();
 	}
 
-	void push_interim_output(int ii,
-                             const GenotypeMatrix& X,
+	void push_interim_output(const GenotypeMatrix& X,
                              const std::uint32_t n_var,
 							 const std::uint32_t n_effects){
 		// Assumes that information for all measures that we track have between
 		// added to VbTracker at index ii.
-		t_interimOutput.resume();
 
 		// TODO: Add converged covar values?
 
 		// Converged snp-stats to file
 		fstream_init(outf_inits, dir, "_converged", true);
-		write_snp_stats_to_file(outf_inits, n_effects, n_var, vp_list[ii], X, p, true);
+		write_snp_stats_to_file(outf_inits, n_effects, n_var, vp, X, p, true);
 		boost_io::close(outf_inits);
-
-		t_interimOutput.stop();
 	}
 
 	void push_rescan_gwas(const GenotypeMatrix& X,
@@ -261,7 +164,6 @@ public:
 							 const Eigen::Ref<const Eigen::VectorXd>& neglogp){
 		// Assumes that information for all measures that we track have between
 		// added to VbTracker at index ii.
-		t_interimOutput.resume();
 
 		fstream_init(outf_rescan, dir, "_rescan", true);
 		outf_rescan << "chr rsid pos a0 a1 maf info neglogp" << std::endl;
@@ -271,8 +173,6 @@ public:
 			outf_rescan << X.maf[kk] << " " << X.info[kk] << " " << neglogp(kk);
 			outf_rescan << std::endl;
 		}
-
-		t_interimOutput.stop();
 	}
 
 	void interim_output_init(const int ii,
@@ -322,7 +222,7 @@ public:
 			outf_iter << "\tlambda" << ee;
 		}
 		outf_iter << "\ts_x" << "\ts_z";
-		outf_iter << "\telbo\tmax_alpha_diff\tseconds" << std::endl;
+		outf_iter << "\telbo\tmax_alpha_diff" << std::endl;
 
 	}
 
@@ -346,29 +246,6 @@ public:
 			my_outf.push(boost_io::gzip_compressor());
 		}
 		my_outf.push(boost_io::file_sink(ofile));
-	}
-
-	void resize(int n_list){
-		counts_list.resize(n_list);
-		vp_list.resize(n_list);
-		logw_updates_list.resize(n_list);
-		alpha_diff_list.resize(n_list);
-		logw_list.resize(n_list);
-		elapsed_time_list.resize(n_list);
-		hyps_list.resize(n_list);
-		for (int ll = 0; ll < n_list; ll++){
-			logw_list[ll] = -std::numeric_limits<double>::max();
-		}
-	}
-
-	void copy_ith_element(int jj, int ii, const VbTracker& other_tracker){
-		counts_list[jj]       = other_tracker.counts_list[ii];
-		vp_list[jj]           = other_tracker.vp_list[ii];
-		logw_list[jj]         = other_tracker.logw_list[ii];
-		logw_updates_list[jj] = other_tracker.logw_updates_list[ii];
-		alpha_diff_list[jj]   = other_tracker.alpha_diff_list[ii];
-		elapsed_time_list[jj] = other_tracker.elapsed_time_list[ii];
-		hyps_list[jj]         = other_tracker.hyps_list[ii];
 	}
 };
 
