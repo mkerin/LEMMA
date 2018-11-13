@@ -43,8 +43,8 @@ find_library(ZSTD_LIB zstd HINTS ${BGEN}/build/3rd_party/zstd-1.1.0)
 set(LIBS boost dl pthread boost_iostreams z ${LIBS})
 
 ##Defining compilation commands
-set(TARGET bgen_prog)
-#set(TARGET bgen_prog_${PROJECT_VERSION_MAJOR}_${PROJECT_VERSION_MINOR}_${PROJECT_VERSION_PATCH})
+#set(TARGET bgen_prog)
+set(TARGET bgen_prog_${PROJECT_VERSION_MAJOR}_${PROJECT_VERSION_MINOR}_${PROJECT_VERSION_PATCH})
 add_executable(${TARGET} ${SOURCES})
 
 target_compile_options(${TARGET} PRIVATE -Wno-deprecated -msse2 ${LOC_COMPILE_OPTS})
