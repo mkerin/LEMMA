@@ -12,6 +12,9 @@ bin/*
 
 # garbage files
 *.gch
+Makefile
+.idea/*
+.DS_Store*
 .Rproj.user
 .Rhistory
 *.Rproj

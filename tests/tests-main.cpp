@@ -8,101 +8,9 @@
 #include <sys/stat.h>
 #include "../src/tools/eigen3.3/Dense"
 #include "../src/parse_arguments.hpp"
-#include "../src/vbayes.hpp"
 #include "../src/vbayes_x2.hpp"
 #include "../src/data.hpp"
 #include "../src/genotype_matrix.hpp"
-
-TEST_CASE( "Checking parse_arguments", "[io]" ) {
-	parameters p;
-	
-	SECTION( "--convert_to_vcf parsed correctly" ) {
-		char* argv[] = { (char*) "bin/bgen_prog",
-						 (char*) "--convert_to_vcf", 
-						 (char*) "--bgen", 
-						 (char*) "data/example/example.v11.bgen",
-						 (char*) "--out", 
-						 (char*) "data/tmp.out"};
-		int argc = sizeof(argv)/sizeof(argv[0]);
-		parse_arguments(p, argc, argv);
-		CHECK(p.bgen_file == "data/example/example.v11.bgen");
-		CHECK(p.out_file == "data/tmp.out");
-		CHECK(p.mode_vcf == true);
-	}
-
-	SECTION( "--lm parsed correctly" ) {
-		char* argv[] = { (char*) "bin/bgen_prog",
-						 (char*) "--lm", 
-						 (char*) "--bgen", 
-						 (char*) "data/example/example.v11.bgen",
-						 (char*) "--out", 
-						 (char*) "data/tmp.out",
-						 (char*) "--pheno", 
-						 (char*) "data/test/empty.pheno",
-						 (char*) "--covar", 
-						 (char*) "data/test/empty.covar",
-						 (char*) "--chunk", 
-						 (char*) "100"};
-		int argc = sizeof(argv)/sizeof(argv[0]);
-		parse_arguments(p, argc, argv);
-		CHECK(p.bgen_file == "data/example/example.v11.bgen");
-		CHECK(p.out_file == "data/tmp.out");
-		CHECK(p.pheno_file == "data/test/empty.pheno");
-		CHECK(p.covar_file == "data/test/empty.covar");
-		CHECK(p.mode_lm == true);
-
-		SECTION( "chunk_size correctly assigned" ) {
-			CHECK(p.chunk_size == 100);
-		}
-	}
-
-	SECTION( "reading in genetic confounders" ) {
-		std::vector< std::string > true_gconf;
-		true_gconf.push_back("gconf1");
-		true_gconf.push_back("gconf2");
-		true_gconf.push_back("gconf3");
-		SECTION( "Parse combo 1" ) {
-			char* argv[] = { (char*) "bin/bgen_prog",
-							 (char*) "--full_lm", 
-							 (char*) "--bgen", 
-							 (char*) "data/example/example.v11.bgen",
-							 (char*) "--out", 
-							 (char*) "data/tmp.out",
-							 (char*) "--pheno", 
-							 (char*) "data/test/empty.pheno",
-							 (char*) "--covar", 
-							 (char*) "data/test/empty.covar",
-							 (char*) "--genetic_confounders", 
-							 (char*) "gconf1",
-							 (char*) "gconf2",
-							 (char*) "gconf3"};
-			int argc = sizeof(argv)/sizeof(argv[0]);
-			parse_arguments(p, argc, argv);
-			CHECK(p.gconf == true_gconf);
-			CHECK(p.n_gconf == 3);
-		}
-		SECTION( "Parse combo 2" ) {
-			char* argv[] = { (char*) "bin/bgen_prog",
-							 (char*) "--full_lm", 
-							 (char*) "--bgen", 
-							 (char*) "data/example/example.v11.bgen",
-							 (char*) "--out", 
-							 (char*) "data/tmp.out",
-							 (char*) "--genetic_confounders", 
-							 (char*) "gconf1",
-							 (char*) "gconf2",
-							 (char*) "gconf3",
-							 (char*) "--pheno", 
-							 (char*) "data/test/empty.pheno",
-							 (char*) "--covar", 
-							 (char*) "data/test/empty.covar"};
-			int argc = sizeof(argv)/sizeof(argv[0]);
-			parse_arguments(p, argc, argv);
-			CHECK(p.gconf == true_gconf);
-			CHECK(p.n_gconf == 3);
-		}
-	}
-}
 
 TEST_CASE( "Algebra in Eigen3" ) {
 
@@ -144,407 +52,644 @@ TEST_CASE( "Algebra in Eigen3" ) {
 	}
 }
 
-TEST_CASE( "GenotypeMatrix Class" ) {
+TEST_CASE( "Example 1: single-env" ){
+	parameters p;
 
-	SECTION("low-mem mode on"){
-		GenotypeMatrix GM(true, 3, 2);
-		GM.assign_index(0, 0, 0.2);
-		GM.assign_index(1, 0, 0.8);
-		GM.assign_index(2, 0, 0.2);
-		GM.assign_index(0, 1, 0.3);
-		GM.assign_index(1, 1, 0.345);
-		GM.assign_index(2, 1, 0.213);
+	SECTION("Ex1. No filters applied, low mem mode"){
+		char* argv[] = { (char*) "bin/bgen_prog", (char*) "--mode_vb",(char*) "--low_mem",
+						 (char*) "--interaction", (char*) "x",
+						 (char*) "--bgen", (char*) "data/io_test/n50_p100.bgen",
+						 (char*) "--out", (char*) "data/io_test/fake_age.out",
+						 (char*) "--pheno", (char*) "data/io_test/pheno.txt",
+						 (char*) "--hyps_grid", (char*) "data/io_test/hyperpriors_gxage.txt",
+						 (char*) "--hyps_probs", (char*) "data/io_test/hyperpriors_gxage_probs.txt",
+						 (char*) "--vb_init", (char*) "data/io_test/answer_init.txt",
+						 (char*) "--covar", (char*) "data/io_test/age.txt"};
+		int argc = sizeof(argv)/sizeof(argv[0]);
+		parse_arguments(p, argc, argv);
+		Data data( p );
 
-		SECTION("Empty constructor"){
-			GenotypeMatrix GM2(true);
-			GM2.resize(3, 2);
-			GM2.assign_index(0, 0, 0.2);
-			GM2.assign_index(1, 0, 0.8);
-			GM2.assign_index(2, 0, 0.2);
-			CHECK(GM2(0,0) == GM(0,0));
+		std::cout << "Data initialised" << std::endl;
+		data.read_non_genetic_data();
+		SECTION( "Ex1. Raw non genetic data read in accurately"){
+            CHECK(data.n_covar == 1);
+            CHECK(data.n_env == 1);
+			CHECK(data.n_pheno == 1);
+			CHECK(data.n_samples == 50);
+			CHECK(data.Y(0,0) == Approx(-1.18865038973338));
+			CHECK(data.W(0,0) == Approx(-0.33472645347487201));
+			CHECK(data.E(0, 0) == Approx(-0.33472645347487201));
+			CHECK(data.hyps_grid(0,1) == Approx(0.317067781333932));
 		}
 
-		SECTION("Column means and sds computed correctly"){
-			GM.calc_scaled_values();
-			Eigen::VectorXd true_mean(2), true_sd(2);
-			true_mean << 0.3997396, 0.2877604;
-			true_sd << 2.879253, 14.846298;   // 0.34731227, 0.06735686;
-
-			CHECK(GM.scaling_performed == true);
-			CHECK(Approx(true_mean.sum()) == GM.compressed_dosage_means.sum());
-			CHECK(Approx(true_sd.sum()) == GM.compressed_dosage_inv_sds.sum());
+		data.standardise_non_genetic_data();
+		SECTION( "Ex1. Non genetic data standardised + covars regressed"){
+			CHECK(data.params.scale_pheno == true);
+			CHECK(data.params.use_vb_on_covars == false);
+			CHECK(data.params.covar_file != "NULL");
+//			CHECK(data.Y(0,0) == Approx(-3.6676363273605137)); Centered
+//			CHECK(data.Y(0,0) == Approx(-1.5800573524786081)); Scaled
+			CHECK(data.Y(0,0) == Approx(-1.262491384814441));
+			CHECK(data.Y2(0,0) == Approx(-1.262491384814441));
+			CHECK(data.W(0,0) == Approx(-0.58947939694779772));
+			CHECK(data.E(0,0) == Approx(-0.58947939694779772));
 		}
 
-		SECTION("Read access returns standardised values"){
-			CHECK(Approx(GM(0, 1)) == 0.1933112);
+		data.read_full_bgen();
+		SECTION( "Ex1. bgen read in & standardised correctly"){
+			CHECK(data.G.low_mem == true);
+			CHECK(data.params.low_mem == true);
+            CHECK(data.params.flip_high_maf_variants == true);
+			CHECK(data.G.col(0)(0) == Approx(1.8570984229));
 		}
 
-		SECTION("Decompressed matrix multiplication"){
-			Eigen::VectorXd vv(2);
-			vv << 0.55, 0.676;
-			Eigen::VectorXd res = GM * vv;
-			Eigen::VectorXd res_truth(3);
-			res_truth << -0.1868643, 1.2362057, -1.0493414;
-			CHECK(res_truth[0] == Approx(res[0]));
-			CHECK(res_truth[1] == Approx(res[1]));
+		SECTION( "Ex1. Confirm calc_dxteex() reorders properly"){
+		    data.params.dxteex_file = "data/io_test/inputs/dxteex_mixed.txt";
+			data.read_external_dxteex();
+            data.calc_dxteex();
+            CHECK(data.dXtEEX(0, 0) == Approx(87.204591182113916));
+            CHECK(data.n_dxteex_computed == 1);
 		}
 
-		SECTION("Read column access"){
-			Eigen::VectorXd c2a(3), c2b, c2_truth(3);
-			c2_truth << 0.1933112, 0.8892314, -1.0825425;
-			// CHECK_THROWS(GM.col(1, c2a));
-			// GM.col(1, c2a);
-			c2b = GM.col(1);
-
-			// CHECK(Approx(c2a[0]) == c2_truth[0]);
-			CHECK(Approx(c2b[0]) == c2_truth[0]);
-			CHECK(Approx(c2b[1]) == c2_truth[1]);
+		data.calc_dxteex();
+		if(p.vb_init_file != "NULL"){
+			data.read_alpha_mu();
+		}
+		VBayesX2 VB(data);
+		VB.check_inputs();
+		SECTION("Ex1. Vbayes_X2 initialised correctly"){
+			CHECK(VB.n_samples == 50);
+			CHECK(VB.N == 50.0);
+			CHECK(VB.n_env == 1);
+			CHECK(VB.n_covar == 1);
+			CHECK(VB.n_effects == 2);
+			CHECK(VB.vp_init.muw(0) == 1.0);
+			CHECK(VB.p.init_weights_with_snpwise_scan == false);
+			CHECK(VB.dXtEEX(0, 0) == Approx(87.1907593967));
+//			CHECK(VB.Cty(0, 0) == Approx(-5.3290705182007514e-15));
 		}
 
-		SECTION("Conservative resize"){
-			GM.conservativeResize(3, 1);
-			CHECK(GM.M.cols() == 1);
-			CHECK(Approx(GM(1,0)) == 1.1547005);
+//		SECTION("Checking output"){
+//		    VB.run();
+//		}
+
+        SECTION("Ex1. Explicitly checking updates"){
+			// Initialisation
+			CHECK(VB.vp_init.ym(0) == Approx(0.0003200476));
+			CHECK(VB.vp_init.yx(0) == Approx(0.0081544079));
+			CHECK(VB.vp_init.eta(0) == Approx(-0.5894793969));
+
+			// Set up for RunInnerLoop
+			int ii = 0;
+			int n_effects = 2;
+			int n_env = 1;
+			double sigma = VB.hyps_grid(ii, VB.sigma_ind);
+			double sigma_b = VB.hyps_grid(ii, VB.sigma_b_ind);
+			double sigma_g = VB.hyps_grid(ii, VB.sigma_g_ind);
+			double lam_b = VB.hyps_grid(ii, VB.lam_b_ind);
+			double lam_g = VB.hyps_grid(ii, VB.lam_g_ind);
+
+			Hyps hyps;
+			hyps.slab_var.resize(n_effects);
+			hyps.spike_var.resize(n_effects);
+			hyps.slab_relative_var.resize(n_effects);
+			hyps.spike_relative_var.resize(n_effects);
+			hyps.lambda.resize(n_effects);
+			hyps.s_x.resize(2);
+
+			Eigen::ArrayXd muw_sq(n_env * n_env);
+			for (int ll = 0; ll < n_env; ll++){
+				for (int mm = 0; mm < n_env; mm++){
+					muw_sq(mm*n_env + ll) = VB.vp_init.muw(mm) * VB.vp_init.muw(ll);
+				}
+			}
+			//
+			hyps.sigma = sigma;
+			hyps.slab_var           << sigma * sigma_b, sigma * sigma_g;
+			hyps.spike_var          << sigma * sigma_b / p.spike_diff_factor, sigma * sigma_g / p.spike_diff_factor;
+			hyps.slab_relative_var  << sigma_b, sigma_g;
+			hyps.spike_relative_var << sigma_b / p.spike_diff_factor, sigma_g / p.spike_diff_factor;
+			hyps.lambda             << lam_b, lam_g;
+			hyps.s_x                << VB.n_var, (VB.dXtEEX.rowwise() * muw_sq.transpose()).sum() / (VB.N - 1.0);
+
+			// Set up for updateAllParams
+			VariationalParameters vp;
+			vp.init_from_lite(VB.vp_init);
+			VB.updateSSq(hyps, vp);
+			vp.calcEdZtZ(VB.dXtEEX, n_env);
+			int round_index = 2;
+			double logw_prev = -1;
+			std::vector< double > logw_updates;
+
+			CHECK(data.Y(0,0) == Approx(-1.262491384814441));
+			CHECK(vp.ym(0) == Approx(0.0003200476));
+			CHECK(vp.yx(0) == Approx(0.0081544079));
+			CHECK(vp.eta(0) == Approx(-0.5894793969));
+
+			VB.updateAllParams(0, round_index, vp, hyps, logw_prev, logw_updates);
+
+			CHECK(VB.X.col(0)(0) == Approx(1.8570984229));
+			CHECK(vp.s_sq(0, 0) == Approx(0.0031087381));
+			CHECK(vp.mu(0, 0) == Approx(-0.0303900712));
+			CHECK(vp.alpha(0, 0) == Approx(0.1447783263));
+			CHECK(vp.alpha(1, 0) == Approx(0.1517251004));
+			CHECK(vp.mu(1, 0) == Approx(-0.0355760798));
+			CHECK(vp.alpha(63, 0) == Approx(0.1784518373));
+			CHECK(VB.calc_logw(hyps, vp) == Approx(-60.983398393));
+
+			VB.updateAllParams(1, round_index, vp, hyps, logw_prev, logw_updates);
+
+			CHECK(vp.alpha(0, 0) == Approx(0.1350711123));
+			CHECK(vp.mu(0, 0) == Approx(-0.0205395866));
+			CHECK(vp.alpha(1, 0) == Approx(0.1400764528));
+			CHECK(vp.alpha(63, 0) == Approx(0.1769882239));
+			CHECK(VB.calc_logw(hyps, vp) == Approx(-60.606081598));
 		}
 
-		SECTION("transpose_vector_multiply "){
-			Eigen::VectorXd yy(3), res;
-			yy << 0.550, 0.676, -1.226;
- 			res = GM.transpose_vector_multiply(yy);
-
-			CHECK(res.rows() == 2);
-			CHECK(res.cols() == 1);
-			CHECK(Approx(res(0, 0)) == 1.170866);
-		}
-
-		SECTION("dot_with_jth_col "){
-			Eigen::VectorXd yy(3);
-			yy << 10.2, 5.35, 3.1;
- 			double res = GM.dot_with_jth_col(yy, 1);
-
-			CHECK(Approx(res) == 3.37328);
-		}
-	}
-
-	SECTION("Normal functionality when low-mem off"){
-		GenotypeMatrix GM(false, 3, 2);
-		GM.assign_index(0, 0, 0.2);
-		GM.assign_index(1, 0, 0.8);
-		GM.assign_index(2, 0, 0.2);
-		GM.assign_index(0, 1, 0.3);
-		GM.assign_index(1, 1, 0.345);
-		GM.assign_index(2, 1, 0.213);
-
-		SECTION("Read access returns standardised values"){
-			CHECK(Approx(GM(0, 1)) == 0.2086301);
-		}
-		SECTION("Matrix multiplication functions on scaled matrix"){
-			Eigen::VectorXd vv(2);
-			vv << 0.55, 0.676;
-			Eigen::VectorXd res = GM * vv;
-			Eigen::VectorXd res_truth(3);
-			res_truth << -0.1765087, 1.2294428, -1.0529341;
-			CHECK(res_truth[0] == Approx(res[0]));
-			CHECK(res_truth[1] == Approx(res[1]));
-		}
-
-		SECTION("Missing values handled correctly"){
-			GM.assign_index(2, 0, std::nan(""));
-			CHECK(GM(1, 0) == Approx(0.7071068));
-			CHECK(0.0 == Approx(GM(2, 0)));
-		}
-
-		SECTION("transpose_vector_multiply "){
-			Eigen::VectorXd yy(3), res;
-			yy << 0.550, 0.676, -1.226;
- 			res = GM.transpose_vector_multiply(yy);
-
-			CHECK(res.rows() == 2);
-			CHECK(res.cols() == 1);
-			CHECK(Approx(res(0, 0)) == 1.170866);
+		std::vector< VbTracker > trackers(p.n_thread);
+		VB.run_inference(VB.hyps_grid, false, 2, trackers);
+		SECTION("Ex1. Vbayes_X2 inference correct"){
+			CHECK(trackers[0].counts_list[0] == 11);
+			CHECK(trackers[0].counts_list[3] == 33);
+			CHECK(trackers[0].logw_list[0] == Approx(-60.522210486));
+			CHECK(trackers[0].logw_list[1] == Approx(-59.9696083263));
+			CHECK(trackers[0].logw_list[2] == Approx(-60.30658117));
+			CHECK(trackers[0].logw_list[3] == Approx(-61.0687573393));
 		}
 	}
 }
 
-TEST_CASE( "Data Class" ){
+TEST_CASE( "Example 2: multi-env" ){
 	parameters p;
 
-	SECTION("No filters applied, high mem mode"){
-		char* argv[] = { (char*) "bin/bgen_prog", (char*) "--mode_vb", 
-						 (char*) "--interaction", (char*) "x",
-						 (char*) "--bgen", (char*) "tests/data/case6_n50_p100.bgen",
-						 (char*) "--out", (char*) "tests/data/fake.out",
-						 (char*) "--pheno", (char*) "tests/data/pheno.txt",
-						 (char*) "--hyps_grid", (char*) "tests/data/hyperpriors_gxage_v1.txt",
-						 (char*) "--hyps_probs", (char*) "tests/data/hyperpriors_gxage_v1_probs.txt",
-						 (char*) "--vb_init", (char*) "tests/data/vb_inits.out",
-						 (char*) "--covar", (char*) "tests/data/age.txt"};
+	SECTION("Ex2. No filters applied, high mem mode"){
+		char* argv[] = { (char*) "bin/bgen_prog", (char*) "--mode_vb",
+						 (char*) "--environment", (char*) "data/io_test/n50_p100_env.txt",
+						 (char*) "--bgen", (char*) "data/io_test/n50_p100.bgen",
+						 (char*) "--out", (char*) "data/io_test/fake_env.out",
+						 (char*) "--pheno", (char*) "data/io_test/pheno.txt",
+						 (char*) "--hyps_grid", (char*) "data/io_test/hyperpriors_gxage.txt",
+						 (char*) "--hyps_probs", (char*) "data/io_test/hyperpriors_gxage_probs.txt",
+						 (char*) "--vb_init", (char*) "data/io_test/answer_init.txt",
+						 (char*) "--covar", (char*) "data/io_test/n50_p100_env.txt"};
 		int argc = sizeof(argv)/sizeof(argv[0]);
 		parse_arguments(p, argc, argv);
 		Data data( p );
 
 		data.read_non_genetic_data();
-		SECTION( "Raw non genetic data read in accurately"){
-			CHECK(data.Y(0,0) == Approx(-1.18865038973338));
-			CHECK(data.W(0,0) == Approx(-0.334726453474872));
-			CHECK(data.alpha_init(2,0) == Approx(0.000102891));
-			CHECK(data.mu_init(4,0) == Approx(-0.0968564));
-			CHECK(data.hyps_grid(0,6) == Approx(0.0153846153846154));
-			CHECK(data.imprt_grid(4,0) == Approx(1.0372941821041e-18));
-		}
-
 		data.standardise_non_genetic_data();
-		SECTION( "Non genetic data standardised"){
-			CHECK(data.Y(0,0) == Approx(-1.58005735));
-			CHECK(data.W(0,0) == Approx(-0.5894794));
+		data.read_full_bgen();
+
+		data.calc_dxteex();
+        data.calc_snpstats();
+		if(p.vb_init_file != "NULL"){
+			data.read_alpha_mu();
+		}
+		VBayesX2 VB(data);
+		VB.check_inputs();
+		SECTION("Ex2. Vbayes_X2 initialised correctly"){
+			CHECK(VB.n_samples == 50);
+			CHECK(VB.N == 50.0);
+			CHECK(VB.n_env == 4);
+			CHECK(VB.n_covar == 4);
+			CHECK(VB.n_effects == 2);
+			CHECK(VB.vp_init.muw(0) == 0.25);
+			CHECK(VB.p.init_weights_with_snpwise_scan == false);
+			CHECK(VB.dXtEEX(0, 0) == Approx(38.9390135703));
 		}
 
-		data.regress_out_covars();
-		SECTION( "Covariates regressed out"){
-			CHECK(data.Y(0,0) == Approx(-1.2624914));
+		SECTION("Ex2. Explicitly checking updates"){
+			// Set up for RunInnerLoop
+			int ii = 0;
+			int n_effects = 2;
+			int n_env = 4;
+			double sigma = VB.hyps_grid(ii, VB.sigma_ind);
+			double sigma_b = VB.hyps_grid(ii, VB.sigma_b_ind);
+			double sigma_g = VB.hyps_grid(ii, VB.sigma_g_ind);
+			double lam_b = VB.hyps_grid(ii, VB.lam_b_ind);
+			double lam_g = VB.hyps_grid(ii, VB.lam_g_ind);
+
+			Hyps hyps;
+			hyps.slab_var.resize(n_effects);
+			hyps.spike_var.resize(n_effects);
+			hyps.slab_relative_var.resize(n_effects);
+			hyps.spike_relative_var.resize(n_effects);
+			hyps.lambda.resize(n_effects);
+			hyps.s_x.resize(2);
+
+			Eigen::ArrayXd muw_sq(n_env * n_env);
+			for (int ll = 0; ll < n_env; ll++){
+				for (int mm = 0; mm < n_env; mm++){
+					muw_sq(mm*n_env + ll) = VB.vp_init.muw(mm) * VB.vp_init.muw(ll);
+				}
+			}
+			//
+			hyps.sigma = sigma;
+			hyps.slab_var           << sigma * sigma_b, sigma * sigma_g;
+			hyps.spike_var          << sigma * sigma_b / p.spike_diff_factor, sigma * sigma_g / p.spike_diff_factor;
+			hyps.slab_relative_var  << sigma_b, sigma_g;
+			hyps.spike_relative_var << sigma_b / p.spike_diff_factor, sigma_g / p.spike_diff_factor;
+			hyps.lambda             << lam_b, lam_g;
+			hyps.s_x                << VB.n_var, (VB.dXtEEX.rowwise() * muw_sq.transpose()).sum() / (VB.N - 1.0);
+
+			// Set up for updateAllParams
+			VariationalParameters vp;
+			vp.init_from_lite(VB.vp_init);
+			VB.updateSSq(hyps, vp);
+			vp.calcEdZtZ(VB.dXtEEX, n_env);
+			int count = 0, round_index = 2;
+			double logw_prev = -1;
+			std::vector< double > logw_updates;
+
+			VB.updateAllParams(0, round_index, vp, hyps, logw_prev, logw_updates);
+
+			CHECK(vp.alpha(0, 0) == Approx(0.1339907047));
+			CHECK(vp.alpha(1, 0) == Approx(0.1393645403 ));
+			CHECK(vp.alpha(63, 0) == Approx(0.1700976171));
+			CHECK(vp.muw(0, 0) == Approx(0.1096760209));
+			CHECK(VB.calc_logw(hyps, vp) == Approx(-68.2656816517));
+
+			VB.updateAllParams(1, round_index, vp, hyps, logw_prev, logw_updates);
+
+			CHECK(vp.alpha(0, 0) == Approx(0.1292192489));
+			CHECK(vp.alpha(1, 0) == Approx(0.1326174323));
+			CHECK(vp.alpha(63, 0) == Approx(0.1704601589));
+			CHECK(vp.muw(0, 0) == Approx(0.0455626691));
+			CHECK(VB.calc_logw(hyps, vp) == Approx(-67.6870841008));
+		}
+
+		std::vector< VbTracker > trackers(p.n_thread);
+		VB.run_inference(VB.hyps_grid, false, 2, trackers);
+		SECTION("Ex2. Vbayes_X2 inference correct"){
+			CHECK(trackers[0].counts_list[0] == 11);
+			CHECK(trackers[0].counts_list[3] == 35);
+			CHECK(trackers[0].logw_list[0] == Approx(-67.6055600008));
+			CHECK(trackers[0].logw_list[1] == Approx(-67.3497693394));
+			CHECK(trackers[0].logw_list[2] == Approx(-67.757622793));
+			CHECK(trackers[0].logw_list[3] == Approx(-68.5048150566));
+		}
+	}
+}
+
+TEST_CASE( "Example 3: multi-env w/ covars" ){
+	parameters p;
+
+	SECTION("Ex3. No filters applied, high mem mode"){
+		char* argv[] = { (char*) "bin/bgen_prog", (char*) "--mode_vb",
+						 (char*) "--use_vb_on_covars",
+						 (char*) "--environment", (char*) "data/io_test/n50_p100_env.txt",
+						 (char*) "--bgen", (char*) "data/io_test/n50_p100.bgen",
+						 (char*) "--out", (char*) "data/io_test/fake_env.out",
+						 (char*) "--pheno", (char*) "data/io_test/pheno.txt",
+						 (char*) "--hyps_grid", (char*) "data/io_test/hyperpriors_gxage.txt",
+						 (char*) "--hyps_probs", (char*) "data/io_test/hyperpriors_gxage_probs.txt",
+						 (char*) "--vb_init", (char*) "data/io_test/answer_init.txt",
+						 (char*) "--covar", (char*) "data/io_test/n50_p100_env.txt"};
+		int argc = sizeof(argv)/sizeof(argv[0]);
+		parse_arguments(p, argc, argv);
+		Data data( p );
+
+		data.read_non_genetic_data();
+		data.standardise_non_genetic_data();
+		SECTION( "Ex3. Non genetic data standardised + covars regressed"){
+			CHECK(data.params.scale_pheno == true);
+			CHECK(data.params.use_vb_on_covars == true);
+			CHECK(data.params.covar_file != "NULL");
+//			CHECK(data.Y(0,0) == Approx(-3.6676363273605137)); Centered
+			CHECK(data.Y(0,0) == Approx(-1.5800573524786081)); // Scaled
+			CHECK(data.Y2(0,0) == Approx(-1.5567970303));
+			CHECK(data.W(0,0) == Approx(0.8957059881));
+			CHECK(data.E(0,0) == Approx(0.8957059881));
+		}
+		data.read_full_bgen();
+
+		data.calc_dxteex();
+		data.calc_snpstats();
+		if(p.vb_init_file != "NULL"){
+			data.read_alpha_mu();
+		}
+		VBayesX2 VB(data);
+		VB.check_inputs();
+		SECTION("Ex3. Vbayes_X2 initialised correctly"){
+			CHECK(VB.n_samples == 50);
+			CHECK(VB.N == 50.0);
+			CHECK(VB.n_env == 4);
+			CHECK(VB.n_covar == 4);
+			CHECK(VB.n_effects == 2);
+			CHECK(VB.vp_init.muw(0) == 0.25);
+			CHECK(VB.p.init_weights_with_snpwise_scan == false);
+			CHECK(VB.dXtEEX(0, 0) == Approx(38.9390135703));
+		}
+
+		SECTION("Ex3. Explicitly checking updates"){
+			// Set up for RunInnerLoop
+			int ii = 0;
+			int n_effects = 2;
+			int n_env = 4;
+			double sigma = VB.hyps_grid(ii, VB.sigma_ind);
+			double sigma_b = VB.hyps_grid(ii, VB.sigma_b_ind);
+			double sigma_g = VB.hyps_grid(ii, VB.sigma_g_ind);
+			double lam_b = VB.hyps_grid(ii, VB.lam_b_ind);
+			double lam_g = VB.hyps_grid(ii, VB.lam_g_ind);
+
+			Hyps hyps;
+			hyps.slab_var.resize(n_effects);
+			hyps.spike_var.resize(n_effects);
+			hyps.slab_relative_var.resize(n_effects);
+			hyps.spike_relative_var.resize(n_effects);
+			hyps.lambda.resize(n_effects);
+			hyps.s_x.resize(2);
+
+			Eigen::ArrayXd muw_sq(n_env * n_env);
+			for (int ll = 0; ll < n_env; ll++){
+				for (int mm = 0; mm < n_env; mm++){
+					muw_sq(mm*n_env + ll) = VB.vp_init.muw(mm) * VB.vp_init.muw(ll);
+				}
+			}
+			//
+			hyps.sigma = sigma;
+			hyps.slab_var           << sigma * sigma_b, sigma * sigma_g;
+			hyps.spike_var          << sigma * sigma_b / p.spike_diff_factor, sigma * sigma_g / p.spike_diff_factor;
+			hyps.slab_relative_var  << sigma_b, sigma_g;
+			hyps.spike_relative_var << sigma_b / p.spike_diff_factor, sigma_g / p.spike_diff_factor;
+			hyps.lambda             << lam_b, lam_g;
+			hyps.s_x                << VB.n_var, (VB.dXtEEX.rowwise() * muw_sq.transpose()).sum() / (VB.N - 1.0);
+
+			// Set up for updateAllParams
+			VariationalParameters vp;
+			vp.init_from_lite(VB.vp_init);
+			VB.updateSSq(hyps, vp);
+			vp.calcEdZtZ(VB.dXtEEX, n_env);
+			int count = 0, round_index = 2;
+			double logw_prev = -1;
+			std::vector< double > logw_updates;
+
+			VB.updateAllParams(0, round_index, vp, hyps, logw_prev, logw_updates);
+
+			CHECK(vp.muc(0) == Approx(0.1221946024));
+			CHECK(vp.muc(3) == Approx(-0.1595909887));
+			CHECK(vp.alpha(0, 0) == Approx(0.1339235799));
+			CHECK(vp.alpha(1, 0) == Approx(0.1415361555));
+			CHECK(vp.alpha(63, 0) == Approx(0.1724736345));
+			CHECK(vp.muw(0, 0) == Approx(0.1127445891));
+			CHECK(VB.calc_logw(hyps, vp) == Approx(-20076.0449393003));
+
+			VB.updateAllParams(1, round_index, vp, hyps, logw_prev, logw_updates);
+
+			CHECK(vp.muc(0) == Approx(0.1463805515));
+			CHECK(vp.muc(3) == Approx(-0.1128544804));
+			CHECK(vp.alpha(0, 0) == Approx(0.1292056073));
+			CHECK(vp.alpha(1, 0) == Approx(0.1338797264));
+			CHECK(vp.alpha(63, 0) == Approx(0.1730150924));
+			CHECK(vp.muw(0, 0) == Approx(0.0460748751));
+			CHECK(VB.calc_logw(hyps, vp) == Approx(-20075.3681431899));
+		}
+
+		std::vector< VbTracker > trackers(p.n_thread);
+		VB.run_inference(VB.hyps_grid, false, 2, trackers);
+		SECTION("Ex3. Vbayes_X2 inference correct"){
+			CHECK(trackers[0].counts_list[0] == 10);
+			CHECK(trackers[0].counts_list[3] == 33);
+			CHECK(trackers[0].logw_list[0] == Approx(-20075.279701215));
+			CHECK(trackers[0].logw_list[1] == Approx(-20074.9040629751));
+			CHECK(trackers[0].logw_list[2] == Approx(-20075.2341616388));
+			CHECK(trackers[0].logw_list[3] == Approx(-20075.9304539824));
+		}
+	}
+}
+
+TEST_CASE( "Example 6: single-env w MoG + hyps max" ){
+	parameters p;
+
+	SECTION("Ex6. No filters applied, high mem mode"){
+		char* argv[] = { (char*) "bin/bgen_prog", (char*) "--mode_vb", (char*) "--effects_prior_mog",
+						 (char*) "--interaction", (char*) "x",
+						 (char*) "--mode_empirical_bayes",
+						 (char*) "--bgen", (char*) "data/io_test/n50_p100.bgen",
+						 (char*) "--out", (char*) "data/io_test/fake_age.out",
+						 (char*) "--pheno", (char*) "data/io_test/pheno.txt",
+						 (char*) "--hyps_grid", (char*) "data/io_test/hyperpriors_gxage.txt",
+						 (char*) "--hyps_probs", (char*) "data/io_test/hyperpriors_gxage_probs.txt",
+						 (char*) "--vb_init", (char*) "data/io_test/answer_init.txt",
+						 (char*) "--covar", (char*) "data/io_test/age.txt",
+						 (char*) "--spike_diff_factor", (char*) "100"};
+		int argc = sizeof(argv)/sizeof(argv[0]);
+		parse_arguments(p, argc, argv);
+		Data data( p );
+
+		data.read_non_genetic_data();
+		data.standardise_non_genetic_data();
+		SECTION( "Ex6. Non genetic data standardised + covars regressed"){
+			CHECK(data.params.scale_pheno == true);
+			CHECK(data.params.use_vb_on_covars == false);
+			CHECK(data.params.covar_file != "NULL");
+//			CHECK(data.Y(0,0) == Approx(-3.6676363273605137)); Centered
+//			CHECK(data.Y(0,0) == Approx(-1.5800573524786081)); Scaled
+			CHECK(data.Y(0,0) == Approx(-1.262491384814441));
+			CHECK(data.Y2(0,0) == Approx(-1.262491384814441));
+			CHECK(data.W(0,0) == Approx(-0.58947939694779772));
+			CHECK(data.E(0,0) == Approx(-0.58947939694779772));
 		}
 
 		data.read_full_bgen();
-		SECTION( "bgen read in & standardised correctly"){
-			CHECK(data.G(0, 0) == Approx(-0.2220569));
+		SECTION( "Ex6. bgen read in & standardised correctly"){
+			CHECK(data.G.low_mem == false);
+			CHECK(data.params.low_mem == false);
+			CHECK(data.params.flip_high_maf_variants == true);
+			CHECK(data.G(0, 0) == Approx(1.8604233373));
+		}
+
+		SECTION( "Ex6. Confirm calc_dxteex() reorders properly"){
+			data.params.dxteex_file = "data/io_test/inputs/dxteex_mixed.txt";
+			data.read_external_dxteex();
+			data.calc_dxteex();
+			CHECK(data.dXtEEX(0, 0) == Approx(87.204591182113916));
+			CHECK(data.n_dxteex_computed == 1);
+		}
+
+		data.calc_dxteex();
+		if(p.vb_init_file != "NULL"){
+			data.read_alpha_mu();
+		}
+		VBayesX2 VB(data);
+		VB.check_inputs();
+		SECTION("Ex6. Vbayes_X2 initialised correctly"){
+			CHECK(VB.n_samples == 50);
+			CHECK(VB.N == 50.0);
+			CHECK(VB.n_env == 1);
+			CHECK(VB.n_covar == 1);
+			CHECK(VB.n_effects == 2);
+			CHECK(VB.vp_init.muw(0) == 1.0);
+			CHECK(VB.p.init_weights_with_snpwise_scan == false);
+			CHECK(VB.dXtEEX(0, 0) == Approx(87.204591182113916));
+//			CHECK(VB.Cty(0, 0) == Approx(-5.3290705182007514e-15));
+		}
+
+//		SECTION("Checking output"){
+//		    VB.run();
+//		}
+
+		SECTION("Ex6. Explicitly checking updates"){
+			// Set up for RunInnerLoop
+			int ii = 0;
+			int n_effects = 2;
+			int n_env = 1;
+			double sigma = VB.hyps_grid(ii, VB.sigma_ind);
+			double sigma_b = VB.hyps_grid(ii, VB.sigma_b_ind);
+			double sigma_g = VB.hyps_grid(ii, VB.sigma_g_ind);
+			double lam_b = VB.hyps_grid(ii, VB.lam_b_ind);
+			double lam_g = VB.hyps_grid(ii, VB.lam_g_ind);
+
+			Hyps hyps;
+			hyps.slab_var.resize(n_effects);
+			hyps.spike_var.resize(n_effects);
+			hyps.slab_relative_var.resize(n_effects);
+			hyps.spike_relative_var.resize(n_effects);
+			hyps.lambda.resize(n_effects);
+			hyps.s_x.resize(2);
+
+			Eigen::ArrayXd muw_sq(n_env * n_env);
+			for (int ll = 0; ll < n_env; ll++){
+				for (int mm = 0; mm < n_env; mm++){
+					muw_sq(mm*n_env + ll) = VB.vp_init.muw(mm) * VB.vp_init.muw(ll);
+				}
+			}
+			//
+			hyps.sigma = sigma;
+			hyps.slab_var           << sigma * sigma_b, sigma * sigma_g;
+			hyps.spike_var          << sigma * sigma_b / p.spike_diff_factor, sigma * sigma_g / p.spike_diff_factor;
+			hyps.slab_relative_var  << sigma_b, sigma_g;
+			hyps.spike_relative_var << sigma_b / p.spike_diff_factor, sigma_g / p.spike_diff_factor;
+			hyps.lambda             << lam_b, lam_g;
+			hyps.s_x                << VB.n_var, (VB.dXtEEX.rowwise() * muw_sq.transpose()).sum() / (VB.N - 1.0);
+
+			// Set up for updateAllParams
+			VariationalParameters vp;
+			vp.init_from_lite(VB.vp_init);
+			VB.updateSSq(hyps, vp);
+			vp.calcEdZtZ(VB.dXtEEX, n_env);
+			int round_index = 2;
+			double logw_prev = -1;
+			std::vector< double > logw_updates;
+
+			VB.updateAllParams(0, round_index, vp, hyps, logw_prev, logw_updates);
+
+			CHECK(vp.alpha(0, 0) == Approx(0.1447525646));
+			CHECK(vp.mu( 0, 0) == Approx(-0.0304566021));
+			CHECK(vp.mup(0, 0) == Approx(-0.0003586526));
+			CHECK(vp.alpha(1, 0) == Approx(0.1515936892));
+			CHECK(vp.mu( 1, 0) == Approx(-0.0356183259));
+			CHECK(vp.mup(1, 0) == Approx(-0.0004194363));
+			CHECK(vp.alpha(63, 0) == Approx(0.1762251019));
+			CHECK(hyps.sigma == Approx(0.3994029731));
+			CHECK(hyps.lambda(0) == Approx(0.1693099847));
+			CHECK(hyps.slab_var(0) == Approx(0.0056085838));
+			CHECK(hyps.spike_var(0) == Approx(0.0000368515));
+			CHECK(VB.calc_logw(hyps, vp) == Approx(-52.129381445));
+
+			VB.updateAllParams(1, round_index, vp, hyps, logw_prev, logw_updates);
+
+			CHECK(vp.alpha(0, 0) == Approx(0.1428104733));
+			CHECK(vp.mu( 0, 0) == Approx(-0.01972825));
+			CHECK(vp.mup(0, 0) == Approx(-0.0002178332));
+			CHECK(vp.alpha(1, 0) == Approx(0.1580997887));
+			CHECK(vp.alpha(63, 0) == Approx(0.6342565543));
+			CHECK(hyps.sigma == Approx(0.2888497603));
+			CHECK(hyps.lambda(0) == Approx(0.2065007836));
+			CHECK(hyps.slab_var(0) == Approx(0.0077922078));
+			CHECK(hyps.spike_var(0) == Approx(0.0000369985));
+			CHECK(VB.calc_logw(hyps, vp) == Approx(-48.0705874648));
+		}
+
+		SECTION("Ex6. Checking rescan") {
+			// Set up for RunInnerLoop
+			int ii = 1;
+			int n_effects = 2;
+			int n_env = 1;
+			int n_samples = VB.n_samples;
+			double sigma = VB.hyps_grid(ii, VB.sigma_ind);
+			double sigma_b = VB.hyps_grid(ii, VB.sigma_b_ind);
+			double sigma_g = VB.hyps_grid(ii, VB.sigma_g_ind);
+			double lam_b = VB.hyps_grid(ii, VB.lam_b_ind);
+			double lam_g = VB.hyps_grid(ii, VB.lam_g_ind);
+
+			Hyps hyps;
+			hyps.slab_var.resize(n_effects);
+			hyps.spike_var.resize(n_effects);
+			hyps.slab_relative_var.resize(n_effects);
+			hyps.spike_relative_var.resize(n_effects);
+			hyps.lambda.resize(n_effects);
+			hyps.s_x.resize(2);
+
+			Eigen::ArrayXd muw_sq(n_env * n_env);
+			for (int ll = 0; ll < n_env; ll++) {
+				for (int mm = 0; mm < n_env; mm++) {
+					muw_sq(mm * n_env + ll) = VB.vp_init.muw(mm) * VB.vp_init.muw(ll);
+				}
+			}
+			hyps.sigma = sigma;
+			hyps.slab_var << sigma * sigma_b, sigma * sigma_g;
+			hyps.spike_var << sigma * sigma_b / p.spike_diff_factor, sigma * sigma_g / p.spike_diff_factor;
+			hyps.slab_relative_var << sigma_b, sigma_g;
+			hyps.spike_relative_var << sigma_b / p.spike_diff_factor, sigma_g / p.spike_diff_factor;
+			hyps.lambda << lam_b, lam_g;
+			hyps.s_x << VB.n_var, (VB.dXtEEX.rowwise() * muw_sq.transpose()).sum() / (VB.N - 1.0);
+
+			VbTracker tracker;
+			tracker.set_main_filepath(p.out_file);
+			tracker.resize(VB.n_grid);
+			VB.runInnerLoop(ii, false, 2, hyps, tracker);
+
+			CHECK(tracker.logw_list[1] == Approx(-40.8450));
+			CHECK(tracker.vp_list[1].eta[0] == Approx(-0.589479));
+			CHECK(tracker.vp_list[1].ym[0] == Approx(-0.933592));
+
+			Eigen::VectorXd gam_neglogp(VB.n_var);
+			VB.rescanGWAS(tracker.vp_list[ii], gam_neglogp);
+
+			CHECK(gam_neglogp[1] == Approx(0.3038129038));
+
+			Eigen::VectorXd pheno = VB.Y - tracker.vp_list[1].ym;
+			Eigen::VectorXd Z_kk(n_samples);
+
+			CHECK(pheno[0] == Approx(-0.3288994));
+
+
+			int jj = 1;
+			Z_kk = VB.X.col(jj).cwiseProduct(tracker.vp_list[1].eta);
+			double ztz_inv = 1.0 / Z_kk.dot(Z_kk);
+			double gam = Z_kk.dot(pheno) * ztz_inv;
+			double rss_null = (pheno - Z_kk * gam).squaredNorm();
+
+			// T-test of variant j
+			boost_m::students_t t_dist(n_samples - 1);
+			double main_se_j    = std::sqrt(rss_null / (VB.N - 1.0) * ztz_inv);
+			double main_tstat_j = gam / main_se_j;
+			double main_pval_j  = 2 * boost_m::cdf(boost_m::complement(t_dist, fabs(main_tstat_j)));
+
+			double neglogp_j = -1 * std::log10(main_pval_j);
+
+			CHECK(VB.X.col(jj)[0] == Approx(0.7465835328));
+			CHECK(Z_kk[0] == Approx(-0.44009531));
+			CHECK(gam == Approx(0.02798559));
+			CHECK(main_pval_j == Approx(0.496806302));
+			CHECK(main_tstat_j == Approx(0.6846255));
+			CHECK(main_se_j == Approx(0.04087723));
+			CHECK(rss_null == Approx(8.342454));
+
+
+		}
+
+		std::vector< VbTracker > trackers(p.n_thread);
+		VB.run_inference(VB.hyps_grid, false, 2, trackers);
+		SECTION("Ex6. Vbayes_X2 inference correct"){
+			CHECK(trackers[0].counts_list[0] == 741);
+			CHECK(trackers[0].counts_list[3] == 71);
+			CHECK(trackers[0].logw_list[0] == Approx(-45.2036994175));
+			CHECK(trackers[0].logw_list[1] == Approx(-40.8450319874));
+			CHECK(trackers[0].logw_list[2] == Approx(-40.960377414));
+			CHECK(trackers[0].logw_list[3] == Approx(-40.9917439828));
 		}
 	}
 }
 
-
-TEST_CASE( "vbayes_x2.hpp", "[VBayesX2]" ) {
-	parameters p;
-	char* argv[] = { (char*) "bin/bgen_prog", (char*) "--mode_vb", 
-					 (char*) "--interaction", (char*) "x",
-					 (char*) "--bgen", (char*) "tests/data/case6_n50_p100.bgen",
-					 (char*) "--out", (char*) "tests/data/fake.out",
-					 (char*) "--pheno", (char*) "tests/data/pheno.txt",
-					 (char*) "--hyps_grid", (char*) "tests/data/hyperpriors_gxage_v1.txt",
-					 (char*) "--hyps_probs", (char*) "tests/data/hyperpriors_gxage_v1_probs.txt",
-					 (char*) "--vb_init", (char*) "tests/data/vb_inits.out",
-					 (char*) "--covar", (char*) "tests/data/age.txt"};
-	int argc = sizeof(argv)/sizeof(argv[0]);
-	parse_arguments(p, argc, argv);
-	Data data( p );
-	data.read_non_genetic_data();
-	data.standardise_non_genetic_data();
-	data.read_full_bgen();
-
-	// Pass data to VBayes object
-	VBayesX2 VB(data);
-
-	// SECTION()
-	CHECK(VB.n_grid == 7);
-	VB.check_inputs();
-	CHECK(VB.n_grid == 6);
-	CHECK(VB.hyps_grid.rows() == 6);
-	CHECK(VB.probs_grid.rows() == 6);
-
-	SECTION("Function to validate hyperparameter grid"){
-			int n_var = 50;
-			Eigen::MatrixXd orig(3, 5), attempt, answer(2, 5);
-			std::vector<int> attempt_vec, answer_vec;
-
-			// Filling answers
-			orig << 1, 0.1, 0.1, 0.1, 0.1,
-					1, 0.1, 0.1, 0.001, 0.1, 
-					1, 0.1, 0.1, 0.1, 0.1;
-			answer << 1, 0.1, 0.1, 0.1, 0.1,
-					  1, 0.1, 0.1, 0.1, 0.1;
-			answer_vec.push_back(0);
-			answer_vec.push_back(2);
-
-			CHECK(validate_grid(orig, n_var) == answer_vec);
-			CHECK(subset_matrix(orig, answer_vec) == answer);
-	}
-}
-
-// TEST_CASE( "Checking data", "[data]" ) {
-// 	char* argv[] = { (char*) "bin/bgen_prog",
-// 					 (char*) "--bgen", 
-// 					 (char*) "data/example/example.v11.bgen"};
-// 	int argc = sizeof(argv)/sizeof(argv[0]);
-// 	parameters p;
-// 	parse_arguments(p, argc, argv);
-// 	Data data( p.bgen_file );
-// 
-// 	SECTION( "read_txt_file behaving sensibly" ) {
-// 		std::string filename = "tests/cases/test_covar.txt";
-// 		Eigen::MatrixXd M_read, M_ans(3, 3), M_cent(3, 3);
-// 		int n_cols;
-// 		std::vector< std::string > col_names_read, col_names_ans;
-// 		std::map< int, bool > incomplete_row;
-// 
-// 		data.n_samples = 3;
-// 		data.read_txt_file( filename,
-// 							M_read,
-// 							n_cols,
-// 							col_names_read,
-// 							incomplete_row );
-// 
-// 		M_ans << 1, 2, 3, 4, 5, 6, 7, 8, 9;
-// 		col_names_ans.push_back("A");
-// 		col_names_ans.push_back("B");
-// 		col_names_ans.push_back("C");
-// 
-// 		CHECK( M_read == M_ans );
-// 		CHECK( n_cols == 3 );
-// 		CHECK( col_names_read == col_names_ans );
-// 
-// 		SECTION( "Number of covariates greater than n_samples" ) {
-// 			data.n_samples = 2;
-// 			CHECK_THROWS_AS(data.read_txt_file( filename,
-// 								M_read,
-// 								n_cols,
-// 								col_names_read,
-// 								incomplete_row ), std::runtime_error);
-// 		}
-// 
-// 		SECTION( "center_matrix behaving sensibly" ) {
-// 			Eigen::MatrixXd M_cent(3, 3);
-// 			int n_cols_ans = 3;
-// 			M_cent << -1, -1, -1, 0, 0, 0, 1, 1, 1;
-// 
-// 			data.center_matrix( M_read, n_cols_ans );
-// 			data.scale_matrix( M_read, n_cols_ans );
-// 			CHECK( M_read == M_cent );
-// 		}
-// 
-// 		// SECTION( "reduce_mat_to_complete_cases behaving sensibly" ) {
-// 		// 	Eigen::MatrixXd M_reduc(2, 3);
-// 		// 	int n_cols_ans = 3;
-// 		// 	bool check = false;
-// 		// 	std::map< int, bool > incomplete_cases;
-// 		// 	M_reduc << 1, 2, 3, 7, 8, 9;
-// 		// 	incomplete_cases[1] = 1;
-// 		// 
-// 		// 	data.reduce_mat_to_complete_cases(M_read, check, n_cols_ans, incomplete_cases);
-// 		// 	// std::cout << "M_read is now " << M_read.rows() << "x" << M_read.cols() << std::endl;
-// 		// 	CHECK( M_read == M_reduc );
-// 		// }
-// 
-// 		// SECTION( "scale_matrix reports removal of zero variance cols" ) {
-// 		// 	Eigen::MatrixXd W(4, 3);
-// 		// 	std::vector<std::string> covar_names, red_covar_names;
-// 		// 	
-// 		// 	// init
-// 		// 	W << 1, 0, 1, 1, 0, 1, -1, 0, -1, -1, 0, -1;
-// 		// 	covar_names.push_back("c1").push_back("c2").push_back("c3");
-// 		// 	red_covar_names.push_back("c1").push_back("c3");
-// 		// 
-// 		// 	// test
-// 		// 	data.W = W;
-// 		// 	data.covar_names = covar_names;
-// 		// 	data.n_col = 3;
-// 		// 	data.scale_matrix(data.W, data.n_col, data.covar_names);
-// 		// 	CHECK( data.covar_names == red_covar_names );
-// 		// 	CHECK( data.n_col == 2 );
-// 		// }
-// 	}
-// }
-// 
-// TEST_CASE( "Check incl_sample_ids", "[data]" ) {
-// 	parameters p;
-// 
-// 	SECTION( "Read in sids correctly and subset covar matrix" ) {
-// 		char* argv[] = { (char*) "bin/bgen_prog",
-// 						 (char*) "--bgen", 
-// 						 (char*) "data/test/example.v11.bgen",
-// 						 (char*) "--covar", 
-// 						 (char*) "data/test/t1_incl_sample_ids/valid_ids.covar",
-// 						 (char*) "--incl_sample_ids", 
-// 						 (char*) "data/test/t1_incl_sample_ids/valid_ids.txt"};
-// 		int argc = sizeof(argv)/sizeof(argv[0]);
-// 		parse_arguments(p, argc, argv);
-// 		Data data( p.bgen_file );
-// 		data.params = p;
-// 		
-// 		CHECK(data.params.incl_sids_file == "data/test/t1_incl_sample_ids/valid_ids.txt");
-// 		data.read_incl_sids();
-// 		CHECK(data.n_samples - data.incomplete_cases.size() == 7);
-// 		data.read_covar();
-// 		data.reduce_to_complete_cases(); // Also edits n_samples
-// 		CHECK(data.n_samples == 7);
-// 		Eigen::MatrixXd C(7,1);
-// 		C << 1, 3, 17, 21, 22, 25, 500;
-// 		CHECK(data.W == C);
-// 	}
-// 
-// 	SECTION( "Empty incl_sample_ids file throws error" ) {
-// 		char* argv[] = { (char*) "bin/bgen_prog",
-// 						 (char*) "--bgen", 
-// 						 (char*) "data/test/example.v11.bgen",
-// 						 (char*) "--incl_sample_ids", 
-// 						 (char*) "data/test/t1_incl_sample_ids/empty.txt"};
-// 		int argc = sizeof(argv)/sizeof(argv[0]);
-// 		CHECK_THROWS_AS(parse_arguments(p, argc, argv), std::runtime_error);
-// 	}
-// 	
-// 	SECTION( "Unordered sids throw error" ) {
-// 		char* argv[] = { (char*) "bin/bgen_prog",
-// 						 (char*) "--bgen", 
-// 						 (char*) "data/test/example.v11.bgen",
-// 						 (char*) "--incl_sample_ids", 
-// 						 (char*) "data/test/t1_incl_sample_ids/invalid_ids1.txt"};
-// 		int argc = sizeof(argv)/sizeof(argv[0]);
-// 		parse_arguments(p, argc, argv);
-// 		Data data( p.bgen_file );
-// 		data.params = p;
-// 		
-// 		CHECK_THROWS_AS(data.read_incl_sids(), std::logic_error);
-// 	}
-// 
-// 	SECTION( "Absent sid throws error" ) {
-// 		char* argv[] = { (char*) "bin/bgen_prog",
-// 						 (char*) "--bgen", 
-// 						 (char*) "data/test/example.v11.bgen",
-// 						 (char*) "--incl_sample_ids", 
-// 						 (char*) "data/test/t1_incl_sample_ids/invalid_ids2.txt"};
-// 		int argc = sizeof(argv)/sizeof(argv[0]);
-// 		parse_arguments(p, argc, argv);
-// 		Data data( p.bgen_file );
-// 		data.params = p;
-// 		
-// 		CHECK_THROWS_AS(data.read_incl_sids(), std::logic_error);
-// 	}
-// 
-// 	SECTION( "Absent sid throws error including last sid" ) {
-// 		char* argv[] = { (char*) "bin/bgen_prog",
-// 						 (char*) "--bgen", 
-// 						 (char*) "data/test/example.v11.bgen",
-// 						 (char*) "--incl_sample_ids", 
-// 						 (char*) "data/test/t1_incl_sample_ids/invalid_ids3.txt"};
-// 		int argc = sizeof(argv)/sizeof(argv[0]);
-// 		parse_arguments(p, argc, argv);
-// 		Data data( p.bgen_file );
-// 		data.params = p;
-// 		
-// 		CHECK_THROWS_AS(data.read_incl_sids(), std::logic_error);
-// 	}
-// 
-// }
-
-
-// TEST_CASE( "Unit test vbayes", "[vbayes]" ) {
-// 	double PI = 3.1415926535897;
-// 	Eigen::MatrixXd myX(2, 2), myY(2, 1);
-// 	myY << 1.0, 2.0;
-// 	myX << 1.0, 0.0, 0.0, 1.0;
-// 	vbayes VB(myX, myY);
-// 	
-// 	SECTION( "Check vbayes.returnZ" ) {
-// 		// Hardcoded comparison with R
-// 		Eigen::VectorXd alpha(2), mu(2);
-// 		alpha << 1.0, 0.0;
-// 		mu << 0.7, 0.2;
-// 		std::vector< double > s_sq;
-// 		s_sq.push_back(1.2);
-// 		s_sq.push_back(0.8);
-// 		double pi = 0.2;
-// 		double sigma = 1.0;
-// 		double sigmab = 1.0;
-// 
-// 		double res = -6.569298;
-// 		CHECK(Approx(res) == VB.calc_logw(sigma, sigmab, pi, s_sq, alpha, mu));
-// 	}
-// }

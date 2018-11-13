@@ -117,8 +117,6 @@ void parse_arguments(parameters &p, int argc, char *argv[]) {
 		"--force_round1",
 		"--raw_phenotypes",
 		"--mode_alternating_updates",
-		"--mode_approximate_residuals",
-		"--min_residuals_diff",
 		"--vb_iter_max",
 		"--mode_sgd",
 		"--sgd_delay",
@@ -129,7 +127,9 @@ void parse_arguments(parameters &p, int argc, char *argv[]) {
 		"--rescale_eta",
 		"--gamma_updates_thresh",
 		"--init_weights_with_snpwise_scan",
-		"--dxteex"
+		"--dxteex",
+		"--spike_diff_factor",
+		"--min_spike_diff_factor",
 	};
 
 	std::set<std::string>::iterator set_it;
@@ -284,6 +284,19 @@ void parse_arguments(parameters &p, int argc, char *argv[]) {
 				i += 1;
 			}
 
+			if(strcmp(in_str, "--spike_diff_factor") == 0) {
+				p.spike_diff_factor = std::stod(argv[i + 1]);
+				std::cout << "Initial slab variance " << p.spike_diff_factor << "x spike variance" << std::endl;
+				i += 1;
+			}
+
+			if(strcmp(in_str, "--min_spike_diff_factor") == 0) {
+				p.min_spike_diff_factor = std::stod(argv[i + 1]);
+				p.min_spike_diff_set = true;
+				std::cout << "Slab variance constrained to atleast " << p.min_spike_diff_factor << "x spike variance" << std::endl;
+				i += 1;
+			}
+
 			if(strcmp(in_str, "--mode_vb") == 0) {
 				p.mode_vb = true;
 				i += 0;
@@ -299,19 +312,9 @@ void parse_arguments(parameters &p, int argc, char *argv[]) {
 				i += 0;
 			}
 
-			if(strcmp(in_str, "--mode_approximate_residuals") == 0) {
-				p.mode_approximate_residuals = true;
-				i += 0;
-			}
-
 			if(strcmp(in_str, "--mode_alternating_updates") == 0) {
 				p.mode_alternating_updates = true;
 				i += 0;
-			}
-
-			if(strcmp(in_str, "--min_residuals_diff") == 0) {
-				p.min_residuals_diff = std::stod(argv[i + 1]);
-				i += 1;
 			}
 
 			if(strcmp(in_str, "--keep_constant_variants") == 0) {
@@ -575,11 +578,6 @@ void parse_arguments(parameters &p, int argc, char *argv[]) {
 				i += 1;
 			}
 		}
-	}
-
-	if(p.mode_approximate_residuals){
-		std::cout << "Vector of residuals only updated if change in beta greater than:";
-		std::cout << std::setprecision(10) << std::fixed << p.min_residuals_diff << std::endl;
 	}
 
 	// Sanity checks here

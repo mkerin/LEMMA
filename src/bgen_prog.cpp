@@ -12,7 +12,6 @@
 #include <stdexcept>
 #include <memory>
 #include "parse_arguments.hpp"
-#include "my_timer.hpp"
 #include "class.h"
 #include "data.hpp"
 #include "vbayes_x2.hpp"
@@ -39,13 +38,10 @@ int main( int argc, char** argv ) {
 	parameters p;
 
 	try {
+		auto data_start = std::chrono::system_clock::now();
 		parse_arguments(p, argc, argv);
 		Data data( p );
 
-		// filter - incl sample ids
-		// filter - range
-		// filter - incl rsids
-		// filter - select single rsid
 		data.apply_filters();
 
 		// Summary info
@@ -60,10 +56,15 @@ int main( int argc, char** argv ) {
 
 		data.read_full_bgen();
 		data.calc_dxteex();
-		data.calc_snpstats();
+		if(p.env_weights_file == "NULL" && p.init_weights_with_snpwise_scan) {
+			data.calc_snpstats();
+		}
 		if(p.vb_init_file != "NULL"){
 			data.read_alpha_mu();
 		}
+
+		auto data_end = std::chrono::system_clock::now();
+		auto elapsed_reading_data = data_end - data_start;
 
 
 		// Pass data to VBayes object
@@ -73,8 +74,15 @@ int main( int argc, char** argv ) {
 		// VB.output_init();
 
 		// Run inference
+		auto vb_start = std::chrono::system_clock::now();
 		VB.run();
+		auto vb_end = std::chrono::system_clock::now();
+		auto elapsed_vb = vb_end - vb_start;
 		// VB.output_results();
+
+		std::cout << std::endl << "Time expenditure:" << std::endl;
+		std::cout << "Reading data: " << elapsed_reading_data.count() << std::endl;
+		std::cout << "VB inference: " << elapsed_vb.count() << std::endl;
 
 		return 0 ;
 	}

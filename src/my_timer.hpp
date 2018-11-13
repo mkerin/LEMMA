@@ -11,37 +11,37 @@ public:
 	boost::timer::auto_cpu_timer l_timer; // lap time
 
 	MyTimer(const std::string& format) : l_timer(""), c_timer(format) {
-		c_timer.stop();
-		l_timer.stop();
+//		c_timer.stop();
+//		l_timer.stop();
 	}
 
 	MyTimer(){
-		c_timer.stop();
-		l_timer.stop();
+//		c_timer.stop();
+//		l_timer.stop();
 	}
 
 	~MyTimer(){
-		c_timer.report();
+//		c_timer.report();
 	}
 
 	void resume(){
-		c_timer.resume();
-		l_timer = boost::timer::auto_cpu_timer("");
+//		c_timer.resume();
+//		l_timer = boost::timer::auto_cpu_timer("");
 	}
 
 	void stop(){
-		c_timer.stop();
-		l_timer.stop();
+//		c_timer.stop();
+//		l_timer.stop();
 	}
 
 	double get_lap_seconds(){
-		boost::timer::cpu_times cpu_time(l_timer.elapsed());
-		double secs = (cpu_time.user + cpu_time.system) / 1000.0/1000.0/1000.0;
-		return secs;
+//		boost::timer::cpu_times cpu_time(l_timer.elapsed());
+//		double secs = (cpu_time.user + cpu_time.system) / 1000.0/1000.0/1000.0;
+		return 0;
 	}
 
 	void report(){
-		c_timer.report();
+//		c_timer.report();
 	}
 };
 

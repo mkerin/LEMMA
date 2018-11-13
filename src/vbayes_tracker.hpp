@@ -9,6 +9,8 @@
 #include <vector>
 #include "variational_parameters.hpp"
 #include "tools/eigen3.3/Dense"
+#include "my_timer.hpp"
+#include "genotype_matrix.hpp"
 #include <boost/iostreams/filtering_stream.hpp>
 #include <boost/iostreams/device/file_descriptor.hpp>
 #include <boost/iostreams/device/file.hpp>
@@ -32,6 +34,7 @@ struct Hyps{
 	// Not hyperparameters, but things that depend on them
 	Eigen::ArrayXd s_x;
 	Eigen::ArrayXd pve;
+//	Eigen::ArrayXd pve2;
 	Eigen::ArrayXd pve_large;
 
 	// Hyps();
@@ -70,7 +73,7 @@ public:
 	// For writing interim output
 	boost::filesystem::path dir;
 	io::filtering_ostream outf_elbo, outf_alpha_diff, outf_weights, outf_inits, outf_iter, outf_alpha;
-	io::filtering_ostream outf_w;
+	io::filtering_ostream outf_w, outf_rescan;
 	std::string main_out_file;
 	bool allow_interim_push;
 
@@ -109,6 +112,7 @@ public:
 		io::close(outf_iter);
 		io::close(outf_alpha);
 		io::close(outf_w);
+		io::close(outf_rescan);
 	};
 
 	void set_main_filepath(const std::string &ofile){
@@ -130,16 +134,21 @@ public:
 
 		outf_inits << "chr rsid pos a0 a1";
 		for (int ee = 0; ee < n_effects; ee++){
-			outf_inits << " alpha" << ee << " mu" << ee << " s_sq" << ee;
+			outf_inits << " beta" << ee << " alpha" << ee << " mu" << ee;
+ 			outf_inits << " s_sq" << ee;
 			if(p.mode_mog_prior){
 				outf_inits << " mu_spike" << ee << " s_sq_spike" << ee;
 			}
 		}
 		outf_inits << std::endl;
+		Eigen::ArrayXXd      beta_vec  = vp.alpha * vp.mu;
+		if(p.mode_mog_prior) beta_vec += (1 - vp.alpha) * vp.mup;
+
 		for (std::uint32_t kk = 0; kk < n_var; kk++){
 			outf_inits << chromosome[kk] << " " << rsid[kk] << " " << position[kk];
 			outf_inits << " " << al_0[kk] << " " << al_1[kk];
 			for (int ee = 0; ee < n_effects; ee++){
+				outf_inits << " " << beta_vec(kk, ee);
 				outf_inits << " " << vp.alpha(kk, ee);
 				outf_inits << " " << vp.mu(kk, ee);
 				outf_inits << " " << vp.s_sq(kk, ee);
@@ -175,7 +184,6 @@ public:
                                   const double& c_logw,
                                   const double& c_alpha_diff,
                                   const double& lap_seconds,
-                                  const long int hty_counter,
                                   const int& n_effects,
                                   const int& n_var,
                                   const int& n_env,
@@ -183,23 +191,28 @@ public:
 		t_interimOutput.resume();
 
 		outf_iter << cnt << "\t" << std::setprecision(3) << std::fixed;
-		outf_iter << i_hyps.sigma << "\t" << std::setprecision(12) << std::fixed;
+		outf_iter << i_hyps.sigma << "\t" << std::setprecision(6) << std::fixed;
+//		for(int ee = 0; ee < n_effects; ee++) {
+//			outf_iter << i_hyps.pve2[ee] << "\t";
+//		}
 		for (int ee = 0; ee < n_effects; ee++){
-			outf_iter << i_hyps.pve(ee) << "\t";
+			outf_iter << std::setprecision(6) << std::fixed << i_hyps.pve(ee) << "\t";
 			if(p.mode_mog_prior){
 				outf_iter << i_hyps.pve_large(ee) << "\t";
 			}
-			outf_iter << i_hyps.slab_relative_var(ee) << "\t";
+			outf_iter << std::setprecision(12) << std::fixed << i_hyps.slab_relative_var(ee) << "\t";
 			if(p.mode_mog_prior){
 				outf_iter << i_hyps.spike_relative_var(ee) << "\t";
 			}
 			outf_iter << i_hyps.lambda(ee) << "\t";
 		}
-		outf_iter << i_hyps.s_x(0) << "\t" << i_hyps.s_x(1) << "\t";
-		outf_iter << std::setprecision(3) << std::fixed << c_logw << "\t";
+		outf_iter << std::setprecision(3) << std::fixed;
+		for( int ee = 0; ee < n_effects; ee++) {
+			outf_iter << i_hyps.s_x(ee) << "\t";
+		}
+		outf_iter << c_logw << "\t";
 		outf_iter << c_alpha_diff << "\t";
-		outf_iter << lap_seconds << "\t";
-		outf_iter << hty_counter << std::endl;
+		outf_iter << lap_seconds << std::endl;
 
 		for (int ll = 0; ll < n_env; ll++){
 			outf_w << vp.muw(ll);
@@ -231,7 +244,10 @@ public:
 		fstream_init(outf_inits, dir, "_inits", true);
 		outf_inits << "chr rsid pos a0 a1";
 		for(int ee = 0; ee < n_effects; ee++){
-			outf_inits << " alpha" << ee << " mu" << ee;
+			outf_inits << " alpha" << ee << " mu" << ee << " s_sq" << ee;
+			if(p.mode_mog_prior){
+				outf_inits << " mu_spike" << ee << " s_sq_spike" << ee;
+			}
 		}
 		outf_inits << std::endl;
 		for (std::uint32_t kk = 0; kk < n_var; kk++){
@@ -240,8 +256,32 @@ public:
 			for (int ee = 0; ee < n_effects; ee++){
 				outf_inits << " " << vp_list[ii].alpha(kk, ee);
 				outf_inits << " " << vp_list[ii].mu(kk, ee);
+				outf_inits << " " << vp_list[ii].s_sq(kk, ee);
+				if(p.mode_mog_prior){
+					outf_inits << " " << vp_list[ii].mup(kk, ee);
+					outf_inits << " " << vp_list[ii].sp_sq(kk, ee);
+				}
 			}
  			outf_inits << std::endl;
+		}
+
+		t_interimOutput.stop();
+	}
+
+	void push_rescan_gwas(const GenotypeMatrix& X,
+							 const std::uint32_t n_var,
+							 const Eigen::Ref<const Eigen::VectorXd>& neglogp){
+		// Assumes that information for all measures that we track have between
+		// added to VbTracker at index ii.
+		t_interimOutput.resume();
+
+		fstream_init(outf_rescan, dir, "_rescan", true);
+		outf_rescan << "chr rsid pos a0 a1 maf info neglogp" << std::endl;
+		for (std::uint32_t kk = 0; kk < n_var; kk++){
+			outf_rescan << X.chromosome[kk] << " " << X.rsid[kk]<< " " << X.position[kk];
+			outf_rescan << " " << X.al_0[kk] << " " << X.al_1[kk] << " ";
+			outf_rescan << X.maf[kk] << " " << X.info[kk] << " " << neglogp(kk);
+			outf_rescan << std::endl;
 		}
 
 		t_interimOutput.stop();
@@ -298,7 +338,7 @@ public:
 			outf_iter << "\tlambda" << ee;
 		}
 		outf_iter << "\ts_x" << "\ts_z";
-		outf_iter << "\telbo\tmax_alpha_diff\tseconds\tHty_hits" << std::endl;
+		outf_iter << "\telbo\tmax_alpha_diff\tseconds" << std::endl;
 
 		// outf_inits << "chr rsid pos a0 a1";
 		// for(int ee = 0; ee < n_effects; ee++){

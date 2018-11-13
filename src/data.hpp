@@ -56,18 +56,17 @@ class Data
 	int n_covar; // number of covariates
 	int n_env; // number of env variables
 	int n_effects;   // number of environmental interactions
-	long int n_samples; // number of samples
-	long int n_snps; // number of snps
+	std::uint32_t n_samples; // number of samples
 	bool bgen_pass;
-	int n_var;
+	std::uint32_t n_var;
 	std::size_t n_var_parsed; // Track progress through IndexQuery
+	long int n_dxteex_computed;
+	long int n_snpstats_computed;
 
 	bool Y_reduced;   // Variables to track whether we have already
 	bool W_reduced;   // reduced to complete cases or not.
 	bool E_reduced;
 
-	std::vector< double > info;
-	std::vector< double > maf;
 	std::vector< std::string > chromosome, rsid, SNPID;
 	std::vector< std::string > external_dXtEEX_SNPID;
 	std::vector< uint32_t > position;
@@ -87,14 +86,11 @@ class Data
 	Eigen::MatrixXd Y, Y2; // phenotype matrix (#2 always has covars regressed)
 	Eigen::MatrixXd W; // covariate matrix
 	Eigen::MatrixXd E; // env matrix
-	Eigen::VectorXd Z; // interaction vector
 	Eigen::MatrixXd R; // recombination map
 	Eigen::ArrayXXd dXtEEX;
 	Eigen::ArrayXXd external_dXtEEX;
 	Eigen::MatrixXd E_weights;
 	genfile::bgen::View::UniquePtr bgenView;
-	std::vector< double > beta, tau, neglogP, neglogP_2dof;
-	std::vector< std::vector< double > > gamma;
 
 	// For gxe genome-wide scan
 	// cols: neglogp-main, neglogp-gxe, coeff-gxe-main, coeff-gxe-env..
@@ -108,8 +104,8 @@ class Data
 	bool filters_applied;
 
 	// grid things for vbayes
-	std::vector< std::string > hyps_names, imprt_names;
-	Eigen::MatrixXd r1_hyps_grid, r1_probs_grid, hyps_grid, imprt_grid;
+	std::vector< std::string > hyps_names;
+	Eigen::MatrixXd r1_hyps_grid, hyps_grid;
 	Eigen::ArrayXXd alpha_init, mu_init;
 
 
@@ -141,7 +137,7 @@ class Data
 
 		bgenView = genfile::bgen::View::create(p.bgen_file);
 		bgen_pass = true;
-		n_samples = bgenView->number_of_samples();
+		n_samples = (std::uint32_t) bgenView->number_of_samples();
 		n_var_parsed = 0;
 		filters_applied = false;
 
@@ -150,8 +146,7 @@ class Data
 		n_effects = -1;
 		n_covar   = -1;
 		n_env   = -1;
-		n_snps    = -1;
-		n_var     = -1;
+		n_var     = 0;
 		Y_reduced = false;
 		W_reduced = false;
 	}
@@ -193,7 +188,10 @@ class Data
 		if(params.select_rsid){
 			std::sort(params.rsid.begin(), params.rsid.end());
 			std::cout << "Filtering to rsids:" << std::endl;
-			for (int kk = 0; kk < params.rsid.size(); kk++) std::cout << params.rsid[kk]<< std::endl;
+			long int n_rsids = params.rsid.size();
+			for (long int kk = 0; kk < n_rsids; kk++){
+				std::cout << params.rsid[kk]<< std::endl;
+			}
 			genfile::bgen::IndexQuery::UniquePtr query = genfile::bgen::IndexQuery::create(params.bgi_file);
 			query->include_rsids( params.rsid ).initialise();
 			bgenView->set_query( query );
@@ -219,20 +217,22 @@ class Data
 		// Environmental vars - subset of covars
 		if(params.env_file != "NULL"){
 			read_environment();
-		} else if (params.x_param_name != "NULL"){
-			env_names.push_back(params.x_param_name);
-			n_env             = 1;
-			std::size_t x_col = find_covar_index(params.x_param_name, covar_names);
-			E                 = W.col(x_col);
-		} else if (params.interaction_analysis){
-			env_names.push_back(covar_names[0]);
-			E                 = W.col(0);
-			n_env             = 1;
-		} else {
-			n_env             = 0;
+        } else if(params.x_param_name != "NULL"){
+            std::size_t x_col = find_covar_index(params.x_param_name, covar_names);
+            E                = W.col(x_col);
+            n_env            = 1;
+            E_reduced        = false;
+            env_names.push_back(params.x_param_name);
+        } else if(params.interaction_analysis){
+            E                = W.col(0);
+            n_env            = 1;
+            E_reduced        = false;
+            env_names.push_back(covar_names[0]);
+        } else {
+		    n_env = 0;
 		}
 
-		if(params.env_weights_file != "NULL" && params.env_file != "NULL"){
+		if(params.env_weights_file != "NULL" && n_env > 1 && params.env_file != "NULL"){
 			read_environment_weights();
 		}
 
@@ -250,7 +250,7 @@ class Data
 			read_grids();
 		}
 
-		if(params.dxteex_file != "NULL"){
+		if(n_env > 1 && params.dxteex_file != "NULL"){
 			read_external_dxteex();
 		}
 
@@ -275,18 +275,18 @@ class Data
 			center_matrix( W, n_covar );
 			scale_matrix( W, n_covar, covar_names );
 		}
-		if(params.env_file != "NULL"){
+		if(n_env > 0){
 			center_matrix( E, n_env );
 			scale_matrix( E, n_env, env_names );
 		}
 
 		// Y2 always contains the controlled phenotype
 		if(params.covar_file != "NULL" && !params.use_vb_on_covars){
-			regress_out_covars();
+			regress_out_covars(Y);
 			Y2 = Y;
-		} else {
-			Eigen::MatrixXd coeff = solve(W.transpose() * W, W.transpose() * Y);
-			Y2 = Y - W * coeff;
+		} else if (params.covar_file != "NULL"){
+			Y2 = Y;
+			regress_out_covars(Y2);
 		}
 	}
 
@@ -317,36 +317,26 @@ class Data
 
 		// Temporary variables to store info from read_variant()
 		std::string chr_j ;
-		uint32_t pos_j ;
+		std::uint32_t pos_j ;
 		std::string rsid_j ;
 		std::vector< std::string > alleles_j ;
 		std::string SNPID_j ; // read but ignored
 		std::vector< std::vector< double > > probs ;
 		ProbSetter setter( &probs );
-		std::map<int, bool> missing_genos;
 
 		double x, dosage, check, info_j, f1, chunk_missingness;
 		double dosage_mean, dosage_sigma, missing_calls = 0.0;
 		int n_var_incomplete = 0;
 
-		// Wipe variant context from last chunk
-		maf.clear();
-		info.clear();
-		rsid.clear();
-		chromosome.clear();
-		position.clear();
-		alleles.clear();
-
 		// Resize genotype matrix
 		G.resize(n_samples, params.chunk_size);
 
 		long int n_constant_variance = 0;
-		std::size_t jj = 0;
+		std::uint32_t jj = 0;
 		while ( jj < params.chunk_size && bgen_pass ) {
 			bgen_pass = bgenView->read_variant( &SNPID_j, &rsid_j, &chr_j, &pos_j, &alleles_j );
 			if (!bgen_pass) break;
 			n_var_parsed++;
-			assert( alleles_j.size() > 0 );
 
 			// Read probs + check maf filter
 			bgenView->read_genotype_data_block( setter );
@@ -423,15 +413,10 @@ class Data
 			}
 
 			// filters passed; write contextual info
-			maf.push_back(maf_j);
-			info.push_back(info_j);
-			rsid.push_back(rsid_j);
-			chromosome.push_back(chr_j);
-			SNPID.push_back(SNPID_j);
-			position.push_back(pos_j);
-			alleles.push_back(alleles_j);
 			G.al_0.push_back(alleles_j[0]);
 			G.al_1.push_back(alleles_j[1]);
+			G.maf.push_back(maf_j);
+			G.info.push_back(info_j);
 			G.rsid.push_back(rsid_j);
 			G.chromosome.push_back(std::stoi(chr_j));
 			G.position.push_back(pos_j);
@@ -442,7 +427,7 @@ class Data
 			// filters passed; write dosage to G
 			// Note that we only write dosage for valid sample ids
 			// Scale + center dosage, set missing to mean
-			if(missing_genos.size() > 0){
+			if(!missing_genos.empty()){
 				n_var_incomplete += 1;
 				missing_calls += (double) missing_genos.size();
 				for (std::uint32_t ii = 0; ii < n_samples; ii++){
@@ -464,10 +449,7 @@ class Data
 		// need to resize G whilst retaining existing coefficients if while
 		// loop exits early due to EOF.
 		G.conservativeResize(n_samples, jj);
-		assert( rsid.size() == jj );
-		assert( chromosome.size() == jj );
-		assert( position.size() == jj );
-		assert( alleles.size() == jj );
+		assert( G.rsid.size() == jj );
 		n_var = jj;
 
 		chunk_missingness = missing_calls / (double) (n_var * n_samples);
@@ -492,7 +474,7 @@ class Data
 
 	void read_incl_rsids(){
 		boost_io::filtering_istream fg;
-		fg.push(boost_io::file_source(params.incl_rsids_file.c_str()));
+		fg.push(boost_io::file_source(params.incl_rsids_file));
 		if (!fg) {
 			std::cout << "ERROR: " << params.incl_rsids_file << " not opened." << std::endl;
 			std::exit(EXIT_FAILURE);
@@ -515,7 +497,7 @@ class Data
 
 	void read_incl_sids(){
 		boost_io::filtering_istream fg;
-		fg.push(boost_io::file_source(params.incl_sids_file.c_str()));
+		fg.push(boost_io::file_source(params.incl_sids_file));
 		if (!fg) {
 			std::cout << "ERROR: " << params.incl_sids_file << " not opened." << std::endl;
 			std::exit(EXIT_FAILURE);
@@ -575,7 +557,7 @@ class Data
 		std::cout << std::endl;
 	}
 
-	void read_grid_file( std::string filename,
+	void read_grid_file( const std::string& filename,
 						 Eigen::MatrixXd& M,
 						 std::vector< std::string >& col_names){
 		// Used in mode_vb only.
@@ -583,7 +565,7 @@ class Data
 		// how many rows there will be and we can assume no missing values.
 
 		boost_io::filtering_istream fg;
-		fg.push(boost_io::file_source(filename.c_str()));
+		fg.push(boost_io::file_source(filename));
 		if (!fg) {
 			std::cout << "ERROR: " << filename << " not opened." << std::endl;
 			std::exit(EXIT_FAILURE);
@@ -597,7 +579,7 @@ class Data
 			n_grid++;
 		}
 		fg.reset();
-		fg.push(boost_io::file_source(filename.c_str()));
+		fg.push(boost_io::file_source(filename));
 
 		// Reading column names
 		if (!getline(fg, line)) {
@@ -648,7 +630,7 @@ class Data
 		}
 	}
 
-	void read_grid_file( std::string filename,
+	void read_grid_file( const std::string& filename,
 						 Eigen::ArrayXXd& M,
 						 std::vector< std::string >& col_names){
 		// Used in mode_vb only.
@@ -656,7 +638,7 @@ class Data
 		// how many rows there will be and we can assume no missing values.
 
 		boost_io::filtering_istream fg;
-		fg.push(boost_io::file_source(filename.c_str()));
+		fg.push(boost_io::file_source(filename));
 		if (!fg) {
 			std::cout << "ERROR: " << filename << " not opened." << std::endl;
 			std::exit(EXIT_FAILURE);
@@ -670,7 +652,7 @@ class Data
 			n_grid++;
 		}
 		fg.reset();
-		fg.push(boost_io::file_source(filename.c_str()));
+		fg.push(boost_io::file_source(filename));
 
 		// Reading column names
 		if (!getline(fg, line)) {
@@ -721,7 +703,7 @@ class Data
 		}
 	}
 
-	void read_vb_init_file(std::string filename,
+	void read_vb_init_file(const std::string& filename,
                            Eigen::MatrixXd& M,
                            std::vector< std::string >& col_names,
                         //    std::vector< int >& init_chr,
@@ -734,7 +716,7 @@ class Data
 		// init_chr, init_pos, init_a0, init_a1;
 
 		boost_io::filtering_istream fg;
-		fg.push(boost_io::file_source(filename.c_str()));
+		fg.push(boost_io::file_source(filename));
 		if (!fg) {
 			std::cout << "ERROR: " << filename << " not opened." << std::endl;
 			std::exit(EXIT_FAILURE);
@@ -748,7 +730,7 @@ class Data
 			n_grid++;
 		}
 		fg.reset();
-		fg.push(boost_io::file_source(filename.c_str()));
+		fg.push(boost_io::file_source(filename));
 
 		// Reading column names
 		if (!getline(fg, line)) {
@@ -824,7 +806,7 @@ class Data
 		}
 	}
 
-	void read_txt_file( std::string filename,
+	void read_txt_file( const std::string& filename,
 						Eigen::MatrixXd& M,
 						int& n_cols,
 						std::vector< std::string >& col_names,
@@ -833,7 +815,7 @@ class Data
 		// TODO: Implement how to deal with missing values.
 
 		boost_io::filtering_istream fg;
-		fg.push(boost_io::file_source(filename.c_str()));
+		fg.push(boost_io::file_source(filename));
 		if (!fg) {
 			std::cout << "ERROR: " << filename << " not opened." << std::endl;
 			std::exit(EXIT_FAILURE);
@@ -1073,7 +1055,7 @@ class Data
 		read_txt_file( params.env_file, E_weights, n_cols, col_names, missing_rows );
 
 		assert(n_cols == 1);
-		assert(missing_rows.size() == 0);
+		assert(missing_rows.empty());
 	}
 
 	void read_external_dxteex( ){
@@ -1091,7 +1073,7 @@ class Data
 	void read_external_snpstats( ){
 		std::vector< std::string > col_names;
 		read_txt_file_w_context( params.snpstats_file, 8, external_snpstats,
-                                 external_snpstats_SNPID, col_names);
+								 external_snpstats_SNPID, col_names);
 
 		if(external_snpstats.cols() != n_env + 3){
 			std::cout << "Expecting columns in order: " << std::endl;
@@ -1122,7 +1104,7 @@ class Data
 			std::exit(EXIT_FAILURE);
 		}
 
-		// Read file twice to acertain number of lines
+		// Read file twice to ascertain number of lines
 		int n_lines = 0;
 		std::string line;
 		getline(fg, line); // skip header
@@ -1180,18 +1162,17 @@ class Data
 	void calc_snpstats(){
 		std::cout << "Reordering/computing results for snpwise scan" << std::endl;
 		MyTimer my_timer("snpwise scan constructed in %ts \n");
-		my_timer.resume();
 		Eigen::ArrayXd cl_j;
 		double dztz_lmj;
 		snpstats.resize(n_var, n_env + 3);
 		std::vector<std::string>::iterator it;
-		int cnt = 0;
+		n_snpstats_computed = 0;
 		double N = (double) n_samples;
 		boost_m::fisher_f f_dist(n_env, n_samples - n_env - 1);
 		for (std::size_t jj = 0; jj < n_var; jj++){
 			it = std::find(external_snpstats_SNPID.begin(), external_snpstats_SNPID.end(), G.SNPID[jj]);
 			if (it == external_snpstats_SNPID.end()){
-				cnt++;
+				n_snpstats_computed++;
 				Eigen::VectorXd X_kk = G.col(jj);
 				Eigen::MatrixXd H(n_samples, 1 + n_env);
 				H << X_kk, (E.array().colwise() * X_kk.array()).matrix();
@@ -1211,9 +1192,9 @@ class Data
 				// F-test; joint interaction effect of variant j
 				double f_stat        = (rss_null - rss_alt) / (double) n_env;
 				f_stat              /= rss_alt / (double) (n_samples - n_env - 1);
-				double gxe_pval_j    = boost_m::cdf(boost_m::complement(f_dist, f_stat));
+				double gxe_pval_j    = boost_m::cdf(boost_m::complement(f_dist, fabs(f_stat)));
 				double gxe_neglogp_j = -1 * std::log10(gxe_pval_j);
-				if(!std::isfinite(gxe_neglogp_j)){
+				if(!std::isfinite(gxe_neglogp_j) || f_stat < 0){
 					std::cout << "Warning: neglog-p = " << gxe_neglogp_j << std::endl;
 					std::cout << "Warning: p-val = "    << gxe_pval_j << std::endl;
 					std::cout << "Warning: rss_null = " << rss_null << std::endl;
@@ -1231,7 +1212,7 @@ class Data
 				snpstats.row(jj) = external_snpstats.row(it - external_snpstats_SNPID.begin());
 			}
 		}
-		std::cout << cnt << " computed from raw data, " << n_var - cnt << " read from file" << std::endl;
+		std::cout << n_snpstats_computed << " computed from raw data, " << n_var - n_snpstats_computed << " read from file" << std::endl;
 
 		if(params.snpstats_file == "NULL"){
 			std::string ofile_scan = fstream_init(outf_scan, "", "_snpwise_scan");
@@ -1242,10 +1223,11 @@ class Data
 			for (std::uint32_t kk = 0; kk < n_var; kk++){
 				outf_scan << G.chromosome[kk] << " " << G.rsid[kk] << " " << G.position[kk];
 				outf_scan << " " << G.al_0[kk] << " " << G.al_1[kk];
-				outf_scan << " " << maf[kk] << " " << info[kk];
+				outf_scan << " " << G.maf[kk] << " " << G.info[kk];
 				outf_scan << " " << snpstats(kk, 0) << " " << snpstats(kk, 1);
 				outf_scan << std::endl;
 			}
+			boost_io::close(outf_scan);
 		}
 	}
 
@@ -1257,11 +1239,11 @@ class Data
 		double dztz_lmj;
 		dXtEEX.resize(n_var, n_env * n_env);
 		std::vector<std::string>::iterator it;
-		int cnt = 0;
+		n_dxteex_computed = 0;
 		for (std::size_t jj = 0; jj < n_var; jj++){
 			it = std::find(external_dXtEEX_SNPID.begin(), external_dXtEEX_SNPID.end(), G.SNPID[jj]);
 			if (it == external_dXtEEX_SNPID.end()){
-				cnt++;
+				n_dxteex_computed++;
 				cl_j = G.col(jj);
 				for (int ll = 0; ll < n_env; ll++){
 					for (int mm = 0; mm <= ll; mm++){
@@ -1274,7 +1256,7 @@ class Data
 				dXtEEX.row(jj) = external_dXtEEX.row(it - external_dXtEEX_SNPID.begin());
 			}
 		}
-		std::cout << cnt << " computed from raw data, " << n_var - cnt << " read from file" << std::endl;
+		std::cout << n_dxteex_computed << " computed from raw data, " << n_var - n_dxteex_computed << " read from file" << std::endl;
 	}
 
 	void read_recombination_map( ){
@@ -1298,19 +1280,9 @@ class Data
 		std::vector< std::string > true_fixed_names = {"sigma", "sigma_b", "lambda_b"};
 		std::vector< std::string > true_gxage_names = {"sigma", "sigma_b", "sigma_g", "lambda_b", "lambda_g"};
 
-		if ( params.hyps_grid_file == "NULL" ) {
-			throw std::invalid_argument( "Must provide hyperparameter grid file." );
-		}
-		if ( params.hyps_probs_file == "NULL" ) {
-			throw std::invalid_argument( "Must provide hyperparameter probabilities file." );
-		}
-
 
 		read_grid_file( params.hyps_grid_file, hyps_grid, hyps_names );
-		read_grid_file( params.hyps_probs_file, imprt_grid, imprt_names );
-
-		assert(imprt_grid.cols() == 1);
-		assert(hyps_grid.rows() == imprt_grid.rows());
+//		read_grid_file( params.hyps_probs_file, imprt_grid, imprt_names );
 
 		// Verify header of grid file as expected
 		if(params.interaction_analysis){
@@ -1319,9 +1291,20 @@ class Data
 			}
 		} else {
 			if(hyps_names != true_fixed_names){
-				throw std::runtime_error("Column names of --hyps_grid must be sigma sigma_b lambda");
+				// Allow gxe params if coeffs set to zero
+				if(std::includes(hyps_names.begin(), hyps_names.end(), true_gxage_names.begin(), true_gxage_names.end())){
+					double sigma_g_sum  = hyps_grid.col(2).array().abs().sum();
+					double lambda_g_sum = hyps_grid.col(4).array().abs().sum();
+					if(sigma_g_sum > 1e-6 || lambda_g_sum > 1e-6){
+						throw std::runtime_error("In a main effects only analysis columns for sigma_g and lambda_g should either be absent or contain zeros");
+					}
+				} else {
+					throw std::runtime_error("Column names of --hyps_grid must be sigma sigma_b lambda_b or sigma sigma_b sigma_g lambda_b lambda_g");
+				}
 			}
 		}
+
+		// If
 
 		// Option to provide separate grid to evaluate in round 1
 		std::vector< std::string > r1_hyps_names, r1_probs_names;
@@ -1330,7 +1313,7 @@ class Data
 			if(hyps_names != r1_hyps_names){
 				throw std::invalid_argument( "Header of --r1_hyps_grid must match --hyps_grid." );
 			}
-			read_grid_file( params.r1_probs_grid_file, r1_probs_grid, r1_probs_names );
+//			read_grid_file( params.r1_probs_grid_file, r1_probs_grid, r1_probs_names );
 		}
 	}
 
@@ -1382,9 +1365,11 @@ class Data
 						index_kk = it - G.SNPKEY.begin();
 
 						alpha_init(index_kk, 0)      = 1.0;
-						alpha_init(index_kk, 1)      = 1.0;
 						mu_init(index_kk, 0)         = vb_init_mat(kk, 5);
-						mu_init(index_kk, 1)         = vb_init_mat(kk, 6);
+						if(n_effects > 1) {
+							alpha_init(index_kk, 1) = 1.0;
+							mu_init(index_kk, 1) = vb_init_mat(kk, 6);
+						}
 					}
 				}
 			}
@@ -1427,7 +1412,7 @@ class Data
 		return M_tmp;
 	}
 
-	void regress_out_covars() {
+	void regress_out_covars(Eigen::Ref<Eigen::MatrixXd> yy){
 		std::cout << "Regressing out covars:" << std::endl;
 		for(int cc = 0; cc < std::min(n_covar, 10); cc++){
 			std::cout << ( cc > 0 ? ", " : "" ) << covar_names[cc];
@@ -1438,8 +1423,8 @@ class Data
 		std::cout << std::endl;
 
 		Eigen::MatrixXd ww = W.rowwise() - W.colwise().mean(); //not needed probably
-		Eigen::MatrixXd bb = solve(ww.transpose() * ww, ww.transpose() * Y);
-		Y = Y - ww * bb;
+		Eigen::MatrixXd bb = solve(ww.transpose() * ww, ww.transpose() * yy);
+		yy -= ww * bb;
 	}
 
 	void reduce_to_complete_cases() {
@@ -1552,7 +1537,6 @@ inline Eigen::MatrixXd solve(const Eigen::MatrixXd &A, const Eigen::MatrixXd &b)
 	return x;
 }
 
-
 inline std::size_t find_covar_index( std::string colname, std::vector< std::string > col_names ){
 	std::size_t x_col;
 	std::vector<std::string>::iterator it;
@@ -1563,76 +1547,5 @@ inline std::size_t find_covar_index( std::string colname, std::vector< std::stri
 	x_col = it - col_names.begin();
 	return x_col;
 }
-
-	// void read_external_dxteex( ){
-	// 	int col_offset = 6; // number of context cols before snp-env covariances
-	//
-	// 	// Reading from file
-	// 	boost_io::filtering_istream fg;
-	// 	fg.push(boost_io::file_source(params.dxteex_file.c_str()));
-	// 	if (!fg) {
-	// 		std::cout << "ERROR: " << params.dxteex_file << " not opened." << std::endl;
-	// 		std::exit(EXIT_FAILURE);
-	// 	}
-	//
-	// 	// Read file twice to acertain number of lines
-	// 	int n_lines = 0;
-	// 	std::string line;
-	// 	getline(fg, line); // skip header
-	// 	while (getline(fg, line)) {
-	// 		n_lines++;
-	// 	}
-	// 	fg.reset();
-	// 	fg.push(boost_io::file_source(params.dxteex_file.c_str()));
-	//
-	// 	// Reading column names
-	// 	std::vector<std::string> dxteex_names;
-	// 	if (!getline(fg, line)) {
-	// 		std::cout << "ERROR: " << params.dxteex_file << " not read." << std::endl;
-	// 		std::exit(EXIT_FAILURE);
-	// 	}
-	// 	std::stringstream ss;
-	// 	std::string s;
-	// 	int n_cols = 0;
-	// 	ss.clear();
-	// 	ss.str(line);
-	// 	while (ss >> s) {
-	// 		++n_cols;
-	// 		dxteex_names.push_back(s);
-	// 	}
-	// 	if(n_cols != n_env * n_env + col_offset){
-	// 		std::cout << "Expecting columns in order: " << std::endl;
-	// 		std::cout << "SNPID, chr, rsid, pos, allele0, allele1, env-snp covariances.." << std::endl;
-	// 		throw std::runtime_error("Unexpected number of columns");
-	// 	}
-	//
-	// 	// Write remainder of file to Eigen matrix M
-	// 	external_dXtEEX.resize(n_lines, n_env * n_env);
-	// 	int i = 0;
-	// 	double tmp_d;
-	// 	while (getline(fg, line)) {
-	// 		ss.clear();
-	// 		ss.str(line);
-	// 		for (int k = 0; k < n_cols; k++) {
-	// 			std::string s;
-	// 			ss >> s;
-	// 			if (k == 0){
-	// 				external_dXtEEX_SNPID.push_back(s);
-	// 			}
-	// 			if (k >= col_offset){
-	// 				try{
-	// 					external_dXtEEX(i, k-col_offset) = stod(s);
-	// 				} catch (const std::invalid_argument &exc){
-	// 					std::cout << "Found value " << s << " on line " << i;
-	//  					std::cout << " of file " << params.dxteex_file << std::endl;
-	// 					throw std::runtime_error("Unexpected value");
-	// 				}
-	// 			}
-	// 		}
-	// 		i++; // loop should end at i == n_samples
-	// 	}
-	// 	std::cout << n_lines << " rows found in " << params.dxteex_file << std::endl;
-	// }
-
 
 #endif
