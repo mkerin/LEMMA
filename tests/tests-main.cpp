@@ -170,12 +170,15 @@ TEST_CASE( "Example 1: single-env" ){
 			int round_index = 2;
 			std::vector<double> logw_prev(n_grid, -1);
 			std::vector<std::vector< double >> logw_updates(n_grid);
-			
+
 			CHECK(vp.alpha_beta(0) * vp.mu1_beta(0) == Approx(-0.00015854116408000002));
 
 			VB.updateAllParams(0, round_index, all_vp, all_hyps, logw_prev, logw_updates);
 
 			SECTION("A computed correctly"){
+				int ee = 0;
+				int n_effects = 2;
+				int n_grid = 2;
 				Eigen::MatrixXd D;
 				Eigen::Ref<Eigen::MatrixXd> Y = VB.Y;
 				std::vector< std::uint32_t > chunk = VB.fwd_pass_chunks[0];
@@ -189,27 +192,30 @@ TEST_CASE( "Example 1: single-env" ){
 
 				CHECK(D(0, 0) == Approx(1.8570984229));
 
-//				// Most work done here
-//				// variant correlations with residuals
-//				Eigen::MatrixXd residual(n_samples, n_grid);
-//				if(n_effects == 1){
-//					// Main effects update in main effects only model
-//					for(int nn = 0; nn < n_grid; nn++) {
-//						residual.col(nn) = Y - all_vp[nn].ym;
-//					}
-//				} else if (ee == 0){
-//					// Main effects update in interaction model
-//					for(int nn = 0; nn < n_grid; nn++){
-//						residual.col(nn) = Y - all_vp[nn].ym - all_vp[nn].yx.cwiseProduct(all_vp[nn].eta);
-//					}
-//				} else {
-//					// Interaction effects
-//					for (int nn = 0; nn < n_grid; nn++){
-//						residual.col(nn) = (Y - all_vp[nn].ym).cwiseProduct(all_vp[nn].eta) - all_vp[nn].yx.cwiseProduct(all_vp[nn].eta_sq);
-//					}
-//				}
-//				Eigen::MatrixXd AA = residual.transpose() * D; // n_grid x snp_batch
-//				AA.transposeInPlace();                         // convert to snp_batch x n_grid
+				// Most work done here
+				// variant correlations with residuals
+				Eigen::MatrixXd residual(n_samples, n_grid);
+				if(n_effects == 1){
+					// Main effects update in main effects only model
+					for(int nn = 0; nn < n_grid; nn++) {
+						residual.col(nn) = Y - all_vp[nn].ym;
+					}
+				} else if (ee == 0){
+					// Main effects update in interaction model
+					for(int nn = 0; nn < n_grid; nn++){
+						residual.col(nn) = Y - all_vp[nn].ym - all_vp[nn].yx.cwiseProduct(all_vp[nn].eta);
+					}
+				} else {
+					// Interaction effects
+					for (int nn = 0; nn < n_grid; nn++){
+						residual.col(nn) = (Y - all_vp[nn].ym).cwiseProduct(all_vp[nn].eta) - all_vp[nn].yx.cwiseProduct(all_vp[nn].eta_sq);
+					}
+				}
+				Eigen::MatrixXd AA = residual.transpose() * D; // n_grid x snp_batch
+				AA.transposeInPlace();                         // convert to snp_batch x n_grid
+
+				CHECK(residual(0, 0) == Approx(-1.2580045769624202));
+				CHECK(AA(0, 0) == Approx(-9.76793));
 			}
 
 			CHECK(VB.X.col(0)(0) == Approx(1.8570984229));
