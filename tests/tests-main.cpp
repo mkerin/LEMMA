@@ -134,6 +134,11 @@ TEST_CASE( "Example 1: single-env" ){
 //		}
 
         SECTION("Ex1. Explicitly checking updates"){
+			// Initialisation
+			CHECK(VB.vp_init.ym(0) == Approx(0.0003200476));
+			CHECK(VB.vp_init.yx(0) == Approx(0.0081544079));
+			CHECK(VB.vp_init.eta(0) == Approx(-0.5894793969));
+
 			// Set up for RunInnerLoop
 			int ii = 0;
 			int n_effects = 2;
@@ -175,6 +180,11 @@ TEST_CASE( "Example 1: single-env" ){
 			int round_index = 2;
 			double logw_prev = -1;
 			std::vector< double > logw_updates;
+
+			CHECK(data.Y(0,0) == Approx(-1.262491384814441));
+			CHECK(vp.ym(0) == Approx(0.0003200476));
+			CHECK(vp.yx(0) == Approx(0.0081544079));
+			CHECK(vp.eta(0) == Approx(-0.5894793969));
 
 			VB.updateAllParams(0, round_index, vp, hyps, logw_prev, logw_updates);
 
