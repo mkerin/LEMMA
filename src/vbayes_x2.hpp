@@ -652,10 +652,12 @@ public:
 		double A;
 		if(n_effects == 1){
 			// Main effects update in main effects only model
-			A  = (Y - vp.ym).dot(X_kk) + rr_k * (N - 1.0);
+			A  = (Y - vp.ym).dot(X_kk);
+			A += rr_k * (N - 1.0);
 		} else if(ee == 0){
 			// Main effects update in interaction model
-			A  = (Y - vp.ym - vp.yx.cwiseProduct(vp.eta)).dot(X_kk) + rr_k * (N - 1.0);
+			A  = (Y - vp.ym - vp.yx.cwiseProduct(vp.eta)).dot(X_kk);
+			A += rr_k * (N - 1.0);
 		} else {
 			// Interaction effects update in interaction model
 			A  = (Y - vp.ym).cwiseProduct(vp.eta).dot(X_kk);
