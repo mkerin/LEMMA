@@ -1209,7 +1209,7 @@ public:
 		if(!p.mode_empirical_bayes){
 			outf << " log_prior";
 		}
-		outf << " count time sigma";
+		outf << " count sigma";
 		for (int ee = 0; ee < n_effects; ee++){
 			outf << " pve" << ee;
 			if(p.mode_mog_prior){
