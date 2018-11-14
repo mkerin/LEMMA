@@ -651,6 +651,8 @@ public:
 		// Partition chunks amongst available threads
 		unsigned long n_grid = all_hyps.size();
 		Eigen::MatrixXd D;
+		Eigen::MatrixXd AA;     // snp_batch x n_grid
+		Eigen::MatrixXd rr_diff;                   // snp_batch x n_grid
 
 		for (std::uint32_t ch = 0; ch < iter_chunks.size(); ch++){
 			std::vector< std::uint32_t > chunk = iter_chunks[ch];
@@ -661,58 +663,67 @@ public:
 			if(D.cols() != ch_len){
 				D.resize(n_samples, ch_len);
 			}
+			if(rr_diff.rows() != ch_len){
+				rr_diff.resize(ch_len, n_grid);
+			}
+			if(AA.rows() != ch_len){
+				AA.resize(ch_len, n_grid);
+			}
 			X.col_block3(chunk, D);
 
 			// Most work done here
 			// variant correlations with residuals
-			Eigen::MatrixXd residual(n_samples, n_grid);
-			if(n_effects == 1){
-				// Main effects update in main effects only model
-				for(int nn = 0; nn < n_grid; nn++) {
-					residual.col(nn) = Y - all_vp[nn].ym;
-				}
-			} else if (ee == 0){
-				// Main effects update in interaction model
-				for(int nn = 0; nn < n_grid; nn++){
-					residual.col(nn) = Y - all_vp[nn].ym - all_vp[nn].yx.cwiseProduct(all_vp[nn].eta);
-				}
-			} else {
-				// Interaction effects
-				for (int nn = 0; nn < n_grid; nn++){
-					residual.col(nn) = (Y - all_vp[nn].ym).cwiseProduct(all_vp[nn].eta) - all_vp[nn].yx.cwiseProduct(all_vp[nn].eta_sq);
-				}
-			}
-			Eigen::MatrixXd AA = residual.transpose() * D; // n_grid x snp_batch
-			AA.transposeInPlace();                         // convert to snp_batch x n_grid
+//			Eigen::MatrixXd residual(n_samples, n_grid);
+//			if(n_effects == 1){
+//				// Main effects update in main effects only model
+//				for(int nn = 0; nn < n_grid; nn++) {
+//					residual.col(nn) = Y - all_vp[nn].ym;
+//				}
+//			} else if (ee == 0){
+//				// Main effects update in interaction model
+//				for(int nn = 0; nn < n_grid; nn++){
+//					residual.col(nn) = Y - all_vp[nn].ym - all_vp[nn].yx.cwiseProduct(all_vp[nn].eta);
+//				}
+//			} else {
+//				// Interaction effects
+//				for (int nn = 0; nn < n_grid; nn++){
+//					residual.col(nn) = (Y - all_vp[nn].ym).cwiseProduct(all_vp[nn].eta) - all_vp[nn].yx.cwiseProduct(all_vp[nn].eta_sq);
+//				}
+//			}
+//			AA = residual.transpose() * D; // n_grid x snp_batch
+			computeGeneResidualCorrelation(AA, D, all_vp, n_grid, ee);
+//			AA.transposeInPlace();                         // convert to snp_batch x n_grid
+
 
 			// Update parameters based on AA
-			Eigen::MatrixXd rr_diff(ch_len, n_grid);                   // snp_batch x n_grid
 			for (int nn = 0; nn < n_grid; nn++) {
 				Eigen::Ref<Eigen::VectorXd> A = AA.col(nn);
-				if (ee == 0) {
 
-					// Update main effects
-					unsigned long memoize_id = ((is_fwd_pass) ? ch : ch + iter_chunks.size());
-					if (D_correlations.count(memoize_id) == 0) {
-						D_correlations[memoize_id] = D.transpose() * D;
-					}
-
-					_internal_updateAlphaMu_beta(chunk, A, D_correlations[memoize_id], D, all_hyps[nn], all_vp[nn], rr_diff.col(nn));
-				} else {
-
-					// Update interaction effects
-					Eigen::MatrixXd D_corr;
-					D_corr = D.transpose() * all_vp[nn].eta_sq.asDiagonal() * D;
-
-					_internal_updateAlphaMu_gam(chunk, A, D_corr, D, all_hyps[nn], all_vp[nn], rr_diff.col(nn));
-				}
+				adjustParams(nn, ee, ch, is_fwd_pass, chunk, iter_chunks, D, A, all_hyps, all_vp, rr_diff);
+//				if (ee == 0) {
+//
+//					// Update main effects
+//					unsigned long memoize_id = ((is_fwd_pass) ? ch : ch + iter_chunks.size());
+//					if (D_correlations.count(memoize_id) == 0) {
+//						D_correlations[memoize_id] = D.transpose() * D;
+//					}
+//
+//					_internal_updateAlphaMu_beta(chunk, A, D_correlations[memoize_id], D, all_hyps[nn], all_vp[nn], rr_diff.col(nn));
+//				} else {
+//
+//					// Update interaction effects
+//					Eigen::MatrixXd D_corr;
+//					D_corr = D.transpose() * all_vp[nn].eta_sq.asDiagonal() * D;
+//
+//					_internal_updateAlphaMu_gam(chunk, A, D_corr, D, all_hyps[nn], all_vp[nn], rr_diff.col(nn));
+//				}
 			}
 
 			// Update residuals
 			if(ee == 0){
-				YM += D * rr_diff;
+				YM.noalias() += D * rr_diff;
 			} else {
-				YX += D * rr_diff;
+				YX.noalias() += D * rr_diff;
 			}
 		}
 
@@ -720,6 +731,66 @@ public:
 			// update summary quantity
 			calcVarqBeta(all_hyps[nn], all_vp[nn], all_vp[nn].varB, all_vp[nn].varG);
 		}
+	}
+
+	void adjustParams(const int& nn,
+			const int& ee,
+			const std::uint32_t& ch,
+			const bool& is_fwd_pass,
+			const std::vector<std::uint32_t>& chunk,
+			const std::vector<std::vector<std::uint32_t>>& iter_chunks,
+			Eigen::Ref<Eigen::MatrixXd> D,
+			Eigen::Ref<Eigen::VectorXd> A,
+			const std::vector<Hyps>& all_hyps,
+			std::vector<VariationalParameters>& all_vp,
+			Eigen::Ref<Eigen::MatrixXd> rr_diff){
+		if (ee == 0) {
+
+			// Update main effects
+			unsigned long memoize_id = ((is_fwd_pass) ? ch : ch + iter_chunks.size());
+			if (D_correlations.count(memoize_id) == 0) {
+				D_correlations[memoize_id] = D.transpose() * D;
+			}
+
+			_internal_updateAlphaMu_beta(chunk, A, D_correlations[memoize_id], D, all_hyps[nn], all_vp[nn], rr_diff.col(nn));
+		} else {
+
+			// Update interaction effects
+			Eigen::MatrixXd D_corr;
+			D_corr.noalias() = D.transpose() * all_vp[nn].eta_sq.asDiagonal() * D;
+
+			_internal_updateAlphaMu_gam(chunk, A, D_corr, D, all_hyps[nn], all_vp[nn], rr_diff.col(nn));
+		}
+	}
+
+	void computeGeneResidualCorrelation(Eigen::Ref<Eigen::MatrixXd> AA,
+			Eigen::Ref<Eigen::MatrixXd> D,
+			const std::vector<VariationalParameters>& all_vp,
+			const long& n_grid,
+			const int& ee){
+		// Most work done here
+		// variant correlations with residuals
+		Eigen::MatrixXd residual(n_samples, n_grid);
+		if(n_effects == 1){
+			// Main effects update in main effects only model
+			for(int nn = 0; nn < n_grid; nn++) {
+				residual.col(nn) = Y - all_vp[nn].ym;
+			}
+		} else if (ee == 0){
+			// Main effects update in interaction model
+			for(int nn = 0; nn < n_grid; nn++){
+				residual.col(nn) = Y - all_vp[nn].ym - all_vp[nn].yx.cwiseProduct(all_vp[nn].eta);
+			}
+		} else {
+			// Interaction effects
+			for (int nn = 0; nn < n_grid; nn++){
+				residual.col(nn) = (Y - all_vp[nn].ym).cwiseProduct(all_vp[nn].eta) - all_vp[nn].yx.cwiseProduct(all_vp[nn].eta_sq);
+			}
+		}
+//		std::cout << residual.rows() << " x " << residual.cols() << std::endl;
+//		std::cout << D.rows() << " x " << D.cols() << std::endl;
+		AA = (residual.transpose() * D).transpose(); // n_grid x snp_batch
+//		std::cout << AA.rows() << " x " << AA.cols() << std::endl;
 	}
 
 	void _internal_updateAlphaMu_beta(const std::vector< std::uint32_t >& iter_chunk,

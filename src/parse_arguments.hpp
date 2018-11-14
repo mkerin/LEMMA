@@ -158,9 +158,12 @@ void parse_arguments(parameters &p, int argc, char *argv[]) {
 #endif
 
 #ifdef DEBUG
-		std::cout << "DEBUG mode ON - multithreading not used" << std::endl;
+		std::cout << "- in DEBUG mode (multithreading not used)" << std::endl;
 #endif
 
+#ifdef OSX
+		std::cout << "- OSX compatible" << std::endl;
+#endif
 
 		// For vectorise profiling
 		Eigen::VectorXi aa1 = Eigen::VectorXi::Random(256000);
