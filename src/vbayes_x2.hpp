@@ -720,8 +720,8 @@ public:
 			const bool& is_fwd_pass,
 			const std::vector<std::uint32_t>& chunk,
 			const std::vector<std::vector<std::uint32_t>>& iter_chunks,
-			Eigen::Ref<Eigen::MatrixXd> D,
-			Eigen::Ref<Eigen::VectorXd> A,
+			const Eigen::Ref<const Eigen::MatrixXd>& D,
+			const Eigen::Ref<const Eigen::VectorXd>& A,
 			const std::vector<Hyps>& all_hyps,
 			std::vector<VariationalParameters>& all_vp,
 			Eigen::Ref<Eigen::MatrixXd> rr_diff){
@@ -745,7 +745,7 @@ public:
 	}
 
 	void computeGeneResidualCorrelation(Eigen::Ref<Eigen::MatrixXd> AA,
-			Eigen::Ref<Eigen::MatrixXd> D,
+			const Eigen::Ref<const Eigen::MatrixXd>& D,
 			const std::vector<VariationalParameters>& all_vp,
 			const long& n_grid,
 			const int& ee){
@@ -768,10 +768,7 @@ public:
 				residual.col(nn) = (Y - all_vp[nn].ym).cwiseProduct(all_vp[nn].eta) - all_vp[nn].yx.cwiseProduct(all_vp[nn].eta_sq);
 			}
 		}
-//		std::cout << residual.rows() << " x " << residual.cols() << std::endl;
-//		std::cout << D.rows() << " x " << D.cols() << std::endl;
 		AA = (residual.transpose() * D).transpose(); // n_grid x snp_batch
-//		std::cout << AA.rows() << " x " << AA.cols() << std::endl;
 	}
 
 	void _internal_updateAlphaMu_beta(const std::vector< std::uint32_t >& iter_chunk,

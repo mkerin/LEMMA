@@ -66,10 +66,14 @@ target_link_libraries(${TARGET} ${BGEN_LIB} ${DB_LIB} ${SQLITE_LIB} ${ZSTD_LIB} 
 
 ## Catch Unit Tests
 add_executable(catch_tests tests/tests-main.cpp)
-target_link_libraries(catch_tests ${BGEN_LIB} ${DB_LIB} ${SQLITE_LIB} ${ZSTD_LIB} ${LIBS})
+target_link_libraries(catch_tests ${BGEN_LIB} ${DB_LIB} ${SQLITE_LIB} ${ZSTD_LIB} ${LIBS} ${LINKER_OPTS})
 target_compile_options(catch_tests PRIVATE -Wno-deprecated -msse2 ${LOC_COMPILE_OPTS})
 target_include_directories(catch_tests PRIVATE ${BGEN}/genfile/include ${BGEN}/3rd_party/zstd-1.1.0/lib ${BGEN}/db/include ${BGEN}/3rd_party/sqlite3 ${BGEN}/3rd_party/boost_1_55_0)
 set_target_properties(catch_tests PROPERTIES LINK_FLAGS "${LIB-DIRS}")
 
-add_executable(test-eigen tests/tests-eigen.cpp)
-target_compile_options(catch_tests PRIVATE -Wno-deprecated -msse2 ${LOC_COMPILE_OPTS})
+## Profiling by hand
+add_executable(profile_read_cols examples/profile_read_cols.cpp examples/genotype_matrix_multithread.cpp)
+target_link_libraries(profile_read_cols boost_iostreams boost_thread ${LIBS} ${LINKER_OPTS})
+target_compile_options(profile_read_cols PRIVATE -Wno-deprecated -msse2 ${LOC_COMPILE_OPTS})
+target_include_directories(profile_read_cols PRIVATE ${BGEN}/3rd_party/boost_1_55_0)
+set_target_properties(profile_read_cols PROPERTIES LINK_FLAGS "${LIB-DIRS}")

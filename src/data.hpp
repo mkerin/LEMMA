@@ -14,6 +14,7 @@
 #include <string>
 #include <stdexcept>
 #include "class.h"
+#include "utils.hpp"
 #include "my_timer.hpp"
 #include "tools/eigen3.3/Dense"
 #include "tools/eigen3.3/Sparse"
@@ -36,13 +37,6 @@
 namespace boost_io = boost::iostreams;
 namespace boost_m = boost::math;
 
-inline Eigen::MatrixXd getCols(const Eigen::MatrixXd &X, const std::vector<std::size_t> &cols);
-//inline void setCols(Eigen::MatrixXd &X, const std::vector<std::size_t> &cols, const Eigen::MatrixXd &values);
-inline std::size_t numRows(const Eigen::MatrixXd &A);
-inline std::size_t numCols(const Eigen::MatrixXd &A);
-inline void setCol(Eigen::MatrixXd &A, const Eigen::VectorXd &v, std::size_t col);
-inline Eigen::VectorXd getCol(const Eigen::MatrixXd &A, std::size_t col);
-inline Eigen::MatrixXd solve(const Eigen::MatrixXd &A, const Eigen::MatrixXd &b);
 inline std::size_t find_covar_index( const std::string& colname, std::vector< std::string > col_names );
 
 
@@ -918,7 +912,11 @@ class Data
 			for(int kk = 0; kk < (n_cols - keep.size()); kk++){
 				std::cout << reject_names[kk] << std::endl;
 			}
-			M = getCols(M, keep);
+			// subset cols
+			for (std::size_t i = 0; i < keep.size(); i++) {
+				M.col(i) = M.col(keep[i]);
+			}
+			M.conservativeResize(M.rows(), keep.size());
 
 			n_cols = keep.size();
 			col_names = keep_names;
@@ -957,7 +955,11 @@ class Data
 //
 //		if (keep.size() != n_cols) {
 //			std::cout << " Removing " << (n_cols - keep.size())  << " columns with zero variance." << std::endl;
-//			M = getCols(M, keep);
+//	// subset cols
+//	for (std::size_t i = 0; i < keep.size(); i++) {
+//		M.col(i) = M.col(keep[i]);
+//	}
+//	M.conservativeResize(M.rows(), keep.size());
 //
 //			n_cols = keep.size();
 //		}
@@ -1029,7 +1031,7 @@ class Data
 		unsigned long n_cols;
 		std::vector< std::string > col_names;
 		std::map<int, bool> missing_rows;
-		read_txt_file( params.env_file, E_weights, n_cols, col_names, missing_rows );
+		read_txt_file( params.env_weights_file, E_weights, n_cols, col_names, missing_rows );
 
 		assert(n_cols == 1);
 		assert(missing_rows.empty());
@@ -1326,8 +1328,6 @@ class Data
 				std::cout << "--vb_init file with contextual information detected" << std::endl;
 				std::cout << "Warning: This will be O(PL) where L = " << vb_init_mat.rows();
 				std::cout << " is the number of lines in file given to --vb_init." << std::endl;
-				// alpha_init = Eigen::VectorXd::Zero(2*n_var);
-				// mu_init    = Eigen::VectorXd::Zero(2*n_var);
 				alpha_init = Eigen::MatrixXd::Zero(n_var, n_effects);
 				mu_init    = Eigen::MatrixXd::Zero(n_var, n_effects);
 
@@ -1373,14 +1373,12 @@ class Data
 
 		// Fill M_tmp with non-missing entries of M
 		int ii_tmp = 0;
-		for (int ii = 0; ii < n_samples; ii++) {
+		for (std::size_t ii = 0; ii < n_samples; ii++) {
 			if (incomplete_cases.count(ii) == 0) {
 				for (int kk = 0; kk < n_cols; kk++) {
 					M_tmp(ii_tmp, kk) = M(ii, kk);
 				}
 				ii_tmp++;
-			} else {
-				// std::cout << "Deleting row " << ii << std::endl;
 			}
 		}
 
@@ -1457,62 +1455,6 @@ class Data
 		return ofile;
 	}
 };
-
-
-inline std::size_t numRows(const Eigen::MatrixXd &A) {
-	return A.rows();
-}
-
-inline std::size_t numCols(const Eigen::MatrixXd &A) {
-	return A.cols();
-}
-
-inline void setCol(Eigen::MatrixXd &A, const Eigen::VectorXd &v, std::size_t col) {
-	assert(numRows(v) == numRows(A));
-	A.col(col) = v;
-}
-
-inline Eigen::VectorXd getCol(const Eigen::MatrixXd &A, std::size_t col) {
-	return A.col(col);
-}
-
-//inline void setCols(Eigen::MatrixXd &X, const std::vector<std::size_t> &cols, const Eigen::MatrixXd &values) {
-//	assert(cols.size() == numCols(values));
-//	assert(numRows(X) == numRows(values));
-//
-//	if (cols.empty()) {
-//		return;
-//	}
-//
-//	for (std::size_t i = 0; i < cols.size(); i++) {
-//		setCol(X, getCol(values, i), cols[i]);
-//	}
-//}
-
-inline Eigen::MatrixXd getCols(const Eigen::MatrixXd &X, const std::vector<std::size_t> &cols) {
-	Eigen::MatrixXd result(numRows(X), cols.size());
-	assert(cols.size() == numCols(result));
-	assert(numRows(X) == numRows(result));
-
-	if (cols.empty()) {
-		return result;
-	}
-
-	for (std::size_t i = 0; i < cols.size(); i++) {
-		setCol(result, getCol(X, cols[i]), i);
-	}
-
-	return result;
-}
-
-inline Eigen::MatrixXd solve(const Eigen::MatrixXd &A, const Eigen::MatrixXd &b) {
-	Eigen::MatrixXd x = A.colPivHouseholderQr().solve(b);
-	if (fabs((double)((A * x - b).norm()/b.norm())) > 1e-8) {
-		std::cout << "ERROR: could not solve covariate scatter matrix." << std::endl;
-		std::exit(EXIT_FAILURE);
-	}
-	return x;
-}
 
 inline std::size_t find_covar_index(const std::string& colname, std::vector< std::string > col_names ){
 	std::size_t x_col;

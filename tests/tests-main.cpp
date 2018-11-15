@@ -72,6 +72,20 @@ TEST_CASE( "Algebra in Eigen3" ) {
 		CHECK(y1(1) == 8);
 		CHECK(y1(2) == 14);
 	}
+
+	SECTION("Conservative Resize"){
+		std::vector<int> keep;
+		keep.push_back(1);
+		for (std::size_t i = 0; i < keep.size(); i++) {
+			X.col(i) = X.col(keep[i]);
+		}
+		X.conservativeResize(X.rows(), keep.size());
+
+		CHECK(X.rows() == 3);
+		CHECK(X.cols() == 1);
+		CHECK(X(0, 0) == 2);
+
+	}
 }
 
 TEST_CASE( "Example 1: single-env" ){
