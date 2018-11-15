@@ -91,7 +91,7 @@ int main( int argc, char** argv ) {
 		outf_time << "function time" << std::endl;
 		outf_time << "read_data " << elapsed_reading_data.count() << std::endl;
 		outf_time << "full_inference " << elapsed_vb.count() << std::endl;
-		outf_time << "vb_outer_loop " << VB.elapsed_outerLoop.count() << std::endl;
+		outf_time << "vb_outer_loop " << VB.elapsed_innerLoop.count() << std::endl;
 		return 0 ;
 	}
 	catch( genfile::bgen::BGenError const& e ) {
