@@ -1,7 +1,13 @@
+# Version 0.10.2
+
+Changes:
+- Only a single thread used to decompress cols.
+- vb block size for main effects set to 64. gxe effects allowed to be tuned.
+
 # Version 0.10.1
 
 Changes:
-- All threads used to decompress genotype columns. 
+- All threads used to decompress genotype columns.
 - Major refactoring: single array for each parameter (in future allows for mutliple runs in XXd array)
 - Hyps now a class
 - VbTracker stores only a single run

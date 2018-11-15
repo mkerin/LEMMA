@@ -16,7 +16,7 @@ class parameters {
 		std::vector< std::string > rsid;
 		long int chunk_size, vb_iter_max;
 		int missing_code, burnin_maxhyps, env_update_repeats, n_gconf;
-		unsigned int n_thread, vb_chunk_size;
+		unsigned int n_thread, main_chunk_size, gxe_chunk_size;
 		std::uint32_t range_start, range_end;
 		bool range, maf_lim, info_lim, select_snps, xtra_verbose;
 		bool geno_check, mode_vb, use_vb_on_covars;
@@ -59,7 +59,8 @@ class parameters {
 		env_update_repeats = 1;
 		interaction_analysis = false;
 		chunk_size = 256;
-		vb_chunk_size = 64;
+		main_chunk_size = 64;
+		gxe_chunk_size = 16;
 		missing_code = -999;
 		vb_iter_max = 10000;
 		spike_diff_factor = 1000000.0; // Initial diff in variance of spike & slab

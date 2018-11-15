@@ -288,27 +288,28 @@ public:
 		unsigned long ch_len = chunk.size();
 		std::vector<std::vector<int>> indexes(params.n_thread);
 		for (int ii = 0; ii < ch_len; ii++) {
-			indexes[ii % params.n_thread].push_back(ii);
+			// indexes[ii % params.n_thread].push_back(ii);
+			indexes[0].push_back(ii);
 		}
 
 		// Decompress char -> double
-#ifdef DEBUG
+// #ifdef DEBUG
 		get_cols(indexes[0], chunk, D);
-		for (int nn = 1; nn < params.n_thread; nn++){
-			get_cols(indexes[nn], chunk, D);
-		}
-#else
-		std::thread t1[params.n_thread];
-		for (int nn = 1; nn < params.n_thread; nn++){
-			t1[nn] = std::thread( [this, &indexes, nn, &chunk, &D] {
-				get_cols(indexes[nn], chunk, D);
-			});
-		}
-		get_cols(indexes[0], chunk, D);
-		for (int nn = 1; nn < params.n_thread; nn++){
-			t1[nn].join();
-		}
-#endif
+		// for (int nn = 1; nn < params.n_thread; nn++){
+		// 	get_cols(indexes[nn], chunk, D);
+		// }
+// #else
+// 		std::thread t1[params.n_thread];
+// 		for (int nn = 1; nn < params.n_thread; nn++){
+// 			t1[nn] = std::thread( [this, &indexes, nn, &chunk, &D] {
+// 				get_cols(indexes[nn], chunk, D);
+// 			});
+// 		}
+// 		get_cols(indexes[0], chunk, D);
+// 		for (int nn = 1; nn < params.n_thread; nn++){
+// 			t1[nn].join();
+// 		}
+// #endif
 	}
 
 	void get_cols(const std::vector<int> &index,

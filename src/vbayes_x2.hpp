@@ -127,7 +127,9 @@ public:
 		env_names      = dat.env_names;
 		N              = (double) n_samples;
 
-		p.vb_chunk_size = (unsigned int) std::min((long int) p.vb_chunk_size, (long int) n_samples);
+
+		p.main_chunk_size = (unsigned int) std::min((long int) p.main_chunk_size, (long int) n_var);
+		p.gxe_chunk_size = (unsigned int) std::min((long int) p.gxe_chunk_size, (long int) n_var);
 
 		// Read environmental variables
 		E = dat.E;
@@ -145,34 +147,37 @@ public:
 			env_back_pass.push_back(n_env - ll - 1);
 		}
 
-		unsigned long n_segs = (n_var + p.vb_chunk_size - 1) / p.vb_chunk_size; // ceiling of n_var / chunk size
-		unsigned long n_chunks = n_segs * n_effects;
+		unsigned long n_main_segs, n_gxe_segs, n_chunks;
+ 		n_main_segs = (n_var + p.main_chunk_size - 1) / p.main_chunk_size; // ceiling of n_var / chunk size
+		n_gxe_segs = (n_var + p.gxe_chunk_size - 1) / p.gxe_chunk_size; // ceiling of n_var / chunk size
+		n_chunks = n_main_segs + n_gxe_segs;
 
 		fwd_pass_chunks.resize(n_chunks);
 		back_pass_chunks.resize(n_chunks);
 		for(std::uint32_t kk = 0; kk < n_effects * n_var; kk++){
-			std::uint32_t ch_index = ((kk % n_var)/ p.vb_chunk_size) + (kk / n_var) * n_segs;
+			std::uint32_t ch_index = (kk < n_var ? kk / p.main_chunk_size : n_main_segs + (kk % n_var) / p.gxe_chunk_size);
+			std::cout << kk << " " << ch_index << std::endl;
 			fwd_pass_chunks[ch_index].push_back(kk);
-
-			std::uint32_t kk_bck = n_effects * n_var - 1 - kk;
-			std::uint32_t ch_bck_index = n_chunks - 1 - ch_index;
-			back_pass_chunks[ch_index].push_back(kk_bck);
+			back_pass_chunks[n_chunks - 1 - ch_index].push_back(kk);
 		}
 
+		for (long ii = 0; ii < n_chunks; ii++){
+			std::reverse(back_pass_chunks[ii].begin(), back_pass_chunks[ii].end());
+		}
 
-//		for (auto chunk : fwd_pass_chunks){
-//			for (auto kk : chunk){
-//				std::cout << kk << " ";
-//			}
-//			std::cout << std::endl;
-//		}
-//
-//		for (auto chunk : back_pass_chunks){
-//			for (auto kk : chunk){
-//				std::cout << kk << " ";
-//			}
-//			std::cout << std::endl;
-//		}
+		for (auto chunk : fwd_pass_chunks){
+			for (auto kk : chunk){
+				std::cout << kk << " ";
+			}
+			std::cout << std::endl;
+		}
+
+		for (auto chunk : back_pass_chunks){
+			for (auto kk : chunk){
+				std::cout << kk << " ";
+			}
+			std::cout << std::endl;
+		}
 
 
 		// non random initialisation

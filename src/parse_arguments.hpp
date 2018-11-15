@@ -126,7 +126,7 @@ void parse_arguments(parameters &p, int argc, char *argv[]) {
 		"--dxteex",
 		"--mode_mog_beta",
 		"--mode_mog_gamma",
-		"--vb_chunk_size",
+		"--gxe_chunk_size",
 		"--spike_diff_factor",
 		"--min_spike_diff_factor"
 	};
@@ -237,8 +237,8 @@ void parse_arguments(parameters &p, int argc, char *argv[]) {
 			// & also make sure they don't go over argc
 
 			// Modes - a variety of different functionalities now included
-			if(strcmp(in_str, "--vb_chunk_size") == 0) {
-				p.vb_chunk_size = std::stoi(argv[i + 1]);
+			if(strcmp(in_str, "--gxe_chunk_size") == 0) {
+				p.gxe_chunk_size = std::stoi(argv[i + 1]);
 				i += 1;
 			}
 
