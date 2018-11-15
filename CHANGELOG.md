@@ -4,7 +4,7 @@ Bugfix:
 - Now able to run only main effects model
 - Need to transpose snpstats.row() to assign to Eigen::ArrayXd vp.muw
 - Init weights from sumstats if n_env > 1
-- read_environment_weights() should read from env_weights_file!
+- read_environment_weights() should read from env_weights_file! (+ use read_grid_file())
 
 Changes:
 - Ability to set minimum difference in variances of MoG.
