@@ -85,6 +85,14 @@ int main( int argc, char** argv ) {
 		std::cout << "VB inference: " << elapsed_vb.count() << " secs" << std::endl;
 		std::cout << "runOuterLoop: " << VB.elapsed_outerLoop.count() << " secs" << std::endl;
 
+		// Write time log to file
+		boost_io::filtering_ostream outf_time;
+		std::string ofile_map   = VB.fstream_init(outf_time, "", "_time_elapsed");
+		outf_time << "function time" << std::endl;
+		outf_time << "read_data " << elapsed_reading_data.count() << std::endl;
+		outf_time << "full_inference " << elapsed_vb.count() << std::endl;
+		outf_time << "vb_outer_loop " << VB.elapsed_outerLoop.count() << std::endl;
+
 		return 0 ;
 	}
 	catch( genfile::bgen::BGenError const& e ) {
