@@ -16,24 +16,7 @@
 #include "data.hpp"
 #include "vbayes_x2.hpp"
 
-void read_directory(const std::string& name, std::vector<std::string>& v);
 
-// TODO: Sensible restructuring of interaction code
-// TODO: Should not require grid_probs
-// TODO: Use high precision double for pval
-// TODO: implement tests for info filter
-// TODO: tests for read_pheno, read_covar? Clarify if args for these are compulsory.
-// TODO: copy argument_sanity()
-
-// Efficiency changes:
-// 1) Use --range to edit query before reading bgen file
-// 2) Is there an option to skip sample ids?
-//    If so we could fill n_samples at start
-//    - read_covar() & read_pheno()
-//    - then edit query with incomplete cases before reading bgen
-
-// This example program reads data from a bgen file specified as the first argument
-// and outputs it as a VCF file.
 int main( int argc, char** argv ) {
 	parameters p;
 

@@ -118,10 +118,6 @@ void parse_arguments(parameters &p, int argc, char *argv[]) {
 		"--raw_phenotypes",
 		"--mode_alternating_updates",
 		"--vb_iter_max",
-		"--mode_sgd",
-		"--sgd_delay",
-		"--sgd_forgetting_rate",
-		"--sgd_minibatch_size",
 		"--burnin_maxhyps",
 		"--env_update_repeats",
 		"--rescale_eta",
@@ -241,17 +237,6 @@ void parse_arguments(parameters &p, int argc, char *argv[]) {
 			// & also make sure they don't go over argc
 
 			// Modes - a variety of different functionalities now included
-			if(strcmp(in_str, "--mode_sgd") == 0) {
-				p.mode_sgd = true;
-				i += 0;
-			}
-
-			if(strcmp(in_str, "--sgd_delay") == 0) {
-				p.sgd_delay = std::stod(argv[i + 1]);
-				p.sgd_delay_set = true;
-				i += 1;
-			}
-
 			if(strcmp(in_str, "--vb_chunk_size") == 0) {
 				p.vb_chunk_size = std::stoi(argv[i + 1]);
 				i += 1;
@@ -280,18 +265,6 @@ void parse_arguments(parameters &p, int argc, char *argv[]) {
 			if(strcmp(in_str, "--gamma_updates_thresh") == 0) {
 				p.restrict_gamma_updates = true;
 				p.gamma_updates_thresh = std::stod(argv[i + 1]);
-				i += 1;
-			}
-
-			if(strcmp(in_str, "--sgd_forgetting_rate") == 0) {
-				p.sgd_forgetting_rate = std::stod(argv[i + 1]);
-				p.sgd_forgetting_rate_set = true;
-				i += 1;
-			}
-
-			if(strcmp(in_str, "--sgd_minibatch_size") == 0) {
-				p.sgd_minibatch_size = std::stol(argv[i + 1]);
-				p.sgd_minibatch_size_set = true;
 				i += 1;
 			}
 
@@ -385,12 +358,7 @@ void parse_arguments(parameters &p, int argc, char *argv[]) {
 				check_counts(in_str, i, 1, argc);
 				p.bgen_file = argv[i + 1]; // bgen file
 
-				std::regex reg_asterisk("\\*");
-				if (std::regex_search(p.bgen_file, reg_asterisk)) {
-					p.bgen_wildcard = true;
-				} else {
-					check_file_exists(p.bgen_file);
-				}
+				check_file_exists(p.bgen_file);
 				i += 1;
 			}
 
@@ -515,8 +483,8 @@ void parse_arguments(parameters &p, int argc, char *argv[]) {
 				check_counts(in_str, i, 3, argc);
 				p.range = true;
 				p.chr = argv[i + 1];
-				p.start = atoi(argv[i + 2]);
-				p.end = atoi(argv[i + 3]);
+				p.range_start = atoi(argv[i + 2]);
+				p.range_end = atoi(argv[i + 3]);
 				i += 3;
 			}
 
@@ -636,13 +604,6 @@ void parse_arguments(parameters &p, int argc, char *argv[]) {
 
 	if(p.interaction_analysis && p.covar_file == "NULL"){
 		throw std::runtime_error("ERROR: --covar must be provided if --interaction analysis is being run.");
-	}
-
-	if(p.mode_sgd && !(p.sgd_delay_set && p.sgd_forgetting_rate_set && p.sgd_minibatch_size_set)){
-		throw std::runtime_error("ERROR: Must set forgetting rate, delay and minibatch size for mode sgd");
-	}
-	if(p.mode_sgd && p.sgd_minibatch_size <= 0){
-		throw std::runtime_error("ERROR: Minibatch size must be greater than zero");
 	}
 
 	if(p.env_file == "NULL" && p.env_weights_file != "NULL"){

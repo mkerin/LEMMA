@@ -36,12 +36,12 @@
 namespace boost_io = boost::iostreams;
 namespace boost_m = boost::math;
 
-inline Eigen::MatrixXd getCols(const Eigen::MatrixXd &X, const std::vector<size_t> &cols);
-inline void setCols(Eigen::MatrixXd &X, const std::vector<size_t> &cols, const Eigen::MatrixXd &values);
-inline size_t numRows(const Eigen::MatrixXd &A);
-inline size_t numCols(const Eigen::MatrixXd &A);
-inline void setCol(Eigen::MatrixXd &A, const Eigen::VectorXd &v, size_t col);
-inline Eigen::VectorXd getCol(const Eigen::MatrixXd &A, size_t col);
+inline Eigen::MatrixXd getCols(const Eigen::MatrixXd &X, const std::vector<std::size_t> &cols);
+//inline void setCols(Eigen::MatrixXd &X, const std::vector<std::size_t> &cols, const Eigen::MatrixXd &values);
+inline std::size_t numRows(const Eigen::MatrixXd &A);
+inline std::size_t numCols(const Eigen::MatrixXd &A);
+inline void setCol(Eigen::MatrixXd &A, const Eigen::VectorXd &v, std::size_t col);
+inline Eigen::VectorXd getCol(const Eigen::MatrixXd &A, std::size_t col);
 inline Eigen::MatrixXd solve(const Eigen::MatrixXd &A, const Eigen::MatrixXd &b);
 inline std::size_t find_covar_index( const std::string& colname, std::vector< std::string > col_names );
 
@@ -52,9 +52,9 @@ class Data
 	parameters params;
 
 
-	int n_pheno; // number of phenotypes
-	int n_covar; // number of covariates
-	int n_env; // number of env variables
+	unsigned long n_pheno; // number of phenotypes
+	unsigned long n_covar; // number of covariates
+	unsigned long n_env; // number of env variables
 	int n_effects;   // number of environmental interactions
 	std::uint32_t n_samples; // number of samples
 	bool bgen_pass;
@@ -67,16 +67,13 @@ class Data
 	bool W_reduced;   // reduced to complete cases or not.
 	bool E_reduced;
 
-	std::vector< std::string > chromosome, rsid, SNPID;
 	std::vector< std::string > external_dXtEEX_SNPID;
-	std::vector< uint32_t > position;
-	std::vector< std::vector< std::string > > alleles;
 	std::vector< std::string > rsid_list;
 
 	std::map<int, bool> missing_envs;   // set of subjects missing >= 1 env variables
 	std::map<int, bool> missing_covars; // set of subjects missing >= 1 covariate
 	std::map<int, bool> missing_phenos; // set of subjects missing >= phenotype
-	std::map< int, bool > incomplete_cases; // union of samples missing data
+	std::map< std::size_t, bool > incomplete_cases; // union of samples missing data
 
 	std::vector< std::string > pheno_names;
 	std::vector< std::string > covar_names;
@@ -86,7 +83,6 @@ class Data
 	Eigen::MatrixXd Y, Y2; // phenotype matrix (#2 always has covars regressed)
 	Eigen::MatrixXd W; // covariate matrix
 	Eigen::MatrixXd E; // env matrix
-	Eigen::MatrixXd R; // recombination map
 	Eigen::ArrayXXd dXtEEX;
 	Eigen::ArrayXXd external_dXtEEX;
 	Eigen::MatrixXd E_weights;
@@ -98,7 +94,7 @@ class Data
 	Eigen::ArrayXXd external_snpstats;
 	std::vector< std::string > external_snpstats_SNPID;
 
-	boost_io::filtering_ostream outf, outf_scan;
+	boost_io::filtering_ostream outf_scan;
 
 	std::chrono::system_clock::time_point start;
 	bool filters_applied;
@@ -107,26 +103,6 @@ class Data
 	std::vector< std::string > hyps_names;
 	Eigen::MatrixXd r1_hyps_grid, hyps_grid;
 	Eigen::ArrayXXd alpha_init, mu_init;
-
-
-	// constructors/destructors
-	// data() : bgenView( "NULL" ) {
-	// 	bgen_pass = false; // No bgen file set; read_bgen_chunk won't run.
-	// }
-
-	// Data( const std::string& filename ) : G(false) {
-	// 	// system time at start
-	// 	start = std::chrono::system_clock::now();
-	// 	std::time_t start_time = std::chrono::system_clock::to_time_t(start);
-	// 	std::cout << "Starting analysis at " << std::ctime(&start_time) << std::endl;
-	// 	std::cout << "Compiled from git branch: master" << std::endl;
-	//
-	// 	bgenView = genfile::bgen::View::create(filename);
-	// 	bgen_pass = true;
-	// 	n_samples = bgenView->number_of_samples();
-	// 	n_var_parsed = 0;
-	// 	filters_applied = false;
-	// }
 
 	explicit Data( const parameters& p ) : params(p), G(p) {
 		// system time at start
@@ -145,10 +121,10 @@ class Data
 		filters_applied = false;
 
 		// Explicit initial values to eliminate linter errors..
-		n_pheno   = -1;
+		n_pheno   = 0;
 		n_effects = -1;
-		n_covar   = -1;
-		n_env   = -1;
+		n_covar   = 0;
+		n_env     = 0;
 		n_var     = 0;
 		Y_reduced = false;
 		W_reduced = false;
@@ -173,7 +149,7 @@ class Data
 		if (params.range){
 			std::cout << "Selecting range..." << std::endl;
 			genfile::bgen::IndexQuery::UniquePtr query = genfile::bgen::IndexQuery::create(params.bgi_file);
-			genfile::bgen::IndexQuery::GenomicRange rr1(params.chr, params.start, params.end);
+			genfile::bgen::IndexQuery::GenomicRange rr1(params.chr, params.range_start, params.range_end);
 			query->include_range( rr1 ).initialise();
 			bgenView->set_query( query );
 		}
@@ -243,7 +219,7 @@ class Data
 			n_effects = 2;  // 1 more than actually present... n_effects?
 		} else {
 			n_effects = 1;
-			assert(n_env = 0);
+			assert(n_env == 0);
 		}
 
 		// Exclude samples with missing values in phenos / covars / filters
@@ -365,7 +341,7 @@ class Data
 						f2 += (f1 - dosage * dosage);
 						valid_count++;
 					} else {
-						missing_genos[ii_obs] = 1;
+						missing_genos[ii_obs] = true;
 						dosage_j[ii_obs] = 0.0;
 					}
 					ii_obs++;
@@ -528,8 +504,8 @@ class Data
 					"to include an id not present in the BGEN file, or the "
 					"the provided ids are in the wrong order");
 				}
-				while(s.compare(bgen_ids[bb]) != 0) {
-					incomplete_cases[bb] = 1;
+				while(s != bgen_ids[bb]) {
+					incomplete_cases[bb] = true;
 					bb++;
 					if (bb >= n_samples){
 						std::cout << "Failed to find a match for sample_id:";
@@ -550,7 +526,7 @@ class Data
 			}
 
 			for (int jj = bb; jj < n_samples; jj++){
-				incomplete_cases[jj] = 1;
+				incomplete_cases[jj] = true;
 			}
 		} catch (const std::exception &exc) {
 			// throw std::runtime_error("ERROR: problem converting incl_sample_ids.");
@@ -591,13 +567,13 @@ class Data
 			std::exit(EXIT_FAILURE);
 		}
 		std::stringstream ss;
-		std::string s;
+		std::string s1;
 		int n_cols = 0;
 		ss.clear();
 		ss.str(line);
-		while (ss >> s) {
+		while (ss >> s1) {
 			++n_cols;
-			col_names.push_back(s);
+			col_names.push_back(s1);
 		}
 		std::cout << " Detected " << n_cols << " column(s) from " << filename << std::endl;
 
@@ -634,85 +610,82 @@ class Data
 		}
 	}
 
-	void read_grid_file( const std::string& filename,
-						 Eigen::ArrayXXd& M,
-						 std::vector< std::string >& col_names){
-		// Used in mode_vb only.
-		// Slightly different from read_txt_file in that I don't know
-		// how many rows there will be and we can assume no missing values.
-
-		boost_io::filtering_istream fg;
-		fg.push(boost_io::file_source(filename));
-		if (!fg) {
-			std::cout << "ERROR: " << filename << " not opened." << std::endl;
-			std::exit(EXIT_FAILURE);
-		}
-
-		// Read file twice to acertain number of lines
-		std::string line;
-		int n_grid = 0;
-		getline(fg, line);
-		while (getline(fg, line)) {
-			n_grid++;
-		}
-		fg.reset();
-		fg.push(boost_io::file_source(filename));
-
-		// Reading column names
-		if (!getline(fg, line)) {
-			std::cout << "ERROR: " << filename << " not read." << std::endl;
-			std::exit(EXIT_FAILURE);
-		}
-		std::stringstream ss;
-		std::string s;
-		int n_cols = 0;
-		ss.clear();
-		ss.str(line);
-		while (ss >> s) {
-			++n_cols;
-			col_names.push_back(s);
-		}
-		std::cout << " Detected " << n_cols << " column(s) from " << filename << std::endl;
-
-		// Write remainder of file to Eigen matrix M
-		M.resize(n_grid, n_cols);
-		int i = 0;
-		double tmp_d;
-		try {
-			while (getline(fg, line)) {
-				if (i >= n_grid) {
-					throw std::runtime_error("ERROR: could not convert txt file (too many lines).");
-				}
-				ss.clear();
-				ss.str(line);
-				for (int k = 0; k < n_cols; k++) {
-					std::string s;
-					ss >> s;
-					try{
-						tmp_d = stod(s);
-					} catch (const std::invalid_argument &exc){
-						std::cout << s << " on line " << i << std::endl;
-						throw;
-					}
-
-					M(i, k) = tmp_d;
-				}
-				i++; // loop should end at i == n_grid
-			}
-			if (i < n_grid) {
-				throw std::runtime_error("ERROR: could not convert txt file (too few lines).");
-			}
-		} catch (const std::exception &exc) {
-			throw;
-		}
-	}
+//	void read_grid_file( const std::string& filename,
+//						 Eigen::ArrayXXd& M,
+//						 std::vector< std::string >& col_names){
+//		// Used in mode_vb only.
+//		// Slightly different from read_txt_file in that I don't know
+//		// how many rows there will be and we can assume no missing values.
+//
+//		boost_io::filtering_istream fg;
+//		fg.push(boost_io::file_source(filename));
+//		if (!fg) {
+//			std::cout << "ERROR: " << filename << " not opened." << std::endl;
+//			std::exit(EXIT_FAILURE);
+//		}
+//
+//		// Read file twice to acertain number of lines
+//		std::string line;
+//		int n_grid = 0;
+//		getline(fg, line);
+//		while (getline(fg, line)) {
+//			n_grid++;
+//		}
+//		fg.reset();
+//		fg.push(boost_io::file_source(filename));
+//
+//		// Reading column names
+//		if (!getline(fg, line)) {
+//			std::cout << "ERROR: " << filename << " not read." << std::endl;
+//			std::exit(EXIT_FAILURE);
+//		}
+//		std::stringstream ss;
+//		std::string s;
+//		int n_cols = 0;
+//		ss.clear();
+//		ss.str(line);
+//		while (ss >> s) {
+//			++n_cols;
+//			col_names.push_back(s);
+//		}
+//		std::cout << " Detected " << n_cols << " column(s) from " << filename << std::endl;
+//
+//		// Write remainder of file to Eigen matrix M
+//		M.resize(n_grid, n_cols);
+//		int i = 0;
+//		double tmp_d;
+//		try {
+//			while (getline(fg, line)) {
+//				if (i >= n_grid) {
+//					throw std::runtime_error("ERROR: could not convert txt file (too many lines).");
+//				}
+//				ss.clear();
+//				ss.str(line);
+//				for (int k = 0; k < n_cols; k++) {
+//					std::string sss;
+//					ss >> sss;
+//					try{
+//						tmp_d = stod(sss);
+//					} catch (const std::invalid_argument &exc){
+//						std::cout << sss << " on line " << i << std::endl;
+//						throw;
+//					}
+//
+//					M(i, k) = tmp_d;
+//				}
+//				i++; // loop should end at i == n_grid
+//			}
+//			if (i < n_grid) {
+//				throw std::runtime_error("ERROR: could not convert txt file (too few lines).");
+//			}
+//		} catch (const std::exception &exc) {
+//			throw;
+//		}
+//	}
 
 	void read_vb_init_file(const std::string& filename,
                            Eigen::MatrixXd& M,
                            std::vector< std::string >& col_names,
-                        //    std::vector< int >& init_chr,
-                        //    std::vector< uint32_t >& init_pos,
-                        //    std::vector< std::string >& init_a0,
                            std::vector< std::string >& init_key){
 		// Used in mode_vb only.
 		// Need custom function to deal with variable input. Sometimes
@@ -766,12 +739,12 @@ class Data
 				ss.str(line);
 				if(n_cols < 7){
 					for (int k = 0; k < n_cols; k++) {
-						std::string s;
-						ss >> s;
+						std::string sss;
+						ss >> sss;
 						try{
-							tmp_d = stod(s);
+							tmp_d = stod(sss);
 						} catch (const std::invalid_argument &exc){
-							std::cout << s << " on line " << i << std::endl;
+							std::cout << sss << " on line " << i << std::endl;
 							throw;
 						}
 						M(i, k) = tmp_d;
@@ -779,22 +752,22 @@ class Data
 				} else if(n_cols == 7){
 					key_i = "";
 					for (int k = 0; k < n_cols; k++) {
-						std::string s;
-						ss >> s;
+						std::string sss;
+						ss >> sss;
 						if(k == 0){
-							key_i += s + "~";
+							key_i += sss + "~";
 						} else if (k == 2){
-							key_i += s + "~";
+							key_i += sss + "~";
 							// init_pos.push_back(std::stoull(s));
 						} else if (k == 3){
-							key_i += s + "~";
+							key_i += sss + "~";
 							// init_a0.push_back(s);
 						} else if (k == 4){
-							key_i += s;
+							key_i += sss;
 							init_key.push_back(key_i);
 							// init_a1.push_back(s);
 						} else if(k >= 5){
-							M(i, k) = stod(s);
+							M(i, k) = stod(sss);
 						}
 					}
 				} else {
@@ -812,7 +785,7 @@ class Data
 
 	void read_txt_file( const std::string& filename,
 						Eigen::MatrixXd& M,
-						int& n_cols,
+						unsigned long& n_cols,
 						std::vector< std::string >& col_names,
 						std::map< int, bool >& incomplete_row ){
 		// pass top line of txt file filename to col_names, and body to M.
@@ -855,16 +828,16 @@ class Data
 				ss.clear();
 				ss.str(line);
 				for (int k = 0; k < n_cols; k++) {
-					std::string s;
-					ss >> s;
+					std::string sss;
+					ss >> sss;
 					/// NA
-					if (s == "NA" || s == "NAN" || s == "NaN" || s == "nan") {
+					if (sss == "NA" || sss == "NAN" || sss == "NaN" || sss == "nan") {
 						tmp_d = params.missing_code;
 					} else {
 						try{
-							tmp_d = stod(s);
+							tmp_d = stod(sss);
 						} catch (const std::invalid_argument &exc){
-							std::cout << s << " on line " << i << std::endl;
+							std::cout << sss << " on line " << i << std::endl;
 							throw;
 						}
 					}
@@ -873,7 +846,7 @@ class Data
 						M(i, k) = tmp_d;
 					} else {
 						M(i, k) = params.missing_code;
-						incomplete_row[i] = 1;
+						incomplete_row[i] = true;
 					}
 				}
 				i++; // loop should end at i == n_samples
@@ -887,7 +860,7 @@ class Data
 	}
 
 	void center_matrix( Eigen::MatrixXd& M,
-						int& n_cols ){
+						unsigned long& n_cols ){
 		// Center eigen matrix passed by reference.
 		// Only call on matrixes which have been reduced to complete cases,
 		// as no check for incomplete rows.
@@ -909,17 +882,17 @@ class Data
 	}
 
 	void scale_matrix( Eigen::MatrixXd& M,
-						int& n_cols,
+						unsigned long& n_cols,
  						std::vector< std::string >& col_names){
 		// Scale eigen matrix passed by reference.
 		// Removes columns with zero variance + updates col_names.
 		// Only call on matrixes which have been reduced to complete cases,
 		// as no check for incomplete rows.
 
-		std::vector<size_t> keep;
+		std::vector<std::size_t> keep;
 		std::vector<std::string> keep_names;
 		std::vector<std::string> reject_names;
-		for (int k = 0; k < n_cols; k++) {
+		for (std::size_t k = 0; k < n_cols; k++) {
 			double sigma = 0.0;
 			double count = 0;
 			for (int i = 0; i < n_samples; i++) {
@@ -956,68 +929,68 @@ class Data
 		}
 	}
 
-	void scale_matrix( Eigen::MatrixXd& M,
-						int& n_cols){
-		// Scale eigen matrix passed by reference.
-		// Removes columns with zero variance.
-		// Only call on matrixes which have been reduced to complete cases,
-		// as no check for incomplete rows.
+//	void scale_matrix( Eigen::MatrixXd& M,
+//						unsigned long& n_cols){
+//		// Scale eigen matrix passed by reference.
+//		// Removes columns with zero variance.
+//		// Only call on matrixes which have been reduced to complete cases,
+//		// as no check for incomplete rows.
+//
+//		std::vector<std::size_t> keep;
+//		for (std::size_t k = 0; k < n_cols; k++) {
+//			double sigma = 0.0;
+//			double count = 0;
+//			for (int i = 0; i < n_samples; i++) {
+//				double val = M(i, k);
+//				sigma += val * val;
+//				count += 1;
+//			}
+//
+//			sigma = sqrt(sigma/(count - 1));
+//			if (sigma > 1e-12) {
+//				for (int i = 0; i < n_samples; i++) {
+//					M(i, k) /= sigma;
+//				}
+//				keep.push_back(k);
+//			}
+//		}
+//
+//		if (keep.size() != n_cols) {
+//			std::cout << " Removing " << (n_cols - keep.size())  << " columns with zero variance." << std::endl;
+//			M = getCols(M, keep);
+//
+//			n_cols = keep.size();
+//		}
+//
+//		if (n_cols == 0) {
+//			throw std::runtime_error("ERROR: No columns left with nonzero variance after scale_matrix()");
+//		}
+//	}
 
-		std::vector<size_t> keep;
-		for (int k = 0; k < n_cols; k++) {
-			double sigma = 0.0;
-			double count = 0;
-			for (int i = 0; i < n_samples; i++) {
-				double val = M(i, k);
-				sigma += val * val;
-				count += 1;
-			}
-
-			sigma = sqrt(sigma/(count - 1));
-			if (sigma > 1e-12) {
-				for (int i = 0; i < n_samples; i++) {
-					M(i, k) /= sigma;
-				}
-				keep.push_back(k);
-			}
-		}
-
-		if (keep.size() != n_cols) {
-			std::cout << " Removing " << (n_cols - keep.size())  << " columns with zero variance." << std::endl;
-			M = getCols(M, keep);
-
-			n_cols = keep.size();
-		}
-
-		if (n_cols == 0) {
-			throw std::runtime_error("ERROR: No columns left with nonzero variance after scale_matrix()");
-		}
-	}
-
-	void scale_matrix_conserved( Eigen::MatrixXd& M,
-						int& n_cols){
-		// Scale eigen matrix passed by reference.
-		// Does not remove columns with zero variance.
-		// Only call on matrixes which have been reduced to complete cases,
-		// as no check for incomplete rows.
-
-		for (int k = 0; k < n_cols; k++) {
-			double sigma = 0.0;
-			double count = 0;
-			for (int i = 0; i < n_samples; i++) {
-				double val = M(i, k);
-				sigma += val * val;
-				count += 1;
-			}
-
-			sigma = sqrt(sigma/(count - 1));
-			if (sigma > 1e-12) {
-				for (int i = 0; i < n_samples; i++) {
-					M(i, k) /= sigma;
-				}
-			}
-		}
-	}
+//	void scale_matrix_conserved( Eigen::MatrixXd& M,
+//						int& n_cols){
+//		// Scale eigen matrix passed by reference.
+//		// Does not remove columns with zero variance.
+//		// Only call on matrixes which have been reduced to complete cases,
+//		// as no check for incomplete rows.
+//
+//		for (int k = 0; k < n_cols; k++) {
+//			double sigma = 0.0;
+//			double count = 0;
+//			for (int i = 0; i < n_samples; i++) {
+//				double val = M(i, k);
+//				sigma += val * val;
+//				count += 1;
+//			}
+//
+//			sigma = sqrt(sigma/(count - 1));
+//			if (sigma > 1e-12) {
+//				for (int i = 0; i < n_samples; i++) {
+//					M(i, k) /= sigma;
+//				}
+//			}
+//		}
+//	}
 
 	void read_pheno( ){
 		// Read phenotypes to Eigen matrix Y
@@ -1053,7 +1026,7 @@ class Data
 	}
 
 	void read_environment_weights( ){
-		int n_cols;
+		unsigned long n_cols;
 		std::vector< std::string > col_names;
 		std::map<int, bool> missing_rows;
 		read_txt_file( params.env_file, E_weights, n_cols, col_names, missing_rows );
@@ -1102,7 +1075,7 @@ class Data
 
 		// Reading from file
 		boost_io::filtering_istream fg;
-		fg.push(boost_io::file_source(filename.c_str()));
+		fg.push(boost_io::file_source(filename));
 		if (!fg) {
 			std::cout << "ERROR: " << filename << " not opened." << std::endl;
 			std::exit(EXIT_FAILURE);
@@ -1116,7 +1089,7 @@ class Data
 			n_lines++;
 		}
 		fg.reset();
-		fg.push(boost_io::file_source(filename.c_str()));
+		fg.push(boost_io::file_source(filename));
 
 		// Reading column names
 		if (!getline(fg, line)) {
@@ -1143,16 +1116,16 @@ class Data
 			ss.clear();
 			ss.str(line);
 			for (int k = 0; k < n_cols; k++) {
-				std::string s;
-				ss >> s;
+				std::string sss;
+				ss >> sss;
 				if (k == 0){
-					M_snpids.push_back(s);
+					M_snpids.push_back(sss);
 				}
 				if (k >= col_offset){
 					try{
-						M(i, k-col_offset) = stod(s);
+						M(i, k-col_offset) = stod(sss);
 					} catch (const std::invalid_argument &exc){
-						std::cout << "Found value " << s << " on line " << i;
+						std::cout << "Found value " << sss << " on line " << i;
 	 					std::cout << " of file " << filename << std::endl;
 						throw std::runtime_error("Unexpected value");
 					}
@@ -1171,7 +1144,7 @@ class Data
 		snpstats.resize(n_var, n_env + 3);
 		std::vector<std::string>::iterator it;
 		n_snpstats_computed = 0;
-		double N = (double) n_samples;
+		auto N = (double) n_samples;
 		boost_m::fisher_f f_dist(n_env, n_samples - n_env - 1);
 		for (std::size_t jj = 0; jj < n_var; jj++){
 			it = std::find(external_snpstats_SNPID.begin(), external_snpstats_SNPID.end(), G.SNPID[jj]);
@@ -1263,20 +1236,20 @@ class Data
 		std::cout << n_dxteex_computed << " computed from raw data, " << n_var - n_dxteex_computed << " read from file" << std::endl;
 	}
 
-	void read_recombination_map( ){
-		// Read covariates to Eigen matrix W
-		int n_cols;
-		std::vector<std::string> colnames;
-		std::map<int, bool> missing_rows;
-
-		read_txt_file( params.recombination_file, R, n_cols, colnames, missing_rows );
-
-		std::vector<std::string> expected_colnames = {"position",
-                                     "COMBINED_rate(cM/Mb)", "Genetic_Map(cM)"};
-		assert(n_cols == 3);
-		assert(colnames == expected_colnames);
-
-	}
+//	void read_recombination_map( ){
+//		// Read covariates to Eigen matrix W
+//		int n_cols;
+//		std::vector<std::string> colnames;
+//		std::map<int, bool> missing_rows;
+//
+//		read_txt_file( params.recombination_file, R, n_cols, colnames, missing_rows );
+//
+//		std::vector<std::string> expected_colnames = {"position",
+//                                     "COMBINED_rate(cM/Mb)", "Genetic_Map(cM)"};
+//		assert(n_cols == 3);
+//		assert(colnames == expected_colnames);
+//
+//	}
 
 	void read_grids(){
 		// For use in vbayes object
@@ -1359,7 +1332,7 @@ class Data
 				mu_init    = Eigen::MatrixXd::Zero(n_var, n_effects);
 
 				std::vector<std::string>::iterator it;
-				std::uint32_t index_kk;
+				unsigned long index_kk;
 				for(int kk = 0; kk < vb_init_mat.rows(); kk++){
 					it = std::find(G.SNPKEY.begin(), G.SNPKEY.end(), init_key[kk]);
 					if (it == G.SNPKEY.end()){
@@ -1386,8 +1359,8 @@ class Data
 
 	Eigen::MatrixXd reduce_mat_to_complete_cases( Eigen::Ref<Eigen::MatrixXd> M,
 								   bool& matrix_reduced,
-								   int n_cols,
-								   std::map< int, bool > incomplete_cases ) {
+								   const unsigned long& n_cols,
+								   const std::map< std::size_t, bool >& incomplete_cases ) {
 		// Remove rows contained in incomplete_cases
 		Eigen::MatrixXd M_tmp;
 		if (matrix_reduced) {
@@ -1395,7 +1368,7 @@ class Data
 		}
 
 		// Create temporary matrix of complete cases
-		int n_incomplete = incomplete_cases.size();
+		unsigned long n_incomplete = incomplete_cases.size();
 		M_tmp.resize(n_samples - n_incomplete, n_cols);
 
 		// Fill M_tmp with non-missing entries of M
@@ -1418,7 +1391,7 @@ class Data
 
 	void regress_out_covars(Eigen::Ref<Eigen::MatrixXd> yy){
 		std::cout << "Regressing out covars:" << std::endl;
-		for(int cc = 0; cc < std::min(n_covar, 10); cc++){
+		for(int cc = 0; cc < std::min(n_covar, (unsigned long) 10); cc++){
 			std::cout << ( cc > 0 ? ", " : "" ) << covar_names[cc];
 		}
 		if (n_covar > 10){
@@ -1468,10 +1441,10 @@ class Data
                              const std::string& file_suffix){
 
 		std::string filepath   = params.out_file;
-		std::string dir        = filepath.substr(0, filepath.rfind("/")+1);
-		std::string stem_w_dir = filepath.substr(0, filepath.find("."));
-		std::string stem       = stem_w_dir.substr(stem_w_dir.rfind("/")+1, stem_w_dir.size());
-		std::string ext        = filepath.substr(filepath.find("."), filepath.size());
+		std::string dir        = filepath.substr(0, filepath.rfind('/')+1);
+		std::string stem_w_dir = filepath.substr(0, filepath.find('.'));
+		std::string stem       = stem_w_dir.substr(stem_w_dir.rfind('/')+1, stem_w_dir.size());
+		std::string ext        = filepath.substr(filepath.find('.'), filepath.size());
 
 		std::string ofile      = dir + file_prefix + stem + file_suffix + ext;
 
@@ -1480,52 +1453,52 @@ class Data
 		if (params.out_file.find(gz_str) != std::string::npos) {
 			my_outf.push(boost_io::gzip_compressor());
 		}
-		my_outf.push(boost_io::file_sink(ofile.c_str()));
+		my_outf.push(boost_io::file_sink(ofile));
 		return ofile;
 	}
 };
 
 
-inline size_t numRows(const Eigen::MatrixXd &A) {
+inline std::size_t numRows(const Eigen::MatrixXd &A) {
 	return A.rows();
 }
 
-inline size_t numCols(const Eigen::MatrixXd &A) {
+inline std::size_t numCols(const Eigen::MatrixXd &A) {
 	return A.cols();
 }
 
-inline void setCol(Eigen::MatrixXd &A, const Eigen::VectorXd &v, size_t col) {
+inline void setCol(Eigen::MatrixXd &A, const Eigen::VectorXd &v, std::size_t col) {
 	assert(numRows(v) == numRows(A));
 	A.col(col) = v;
 }
 
-inline Eigen::VectorXd getCol(const Eigen::MatrixXd &A, size_t col) {
+inline Eigen::VectorXd getCol(const Eigen::MatrixXd &A, std::size_t col) {
 	return A.col(col);
 }
 
-inline void setCols(Eigen::MatrixXd &X, const std::vector<size_t> &cols, const Eigen::MatrixXd &values) {
-	assert(cols.size() == numCols(values));
-	assert(numRows(X) == numRows(values));
+//inline void setCols(Eigen::MatrixXd &X, const std::vector<std::size_t> &cols, const Eigen::MatrixXd &values) {
+//	assert(cols.size() == numCols(values));
+//	assert(numRows(X) == numRows(values));
+//
+//	if (cols.empty()) {
+//		return;
+//	}
+//
+//	for (std::size_t i = 0; i < cols.size(); i++) {
+//		setCol(X, getCol(values, i), cols[i]);
+//	}
+//}
 
-	if (cols.size() == 0) {
-		return;
-	}
-
-	for (size_t i = 0; i < cols.size(); i++) {
-		setCol(X, getCol(values, i), cols[i]);
-	}
-}
-
-inline Eigen::MatrixXd getCols(const Eigen::MatrixXd &X, const std::vector<size_t> &cols) {
+inline Eigen::MatrixXd getCols(const Eigen::MatrixXd &X, const std::vector<std::size_t> &cols) {
 	Eigen::MatrixXd result(numRows(X), cols.size());
 	assert(cols.size() == numCols(result));
 	assert(numRows(X) == numRows(result));
 
-	if (cols.size() == 0) {
+	if (cols.empty()) {
 		return result;
 	}
 
-	for (size_t i = 0; i < cols.size(); i++) {
+	for (std::size_t i = 0; i < cols.size(); i++) {
 		setCol(result, getCol(X, cols[i]), i);
 	}
 

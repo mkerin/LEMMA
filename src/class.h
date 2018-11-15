@@ -15,22 +15,21 @@ class parameters {
 		std::string dxteex_file, snpstats_file;
 		std::vector< std::string > rsid;
 		long int chunk_size, vb_iter_max;
-		int missing_code, n_gconf, n_thread, burnin_maxhyps, env_update_repeats;
-		int vb_chunk_size;
-		uint32_t start, end;
-		bool range, maf_lim, info_lim, test_2dof, select_snps, xtra_verbose;
-		bool geno_check, bgen_wildcard, mode_vb, use_vb_on_covars;
+		int missing_code, burnin_maxhyps, env_update_repeats, n_gconf;
+		unsigned int n_thread, vb_chunk_size;
+		std::uint32_t range_start, range_end;
+		bool range, maf_lim, info_lim, select_snps, xtra_verbose;
+		bool geno_check, mode_vb, use_vb_on_covars;
 		bool select_rsid, interaction_analysis, verbose, low_mem;
 		bool elbo_tol_set_by_user, alpha_tol_set_by_user, mode_empirical_bayes;
 		bool keep_constant_variants, user_requests_round1, scale_pheno;
-		bool mode_alternating_updates, mode_sgd, sgd_delay_set, sgd_forgetting_rate_set;
-		bool sgd_minibatch_size_set, rescale_eta, restrict_gamma_updates;
+		bool mode_alternating_updates;
+		bool rescale_eta, restrict_gamma_updates;
 		bool init_weights_with_snpwise_scan, flip_high_maf_variants, min_spike_diff_set;
 		bool mode_mog_prior_beta, mode_mog_prior_gam;
 		double min_maf, min_info, elbo_tol, alpha_tol, gamma_updates_thresh;
-		double sgd_delay, sgd_forgetting_rate, spike_diff_factor, min_spike_diff_factor;
+		double spike_diff_factor, min_spike_diff_factor;
 		std::vector < std::string > incl_sample_ids, gconf;
-		long int sgd_minibatch_size;
 
 	// constructors/destructors
 	parameters() : bgen_file("NULL"),
@@ -51,7 +50,6 @@ class parameters {
 		x_param_name("NULL"),
 		dxteex_file("NULL"),
 		env_weights_file("NULL") {
-		bgen_wildcard = false;
 		rescale_eta = false;
 		flip_high_maf_variants = true;
 		init_weights_with_snpwise_scan = false;
@@ -75,7 +73,6 @@ class parameters {
 		mode_vb = false;
 		mode_mog_prior_beta = false;
 		mode_mog_prior_gam = false;
-		test_2dof = true;
 		select_snps = false;
 		select_rsid = false;
 		geno_check = true; // check allele probs sum to 1 by default
@@ -87,14 +84,9 @@ class parameters {
 		keep_constant_variants = false;
 		user_requests_round1 = false;
 		scale_pheno = true;
-		mode_sgd = false;
-		sgd_forgetting_rate_set = false;
-		sgd_delay_set = false;
-		sgd_minibatch_size_set = false;
 	}
 
-	~parameters() {
-	}
+	~parameters() = default;
 };
 
 #endif

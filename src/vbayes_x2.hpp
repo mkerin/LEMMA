@@ -10,8 +10,8 @@ https://stackoverflow.com/questions/3283021/compile-a-standalone-static-executab
 #define VBAYES_X2_HPP
 
 #include <algorithm>
-#include <chrono>      // start/end time info
-#include <ctime>       // start/end time info
+#include <chrono>     // start/end time info
+#include <ctime>      // start/end time info
 #include <cstdint>    // uint32_t
 #include <iostream>
 #include <iterator>
@@ -38,7 +38,7 @@ namespace boost_m = boost::math;
 namespace boost_io = boost::iostreams;
 
 template <typename T>
-inline std::vector<int> validate_grid(const Eigen::MatrixXd &grid, const T n_var);
+inline std::vector<int> validate_grid(const Eigen::MatrixXd &grid, T n_var);
 inline Eigen::MatrixXd subset_matrix(const Eigen::MatrixXd &orig, const std::vector<int> &valid_points);
 
 class VBayesX2 {
@@ -53,19 +53,14 @@ public:
 	std::vector< std::string > env_names;
 
 	// Column order of hyperparameters in grid
-	const int sigma_ind   = 0;
-	const int sigma_b_ind = 1;
-	const int sigma_g_ind = 2;
-	const int lam_b_ind   = 3;
-	const int lam_g_ind   = 4;
 	const std::vector< std::string > hyps_names = {"sigma", "sigma_b", "sigma_g",
 												  "lambda_b", "lambda_g"};
 
 	// sizes
 	int           n_effects;             // no. interaction variables + 1
 	std::uint32_t n_samples;
-	int n_covar;
-	int n_env;
+	unsigned long n_covar;
+	unsigned long n_env;
 	std::uint32_t n_var;
 	std::uint32_t n_var2;
 	bool          random_params_init;
@@ -112,9 +107,6 @@ public:
 	std::chrono::system_clock::time_point time_check;
 	std::chrono::duration<double> elapsed_innerLoop;
 
-	// sgd
-	double minibatch_adjust;
-
 	explicit VBayesX2( Data& dat ) : X( dat.G ),
                             Y(Eigen::Map<Eigen::VectorXd>(dat.Y.data(), dat.Y.rows())),
                             C( dat.W ),
@@ -135,7 +127,7 @@ public:
 		env_names      = dat.env_names;
 		N              = (double) n_samples;
 
-		p.vb_chunk_size = (int) std::min((long int) p.vb_chunk_size, (long int) n_samples);
+		p.vb_chunk_size = (unsigned int) std::min((long int) p.vb_chunk_size, (long int) n_samples);
 
 		// Read environmental variables
 		E = dat.E;
@@ -153,7 +145,7 @@ public:
 			env_back_pass.push_back(n_env - ll - 1);
 		}
 
-		int n_segs = (n_var + p.vb_chunk_size - 1) / p.vb_chunk_size; // ceiling of n_var / chunk size
+		unsigned long n_segs = (n_var + p.vb_chunk_size - 1) / p.vb_chunk_size; // ceiling of n_var / chunk size
 		unsigned long n_chunks = n_segs * n_effects;
 
 		fwd_pass_chunks.resize(n_chunks);
@@ -253,17 +245,6 @@ public:
 		if(p.use_vb_on_covars){
 			Cty = C.transpose() * Y;
 		}
-
-		// sgd
-		if(p.mode_sgd){
-			minibatch_adjust = N / p.sgd_minibatch_size;
-			std::cout << "Using SVI with:" << std::endl;
-			std::cout << "delay: " << p.sgd_delay << std::endl;
-			std::cout << "minibatch size:" << p.sgd_minibatch_size << std::endl;
-			std::cout << "decay:" << p.sgd_forgetting_rate << std::endl;
-		} else {
-			minibatch_adjust = 1.0;
-		}
 	}
 
 	~VBayesX2(){
@@ -288,7 +269,7 @@ public:
 		if(run_round1){
 
 			std::vector< VbTracker > trackers(n_thread);
-			unsigned long r1_n_grid = r1_hyps_grid.rows();
+			long r1_n_grid = r1_hyps_grid.rows();
 			run_inference(r1_hyps_grid, true, 1, trackers);
 
 			if(p.verbose){
@@ -324,7 +305,7 @@ public:
 		boost_io::close(outf_inits);
 
 
-		unsigned long n_grid = r1_hyps_grid.rows();
+		long n_grid = r1_hyps_grid.rows();
 		std::vector< VbTracker > trackers(n_grid);
 		run_inference(hyps_grid, false, 2, trackers);
 
@@ -339,7 +320,7 @@ public:
                      std::vector<VbTracker>& trackers){
 		// Writes results from inference to trackers
 
-		unsigned long n_grid = hyps_grid.rows();
+		long n_grid = hyps_grid.rows();
 		int n_thread = 1; // Parrallel starts swapped for multithreaded inference
 
 		// Divide grid of hyperparameters into chunks for multithreading
@@ -363,7 +344,7 @@ public:
 	void runOuterLoop(const int round_index,
                       const Eigen::Ref<const Eigen::MatrixXd>& outer_hyps_grid,
                       const unsigned long n_grid,
-                      std::vector<int> grid_index_list,
+                      const std::vector<int>& grid_index_list,
                       const bool random_init,
                       std::vector<VbTracker>& all_tracker){
 
@@ -389,7 +370,7 @@ public:
 	void unpack_hyps(const Eigen::Ref<const Eigen::MatrixXd>& outer_hyps_grid,
 			std::vector<Hyps>& all_hyps){
 
-		unsigned long n_grid = outer_hyps_grid.rows();
+		long n_grid = outer_hyps_grid.rows();
 		for (int ii = 0; ii < n_grid; ii++) {
 			Hyps i_hyps;
 			if (n_effects == 2) {
@@ -615,7 +596,7 @@ public:
 
 			// Maximise hyps
 			if (round_index > 1 && p.mode_empirical_bayes) {
-				if (count >= p.burnin_maxhyps) wrapMaximiseHyps(all_hyps[nn], all_vp[nn]);
+				if (count >= p.burnin_maxhyps) maximiseHyps(all_hyps[nn], all_vp[nn]);
 
 				i_logw[nn] = calc_logw(all_hyps[nn], all_vp[nn]);
 
@@ -1679,10 +1660,10 @@ public:
                              const std::string& file_suffix){
 
 		std::string filepath   = p.out_file;
-		std::string dir        = filepath.substr(0, filepath.rfind("/")+1);
-		std::string stem_w_dir = filepath.substr(0, filepath.find("."));
-		std::string stem       = stem_w_dir.substr(stem_w_dir.rfind("/")+1, stem_w_dir.size());
-		std::string ext        = filepath.substr(filepath.find("."), filepath.size());
+		std::string dir        = filepath.substr(0, filepath.rfind('/')+1);
+		std::string stem_w_dir = filepath.substr(0, filepath.find('.'));
+		std::string stem       = stem_w_dir.substr(stem_w_dir.rfind('/')+1, stem_w_dir.size());
+		std::string ext        = filepath.substr(filepath.find('.'), filepath.size());
 
 		std::string ofile      = dir + file_prefix + stem + file_suffix + ext;
 
@@ -1691,7 +1672,7 @@ public:
 		if (p.out_file.find(gz_str) != std::string::npos) {
 			my_outf.push(boost_io::gzip_compressor());
 		}
-		my_outf.push(boost_io::file_sink(ofile.c_str()));
+		my_outf.push(boost_io::file_sink(ofile));
 		return ofile;
 	}
 
@@ -1699,7 +1680,7 @@ public:
 		// If grid contains hyperparameter values that aren't sensible then we exclude
 		assert(Y.rows() == n_samples);
 		assert(X.rows() == n_samples);
-		unsigned long n_grid = hyps_grid.rows();
+		long n_grid = hyps_grid.rows();
 
 		std::vector<int> valid_points, r1_valid_points;
 		valid_points        = validate_grid(hyps_grid, n_var);
@@ -1710,11 +1691,10 @@ public:
 		} else if(n_grid > valid_points.size()){
 			std::cout << "WARNING: " << n_grid - valid_points.size();
 			std::cout << " invalid grid points removed from hyps_grid." << std::endl;
-			n_grid = (int) valid_points.size();
 		}
 
 		// r1_hyps_grid assigned during constructor (ie before this function call)
-		int r1_n_grid   = r1_hyps_grid.rows();
+		long r1_n_grid   = r1_hyps_grid.rows();
 		r1_valid_points = validate_grid(r1_hyps_grid, n_var);
 		r1_hyps_grid    = subset_matrix(r1_hyps_grid, r1_valid_points);
 
@@ -1728,12 +1708,13 @@ public:
 
 	int parseLineRAM(char* line){
 		// This assumes that a digit will be found and the line ends in " Kb".
-		int i = strlen(line);
+		std::size_t i = strlen(line);
 		const char* p = line;
 		while (*p <'0' || *p > '9') p++;
 		line[i-3] = '\0';
-		i = atoi(p);
-		return i;
+		char* s_end;
+		int res = atoi(p);
+		return res;
 	}
 
 	int getValueRAM(){ //Note: this value is in KB!
@@ -1753,43 +1734,6 @@ public:
 #else
 		return -1;
 #endif
-	}
-
-	/********** SGD stuff; unfinished ************/
-	void wrapMaximiseHyps(Hyps& hyps, const VariationalParameters& vp){
-		// if(p.mode_sgd){
-		// 	Hyps t_hyps;
-		// 	maximiseHyps(t_hyps, vp);
-		// 	hyps.sigma = _update_param(hyps.sigma, t_hyps.sigma, vp);
-		// 	hyps.lambda = _update_param(hyps.lambda, t_hyps.lambda, vp);
-		// 	hyps.spike_var = _update_param(hyps.spike_var, t_hyps.spike_var, vp);
-		// 	hyps.slab_var = _update_param(hyps.slab_var, t_hyps.slab_var, vp);
-		// 	hyps.spike_relative_var = _update_param(hyps.spike_relative_var, t_hyps.spike_relative_var, vp);
-		// 	hyps.slab_relative_var = _update_param(hyps.slab_relative_var, t_hyps.slab_relative_var, vp);
-		// } else {
-			maximiseHyps(hyps, vp);
-		// }
-	}
-
-	double _update_param(double p_old, double p_new, const VariationalParameters& vp){
-		double res, rho = std::pow(vp.count + p.sgd_delay, -p.sgd_forgetting_rate);
-		if(p.mode_sgd){
-			res = (1 - rho) * p_old + rho * p_new;
-		} else {
-			res = p_new;
-		}
-		return(res);
-	}
-
-	Eigen::ArrayXd _update_param(Eigen::ArrayXd p_old, Eigen::ArrayXd p_new, const VariationalParameters& vp){
-		Eigen::ArrayXd res;
-		double rho = std::pow(vp.count + p.sgd_delay, -p.sgd_forgetting_rate);
-		if(p.mode_sgd){
-			res = (1 - rho) * p_old + rho * p_new;
-		} else {
-			res = p_new;
-		}
-		return(res);
 	}
 };
 
@@ -1819,7 +1763,7 @@ inline std::vector<int> validate_grid(const Eigen::MatrixXd &grid, const T n_var
 }
 
 inline Eigen::MatrixXd subset_matrix(const Eigen::MatrixXd &orig, const std::vector<int> &valid_points){
-	int n_cols = orig.cols(), n_rows = valid_points.size();
+	long n_cols = orig.cols(), n_rows = valid_points.size();
 	Eigen::MatrixXd subset(n_rows, n_cols);
 
 	for(int kk = 0; kk < n_rows; kk++){
