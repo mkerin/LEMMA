@@ -156,7 +156,6 @@ public:
 		back_pass_chunks.resize(n_chunks);
 		for(std::uint32_t kk = 0; kk < n_effects * n_var; kk++){
 			std::uint32_t ch_index = (kk < n_var ? kk / p.main_chunk_size : n_main_segs + (kk % n_var) / p.gxe_chunk_size);
-			std::cout << kk << " " << ch_index << std::endl;
 			fwd_pass_chunks[ch_index].push_back(kk);
 			back_pass_chunks[n_chunks - 1 - ch_index].push_back(kk);
 		}
@@ -164,21 +163,6 @@ public:
 		for (long ii = 0; ii < n_chunks; ii++){
 			std::reverse(back_pass_chunks[ii].begin(), back_pass_chunks[ii].end());
 		}
-
-		for (auto chunk : fwd_pass_chunks){
-			for (auto kk : chunk){
-				std::cout << kk << " ";
-			}
-			std::cout << std::endl;
-		}
-
-		for (auto chunk : back_pass_chunks){
-			for (auto kk : chunk){
-				std::cout << kk << " ";
-			}
-			std::cout << std::endl;
-		}
-
 
 		// non random initialisation
 		if(p.vb_init_file != "NULL"){

@@ -433,18 +433,7 @@ public:
 			calc_scaled_values();
 		}
 
-		if(params.n_thread == 1 && low_mem) {
-			double ww = intervalWidth;
-
-			Eigen::ArrayXd E = 0.5 * ww - compressed_dosage_means.segment(ch_start, ch_len).array();
-			Eigen::ArrayXd S = compressed_dosage_inv_sds.segment(ch_start, ch_len);
-			Eigen::ArrayXXd res;
-
-			res = ww * M.block(0, ch_start, nn, ch_len).cast<double>();
-			res.rowwise() += E.transpose();
-			res.rowwise() *= S.transpose();
-			D = res.matrix();
-		} else if (params.n_thread == 1) {
+		if(!low_mem) {
 			D = G.block(0, ch_start, nn, ch_len);
 		} else {
 			std::vector< std::uint32_t > chunk;
