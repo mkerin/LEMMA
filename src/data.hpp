@@ -604,78 +604,6 @@ class Data
 		}
 	}
 
-//	void read_grid_file( const std::string& filename,
-//						 Eigen::ArrayXXd& M,
-//						 std::vector< std::string >& col_names){
-//		// Used in mode_vb only.
-//		// Slightly different from read_txt_file in that I don't know
-//		// how many rows there will be and we can assume no missing values.
-//
-//		boost_io::filtering_istream fg;
-//		fg.push(boost_io::file_source(filename));
-//		if (!fg) {
-//			std::cout << "ERROR: " << filename << " not opened." << std::endl;
-//			std::exit(EXIT_FAILURE);
-//		}
-//
-//		// Read file twice to acertain number of lines
-//		std::string line;
-//		int n_grid = 0;
-//		getline(fg, line);
-//		while (getline(fg, line)) {
-//			n_grid++;
-//		}
-//		fg.reset();
-//		fg.push(boost_io::file_source(filename));
-//
-//		// Reading column names
-//		if (!getline(fg, line)) {
-//			std::cout << "ERROR: " << filename << " not read." << std::endl;
-//			std::exit(EXIT_FAILURE);
-//		}
-//		std::stringstream ss;
-//		std::string s;
-//		int n_cols = 0;
-//		ss.clear();
-//		ss.str(line);
-//		while (ss >> s) {
-//			++n_cols;
-//			col_names.push_back(s);
-//		}
-//		std::cout << " Detected " << n_cols << " column(s) from " << filename << std::endl;
-//
-//		// Write remainder of file to Eigen matrix M
-//		M.resize(n_grid, n_cols);
-//		int i = 0;
-//		double tmp_d;
-//		try {
-//			while (getline(fg, line)) {
-//				if (i >= n_grid) {
-//					throw std::runtime_error("ERROR: could not convert txt file (too many lines).");
-//				}
-//				ss.clear();
-//				ss.str(line);
-//				for (int k = 0; k < n_cols; k++) {
-//					std::string sss;
-//					ss >> sss;
-//					try{
-//						tmp_d = stod(sss);
-//					} catch (const std::invalid_argument &exc){
-//						std::cout << sss << " on line " << i << std::endl;
-//						throw;
-//					}
-//
-//					M(i, k) = tmp_d;
-//				}
-//				i++; // loop should end at i == n_grid
-//			}
-//			if (i < n_grid) {
-//				throw std::runtime_error("ERROR: could not convert txt file (too few lines).");
-//			}
-//		} catch (const std::exception &exc) {
-//			throw;
-//		}
-//	}
 
 	void read_vb_init_file(const std::string& filename,
                            Eigen::MatrixXd& M,
@@ -927,73 +855,6 @@ class Data
 		}
 	}
 
-//	void scale_matrix( Eigen::MatrixXd& M,
-//						unsigned long& n_cols){
-//		// Scale eigen matrix passed by reference.
-//		// Removes columns with zero variance.
-//		// Only call on matrixes which have been reduced to complete cases,
-//		// as no check for incomplete rows.
-//
-//		std::vector<std::size_t> keep;
-//		for (std::size_t k = 0; k < n_cols; k++) {
-//			double sigma = 0.0;
-//			double count = 0;
-//			for (int i = 0; i < n_samples; i++) {
-//				double val = M(i, k);
-//				sigma += val * val;
-//				count += 1;
-//			}
-//
-//			sigma = sqrt(sigma/(count - 1));
-//			if (sigma > 1e-12) {
-//				for (int i = 0; i < n_samples; i++) {
-//					M(i, k) /= sigma;
-//				}
-//				keep.push_back(k);
-//			}
-//		}
-//
-//		if (keep.size() != n_cols) {
-//			std::cout << " Removing " << (n_cols - keep.size())  << " columns with zero variance." << std::endl;
-//	// subset cols
-//	for (std::size_t i = 0; i < keep.size(); i++) {
-//		M.col(i) = M.col(keep[i]);
-//	}
-//	M.conservativeResize(M.rows(), keep.size());
-//
-//			n_cols = keep.size();
-//		}
-//
-//		if (n_cols == 0) {
-//			throw std::runtime_error("ERROR: No columns left with nonzero variance after scale_matrix()");
-//		}
-//	}
-
-//	void scale_matrix_conserved( Eigen::MatrixXd& M,
-//						int& n_cols){
-//		// Scale eigen matrix passed by reference.
-//		// Does not remove columns with zero variance.
-//		// Only call on matrixes which have been reduced to complete cases,
-//		// as no check for incomplete rows.
-//
-//		for (int k = 0; k < n_cols; k++) {
-//			double sigma = 0.0;
-//			double count = 0;
-//			for (int i = 0; i < n_samples; i++) {
-//				double val = M(i, k);
-//				sigma += val * val;
-//				count += 1;
-//			}
-//
-//			sigma = sqrt(sigma/(count - 1));
-//			if (sigma > 1e-12) {
-//				for (int i = 0; i < n_samples; i++) {
-//					M(i, k) /= sigma;
-//				}
-//			}
-//		}
-//	}
-
 	void read_pheno( ){
 		// Read phenotypes to Eigen matrix Y
 		if ( params.pheno_file != "NULL" ) {
@@ -1237,21 +1098,6 @@ class Data
 		}
 		std::cout << n_dxteex_computed << " computed from raw data, " << n_var - n_dxteex_computed << " read from file" << std::endl;
 	}
-
-//	void read_recombination_map( ){
-//		// Read covariates to Eigen matrix W
-//		int n_cols;
-//		std::vector<std::string> colnames;
-//		std::map<int, bool> missing_rows;
-//
-//		read_txt_file( params.recombination_file, R, n_cols, colnames, missing_rows );
-//
-//		std::vector<std::string> expected_colnames = {"position",
-//                                     "COMBINED_rate(cM/Mb)", "Genetic_Map(cM)"};
-//		assert(n_cols == 3);
-//		assert(colnames == expected_colnames);
-//
-//	}
 
 	void read_grids(){
 		// For use in vbayes object

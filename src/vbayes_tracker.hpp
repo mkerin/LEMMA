@@ -72,7 +72,7 @@ public:
 
 	void push_interim_param_values(const int& cnt,
                                   const int& n_effects,
-                                  const int& n_var,
+                                  const unsigned long& n_var,
                                   const VariationalParameters& vp,
                                   const GenotypeMatrix& X){
 		fstream_init(outf_inits, dir, "_params_iter" + std::to_string(cnt), true);
@@ -82,7 +82,7 @@ public:
 	}
 
 	void push_interim_covar_values(const int& cnt,
-                                  const int& n_covar,
+                                  const unsigned long& n_covar,
                                   const VariationalParameters& vp,
                                   const std::vector< std::string >& covar_names){
 		fstream_init(outf_inits, dir, "_covars_iter" + std::to_string(cnt), true);
@@ -101,8 +101,8 @@ public:
                                   const double& c_logw,
                                   const double& c_alpha_diff,
                                   const int& n_effects,
-                                  const int& n_var,
-                                  const int& n_env,
+                                  const unsigned long& n_var,
+                                  const unsigned long& n_env,
                                   const VariationalParameters& vp){
 		// Diagnostics + env-weights from latest vb iteration
 

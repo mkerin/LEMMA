@@ -2,6 +2,8 @@
 #define VARIATIONAL_PARAMETERS_HPP
 
 #include <iostream>
+#include "hyps.hpp"
+#include "class.h
 #include "tools/eigen3.3/Dense"
 
 // Store subset of Variational Parameters to be RAM efficient
@@ -53,12 +55,12 @@ public:
 	Eigen::ArrayXd s2_gam_sq;  // P x (E+1)
 
 	// Variational parameters for covariate main effects
-	Eigen::ArrayXd  muc;    // C x 1
-	Eigen::ArrayXd  sc_sq;  // C x 1
+	Eigen::ArrayXd muc;    // C x 1
+	Eigen::ArrayXd sc_sq;  // C x 1
 
 	// Variational params for weights
-	Eigen::ArrayXd  muw;      // n_env x 1
-	Eigen::ArrayXd  sw_sq;    // n_env x 1
+	Eigen::ArrayXd muw;      // n_env x 1
+	Eigen::ArrayXd sw_sq;    // n_env x 1
 
 	// Summary quantities
 	Eigen::Ref<Eigen::VectorXd> yx;      // N x 1
@@ -131,6 +133,23 @@ public:
 			for (int ll = 0; ll < n_env; ll++) {
 				EdZtZ += dXtEEX.col(ll * n_env + ll) * sw_sq(ll);
 			}
+		}
+	}
+
+	void calcVarqBeta(const Hyps& hyps,
+			const parameters& p){
+		// Variance of effect size beta under approximating distribution q(u, beta)
+
+		varB = alpha_beta * (s1_beta_sq + (1.0 - alpha_beta) * mu1_beta.square());
+		if(p.mode_mog_prior_beta){
+			varB += (1.0 - alpha_beta) * (s2_beta_sq + (alpha_beta) * mu2_beta.square());
+			varB -= 2.0 * alpha_beta * (1.0 - alpha_beta) * mu1_beta * mu2_beta;
+		}
+
+		varG = alpha_gam * (s1_gam_sq + (1.0 - alpha_gam) * mu1_gam.square());
+		if(p.mode_mog_prior_gam){
+			varG += (1.0 - alpha_gam) * (s2_gam_sq + (alpha_gam) * mu2_gam.square());
+			varG -= 2.0 * alpha_gam * (1.0 - alpha_gam) * mu1_gam * mu2_gam;
 		}
 	}
 };

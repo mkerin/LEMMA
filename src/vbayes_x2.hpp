@@ -517,27 +517,6 @@ public:
 	}
 
 	/********** VB update functions ************/
-	void rescanGWAS(const VariationalParametersLite& vp,
-			Eigen::Ref<Eigen::VectorXd> neglogp){
-		Eigen::VectorXd pheno = Y - vp.ym;
-		Eigen::VectorXd Z_kk(n_samples);
-
-		for(std::uint32_t jj = 0; jj < n_var; jj++ ){
-			Z_kk = X.col(jj).cwiseProduct(vp.eta);
-			double ztz_inv = 1.0 / Z_kk.dot(Z_kk);
-			double gam = Z_kk.dot(pheno) * ztz_inv;
-			double rss_null = (pheno - Z_kk * gam).squaredNorm();
-
-			// T-test of variant j
-			boost_m::students_t t_dist(n_samples - 1);
-			double main_se_j    = std::sqrt(rss_null / (N - 1.0) * ztz_inv);
-			double main_tstat_j = gam / main_se_j;
-			double main_pval_j  = 2 * boost_m::cdf(boost_m::complement(t_dist, fabs(main_tstat_j)));
-
-			neglogp(jj) = -1 * std::log10(main_pval_j);
-		}
-	}
-
 	void updateAllParams(const int& count,
 			             const int& round_index,
 			             std::vector<VariationalParameters>& all_vp,
@@ -647,51 +626,15 @@ public:
 			X.col_block3(chunk, D);
 
 			// Most work done here
-			// variant correlations with residuals
-//			Eigen::MatrixXd residual(n_samples, n_grid);
-//			if(n_effects == 1){
-//				// Main effects update in main effects only model
-//				for(int nn = 0; nn < n_grid; nn++) {
-//					residual.col(nn) = Y - all_vp[nn].ym;
-//				}
-//			} else if (ee == 0){
-//				// Main effects update in interaction model
-//				for(int nn = 0; nn < n_grid; nn++){
-//					residual.col(nn) = Y - all_vp[nn].ym - all_vp[nn].yx.cwiseProduct(all_vp[nn].eta);
-//				}
-//			} else {
-//				// Interaction effects
-//				for (int nn = 0; nn < n_grid; nn++){
-//					residual.col(nn) = (Y - all_vp[nn].ym).cwiseProduct(all_vp[nn].eta) - all_vp[nn].yx.cwiseProduct(all_vp[nn].eta_sq);
-//				}
-//			}
-//			AA = residual.transpose() * D; // n_grid x snp_batch
-			computeGeneResidualCorrelation(AA, D, all_vp, n_grid, ee);
-//			AA.transposeInPlace();                         // convert to snp_batch x n_grid
-
+			// AA is snp_batch x n_grid
+			AA = computeGeneResidualCorrelation(D, all_vp, n_grid, ee);
 
 			// Update parameters based on AA
 			for (int nn = 0; nn < n_grid; nn++) {
 				Eigen::Ref<Eigen::VectorXd> A = AA.col(nn);
 
-				adjustParams(nn, ee, ch, is_fwd_pass, chunk, iter_chunks, D, A, all_hyps, all_vp, rr_diff);
-//				if (ee == 0) {
-//
-//					// Update main effects
-//					unsigned long memoize_id = ((is_fwd_pass) ? ch : ch + iter_chunks.size());
-//					if (D_correlations.count(memoize_id) == 0) {
-//						D_correlations[memoize_id] = D.transpose() * D;
-//					}
-//
-//					_internal_updateAlphaMu_beta(chunk, A, D_correlations[memoize_id], D, all_hyps[nn], all_vp[nn], rr_diff.col(nn));
-//				} else {
-//
-//					// Update interaction effects
-//					Eigen::MatrixXd D_corr;
-//					D_corr = D.transpose() * all_vp[nn].eta_sq.asDiagonal() * D;
-//
-//					_internal_updateAlphaMu_gam(chunk, A, D_corr, D, all_hyps[nn], all_vp[nn], rr_diff.col(nn));
-//				}
+				unsigned long memoize_id = ((is_fwd_pass) ? ch : ch + iter_chunks.size());
+				adjustParams(nn, memoize_id, chunk, D, A, all_hyps, all_vp, rr_diff);
 			}
 
 			// Update residuals
@@ -704,25 +647,22 @@ public:
 
 		for (int nn = 0; nn < n_grid; nn++){
 			// update summary quantity
-			calcVarqBeta(all_hyps[nn], all_vp[nn], all_vp[nn].varB, all_vp[nn].varG);
+			all_vp[nn].calcVarqBeta(all_hyps[nn], p);
 		}
 	}
 
-	void adjustParams(const int& nn,
-			const int& ee,
-			const std::uint32_t& ch,
-			const bool& is_fwd_pass,
+	void adjustParams(const int& nn, const unsigned long& memoize_id,
 			const std::vector<std::uint32_t>& chunk,
-			const std::vector<std::vector<std::uint32_t>>& iter_chunks,
 			const Eigen::Ref<const Eigen::MatrixXd>& D,
 			const Eigen::Ref<const Eigen::VectorXd>& A,
 			const std::vector<Hyps>& all_hyps,
 			std::vector<VariationalParameters>& all_vp,
 			Eigen::Ref<Eigen::MatrixXd> rr_diff){
+
+		int ee                 = chunk[0] / n_var;
 		if (ee == 0) {
 
 			// Update main effects
-			unsigned long memoize_id = ((is_fwd_pass) ? ch : ch + iter_chunks.size());
 			if (D_correlations.count(memoize_id) == 0) {
 				if(p.n_thread == 1) {
 					Eigen::MatrixXd D_corr(p.main_chunk_size, p.main_chunk_size);
@@ -750,39 +690,27 @@ public:
 		}
 	}
 
-	void computeGeneResidualCorrelation(Eigen::Ref<Eigen::MatrixXd> AA,
-			const Eigen::Ref<const Eigen::MatrixXd>& D,
+	Eigen::MatrixXd computeGeneResidualCorrelation(const Eigen::Ref<const Eigen::MatrixXd>& D,
 			const std::vector<VariationalParameters>& all_vp,
 			const long& n_grid,
 			const int& ee){
 		// Most work done here
 		// variant correlations with residuals
-		 Eigen::MatrixXd res;
+		Eigen::MatrixXd res;
 		Eigen::MatrixXd residual(n_samples, n_grid);
 		if(n_effects == 1){
 			// Main effects update in main effects only model
-//			for(int nn = 0; nn < n_grid; nn++) {
-//				residual.col(nn) = Y - all_vp[nn].ym;
-//			}
 			res.noalias() = (YY - YM).transpose() * D;
 			res.transposeInPlace();
 		} else if (ee == 0){
 			// Main effects update in interaction model
-//			for(int nn = 0; nn < n_grid; nn++){
-//				residual.col(nn) = Y - all_vp[nn].ym - all_vp[nn].yx.cwiseProduct(all_vp[nn].eta);
-//
-//			}
 			res.noalias() = (YY - YM - YX.cwiseProduct(ETA)).transpose() * D;
 			res.transposeInPlace();
 		} else {
 			// Interaction effects
-//			for (int nn = 0; nn < n_grid; nn++){
-//				residual.col(nn) = (Y - all_vp[nn].ym).cwiseProduct(all_vp[nn].eta) - all_vp[nn].yx.cwiseProduct(all_vp[nn].eta_sq);
-//			}
-			 res.noalias() = D.transpose() * ((YY - YM).cwiseProduct(ETA) - YX.cwiseProduct(ETA_SQ));
+			res.noalias() = D.transpose() * ((YY - YM).cwiseProduct(ETA) - YX.cwiseProduct(ETA_SQ));
 		}
-//		AA = (residual.transpose() * D).transpose(); // n_grid x snp_batch
-		AA = res;
+		return(res); // n_grid x snp_batch
 	}
 
 	void _internal_updateAlphaMu_beta(const std::vector< std::uint32_t >& iter_chunk,
@@ -942,7 +870,7 @@ public:
 
 		vp.varB.resize(n_var);
 		vp.varG.resize(n_var);
-		calcVarqBeta(hyps, vp, vp.varB, vp.varG);
+		vp.calcVarqBeta(hyps, p);
 
 		// for covars
 		if(p.use_vb_on_covars){
@@ -1175,6 +1103,26 @@ public:
 		}
 	}
 
+	void rescanGWAS(const VariationalParametersLite& vp,
+					Eigen::Ref<Eigen::VectorXd> neglogp){
+		Eigen::VectorXd pheno = Y - vp.ym;
+		Eigen::VectorXd Z_kk(n_samples);
+
+		for(std::uint32_t jj = 0; jj < n_var; jj++ ){
+			Z_kk = X.col(jj).cwiseProduct(vp.eta);
+			double ztz_inv = 1.0 / Z_kk.dot(Z_kk);
+			double gam = Z_kk.dot(pheno) * ztz_inv;
+			double rss_null = (pheno - Z_kk * gam).squaredNorm();
+
+			// T-test of variant j
+			boost_m::students_t t_dist(n_samples - 1);
+			double main_se_j    = std::sqrt(rss_null / (N - 1.0) * ztz_inv);
+			double main_tstat_j = gam / main_se_j;
+			double main_pval_j  = 2 * boost_m::cdf(boost_m::complement(t_dist, fabs(main_tstat_j)));
+
+			neglogp(jj) = -1 * std::log10(main_pval_j);
+		}
+	}
 	/********** Helper functions ************/
 	void print_time_check(){
 		auto now = std::chrono::system_clock::now();
@@ -1324,27 +1272,6 @@ public:
 		if(nonfinite_count > 0){
 			std::cout << "WARNING: " << nonfinite_count << " grid points returned non-finite ELBO.";
 			std::cout << "Skipping these when producing posterior estimates.";
-		}
-	}
-
-	void calcVarqBeta(const Hyps& hyps,
-                      const VariationalParameters& vp,
-                      Eigen::Ref<Eigen::ArrayXd> varB,
-					  Eigen::Ref<Eigen::ArrayXd> varG){
-		// Variance of effect size beta under approximating distribution q(u, beta)
-		assert(varB.rows() == n_var);
-		assert(varG.rows() == n_var);
-
-		varB = vp.alpha_beta * (vp.s1_beta_sq + (1.0 - vp.alpha_beta) * vp.mu1_beta.square());
-		if(p.mode_mog_prior_beta){
-			varB += (1.0 - vp.alpha_beta) * (vp.s2_beta_sq + (vp.alpha_beta) * vp.mu2_beta.square());
-			varB -= 2.0 * vp.alpha_beta * (1.0 - vp.alpha_beta) * vp.mu1_beta * vp.mu2_beta;
-		}
-
-		varG = vp.alpha_gam * (vp.s1_gam_sq + (1.0 - vp.alpha_gam) * vp.mu1_gam.square());
-		if(p.mode_mog_prior_gam){
-			varG += (1.0 - vp.alpha_gam) * (vp.s2_gam_sq + (vp.alpha_gam) * vp.mu2_gam.square());
-			varG -= 2.0 * vp.alpha_gam * (1.0 - vp.alpha_gam) * vp.mu1_gam * vp.mu2_gam;
 		}
 	}
 
