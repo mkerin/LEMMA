@@ -89,8 +89,7 @@ public:
 	Eigen::MatrixXd hyps_grid;
 
 	// Global location of y_m = E[X beta] and y_x = E[X gamma]
-	Eigen::MatrixXd YX;
-	Eigen::MatrixXd YM;
+	Eigen::MatrixXd YY, YX, YM, ETA, ETA_SQ;
 
 	// genome wide scan computed upstream
 	Eigen::ArrayXXd& snpstats;
@@ -489,20 +488,26 @@ public:
 		unsigned long n_grid = all_hyps.size();
 
 		// Init global locations YM YX
+		YY.resize(n_samples, n_grid);
 		YM.resize(n_samples, n_grid);
-		YX.resize(n_samples, n_grid);
 		for (int nn = 0; nn < n_grid; nn++){
 			YM.col(nn) = vp_init.ym;
+			YY.col(nn) = Y;
 		}
 		if (n_effects > 1){
+			YX.resize(n_samples, n_grid);
+			ETA.resize(n_samples, n_grid);
+			ETA_SQ.resize(n_samples, n_grid);
 			for (int nn = 0; nn < n_grid; nn++){
 				YX.col(nn) = vp_init.yx;
+				ETA.col(nn) = vp_init.eta;
+				ETA_SQ.col(nn) = vp_init.eta_sq;
 			}
 		}
 
 		// Init variational params
 		for (int nn = 0; nn < n_grid; nn++){
-			VariationalParameters vp(YM.col(nn), YX.col(nn));
+			VariationalParameters vp(YM.col(nn), YX.col(nn), ETA.col(nn), ETA_SQ.col(nn));
 			vp.init_from_lite(vp_init);
 			updateSSq(all_hyps[nn], vp);
 			vp.calcEdZtZ(dXtEEX, n_env);
@@ -719,15 +724,27 @@ public:
 			// Update main effects
 			unsigned long memoize_id = ((is_fwd_pass) ? ch : ch + iter_chunks.size());
 			if (D_correlations.count(memoize_id) == 0) {
-				D_correlations[memoize_id] = D.transpose() * D;
+				if(p.n_thread == 1) {
+					Eigen::MatrixXd D_corr(p.main_chunk_size, p.main_chunk_size);
+					D_corr.triangularView<Eigen::StrictlyUpper>() = D.transpose() * D;
+					D_correlations[memoize_id] = D_corr;
+				} else {
+					D_correlations[memoize_id] = D.transpose() * D;
+				}
 			}
 
 			_internal_updateAlphaMu_beta(chunk, A, D_correlations[memoize_id], D, all_hyps[nn], all_vp[nn], rr_diff.col(nn));
 		} else {
 
 			// Update interaction effects
-			Eigen::MatrixXd D_corr;
-			D_corr.noalias() = D.transpose() * all_vp[nn].eta_sq.asDiagonal() * D;
+			Eigen::MatrixXd D_corr(p.gxe_chunk_size, p.gxe_chunk_size);
+			if(p.gxe_chunk_size > 1) {
+				if(p.n_thread == 1){
+					D_corr.triangularView<Eigen::StrictlyUpper>() = D.transpose() * all_vp[nn].eta_sq.asDiagonal() * D;
+				} else {
+					D_corr = D.transpose() * all_vp[nn].eta_sq.asDiagonal() * D;
+				}
+			}
 
 			_internal_updateAlphaMu_gam(chunk, A, D_corr, D, all_hyps[nn], all_vp[nn], rr_diff.col(nn));
 		}
@@ -740,24 +757,32 @@ public:
 			const int& ee){
 		// Most work done here
 		// variant correlations with residuals
+		 Eigen::MatrixXd res;
 		Eigen::MatrixXd residual(n_samples, n_grid);
 		if(n_effects == 1){
 			// Main effects update in main effects only model
-			for(int nn = 0; nn < n_grid; nn++) {
-				residual.col(nn) = Y - all_vp[nn].ym;
-			}
+//			for(int nn = 0; nn < n_grid; nn++) {
+//				residual.col(nn) = Y - all_vp[nn].ym;
+//			}
+			res.noalias() = (YY - YM).transpose() * D;
+			res.transposeInPlace();
 		} else if (ee == 0){
 			// Main effects update in interaction model
-			for(int nn = 0; nn < n_grid; nn++){
-				residual.col(nn) = Y - all_vp[nn].ym - all_vp[nn].yx.cwiseProduct(all_vp[nn].eta);
-			}
+//			for(int nn = 0; nn < n_grid; nn++){
+//				residual.col(nn) = Y - all_vp[nn].ym - all_vp[nn].yx.cwiseProduct(all_vp[nn].eta);
+//
+//			}
+			res.noalias() = (YY - YM - YX.cwiseProduct(ETA)).transpose() * D;
+			res.transposeInPlace();
 		} else {
 			// Interaction effects
-			for (int nn = 0; nn < n_grid; nn++){
-				residual.col(nn) = (Y - all_vp[nn].ym).cwiseProduct(all_vp[nn].eta) - all_vp[nn].yx.cwiseProduct(all_vp[nn].eta_sq);
-			}
+//			for (int nn = 0; nn < n_grid; nn++){
+//				residual.col(nn) = (Y - all_vp[nn].ym).cwiseProduct(all_vp[nn].eta) - all_vp[nn].yx.cwiseProduct(all_vp[nn].eta_sq);
+//			}
+			 res.noalias() = D.transpose() * ((YY - YM).cwiseProduct(ETA) - YX.cwiseProduct(ETA_SQ));
 		}
-		AA = (residual.transpose() * D).transpose(); // n_grid x snp_batch
+//		AA = (residual.transpose() * D).transpose(); // n_grid x snp_batch
+		AA = res;
 	}
 
 	void _internal_updateAlphaMu_beta(const std::vector< std::uint32_t >& iter_chunk,
@@ -796,7 +821,7 @@ public:
 			if(p.mode_mog_prior_beta) vp.s2_beta_sq(jj) /= (hyps.spike_relative_var(ee) * (N-1) + 1);
 
 			// Update mu
-			double offset = rr_k(ii) * D_corr(ii, ii);
+			double offset = rr_k(ii) * (N-1.0);
 			for (int mm = 0; mm < ii; mm++){
 				offset -= rr_k_diff(mm, 0) * D_corr(mm, ii);
 			}
@@ -858,7 +883,7 @@ public:
 			if(p.mode_mog_prior_gam) vp.s2_gam_sq(jj) /= (hyps.spike_relative_var(ee) * vp.EdZtZ(jj) + 1);
 
 			// Update mu
-			double offset = rr_k(ii) * D_corr(ii, ii);
+			double offset = rr_k(ii) * vp.EdZtZ(jj);
 			for (int mm = 0; mm < ii; mm++){
 				offset -= rr_k_diff(mm, 0) * D_corr(mm, ii);
 			}

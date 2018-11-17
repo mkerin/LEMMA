@@ -3,6 +3,7 @@
 Changes:
 - Only a single thread used to decompress cols.
 - vb block size for main effects set to 64. gxe effects allowed to be tuned.
+- Only compute StrictlyUpper triangular part of snp corr matrix for param adjustment (note with Eigen this is not multithreaded!)
 
 # Version 0.10.1
 

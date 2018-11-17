@@ -63,8 +63,8 @@ public:
 	// Summary quantities
 	Eigen::Ref<Eigen::VectorXd> yx;      // N x 1
 	Eigen::Ref<Eigen::VectorXd> ym;      // N x 1
-	Eigen::VectorXd eta;     // expected value of matrix product E x w
-	Eigen::VectorXd eta_sq;  // expected value (E x w) cdot (E x w)
+	Eigen::Ref<Eigen::VectorXd> eta;     // expected value of matrix product E x w
+	Eigen::Ref<Eigen::VectorXd> eta_sq;  // expected value (E x w) cdot (E x w)
 	Eigen::ArrayXd  EdZtZ;   // expectation of the diagonal of Z^t Z
 	Eigen::ArrayXd varB;    // variance of beta, gamma under approximating distn
 	Eigen::ArrayXd varG;    // variance of beta, gamma under approximating distn
@@ -74,7 +74,10 @@ public:
 	long int count;
 
 	VariationalParameters(Eigen::Ref<Eigen::VectorXd> my_ym,
-			Eigen::Ref<Eigen::VectorXd> my_yx) : yx(my_yx), ym(my_ym){};
+			Eigen::Ref<Eigen::VectorXd> my_yx,
+			Eigen::Ref<Eigen::VectorXd> my_eta,
+			Eigen::Ref<Eigen::VectorXd> my_eta_sq) : yx(my_yx), ym(my_ym),
+				eta(my_eta), eta_sq(my_eta_sq){};
 	~VariationalParameters(){};
 
 	void init_from_lite(const VariationalParametersLite& init) {
@@ -91,9 +94,6 @@ public:
 
 		count = 0;
 		muw   = init.muw;
-
-		eta    = init.eta;
-		eta_sq = init.eta_sq;
 	}
 
 	VariationalParametersLite convert_to_lite(){

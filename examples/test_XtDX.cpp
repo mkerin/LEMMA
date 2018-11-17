@@ -95,5 +95,23 @@ int main() {
 		std::cout << std::endl;
 	}
 
+	// Upper triangular
+	for (int th = 1; th < 17; th++){
+		Eigen::setNbThreads(th);
+		std::cout << th << " ";
+		// MyTimer tt2("10 repeats takes: %ts \n");
+		for (int ss = 0; ss < 20; ss++){
+			auto start = std::chrono::system_clock::now();
+			for (int kk = 0; kk < 5; kk++){
+				res.triangularView<Eigen::Upper>() = X.transpose() * D.asDiagonal() * X;
+				res2 += res(0, 0);
+			}
+			auto end = std::chrono::system_clock::now();
+			auto elapsed = end - start;
+			std::cout << elapsed.count() << " ";
+		}
+		std::cout << std::endl;
+	}
+
 	return 0;
 }

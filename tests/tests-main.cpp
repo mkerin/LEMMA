@@ -84,7 +84,22 @@ TEST_CASE( "Algebra in Eigen3" ) {
 		CHECK(X.rows() == 3);
 		CHECK(X.cols() == 1);
 		CHECK(X(0, 0) == 2);
+	}
 
+	SECTION("selfAdjoit views"){
+		Eigen::MatrixXd m3(3, 3);
+		m3.triangularView<Eigen::StrictlyUpper>() = X.transpose() * X;
+		std::cout << m3 << std::endl;
+		CHECK(m3(0, 1) == 78);
+	}
+
+	SECTION("colwise subtraction between vector and matrix"){
+		Eigen::MatrixXd res;
+		res = -1*(X.colwise() - v1);
+		std::cout << res << std::endl;
+		CHECK(res(0, 0) == 0);
+		CHECK(res.rows() == 3);
+		CHECK(res.cols() == 3);
 	}
 }
 
