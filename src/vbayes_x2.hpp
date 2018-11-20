@@ -21,9 +21,9 @@ https://stackoverflow.com/questions/3283021/compile-a-standalone-static-executab
 #include "sys/types.h"
 #include "class.h"
 #include "data.hpp"
-#include "misc_utils.hpp"
 #include "my_timer.hpp"
-#include "utils.hpp"  // sigmoid
+#include "utils.hpp"
+#include "file_streaming.hpp"
 #include "variational_parameters.hpp"
 #include "vbayes_tracker.hpp"
 #include "hyps.hpp"
@@ -79,17 +79,18 @@ public:
 	std::map<unsigned long, Eigen::MatrixXd> D_correlations; //We can keep D^t D for the main effects
 
 	// Data
-	GenotypeMatrix& X;
-	Eigen::VectorXd Y;          // residual phenotype matrix
+	GenotypeMatrix&  X;
+	EigenDataVector  Y;          // residual phenotype matrix
+	EigenDataArrayX  Cty;         // vector of W^T x y where C the matrix of covariates
+	EigenDataArrayXX E;          // matrix of variables used for GxE interactions
+	EigenDataMatrix& C;          // matrix of covariates (superset of GxE variables)
+
 	Eigen::ArrayXXd& dXtEEX;     // P x n_env^2; col (l * n_env + m) is the diagonal of X^T * diag(E_l * E_m) * X
-	Eigen::ArrayXd  Cty;         // vector of W^T x y where C the matrix of covariates
-	Eigen::ArrayXXd E;          // matrix of variables used for GxE interactions
-	Eigen::MatrixXd& C;          // matrix of covariates (superset of GxE variables)
 	Eigen::MatrixXd r1_hyps_grid;
 	Eigen::MatrixXd hyps_grid;
 
 	// Global location of y_m = E[X beta] and y_x = E[X gamma]
-	Eigen::MatrixXd YY, YX, YM, ETA, ETA_SQ;
+	EigenDataMatrix YY, YX, YM, ETA, ETA_SQ;
 
 	// genome wide scan computed upstream
 	Eigen::ArrayXXd& snpstats;
@@ -107,7 +108,7 @@ public:
 	std::chrono::duration<double> elapsed_innerLoop;
 
 	explicit VBayesX2( Data& dat ) : X( dat.G ),
-                            Y(Eigen::Map<Eigen::VectorXd>(dat.Y.data(), dat.Y.rows())),
+                            Y(Eigen::Map<EigenDataVector>(dat.Y.data(), dat.Y.rows())),
                             C( dat.W ),
                             dXtEEX( dat.dXtEEX ),
                             snpstats( dat.snpstats ),
@@ -205,7 +206,12 @@ public:
 				vp_init.muw.resize(n_env);
 				vp_init.muw     = 1.0 / (double) n_env;
 			}
+			// cast used if DATA_AS_FLOAT
+#ifdef DATA_AS_FLOAT
+			vp_init.eta     = E.matrix() * vp_init.muw.matrix().cast<float>();
+#else
 			vp_init.eta     = E.matrix() * vp_init.muw.matrix();
+#endif
 			vp_init.eta_sq  = vp_init.eta.array().square();
 
 			// ym, yx
@@ -404,7 +410,7 @@ public:
 		std::vector<std::vector< double >> logw_updates(n_grid), alpha_diff_updates(n_grid);
 
 		for (int nn = 0; nn < n_grid; nn++){
-			i_logw[nn] = calc_logw(all_hyps[nn], all_vp[nn]);
+			i_logw[nn] = std::numeric_limits<double>::min();
 			logw_updates[nn].push_back(i_logw[nn]);
 			converged[nn] = 0;
 
@@ -589,7 +595,8 @@ public:
 			vp.sc_sq(cc) = hyps.sigma * sigma_c / (sigma_c * (N - 1.0) + 1.0);
 
 			// Update mu
-			vp.muc(cc) = vp.sc_sq(cc) * (Cty(cc) - (vp.ym + vp.yx.cwiseProduct(vp.eta)).dot(C.col(cc)) + rr_k * (N - 1.0)) / hyps.sigma;
+			auto A = Cty(cc) - (vp.ym + vp.yx.cwiseProduct(vp.eta)).dot(C.col(cc));
+			vp.muc(cc) = vp.sc_sq(cc) * ( (double) A + rr_k * (N - 1.0)) / hyps.sigma;
 
 			// Update predicted effects
 			double rr_k_diff     = vp.muc(cc) - rr_k;
@@ -604,7 +611,7 @@ public:
 		// Divide updates into chunks
 		// Partition chunks amongst available threads
 		unsigned long n_grid = all_hyps.size();
-		Eigen::MatrixXd D;
+		EigenDataMatrix D;
 		Eigen::MatrixXd AA;     // snp_batch x n_grid
 		Eigen::MatrixXd rr_diff;                   // snp_batch x n_grid
 
@@ -627,7 +634,7 @@ public:
 
 			// Most work done here
 			// AA is snp_batch x n_grid
-			AA = computeGeneResidualCorrelation(D, all_vp, n_grid, ee);
+			AA = computeGeneResidualCorrelation(D, ee);
 
 			// Update parameters based on AA
 			for (int nn = 0; nn < n_grid; nn++) {
@@ -638,11 +645,19 @@ public:
 			}
 
 			// Update residuals
+#ifdef DATA_AS_FLOAT
+			if(ee == 0){
+				YM.noalias() += D * rr_diff.cast<float>();
+			} else {
+				YX.noalias() += D * rr_diff.cast<float>();
+			}
+#else
 			if(ee == 0){
 				YM.noalias() += D * rr_diff;
 			} else {
 				YX.noalias() += D * rr_diff;
 			}
+#endif
 		}
 
 		for (int nn = 0; nn < n_grid; nn++){
@@ -651,9 +666,10 @@ public:
 		}
 	}
 
+	template <typename Deriv>
 	void adjustParams(const int& nn, const unsigned long& memoize_id,
 			const std::vector<std::uint32_t>& chunk,
-			const Eigen::Ref<const Eigen::MatrixXd>& D,
+			const Eigen::MatrixBase<Deriv>& D,
 			const Eigen::Ref<const Eigen::VectorXd>& A,
 			const std::vector<Hyps>& all_hyps,
 			std::vector<VariationalParameters>& all_vp,
@@ -666,38 +682,38 @@ public:
 			if (D_correlations.count(memoize_id) == 0) {
 				if(p.n_thread == 1) {
 					Eigen::MatrixXd D_corr(p.main_chunk_size, p.main_chunk_size);
-					D_corr.triangularView<Eigen::StrictlyUpper>() = D.transpose() * D;
+					// cast only used if DATA_AS_FLOAT
+					D_corr.triangularView<Eigen::StrictlyUpper>() = (D.transpose() * D).template cast<double>();
 					D_correlations[memoize_id] = D_corr;
 				} else {
-					D_correlations[memoize_id] = D.transpose() * D;
+					D_correlations[memoize_id] = (D.transpose() * D).template cast<double>();
 				}
 			}
 
-			_internal_updateAlphaMu_beta(chunk, A, D_correlations[memoize_id], D, all_hyps[nn], all_vp[nn], rr_diff.col(nn));
+			_internal_updateAlphaMu_beta(chunk, A, D_correlations[memoize_id], all_hyps[nn], all_vp[nn], rr_diff.col(nn));
 		} else {
 
 			// Update interaction effects
 			Eigen::MatrixXd D_corr(p.gxe_chunk_size, p.gxe_chunk_size);
 			if(p.gxe_chunk_size > 1) {
 				if(p.n_thread == 1){
-					D_corr.triangularView<Eigen::StrictlyUpper>() = D.transpose() * all_vp[nn].eta_sq.asDiagonal() * D;
+					// cast only used if DATA_AS_FLOAT
+					D_corr.triangularView<Eigen::StrictlyUpper>() = (D.transpose() * all_vp[nn].eta_sq.asDiagonal() * D).template cast<double>();
 				} else {
-					D_corr = D.transpose() * all_vp[nn].eta_sq.asDiagonal() * D;
+					D_corr = (D.transpose() * all_vp[nn].eta_sq.asDiagonal() * D).template cast<double>();
 				}
 			}
 
-			_internal_updateAlphaMu_gam(chunk, A, D_corr, D, all_hyps[nn], all_vp[nn], rr_diff.col(nn));
+			_internal_updateAlphaMu_gam(chunk, A, D_corr, all_hyps[nn], all_vp[nn], rr_diff.col(nn));
 		}
 	}
 
-	Eigen::MatrixXd computeGeneResidualCorrelation(const Eigen::Ref<const Eigen::MatrixXd>& D,
-			const std::vector<VariationalParameters>& all_vp,
-			const long& n_grid,
+	template <typename EigenMat>
+	Eigen::MatrixXd computeGeneResidualCorrelation(const EigenMat& D,
 			const int& ee){
 		// Most work done here
 		// variant correlations with residuals
-		Eigen::MatrixXd res;
-		Eigen::MatrixXd residual(n_samples, n_grid);
+		EigenMat res;
 		if(n_effects == 1){
 			// Main effects update in main effects only model
 			res.noalias() = (YY - YM).transpose() * D;
@@ -710,13 +726,13 @@ public:
 			// Interaction effects
 			res.noalias() = D.transpose() * ((YY - YM).cwiseProduct(ETA) - YX.cwiseProduct(ETA_SQ));
 		}
-		return(res); // n_grid x snp_batch
+		// cast only used if DATA_AS_FLOAT
+		return(res.template cast<double>()); // n_grid x snp_batch
 	}
 
 	void _internal_updateAlphaMu_beta(const std::vector< std::uint32_t >& iter_chunk,
 									  const Eigen::Ref<const Eigen::VectorXd>& A,
 									  const Eigen::Ref<const Eigen::MatrixXd>& D_corr,
-									  const Eigen::Ref<const Eigen::MatrixXd>& D,
 									  const Hyps& hyps,
 									  VariationalParameters& vp,
 									  Eigen::Ref<Eigen::MatrixXd> rr_k_diff){
@@ -774,7 +790,6 @@ public:
 	void _internal_updateAlphaMu_gam(const std::vector< std::uint32_t >& iter_chunk,
 									 const Eigen::Ref<const Eigen::VectorXd>& A,
 									 const Eigen::Ref<const Eigen::MatrixXd>& D_corr,
-									 const Eigen::Ref<const Eigen::MatrixXd>& D,
 									 const Hyps& hyps,
 									 VariationalParameters& vp,
 									 Eigen::Ref<Eigen::MatrixXd> rr_k_diff){
@@ -999,17 +1014,21 @@ public:
 		}
 
 		// rescale weights such that vector eta has variance 1
-		if(p.rescale_eta){
-			double sigma = (vp.eta.array() - (vp.eta.array().sum() / N)).matrix().squaredNorm() / (N-1);
-			vp.muw /= std::sqrt(sigma);
-			vp.eta = E.matrix() * vp.muw.matrix();
-			double sigma2 = (vp.eta.array() - (vp.eta.array().sum() / N)).matrix().squaredNorm() / (N-1);
-			std::cout << "Eta rescaled; variance " << sigma << " -> variance " << sigma2 <<std::endl;
-		}
+//		if(p.rescale_eta){
+//			double sigma = (vp.eta.array() - (vp.eta.array().sum() / N)).matrix().squaredNorm() / (N-1);
+//			vp.muw /= std::sqrt(sigma);
+//			vp.eta = E.matrix() * vp.muw.matrix();
+//			double sigma2 = (vp.eta.array() - (vp.eta.array().sum() / N)).matrix().squaredNorm() / (N-1);
+//			std::cout << "Eta rescaled; variance " << sigma << " -> variance " << sigma2 <<std::endl;
+//		}
 
 		// Recompute eta_sq
 		vp.eta_sq  = vp.eta.array().square();
+#ifdef DATA_AS_FLOAT
+		vp.eta_sq += E.square().matrix() * vp.sw_sq.matrix().cast<float>();
+#else
 		vp.eta_sq += E.square().matrix() * vp.sw_sq.matrix();
+#endif
 
 		// Recompute expected value of diagonal of ZtZ
 		vp.calcEdZtZ(dXtEEX, n_env);
@@ -1105,11 +1124,12 @@ public:
 
 	void rescanGWAS(const VariationalParametersLite& vp,
 					Eigen::Ref<Eigen::VectorXd> neglogp){
-		Eigen::VectorXd pheno = Y - vp.ym;
+		// casts used is DATA_AS_FLOAT
+		Eigen::VectorXd pheno = (Y.cast<double>() - vp.ym.cast<double>());
 		Eigen::VectorXd Z_kk(n_samples);
 
 		for(std::uint32_t jj = 0; jj < n_var; jj++ ){
-			Z_kk = X.col(jj).cwiseProduct(vp.eta);
+			Z_kk = (X.col(jj).cast<double>().cwiseProduct(vp.eta.cast<double>()));
 			double ztz_inv = 1.0 / Z_kk.dot(Z_kk);
 			double gam = Z_kk.dot(pheno) * ztz_inv;
 			double rss_null = (pheno - Z_kk * gam).squaredNorm();
@@ -1175,9 +1195,13 @@ public:
 		// Gen predicted effects.
 		calcPredEffects(vp);
 
-		// Env weights
+		// Env weights - cast if DATA_AS_FLOAT
 		vp.muw     = 1.0 / (double) n_env;
+#ifdef DATA_AS_FLOAT
+		vp.eta     = E.matrix() * vp.muw.matrix().cast<float>();
+#else
 		vp.eta     = E.matrix() * vp.muw.matrix();
+#endif
 		vp.eta_sq  = vp.eta.array().square();
 		vp.calcEdZtZ(dXtEEX, n_env);
 	}
@@ -1192,7 +1216,11 @@ public:
 
 		vp.ym = X * rr_beta;
 		if(p.use_vb_on_covars){
+#ifdef DATA_AS_FLOAT
+			vp.ym += C * vp.muc.matrix().cast<float>();
+#else
 			vp.ym += C * vp.muc.matrix();
+#endif
 		}
 
 		if(n_effects > 1) {
@@ -1215,7 +1243,11 @@ public:
 
 		vp.ym = X * rr_beta;
 		if(p.use_vb_on_covars){
+#ifdef DATA_AS_FLOAT
+			vp.ym += C * vp.muc.matrix().cast<float>();
+#else
 			vp.ym += C * vp.muc.matrix();
+#endif
 		}
 
 		if(n_effects > 1) {

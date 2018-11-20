@@ -5,7 +5,6 @@
 #ifndef BGEN_PROG_MISC_UTILS_HPP
 #define BGEN_PROG_MISC_UTILS_HPP
 
-#include <iostream>
 #include <iomanip>
 #include <string>
 #include <vector>
@@ -14,8 +13,9 @@
 #include "variational_parameters.hpp"
 #include <boost/iostreams/filtering_stream.hpp>
 
-
 namespace boost_io = boost::iostreams;
+
+/***************** File writing *****************/
 
 
 void write_snp_stats_to_file(boost_io::filtering_ostream& ofile,
@@ -141,5 +141,6 @@ void write_snp_stats_to_file(boost_io::filtering_ostream& ofile,
 		ofile << std::endl;
 	}
 }
+
 
 #endif //BGEN_PROG_MISC_UTILS_HPP

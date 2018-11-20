@@ -3,16 +3,17 @@
 
 #include <iostream>
 #include "hyps.hpp"
-#include "class.h
+#include "utils.hpp"
+#include "class.h"
 #include "tools/eigen3.3/Dense"
 
 // Store subset of Variational Parameters to be RAM efficient
 struct VariationalParametersLite {
 	// Other quantities to track
-	Eigen::VectorXd yx;    // N x 1
-	Eigen::VectorXd ym;    // N x 1
-	Eigen::VectorXd eta;
-	Eigen::VectorXd eta_sq;
+	EigenDataVector yx;    // N x 1
+	EigenDataVector ym;    // N x 1
+	EigenDataVector eta;
+	EigenDataVector eta_sq;
 
 	// Variational parameters for slab
 	Eigen::ArrayXd alpha_beta; // P x (E+1)
@@ -63,10 +64,11 @@ public:
 	Eigen::ArrayXd sw_sq;    // n_env x 1
 
 	// Summary quantities
-	Eigen::Ref<Eigen::VectorXd> yx;      // N x 1
-	Eigen::Ref<Eigen::VectorXd> ym;      // N x 1
-	Eigen::Ref<Eigen::VectorXd> eta;     // expected value of matrix product E x w
-	Eigen::Ref<Eigen::VectorXd> eta_sq;  // expected value (E x w) cdot (E x w)
+	EigenRefDataVector yx;      // N x 1
+	EigenRefDataVector ym;      // N x 1
+	EigenRefDataVector eta;     // expected value of matrix product E x w
+	EigenRefDataVector eta_sq;  // expected value (E x w) cdot (E x w)
+
 	Eigen::ArrayXd  EdZtZ;   // expectation of the diagonal of Z^t Z
 	Eigen::ArrayXd varB;    // variance of beta, gamma under approximating distn
 	Eigen::ArrayXd varG;    // variance of beta, gamma under approximating distn
@@ -75,11 +77,19 @@ public:
 	// sgd
 	long int count;
 
+#ifdef DATA_AS_FLOAT
+	VariationalParameters(EigenRefDataVector my_ym,
+						  EigenRefDataVector my_yx,
+						  EigenRefDataVector my_eta,
+						  EigenRefDataVector my_eta_sq) : yx(my_yx), ym(my_ym),
+																   eta(my_eta), eta_sq(my_eta_sq){};
+#else
 	VariationalParameters(Eigen::Ref<Eigen::VectorXd> my_ym,
 			Eigen::Ref<Eigen::VectorXd> my_yx,
 			Eigen::Ref<Eigen::VectorXd> my_eta,
 			Eigen::Ref<Eigen::VectorXd> my_eta_sq) : yx(my_yx), ym(my_ym),
 				eta(my_eta), eta_sq(my_eta_sq){};
+#endif
 	~VariationalParameters(){};
 
 	void init_from_lite(const VariationalParametersLite& init) {

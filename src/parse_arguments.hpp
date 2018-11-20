@@ -162,6 +162,10 @@ void parse_arguments(parameters &p, int argc, char *argv[]) {
 		std::cout << "- OSX compatible" << std::endl;
 #endif
 
+#ifdef DATA_AS_FLOAT
+		std::cout << "- Data encoded as float" << std::endl;
+#endif
+
 		// For vectorise profiling
 		Eigen::VectorXi aa1 = Eigen::VectorXi::Random(256000);
 		Eigen::VectorXi aa2 = Eigen::VectorXi::Random(256000);

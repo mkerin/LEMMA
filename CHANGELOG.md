@@ -1,3 +1,13 @@
+# Version 0.10.3
+
+Changes:
+- DATA_AS_FLOAT implemented. Preliminary testing suggests this is a 2x speedup with small changes in accuracy
+- Initialise logw with numeric_limits::min()
+- interim outputs include low maintenance measure of wall clock time
+
+Bugfix:
+- removed circular dependancy between header files
+
 # Version 0.10.2
 
 Changes:

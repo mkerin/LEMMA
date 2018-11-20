@@ -61,7 +61,11 @@ public:
 	parameters params;
 
 	Eigen::Matrix<unsigned char, Eigen::Dynamic, Eigen::Dynamic> M; // used in low-mem mode
+#ifdef DATA_AS_FLOAT
+	Eigen::MatrixXf G; // used when not in low-mem node
+#else
 	Eigen::MatrixXd G; // used when not in low-mem node
+#endif
 
 	std::vector< int > chromosome;
 	std::vector< std::string > al_0, al_1, rsid;
@@ -145,6 +149,26 @@ public:
 		}
 	}
 
+#ifdef DATA_AS_FLOAT
+	// Eigen read column
+	template<typename T>
+	Eigen::VectorXf col(T jj){
+		assert(jj < pp);
+		Eigen::VectorXf vec(nn);
+		if(!scaling_performed){
+			calc_scaled_values();
+		}
+
+		if(low_mem){
+			vec = M.cast<float>().col(jj);
+			vec *= (intervalWidth * compressed_dosage_inv_sds[jj]);
+			vec.array() += (0.5 * intervalWidth - compressed_dosage_means[jj]) * compressed_dosage_inv_sds[jj];
+		} else {
+			vec = G.col(jj);
+		}
+		return vec;
+	}
+#else
 	// Eigen read column
 	template<typename T>
 	Eigen::VectorXd col(T jj){
@@ -155,33 +179,15 @@ public:
 		}
 
 		if(low_mem){
-
 			vec = M.cast<double>().col(jj);
-
 			vec *= (intervalWidth * compressed_dosage_inv_sds[jj]);
-			vec = vec.array() + (0.5 * intervalWidth - compressed_dosage_means[jj]) * compressed_dosage_inv_sds[jj];
+			vec.array() += (0.5 * intervalWidth - compressed_dosage_means[jj]) * compressed_dosage_inv_sds[jj];
 		} else {
 			vec = G.col(jj);
 		}
 		return vec;
 	}
-
-//	template<typename T>
-//	Eigen::VectorXf col_float(T jj){
-//		Eigen::VectorXf vec(nn);
-//		if(!scaling_performed){
-//			calc_scaled_values();
-//		}
-//
-//		if(low_mem){
-//				vec = M.cast<float>().col(jj);
-//			vec *= (intervalWidth * compressed_dosage_inv_sds[jj]);
-//			vec = vec.array() + (0.5 * intervalWidth - compressed_dosage_means[jj]) * compressed_dosage_inv_sds[jj];
-//		} else {
-//				vec = G.cast<float>().col(jj);
-//		}
-//		return vec;
-//	}
+#endif
 
 	// Eigen read column
 	template<typename T>
@@ -192,9 +198,25 @@ public:
 		}
 
 		if(low_mem){
-			for (Index ii = 0; ii < nn; ii++){
-				vec[ii] = (DecompressDosage(M(ii, jj)) - compressed_dosage_means[jj]) * compressed_dosage_inv_sds[jj];
-			}
+			vec = M.cast<double>().col(jj);
+			vec *= (intervalWidth * compressed_dosage_inv_sds[jj]);
+			vec.array() += (0.5 * intervalWidth - compressed_dosage_means[jj]) * compressed_dosage_inv_sds[jj];
+		} else {
+			vec = G.col(jj);
+		}
+	}
+
+	template<typename T>
+	void col(T jj, Eigen::Ref<Eigen::VectorXf> vec){
+		assert(jj < pp);
+		if(!scaling_performed){
+			calc_scaled_values();
+		}
+
+		if(low_mem){
+			vec = M.cast<float>().col(jj);
+			vec *= (intervalWidth * compressed_dosage_inv_sds[jj]);
+			vec.array() += (0.5 * intervalWidth - compressed_dosage_means[jj]) * compressed_dosage_inv_sds[jj];
 		} else {
 			vec = G.col(jj);
 		}
@@ -217,23 +239,83 @@ public:
 //	}
 
 	// Eigen matrix multiplication
+#ifdef DATA_AS_FLOAT
+	Eigen::VectorXf operator*(const Eigen::Ref<const Eigen::VectorXd>&  rhs){
+		if(!scaling_performed){
+			calc_scaled_values();
+		}
+
+		if(low_mem){
+			auto vec_total = rhs.sum() * intervalWidth * 0.5;
+			Eigen::VectorXf rhs_trans = rhs.cast<float>().cwiseProduct(compressed_dosage_inv_sds.cast<float>());
+			auto offset = rhs_trans.sum() * intervalWidth * 0.5;
+			offset -= rhs_trans.dot(compressed_dosage_means.cast<float>());
+			return ((M.cast<float>() * rhs_trans).array() * intervalWidth + offset).matrix();
+		} else {
+			return G * rhs.cast<float>();
+		}
+	}
+
+	Eigen::MatrixXf col_block(const std::uint32_t& ch_start,
+							  const int& ch_len){
+		if(!scaling_performed){
+			calc_scaled_values();
+		}
+
+		if(low_mem){
+			double ww = intervalWidth;
+
+			Eigen::ArrayXd  E = 0.5 * ww - compressed_dosage_means.segment(ch_start, ch_len).array();
+			Eigen::ArrayXd  S = compressed_dosage_inv_sds.segment(ch_start, ch_len);
+			Eigen::ArrayXXf res;
+
+			res = ww * M.block(0, ch_start, nn, ch_len).cast<float>();
+			res.rowwise() += E.transpose().cast<float>();
+			res.rowwise() *= S.transpose().cast<float>();
+			return res.matrix();
+		} else {
+			return G.block(0, ch_start, nn, ch_len);
+		}
+	}
+#else
 	Eigen::VectorXd operator*(const Eigen::Ref<const Eigen::VectorXd>&  rhs){
 		if(!scaling_performed){
 			calc_scaled_values();
 		}
 
 		if(low_mem){
-			double vec_total = rhs.sum() * intervalWidth * 0.5;
-
+			auto vec_total = rhs.sum() * intervalWidth * 0.5;
 			Eigen::VectorXd rhs_trans = rhs.cwiseProduct(compressed_dosage_inv_sds);
-			double offset = rhs_trans.sum() * intervalWidth * 0.5;
+			auto offset = rhs_trans.sum() * intervalWidth * 0.5;
 			offset -= compressed_dosage_means.dot(rhs_trans);
-
 			return ((M.cast<double>() * rhs_trans).array() * intervalWidth + offset).matrix();
 		} else {
 			return G * rhs;
 		}
 	}
+
+		Eigen::MatrixXd col_block(const std::uint32_t& ch_start,
+							  const int& ch_len){
+		if(!scaling_performed){
+			calc_scaled_values();
+		}
+
+		if(low_mem){
+			double ww = intervalWidth;
+
+			Eigen::ArrayXd  E = 0.5 * ww - compressed_dosage_means.segment(ch_start, ch_len).array();
+			Eigen::ArrayXd  S = compressed_dosage_inv_sds.segment(ch_start, ch_len);
+			Eigen::ArrayXXd res;
+
+			res = ww * M.block(0, ch_start, nn, ch_len).cast<double>();
+			res.rowwise() += E.transpose();
+			res.rowwise() *= S.transpose();
+			return res.matrix();
+		} else {
+			return G.block(0, ch_start, nn, ch_len);
+		}
+	}
+#endif
 
 //	// Eigen lhs matrix multiplication
 //	Eigen::VectorXd transpose_vector_multiply(const Eigen::Ref<const Eigen::VectorXd>& lhs){
@@ -256,30 +338,9 @@ public:
 //		}
 //	}
 
-	Eigen::MatrixXd col_block(const std::uint32_t& ch_start,
-							  const int& ch_len){
-		if(!scaling_performed){
-			calc_scaled_values();
-		}
-
-		if(low_mem){
-			double ww = intervalWidth;
-
-			Eigen::ArrayXd  E = 0.5 * ww - compressed_dosage_means.segment(ch_start, ch_len).array();
-			Eigen::ArrayXd  S = compressed_dosage_inv_sds.segment(ch_start, ch_len);
-			Eigen::ArrayXXd res;
-
-			res = ww * M.block(0, ch_start, nn, ch_len).cast<double>();
-			res.rowwise() += E.transpose();
-			res.rowwise() *= S.transpose();
-			return res.matrix();
-		} else {
-			return G.block(0, ch_start, nn, ch_len);
-		}
-	}
-
+	template <typename Deriv>
 	void col_block3(const std::vector< std::uint32_t>& chunk,
-					Eigen::Ref<Eigen::MatrixXd> D){
+					Eigen::MatrixBase<Deriv>& D){
 		if(!scaling_performed){
 			calc_scaled_values();
 		}
@@ -312,13 +373,15 @@ public:
 // #endif
 	}
 
+	template <typename Deriv>
 	void get_cols(const std::vector<int> &index,
 				  const std::vector<std::uint32_t> &iter_chunk,
-				  Eigen::Ref<Eigen::MatrixXd> D){
+				  Eigen::MatrixBase<Deriv>& D){
 		// D.col(ii) = X.col(chunk(ii))
 		for(int ii : index ) {
 			std::uint32_t jj = (iter_chunk[ii] % pp);
-			D.col(ii) = col(jj);
+//			D.col(ii) = col(jj);
+			col(jj, D.col(ii));
 		}
 	}
 

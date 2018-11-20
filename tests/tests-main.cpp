@@ -43,7 +43,7 @@ TEST_CASE( "Algebra in Eigen3" ) {
 		CHECK((v1.array() * v2.array()).matrix() == res);
 		CHECK(v1.cwiseProduct(v2) == res);
 	}
-	
+
 	SECTION("coefficient-wise subtraction between vectors"){
 		Eigen::VectorXd res(3);
 		res << 0, 1, 2;
@@ -55,7 +55,7 @@ TEST_CASE( "Algebra in Eigen3" ) {
 		res << 1, 2, 3;
 		CHECK(res.sum() == 6);
 	}
-	
+
 	SECTION("Sum of NaN returns NaN"){
 		Eigen::VectorXd res(3);
 		res << 1, std::numeric_limits<double>::quiet_NaN(), 3;
@@ -181,7 +181,11 @@ TEST_CASE( "Example 1: single-env" ){
 
         SECTION("Ex1. Explicitly checking updates"){
 			// Initialisation
+#ifdef DATA_AS_FLOAT
+			CHECK( (double)  VB.vp_init.ym(0) == Approx(0.0003200434));
+#else
 			CHECK(VB.vp_init.ym(0) == Approx(0.0003200476));
+#endif
 			CHECK(VB.vp_init.yx(0) == Approx(0.0081544079));
 			CHECK(VB.vp_init.eta(0) == Approx(-0.5894793969));
 
@@ -204,54 +208,15 @@ TEST_CASE( "Example 1: single-env" ){
 			// Ground zero as expected
 			CHECK(vp.alpha_beta(0) * vp.mu1_beta(0) == Approx(-0.00015854116408000002));
 			CHECK(data.Y(0,0) == Approx(-1.262491384814441));
+#ifdef DATA_AS_FLOAT
+			CHECK( (double) vp.ym(0) == Approx( 0.0003200434));
+#else
 			CHECK(vp.ym(0) == Approx(0.0003200476));
+#endif
 			CHECK(vp.yx(0) == Approx(0.0081544079));
 			CHECK(vp.eta(0) == Approx(-0.5894793969));
 
 			VB.updateAllParams(0, round_index, all_vp, all_hyps, logw_prev, logw_updates);
-
-			SECTION("A computed correctly"){
-				int ee = 0;
-				int n_effects = 2;
-				int n_grid = 2;
-				Eigen::MatrixXd D;
-				Eigen::Ref<Eigen::MatrixXd> Y = VB.Y;
-				std::vector< std::uint32_t > chunk = VB.fwd_pass_chunks[0];
-				unsigned long ch_len   = chunk.size();
-
-				// D is n_samples x snp_batch
-				if(D.cols() != ch_len){
-					D.resize(n_samples, ch_len);
-				}
-				VB.X.col_block3(chunk, D);
-
-				CHECK(D(0, 0) == Approx(1.8570984229));
-
-				// Most work done here
-				// variant correlations with residuals
-				Eigen::MatrixXd residual(n_samples, n_grid);
-				if(n_effects == 1){
-					// Main effects update in main effects only model
-					for(int nn = 0; nn < n_grid; nn++) {
-						residual.col(nn) = Y - all_vp[nn].ym;
-					}
-				} else if (ee == 0){
-					// Main effects update in interaction model
-					for(int nn = 0; nn < n_grid; nn++){
-						residual.col(nn) = Y - all_vp[nn].ym - all_vp[nn].yx.cwiseProduct(all_vp[nn].eta);
-					}
-				} else {
-					// Interaction effects
-					for (int nn = 0; nn < n_grid; nn++){
-						residual.col(nn) = (Y - all_vp[nn].ym).cwiseProduct(all_vp[nn].eta) - all_vp[nn].yx.cwiseProduct(all_vp[nn].eta_sq);
-					}
-				}
-				Eigen::MatrixXd AA = residual.transpose() * D; // n_grid x snp_batch
-				AA.transposeInPlace();                         // convert to snp_batch x n_grid
-
-//				CHECK(residual(0, 0) == Approx(-1.2580045769624202));
-//				CHECK(AA(0, 0) == Approx(-9.76793));
-			}
 
 			CHECK(VB.X.col(0)(0) == Approx(1.8570984229));
 			CHECK(vp.s1_beta_sq(0) == Approx(0.0031087381));
@@ -609,35 +574,31 @@ TEST_CASE( "Example 6: single-env w MoG + hyps max" ){
 			Eigen::VectorXd gam_neglogp(VB.n_var);
 			VB.rescanGWAS(trackers[1].vp, gam_neglogp);
 
+			// Eigen::VectorXd pheno = VB.Y - trackers[1].vp.ym;
+			// Eigen::VectorXd Z_kk(n_samples);
+			// int jj = 1;
+			// Z_kk = VB.X.col(jj).cwiseProduct(trackers[1].vp.eta);
+			// double ztz_inv = 1.0 / Z_kk.dot(Z_kk);
+			// double gam = Z_kk.dot(pheno) * ztz_inv;
+			// double rss_null = (pheno - Z_kk * gam).squaredNorm();
+			//
+			// // T-test of variant j
+			// boost_m::students_t t_dist(n_samples - 1);
+			// double main_se_j    = std::sqrt(rss_null / (VB.N - 1.0) * ztz_inv);
+			// double main_tstat_j = gam / main_se_j;
+			// double main_pval_j  = 2 * boost_m::cdf(boost_m::complement(t_dist, fabs(main_tstat_j)));
+			//
+			// double neglogp_j = -1 * std::log10(main_pval_j);
+
 			CHECK(gam_neglogp[1] == Approx(0.2392402716));
-
-			Eigen::VectorXd pheno = VB.Y - trackers[1].vp.ym;
-			Eigen::VectorXd Z_kk(n_samples);
-
-			CHECK(pheno[0] == Approx(-0.4439596651));
-
-
-			int jj = 1;
-			Z_kk = VB.X.col(jj).cwiseProduct(trackers[1].vp.eta);
-			double ztz_inv = 1.0 / Z_kk.dot(Z_kk);
-			double gam = Z_kk.dot(pheno) * ztz_inv;
-			double rss_null = (pheno - Z_kk * gam).squaredNorm();
-
-			// T-test of variant j
-			boost_m::students_t t_dist(n_samples - 1);
-			double main_se_j    = std::sqrt(rss_null / (VB.N - 1.0) * ztz_inv);
-			double main_tstat_j = gam / main_se_j;
-			double main_pval_j  = 2 * boost_m::cdf(boost_m::complement(t_dist, fabs(main_tstat_j)));
-
-			double neglogp_j = -1 * std::log10(main_pval_j);
-
-			CHECK(VB.X.col(jj)[0] == Approx(0.7465835328));
-			CHECK(Z_kk[0] == Approx(-0.44009531));
-			CHECK(gam == Approx(0.0223947128));
-			CHECK(main_pval_j == Approx(0.576447458));
-			CHECK(main_tstat_j == Approx(0.5623409325));
-			CHECK(main_se_j == Approx(0.0398240845));
-			CHECK(rss_null == Approx(7.9181184549));
+			// CHECK(pheno[0] == Approx(-0.4439596651));
+			// CHECK(VB.X.col(jj)[0] == Approx(0.7465835328));
+			// CHECK(Z_kk[0] == Approx(-0.44009531));
+			// CHECK(gam == Approx(0.0223947128));
+			// CHECK(main_pval_j == Approx(0.576447458));
+			// CHECK(main_tstat_j == Approx(0.5623409325));
+			// CHECK(main_se_j == Approx(0.0398240845));
+			// CHECK(rss_null == Approx(7.9181184549));
 		}
 
 		std::vector< VbTracker > trackers(VB.hyps_grid.rows());
@@ -658,4 +619,3 @@ TEST_CASE( "Example 6: single-env w MoG + hyps max" ){
 		}
 	}
 }
-

@@ -8,6 +8,7 @@
 #ifndef VBAYES_TRACKER_HPP
 #define VBAYES_TRACKER_HPP
 
+#include <chrono>
 #include <iostream>
 #include <iomanip>
 #include <stdexcept>
@@ -19,7 +20,8 @@
 #include "class.h"
 #include "genotype_matrix.hpp"
 #include "hyps.hpp"
-#include "misc_utils.hpp"
+#include "utils.hpp"
+#include "file_streaming.hpp"
 #include "variational_parameters.hpp"
 #include "tools/eigen3.3/Dense"
 
@@ -50,6 +52,7 @@ public:
 	std::string main_out_file;
 	bool allow_interim_push;
 
+	std::chrono::system_clock::time_point time_check;
 
 	VbTracker(){
 		allow_interim_push = false;
@@ -78,7 +81,6 @@ public:
 		fstream_init(outf_inits, dir, "_params_iter" + std::to_string(cnt), true);
 		write_snp_stats_to_file(outf_inits, n_effects, n_var, vp, X, p, true);
 		boost_io::close(outf_inits);
-
 	}
 
 	void push_interim_covar_values(const int& cnt,
@@ -105,6 +107,7 @@ public:
                                   const unsigned long& n_env,
                                   const VariationalParameters& vp){
 		// Diagnostics + env-weights from latest vb iteration
+		std::chrono::duration<double> lapsecs = std::chrono::system_clock::now() - time_check;
 
 		outf_iter << cnt << "\t";
 		outf_iter << std::setprecision(3) << std::fixed;
@@ -134,7 +137,8 @@ public:
 			outf_iter << i_hyps.s_x(ee) << "\t";
 		}
 		outf_iter << c_logw << "\t";
-		outf_iter << c_alpha_diff << std::endl;
+		outf_iter << c_alpha_diff << "\t";
+		outf_iter << lapsecs.count() << std::endl;
 
 
 		// Weights
@@ -143,6 +147,8 @@ public:
 			if(ll < n_env - 1) outf_weights << "\t";
 		}
 		outf_weights << std::endl;
+
+		time_check = std::chrono::system_clock::now();
 	}
 
 	void push_interim_output(const GenotypeMatrix& X,
@@ -184,6 +190,7 @@ public:
 		if(!allow_interim_push){
 			throw std::runtime_error("Internal error; interim push not expected");
 		}
+		time_check = std::chrono::system_clock::now();
 
 		// Create directories
 		std::string ss = "interim_files/grid_point_" + std::to_string(ii);
@@ -222,7 +229,7 @@ public:
 			outf_iter << "\tlambda" << ee;
 		}
 		outf_iter << "\ts_x" << "\ts_z";
-		outf_iter << "\telbo\tmax_alpha_diff" << std::endl;
+		outf_iter << "\telbo\tmax_alpha_diff\tsecs" << std::endl;
 
 	}
 

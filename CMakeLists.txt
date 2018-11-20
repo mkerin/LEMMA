@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.7.2)
-project(bgen_prog VERSION 0.10.2)
+project(bgen_prog VERSION 0.10.3)
 
 set(CMAKE_CXX_STANDARD 11)
 
@@ -12,7 +12,7 @@ if(CMAKE_CURRENT_SOURCE_DIR MATCHES /Users/kerin)
     # OSX File System - Laptop
     if(CMAKE_BUILD_TYPE STREQUAL Release)
         message("Release build")
-        set(LOC_COMPILE_OPTS -DOSX -O3 -g)
+        set(LOC_COMPILE_OPTS -DOSX -DDATA_AS_FLOAT -O3 -g)
         set(LINKER_OPTS -O3 -g)
     else()
         message("Debug build")

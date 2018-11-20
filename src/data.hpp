@@ -74,16 +74,16 @@ class Data
 	std::vector< std::string > env_names;
 
 	GenotypeMatrix G;
-	Eigen::MatrixXd Y, Y2; // phenotype matrix (#2 always has covars regressed)
-	Eigen::MatrixXd W; // covariate matrix
-	Eigen::MatrixXd E; // env matrix
+	EigenDataMatrix Y, Y2; // phenotype matrix (#2 always has covars regressed)
+	EigenDataMatrix W; // covariate matrix
+	EigenDataMatrix E; // env matrix
 	Eigen::ArrayXXd dXtEEX;
 	Eigen::ArrayXXd external_dXtEEX;
 	Eigen::MatrixXd E_weights;
 	genfile::bgen::View::UniquePtr bgenView;
 
 	// For gxe genome-wide scan
-	// cols: neglogp-main, neglogp-gxe, coeff-gxe-main, coeff-gxe-env..
+	// cols neglogp-main, neglogp-gxe, coeff-gxe-main, coeff-gxe-env..
 	Eigen::ArrayXXd snpstats;
 	Eigen::ArrayXXd external_snpstats;
 	std::vector< std::string > external_snpstats_SNPID;
@@ -781,7 +781,79 @@ class Data
 		}
 	}
 
-	void center_matrix( Eigen::MatrixXd& M,
+	void read_txt_file( const std::string& filename,
+						Eigen::MatrixXf& M,
+						unsigned long& n_cols,
+						std::vector< std::string >& col_names,
+						std::map< int, bool >& incomplete_row ){
+		// pass top line of txt file filename to col_names, and body to M.
+		// TODO: Implement how to deal with missing values.
+
+		boost_io::filtering_istream fg;
+		fg.push(boost_io::file_source(filename));
+		if (!fg) {
+			std::cout << "ERROR: " << filename << " not opened." << std::endl;
+			std::exit(EXIT_FAILURE);
+		}
+
+		// Reading column names
+		std::string line;
+		if (!getline(fg, line)) {
+			std::cout << "ERROR: " << filename << " not read." << std::endl;
+			std::exit(EXIT_FAILURE);
+		}
+		std::stringstream ss;
+		std::string s;
+		n_cols = 0;
+		ss.clear();
+		ss.str(line);
+		while (ss >> s) {
+			++n_cols;
+			col_names.push_back(s);
+		}
+		std::cout << " Detected " << n_cols << " column(s) from " << filename << std::endl;
+
+		// Write remainder of file to Eigen matrix M
+		incomplete_row.clear();
+		M.resize(n_samples, n_cols);
+		int i = 0;
+		float tmp_d;
+		try {
+			while (getline(fg, line)) {
+				if (i >= n_samples) {
+					throw std::runtime_error("ERROR: could not convert txt file (too many lines).");
+				}
+				ss.clear();
+				ss.str(line);
+				for (int k = 0; k < n_cols; k++) {
+					std::string sss;
+					ss >> sss;
+					/// NA
+					if (sss == "NA" || sss == "NAN" || sss == "NaN" || sss == "nan") {
+						M(i, k) = params.missing_code;
+						incomplete_row[i] = true;
+					} else {
+						try{
+							tmp_d = std::stof(sss);
+							M(i, k) = tmp_d;
+						} catch (const std::invalid_argument &exc){
+							std::cout << sss << " on line " << i << std::endl;
+							throw;
+						}
+					}
+				}
+				i++; // loop should end at i == n_samples
+			}
+			if (i < n_samples) {
+				throw std::runtime_error("ERROR: could not convert txt file (too few lines).");
+			}
+		} catch (const std::exception &exc) {
+			throw;
+		}
+	}
+
+	template <typename Derived>
+	void center_matrix( Eigen::MatrixBase<Derived>& M,
 						unsigned long& n_cols ){
 		// Center eigen matrix passed by reference.
 		// Only call on matrixes which have been reduced to complete cases,
@@ -803,7 +875,8 @@ class Data
 		}
 	}
 
-	void scale_matrix( Eigen::MatrixXd& M,
+	template <typename EigenMat>
+	void scale_matrix( EigenMat& M,
 						unsigned long& n_cols,
  						std::vector< std::string >& col_names){
 		// Scale eigen matrix passed by reference.
@@ -1002,8 +1075,6 @@ class Data
 	void calc_snpstats(){
 		std::cout << "Reordering/computing results for snpwise scan" << std::endl;
 		MyTimer my_timer("snpwise scan constructed in %ts \n");
-		Eigen::ArrayXd cl_j;
-		double dztz_lmj;
 		snpstats.resize(n_var, n_env + 3);
 		std::vector<std::string>::iterator it;
 		n_snpstats_computed = 0;
@@ -1013,13 +1084,16 @@ class Data
 			it = std::find(external_snpstats_SNPID.begin(), external_snpstats_SNPID.end(), G.SNPID[jj]);
 			if (it == external_snpstats_SNPID.end()){
 				n_snpstats_computed++;
-				Eigen::VectorXd X_kk = G.col(jj);
-				Eigen::MatrixXd H(n_samples, 1 + n_env);
+				EigenDataVector X_kk = G.col(jj);
+				EigenDataMatrix H(n_samples, 1 + n_env);
 				H << X_kk, (E.array().colwise() * X_kk.array()).matrix();
 
+				EigenDataMatrix HtH = H.transpose() * H;
+				EigenDataMatrix Hty = H.transpose() * Y2;
+
 				// Fitting regression models
-				Eigen::MatrixXd tau1_j = X_kk.transpose() * Y2 / (N-1.0);
-				Eigen::MatrixXd tau2_j = solve(H.transpose() * H, H.transpose() * Y2);
+				EigenDataMatrix tau1_j = X_kk.transpose() * Y2 / (N-1.0);
+				EigenDataMatrix tau2_j = solve(HtH, Hty);
 				double rss_null = (Y2 - X_kk * tau1_j).squaredNorm();
 				double rss_alt  = (Y2 - H * tau2_j).squaredNorm();
 
@@ -1075,8 +1149,8 @@ class Data
 		std::cout << "Reordering/building dXtEEX array" << std::endl;
 		MyTimer t_calcDXtEEX("dXtEEX array constructed in %ts \n");
 		t_calcDXtEEX.resume();
-		Eigen::ArrayXd cl_j;
-		double dztz_lmj;
+		EigenDataArrayX cl_j;
+		scalarData dztz_lmj;
 		dXtEEX.resize(n_var, n_env * n_env);
 		std::vector<std::string>::iterator it;
 		n_dxteex_computed = 0;
@@ -1203,12 +1277,13 @@ class Data
 
 	}
 
-	Eigen::MatrixXd reduce_mat_to_complete_cases( Eigen::Ref<Eigen::MatrixXd> M,
+	template <typename EigenMat>
+	EigenMat reduce_mat_to_complete_cases( EigenMat& M,
 								   bool& matrix_reduced,
 								   const unsigned long& n_cols,
 								   const std::map< std::size_t, bool >& incomplete_cases ) {
 		// Remove rows contained in incomplete_cases
-		Eigen::MatrixXd M_tmp;
+		EigenMat M_tmp;
 		if (matrix_reduced) {
 			throw std::runtime_error("ERROR: Trying to remove incomplete cases twice...");
 		}
@@ -1233,7 +1308,7 @@ class Data
 		return M_tmp;
 	}
 
-	void regress_out_covars(Eigen::Ref<Eigen::MatrixXd> yy){
+	void regress_out_covars(EigenDataMatrix& yy){
 		std::cout << "Regressing out covars:" << std::endl;
 		for(int cc = 0; cc < std::min(n_covar, (unsigned long) 10); cc++){
 			std::cout << ( cc > 0 ? ", " : "" ) << covar_names[cc];
@@ -1243,9 +1318,11 @@ class Data
 		}
 		std::cout << std::endl;
 
-		Eigen::MatrixXd ww = W.rowwise() - W.colwise().mean(); //not needed probably
-		Eigen::MatrixXd bb = solve(ww.transpose() * ww, ww.transpose() * yy);
-		yy -= ww * bb;
+		EigenDataMatrix WtW = W.transpose() * W;
+		EigenDataMatrix Wty = W.transpose() * yy;
+
+		EigenDataMatrix bb = solve(WtW, Wty);
+		yy -= W * bb;
 	}
 
 	void reduce_to_complete_cases() {
