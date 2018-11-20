@@ -59,7 +59,7 @@ class parameters {
 		env_update_repeats = 1;
 		interaction_analysis = false;
 		chunk_size = 256;
-		main_chunk_size = 128;
+		main_chunk_size = 64;
 		gxe_chunk_size = 1;
 		missing_code = -999;
 		vb_iter_max = 10000;
