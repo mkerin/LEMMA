@@ -42,9 +42,10 @@ inline Eigen::MatrixXf solve(const Eigen::MatrixXf &A, const Eigen::MatrixXf &b)
 	Eigen::MatrixXf x = A.colPivHouseholderQr().solve(b);
 	double check = fabs((double)((A * x - b).norm()/b.norm()));
 	if (check > 1e-6) {
-		std::string ms = "ERROR: could not solve covariate scatter matrix (Check = " +
-						std::to_string(check) + ").";
-		throw std::runtime_error(ms);
+		// std::string ms = "ERROR: could not solve covariate scatter matrix (Check = " +
+						// std::to_string(check) + ").";
+		// throw std::runtime_error(ms);
+		std::cout << "WARNING: Error in solving covariate scatter matrix is: " << check << std::endl;
 	}
 	return x;
 }

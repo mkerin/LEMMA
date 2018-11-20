@@ -1088,15 +1088,18 @@ class Data
 				EigenDataMatrix H(n_samples, 1 + n_env);
 				H << X_kk, (E.array().colwise() * X_kk.array()).matrix();
 
-				EigenDataMatrix HtH = H.transpose() * H;
-				EigenDataMatrix Hty = H.transpose() * Y2;
+				Eigen::MatrixXd HtH = (H.transpose() * H).cast<double>();
+				Eigen::MatrixXd Hty = (H.transpose() * Y2).cast<double>();
 
 				// Fitting regression models
 				EigenDataMatrix tau1_j = X_kk.transpose() * Y2 / (N-1.0);
-				EigenDataMatrix tau2_j = solve(HtH, Hty);
+				Eigen::MatrixXd tau2_j = solve(HtH, Hty);
 				double rss_null = (Y2 - X_kk * tau1_j).squaredNorm();
+#ifdef DATA_AS_FLOAT
+				double rss_alt  = (Y2 - H * tau2_j.cast<float>()).squaredNorm();
+#else
 				double rss_alt  = (Y2 - H * tau2_j).squaredNorm();
-
+#endif
 				// T-test; main effect of variant j
 				boost_m::students_t t_dist(n_samples - 1);
 				double main_se_j    = std::sqrt(rss_null) / (N - 1.0);
@@ -1318,11 +1321,15 @@ class Data
 		}
 		std::cout << std::endl;
 
-		EigenDataMatrix WtW = W.transpose() * W;
-		EigenDataMatrix Wty = W.transpose() * yy;
+		Eigen::MatrixXd WtW = (W.transpose() * W).cast<double>();
+		Eigen::MatrixXd Wty = (W.transpose() * yy).cast<double>();
 
-		EigenDataMatrix bb = solve(WtW, Wty);
+		Eigen::MatrixXd bb = solve(WtW, Wty);
+#ifdef DATA_AS_FLOAT
+		yy -= W * bb.cast<float>();
+#else
 		yy -= W * bb;
+#endif
 	}
 
 	void reduce_to_complete_cases() {

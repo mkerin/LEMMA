@@ -436,7 +436,7 @@ public:
 				if (p.use_vb_on_covars) {
 					all_tracker[nn].push_interim_covar_values(count, n_covar, all_vp[nn], covar_names);
 				}
-				if (p.xtra_verbose && count % 5 == 0) {
+				if (p.xtra_verbose && count % 20 == 0) {
 					all_tracker[nn].push_interim_param_values(count, n_effects, n_var, all_vp[nn], X);
 				}
 				all_tracker[nn].push_interim_iter_update(count, all_hyps[nn], i_logw[nn], alpha_diff[nn], n_effects,
