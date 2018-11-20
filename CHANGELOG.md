@@ -4,6 +4,7 @@ Changes:
 - DATA_AS_FLOAT implemented. Preliminary testing suggests this is a 2x speedup with small changes in accuracy
 - Initialise logw with numeric_limits::min()
 - interim outputs include low maintenance measure of wall clock time
+- include sum of squares of covar coeffs in interim output
 
 Bugfix:
 - removed circular dependancy between header files
