@@ -59,8 +59,8 @@ class parameters {
 		env_update_repeats = 1;
 		interaction_analysis = false;
 		chunk_size = 256;
-		main_chunk_size = 32;
-		gxe_chunk_size = 16;
+		main_chunk_size = 128;
+		gxe_chunk_size = 1;
 		missing_code = -999;
 		vb_iter_max = 10000;
 		spike_diff_factor = 1000000.0; // Initial diff in variance of spike & slab
