@@ -145,13 +145,11 @@ void parse_arguments(parameters &p, int argc, char *argv[]) {
 		std::cout << "======-----" << std::endl << std::endl;
 
 #ifdef EIGEN_VECTORIZE
-		std::cout << "Supports:" << std::endl;
-		std::cout << "- vectorization with SSE" << std::endl;
-#endif
-
-#ifndef EIGEN_VECTORIZE
-		std::cout << "Not supported:" << std::endl;
-		std::cout << "- vectorization with SSE" << std::endl;
+		std::cout << "Details:" << std::endl;
+		std::cout << "- vectorization with SSE is ON" << std::endl;
+#else
+		std::cout << "Details:" << std::endl;
+		std::cout << "- vectorization with SSE is OFF" << std::endl;
 #endif
 
 #ifdef DEBUG
@@ -160,10 +158,14 @@ void parse_arguments(parameters &p, int argc, char *argv[]) {
 
 #ifdef OSX
 		std::cout << "- OSX compatible" << std::endl;
+#else
+		std::cout << "- LINUX compatible" << std::endl;
 #endif
 
 #ifdef DATA_AS_FLOAT
 		std::cout << "- Data encoded as float" << std::endl;
+#else
+		std::cout << "- Data encoded as doubles" << std::endl;
 #endif
 
 		// For vectorise profiling

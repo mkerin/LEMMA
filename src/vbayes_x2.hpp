@@ -391,6 +391,7 @@ public:
 		// minimise KL Divergence and assign elbo estimate
 		// Assumes vp_init already exist
 		// TODO: re intergrate random starts
+		int print_interval = 25;
 		if(random_init){
 			throw std::logic_error("Random starts no longer implemented");
 		}
@@ -468,6 +469,17 @@ public:
 				all_converged = true;
 			}
 			count++;
+
+			// Report progress to std::cout
+			if((count + 1) % print_interval == 0){
+				int n_converged = 0;
+				for (auto& n : converged){
+					n_converged += n;
+				}
+
+				std::cout << "Completed " << count+1 << " iterations, " << n_converged << " runs converged";
+				print_time_check();
+			}
 		}
 
 		if(any_of(i_logw.begin(), i_logw.end(), [](double x) {return !std::isfinite(x);})){
