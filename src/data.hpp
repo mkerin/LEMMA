@@ -105,8 +105,9 @@ class Data
 		std::cout << "Starting analysis at " << std::ctime(&start_time) << std::endl;
 		std::cout << "Compiled from git branch: master" << std::endl;
 
+		Eigen::setNbThreads(params.n_thread);
 		int n = Eigen::nbThreads( );
-		std::cout << "Threads detected by eigen: " << n << std::endl;
+		std::cout << "Threads used by eigen: " << n << std::endl;
 
 		bgenView = genfile::bgen::View::create(p.bgen_file);
 		bgen_pass = true;

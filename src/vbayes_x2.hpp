@@ -331,7 +331,6 @@ public:
 			trackers[nn].p = p;
 		}
 
-
 		runOuterLoop(round_index, hyps_grid, n_grid, chunks[0], random_init, trackers);
 	}
 
@@ -410,7 +409,7 @@ public:
 		std::vector<std::vector< double >> logw_updates(n_grid), alpha_diff_updates(n_grid);
 
 		for (int nn = 0; nn < n_grid; nn++){
-			i_logw[nn] = std::numeric_limits<double>::min();
+			i_logw[nn] = -1*std::numeric_limits<double>::max();
 			logw_updates[nn].push_back(i_logw[nn]);
 			converged[nn] = 0;
 
@@ -423,6 +422,7 @@ public:
 			}
 			std::vector<double> logw_prev = i_logw;
 
+			// WARNING: logw_prev copied by value (just want to check updates improve elbo)
 			updateAllParams(count, round_index, all_vp, all_hyps, logw_prev, logw_updates);
 			std::vector<double> alpha_diff(n_grid);
 			for (int nn = 0; nn < n_grid; nn++){
@@ -433,7 +433,7 @@ public:
 
 			// Interim output
 			for (int nn = 0; nn < n_grid; nn++) {
-				if (p.use_vb_on_covars) {
+				if (p.use_vb_on_covars && count % 10 == 0) {
 					all_tracker[nn].push_interim_covar_values(count, n_covar, all_vp[nn], covar_names);
 				}
 				if (p.xtra_verbose && count % 20 == 0) {
@@ -527,7 +527,7 @@ public:
 			             const int& round_index,
 			             std::vector<VariationalParameters>& all_vp,
 						 std::vector<Hyps>& all_hyps,
-						 std::vector<double>& logw_prev,
+						 std::vector<double> logw_prev,
 						 std::vector<std::vector< double >>& logw_updates){
 		std::vector< std::uint32_t > iter;
 		std::vector< std::vector< std::uint32_t >> iter_chunks;
@@ -666,22 +666,22 @@ public:
 		}
 	}
 
-	template <typename Deriv>
 	void adjustParams(const int& nn, const unsigned long& memoize_id,
 			const std::vector<std::uint32_t>& chunk,
-			const Eigen::MatrixBase<Deriv>& D,
+			const EigenDataMatrix& D,
 			const Eigen::Ref<const Eigen::VectorXd>& A,
 			const std::vector<Hyps>& all_hyps,
 			std::vector<VariationalParameters>& all_vp,
 			Eigen::Ref<Eigen::MatrixXd> rr_diff){
 
 		int ee                 = chunk[0] / n_var;
+		unsigned long ch_len   = chunk.size();
 		if (ee == 0) {
 
 			// Update main effects
 			if (D_correlations.count(memoize_id) == 0) {
 				if(p.n_thread == 1) {
-					Eigen::MatrixXd D_corr(p.main_chunk_size, p.main_chunk_size);
+					Eigen::MatrixXd D_corr(ch_len, ch_len);
 					// cast only used if DATA_AS_FLOAT
 					D_corr.triangularView<Eigen::StrictlyUpper>() = (D.transpose() * D).template cast<double>();
 					D_correlations[memoize_id] = D_corr;
@@ -694,7 +694,7 @@ public:
 		} else {
 
 			// Update interaction effects
-			Eigen::MatrixXd D_corr(p.gxe_chunk_size, p.gxe_chunk_size);
+			Eigen::MatrixXd D_corr(ch_len, ch_len);
 			if(p.gxe_chunk_size > 1) {
 				if(p.n_thread == 1){
 					// cast only used if DATA_AS_FLOAT

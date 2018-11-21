@@ -41,6 +41,7 @@ Questions:
 #include <vector>
 #include <map>
 #include "my_timer.hpp"
+#include "utils.hpp"
 #include "class.h"
 #include "tools/eigen3.3/Dense"
 
@@ -61,11 +62,7 @@ public:
 	parameters params;
 
 	Eigen::Matrix<unsigned char, Eigen::Dynamic, Eigen::Dynamic> M; // used in low-mem mode
-#ifdef DATA_AS_FLOAT
-	Eigen::MatrixXf G; // used when not in low-mem node
-#else
-	Eigen::MatrixXd G; // used when not in low-mem node
-#endif
+	EigenDataMatrix G; // used when not in low-mem node
 
 	std::vector< int > chromosome;
 	std::vector< std::string > al_0, al_1, rsid;
