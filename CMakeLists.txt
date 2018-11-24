@@ -12,11 +12,11 @@ if(CMAKE_CURRENT_SOURCE_DIR MATCHES /Users/kerin)
     # OSX File System - Laptop
     if(CMAKE_BUILD_TYPE STREQUAL Release)
         message("Release build")
-        set(LOC_COMPILE_OPTS -DOSX -DDATA_AS_FLOAT -O3 -g)
+        set(LOC_COMPILE_OPTS -DOSX -Wno-deprecated -O3 -g)
         set(LINKER_OPTS -O3 -g)
     else()
         message("Debug build")
-        set(LOC_COMPILE_OPTS -DOSX -DDEBUG -pg -Og -g)
+        set(LOC_COMPILE_OPTS -DOSX -Wno-deprecated -DDEBUG -pg -Og -g)
         set(LINKER_OPTS -pg -Og -g)
     endif()
     set(BGEN /Users/kerin/software/bgen)
@@ -25,14 +25,14 @@ elseif(CMAKE_CURRENT_SOURCE_DIR MATCHES /well/marchini/kebl4230)
     # LINUX File System - Rescomp
     set(BGEN /well/marchini/kebl4230/software/bgen/)
     set(LIBS rt)
-    set(LOC_COMPILE_OPTS -O3 -DDATA_AS_FLOAT -static -static-libgcc -static-libstdc++ -lz -fopenmp)
+    set(LOC_COMPILE_OPTS -Wno-deprecated -O3 -static -static-libgcc -static-libstdc++ -lz -fopenmp)
     set(LINKER_OPTS -O3 -fopenmp)
     set(LIB-DIRS "-L${BGEN}/build/3rd_party/boost_1_55_0 -L/well/marchini/kebl4230/software/boost_1_62_0/stage/lib")
 elseif(CMAKE_CURRENT_SOURCE_DIR MATCHES /homes/kerin)
     # LINUX File System - Garganey
     set(BGEN /homes/kerin/projects/bgen/)
     set(LIBS rt)
-    set(LOC_COMPILE_OPTS -O3 -DDATA_AS_FLOAT -fopenmp -g)
+    set(LOC_COMPILE_OPTS -Wno-deprecated -O3 -fopenmp -g)
     set(LINKER_OPTS -O3 -fopenmp -g)
     set(LIB-DIRS "-L${BGEN}/build/3rd_party/boost_1_55_0")
 else()
@@ -52,28 +52,36 @@ set(LIBS boost dl pthread boost_iostreams z ${LIBS})
 ##Defining compilation commands
 #set(TARGET bgen_prog)
 set(TARGET bgen_prog_${PROJECT_VERSION_MAJOR}_${PROJECT_VERSION_MINOR}_${PROJECT_VERSION_PATCH})
+
 add_executable(${TARGET} ${SOURCES})
-
-target_compile_options(${TARGET} PRIVATE -Wno-deprecated -msse2 ${LOC_COMPILE_OPTS})
-
+target_compile_options(${TARGET} PRIVATE -msse2 ${LOC_COMPILE_OPTS})
 target_include_directories(${TARGET} PRIVATE ${BGEN}/genfile/include ${BGEN}/3rd_party/zstd-1.1.0/lib ${BGEN}/db/include ${BGEN}/3rd_party/sqlite3 ${BGEN}/3rd_party/boost_1_55_0)
-
-#Set search paths to 3rd party libs
 set_target_properties(${TARGET} PROPERTIES LINK_FLAGS "${LIB-DIRS}")
-
-#Link libs
 target_link_libraries(${TARGET} ${BGEN_LIB} ${DB_LIB} ${SQLITE_LIB} ${ZSTD_LIB} ${LIBS} ${LINKER_OPTS})
+
+add_executable(${TARGET}_Xf ${SOURCES})
+target_compile_options(${TARGET}_Xf PRIVATE -DDATA_AS_FLOAT -msse2 ${LOC_COMPILE_OPTS})
+target_include_directories(${TARGET}_Xf PRIVATE ${BGEN}/genfile/include ${BGEN}/3rd_party/zstd-1.1.0/lib ${BGEN}/db/include ${BGEN}/3rd_party/sqlite3 ${BGEN}/3rd_party/boost_1_55_0)
+set_target_properties(${TARGET}_Xf PROPERTIES LINK_FLAGS "${LIB-DIRS}")
+target_link_libraries(${TARGET}_Xf ${BGEN_LIB} ${DB_LIB} ${SQLITE_LIB} ${ZSTD_LIB} ${LIBS} ${LINKER_OPTS})
+
 
 ## Catch Unit Tests
 add_executable(catch_tests tests/tests-main.cpp)
 target_link_libraries(catch_tests ${BGEN_LIB} ${DB_LIB} ${SQLITE_LIB} ${ZSTD_LIB} ${LIBS} ${LINKER_OPTS})
-target_compile_options(catch_tests PRIVATE -Wno-deprecated -msse2 ${LOC_COMPILE_OPTS})
+target_compile_options(catch_tests PRIVATE -msse2 ${LOC_COMPILE_OPTS})
 target_include_directories(catch_tests PRIVATE ${BGEN}/genfile/include ${BGEN}/3rd_party/zstd-1.1.0/lib ${BGEN}/db/include ${BGEN}/3rd_party/sqlite3 ${BGEN}/3rd_party/boost_1_55_0)
 set_target_properties(catch_tests PROPERTIES LINK_FLAGS "${LIB-DIRS}")
 
-## Profiling by hand
-add_executable(profile_read_cols examples/profile_read_cols.cpp examples/genotype_matrix_multithread.cpp)
-target_link_libraries(profile_read_cols boost_iostreams boost_thread ${LIBS} ${LINKER_OPTS})
-target_compile_options(profile_read_cols PRIVATE -Wno-deprecated -msse2 ${LOC_COMPILE_OPTS})
-target_include_directories(profile_read_cols PRIVATE ${BGEN}/3rd_party/boost_1_55_0)
-set_target_properties(profile_read_cols PROPERTIES LINK_FLAGS "${LIB-DIRS}")
+add_executable(catch_tests_Xf tests/tests-main.cpp)
+target_link_libraries(catch_tests_Xf ${BGEN_LIB} ${DB_LIB} ${SQLITE_LIB} ${ZSTD_LIB} ${LIBS} ${LINKER_OPTS})
+target_compile_options(catch_tests_Xf PRIVATE -DDATA_AS_FLOAT -msse2 ${LOC_COMPILE_OPTS})
+target_include_directories(catch_tests_Xf PRIVATE ${BGEN}/genfile/include ${BGEN}/3rd_party/zstd-1.1.0/lib ${BGEN}/db/include ${BGEN}/3rd_party/sqlite3 ${BGEN}/3rd_party/boost_1_55_0)
+set_target_properties(catch_tests_Xf PROPERTIES LINK_FLAGS "${LIB-DIRS}")
+#
+### Profiling by hand
+#add_executable(profile_read_cols examples/profile_read_cols.cpp examples/genotype_matrix_multithread.cpp)
+#target_link_libraries(profile_read_cols boost_iostreams boost_thread ${LIBS} ${LINKER_OPTS})
+#target_compile_options(profile_read_cols PRIVATE -Wno-deprecated -msse2 ${LOC_COMPILE_OPTS})
+#target_include_directories(profile_read_cols PRIVATE ${BGEN}/3rd_party/boost_1_55_0)
+#set_target_properties(profile_read_cols PROPERTIES LINK_FLAGS "${LIB-DIRS}")
