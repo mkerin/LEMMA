@@ -1213,7 +1213,7 @@ public:
 #else
 		vp.eta     = E.matrix() * vp.muw.matrix();
 #endif
-		vp.eta_sq  = vp.eta.array().square();
+		vp.eta_sq  = vp.eta.array().square().matrix();
 		vp.calcEdZtZ(dXtEEX, n_env);
 	}
 
