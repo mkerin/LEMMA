@@ -11,48 +11,37 @@ Comparison of vector vector to vector-matrix computations
 const long int N = 250000;
 const int K = 64;
 
-void single_core_scheme(
-	Eigen::VectorXd& ym,
-	Eigen::VectorXd& yx,
-	Eigen::VectorXd& eta,
-	Eigen::VectorXd& Y){
-
-	double A, tot;
-
-	for (int ii = 0; ii < K; ii++){
-		Eigen::VectorXd X_kk = Eigen::VectorXd::Random(N);
-		A  = (Y - ym - yx.cwiseProduct(eta)).dot(X_kk);
-		ym += yx;
-		tot += A;
-	}
-}
-
-void single_core_scheme_sse(
-	Eigen::VectorXd& ym,
-	Eigen::VectorXd& yx,
-	Eigen::VectorXd& eta,
-	Eigen::VectorXd& Y){
-
-	double A, tot;
-
-	for (int ii = 0; ii < K; ii++){
-		Eigen::VectorXf X_kk = Eigen::VectorXf::Random(N);
-		A  = (Y.cast<float>() - ym.cast<float>() - yx.cast<float>().cwiseProduct(eta.cast<float>())).dot(X_kk);
-		ym += yx;
-		tot += A;
-	}
-}
-
 int main() {
 	// Single core version
 	Eigen::MatrixXd X = Eigen::MatrixXd::Random(N, K);
+	Eigen::VectorXd vv = Eigen::VectorXd::Random(N);
 	Eigen::VectorXd D = Eigen::VectorXd::Random(N);
 
 	// int n = Eigen::nbThreads( );
 	std::cout << "Data initialised" << std::endl;
 	double res2 = 0;
 
-	// No diagonal
+	// With diagonal
+	std::cout << "DGEMV" << std::endl << std::endl;
+	Eigen::VectorXd resv(K);
+	for (int th = 1; th < 17; th++){
+		Eigen::setNbThreads(th);
+		std::cout << th << " ";
+		for (int ss = 0; ss < 20; ss++){
+			auto start = std::chrono::system_clock::now();
+			for (int kk = 0; kk < 5; kk++){
+				resv = X.transpose() * vv;
+				res2 += resv(0);
+			}
+			auto end = std::chrono::system_clock::now();
+			auto elapsed = end - start;
+			std::cout << elapsed.count() << " ";
+		}
+		std::cout << std::endl;
+	}
+
+	// No diagonal DGEMM
+	std::cout << "DGEMM" << std::endl << std::endl;
 	Eigen::MatrixXd res(K, K);
 	for (int th = 1; th < 17; th++){
 		Eigen::setNbThreads(th);
@@ -67,14 +56,12 @@ int main() {
 			auto end = std::chrono::system_clock::now();
 			auto elapsed = end - start;
 			std::cout << elapsed.count() << " ";
-			// tt1.stop();
-			// std::cout << tt1.get_lap_seconds() << " ";
-			// tt1.resume();
 		}
 		std::cout << std::endl;
 	}
 
 	// With diagonal
+	std::cout << "DGEMM (with extra mult)" << std::endl << std::endl;
 	for (int th = 1; th < 17; th++){
 		Eigen::setNbThreads(th);
 		std::cout << th << " ";
