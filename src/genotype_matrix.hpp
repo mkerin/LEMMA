@@ -252,28 +252,6 @@ public:
 			return G * rhs.cast<float>();
 		}
 	}
-
-	Eigen::MatrixXf col_block(const std::uint32_t& ch_start,
-							  const int& ch_len){
-		if(!scaling_performed){
-			calc_scaled_values();
-		}
-
-		if(low_mem){
-			double ww = intervalWidth;
-
-			Eigen::ArrayXd  E = 0.5 * ww - compressed_dosage_means.segment(ch_start, ch_len).array();
-			Eigen::ArrayXd  S = compressed_dosage_inv_sds.segment(ch_start, ch_len);
-			Eigen::ArrayXXf res;
-
-			res = ww * M.block(0, ch_start, nn, ch_len).cast<float>();
-			res.rowwise() += E.transpose().cast<float>();
-			res.rowwise() *= S.transpose().cast<float>();
-			return res.matrix();
-		} else {
-			return G.block(0, ch_start, nn, ch_len);
-		}
-	}
 #else
 	Eigen::VectorXd operator*(const Eigen::Ref<const Eigen::VectorXd>&  rhs){
 		if(!scaling_performed){
@@ -290,50 +268,69 @@ public:
 			return G * rhs;
 		}
 	}
+#endif
 
-		Eigen::MatrixXd col_block(const std::uint32_t& ch_start,
-							  const int& ch_len){
+EigenDataMatrix col_block(const std::uint32_t& ch_start,
+						  const int& ch_len){
+	if(!scaling_performed){
+		calc_scaled_values();
+	}
+
+	if(low_mem){
+		double ww = intervalWidth;
+
+		EigenDataArrayX  E = 0.5 * ww - compressed_dosage_means.segment(ch_start, ch_len).array();
+		EigenDataArrayX  S = compressed_dosage_inv_sds.segment(ch_start, ch_len);
+		EigenDataArrayXX res;
+
+		res = ww * M.block(0, ch_start, nn, ch_len).cast<scalarData>();
+		res.rowwise() += E.transpose();
+		res.rowwise() *= S.transpose();
+		return res.matrix();
+	} else {
+		return G.block(0, ch_start, nn, ch_len);
+	}
+}
+
+	// Eigen lhs matrix multiplication
+	Eigen::VectorXd mult_vector_by_chr(const int& chr, const Eigen::Ref<const Eigen::VectorXd>& rhs){
+		// (y^t G)^t <=> G^t y
+		assert(rhs.rows() == pp);
 		if(!scaling_performed){
 			calc_scaled_values();
 		}
 
+		// Find chr block
+		std::uint32_t chr_st, chr_size;
+		bool first_var_found = false, block_end_found = false;
+		for (std::uint32_t jj = 0; jj < pp; jj++){
+			if(!first_var_found && chromosome[jj] == chr){
+				first_var_found = true;
+				chr_st = jj;
+			} else if(first_var_found && chromosome[jj] != chr){
+				chr_size = jj - chr_st;
+				block_end_found = true;
+			} else if(block_end_found && chromosome[jj] == chr){
+				std::cout << "WARNING: genotype matrix not sorted by chromosome. LOCO snpstats computed incorrectly." << std::endl;
+			}
+		}
+		if(!block_end_found){
+			chr_size = pp - chr_st;
+		}
+
+		Eigen::VectorXd res;
 		if(low_mem){
-			double ww = intervalWidth;
+			auto vec_total = rhs.sum() * intervalWidth * 0.5;
+			Eigen::VectorXd rhs_trans = rhs.cwiseProduct(compressed_dosage_inv_sds);
+			auto offset = rhs_trans.sum() * intervalWidth * 0.5;
+			offset -= compressed_dosage_means.dot(rhs_trans);
 
-			Eigen::ArrayXd  E = 0.5 * ww - compressed_dosage_means.segment(ch_start, ch_len).array();
-			Eigen::ArrayXd  S = compressed_dosage_inv_sds.segment(ch_start, ch_len);
-			Eigen::ArrayXXd res;
-
-			res = ww * M.block(0, ch_start, nn, ch_len).cast<double>();
-			res.rowwise() += E.transpose();
-			res.rowwise() *= S.transpose();
-			return res.matrix();
+			res = M.block(0, chr_st, nn, chr_size).cast<double>() * rhs_trans.segment(chr_st, chr_size);
+			return (res.array() * intervalWidth + offset).matrix();
 		} else {
-			return G.block(0, ch_start, nn, ch_len);
+			return G.block(0, chr_st, nn, chr_size).cast<double>() * rhs.segment(chr_st, chr_size);
 		}
 	}
-#endif
-
-//	// Eigen lhs matrix multiplication
-//	Eigen::VectorXd transpose_vector_multiply(const Eigen::Ref<const Eigen::VectorXd>& lhs){
-//		// G.transpose_vector_multiply(y) <=> (y^t G)^t <=> G^t y
-//		if(!scaling_performed){
-//			calc_scaled_values();
-//		}
-//
-//		Eigen::VectorXd res;
-//		if(low_mem){
-//			assert(lhs.rows() == M.rows());
-//			double offset = lhs.sum();
-//
-//			res = lhs.transpose() * M.cast<double>();
-//			res *= intervalWidth;
-//			res += offset * (intervalWidth * 0.5 - compressed_dosage_means.array()).matrix();
-//			return res.cwiseProduct(compressed_dosage_inv_sds);
-//		} else {
-//			return lhs.transpose() * G;
-//		}
-//	}
 
 	template <typename Deriv>
 	void col_block3(const std::vector< std::uint32_t>& chunk,

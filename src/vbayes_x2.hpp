@@ -18,6 +18,7 @@ https://stackoverflow.com/questions/3283021/compile-a-standalone-static-executab
 #include <limits>
 #include <random>
 #include <thread>
+#include <set>
 #include "sys/types.h"
 #include "class.h"
 #include "data.hpp"
@@ -49,6 +50,7 @@ public:
 	const double alpha_tol = 1e-4;
 	const double logw_tol = 1e-2;
 	const double sigma_c = 10000;
+	const int    n_chrs = 22; // Likely to break with X chromosome
 	std::vector< std::string > covar_names;
 	std::vector< std::string > env_names;
 
@@ -152,7 +154,10 @@ public:
 		unsigned long n_main_segs, n_gxe_segs, n_chunks;
  		n_main_segs = (n_var + p.main_chunk_size - 1) / p.main_chunk_size; // ceiling of n_var / chunk size
 		n_gxe_segs = (n_var + p.gxe_chunk_size - 1) / p.gxe_chunk_size; // ceiling of n_var / chunk size
-		n_chunks = n_main_segs + n_gxe_segs;
+		n_chunks = n_main_segs;
+		if(n_effects > 1){
+			n_chunks += n_gxe_segs;
+		}
 
 		fwd_pass_chunks.resize(n_chunks);
 		back_pass_chunks.resize(n_chunks);
@@ -161,6 +166,20 @@ public:
 			fwd_pass_chunks[ch_index].push_back(kk);
 			back_pass_chunks[n_chunks - 1 - ch_index].push_back(kk);
 		}
+
+//		for (auto chunk : fwd_pass_chunks){
+//			for (auto ii : chunk){
+//				std::cout << ii << " ";
+//			}
+//			std::cout << std::endl;
+//		}
+//
+//		for (auto chunk : back_pass_chunks){
+//			for (auto ii : chunk){
+//				std::cout << ii << " ";
+//			}
+//			std::cout << std::endl;
+//		}
 
 		for (long ii = 0; ii < n_chunks; ii++){
 			std::reverse(back_pass_chunks[ii].begin(), back_pass_chunks[ii].end());
@@ -192,6 +211,20 @@ public:
 					vp_init.mu2_gam   = Eigen::ArrayXd::Zero(n_var);
 					vp_init.s2_gam_sq = Eigen::ArrayXd::Zero(n_var);
 				}
+
+				// Env Weights
+				if(p.env_weights_file != "NULL"){
+					vp_init.muw     = dat.E_weights.col(0);
+				} else if (n_env > 1 && p.init_weights_with_snpwise_scan){
+					calc_snpwise_regression(vp_init);
+				} else {
+					vp_init.muw.resize(n_env);
+					vp_init.muw     = 1.0 / (double) n_env;
+				}
+
+				// cast used if DATA_AS_FLOAT
+				vp_init.eta     = E.matrix() * vp_init.muw.matrix().cast<scalarData>();
+				vp_init.eta_sq  = vp_init.eta.cwiseProduct(vp_init.eta);
 			}
 
 			// Covars
@@ -199,22 +232,6 @@ public:
 				vp_init.muc   = Eigen::ArrayXd::Zero(n_covar);
 			}
 
-			// Env Weights
-			if(p.env_weights_file != "NULL"){
-				vp_init.muw     = dat.E_weights.col(0);
-			} else if (n_env > 1 && p.init_weights_with_snpwise_scan){
-				calc_snpwise_regression(vp_init);
-			} else {
-				vp_init.muw.resize(n_env);
-				vp_init.muw     = 1.0 / (double) n_env;
-			}
-			// cast used if DATA_AS_FLOAT
-#ifdef DATA_AS_FLOAT
-			vp_init.eta     = E.matrix() * vp_init.muw.matrix().cast<float>();
-#else
-			vp_init.eta     = E.matrix() * vp_init.muw.matrix();
-#endif
-			vp_init.eta_sq  = vp_init.eta.cwiseProduct(vp_init.eta);
 
 			// ym, yx
 			calcPredEffects(vp_init);
@@ -299,7 +316,6 @@ public:
 		std::cout << "Writing start points for alpha and mu to " << ofile_inits << std::endl;
 		write_snp_stats_to_file(outf_inits, n_effects, n_var, vp_init, X, p, false);
 		boost_io::close(outf_inits);
-
 
 		long n_grid = r1_hyps_grid.rows();
 		std::vector< VbTracker > trackers(n_grid);
@@ -514,10 +530,10 @@ public:
 			YM.col(nn) = vp_init.ym;
 			YY.col(nn) = Y;
 		}
+		YX.resize(n_samples, n_grid);
+		ETA.resize(n_samples, n_grid);
+		ETA_SQ.resize(n_samples, n_grid);
 		if (n_effects > 1){
-			YX.resize(n_samples, n_grid);
-			ETA.resize(n_samples, n_grid);
-			ETA_SQ.resize(n_samples, n_grid);
 			for (int nn = 0; nn < n_grid; nn++){
 				YX.col(nn) = vp_init.yx;
 				ETA.col(nn) = vp_init.eta;
@@ -530,7 +546,7 @@ public:
 			VariationalParameters vp(YM.col(nn), YX.col(nn), ETA.col(nn), ETA_SQ.col(nn));
 			vp.init_from_lite(vp_init);
 			updateSSq(all_hyps[nn], vp);
-			vp.calcEdZtZ(dXtEEX, n_env);
+
 
 			all_vp.push_back(vp);
 		}
@@ -676,7 +692,7 @@ public:
 
 		for (int nn = 0; nn < n_grid; nn++){
 			// update summary quantity
-			all_vp[nn].calcVarqBeta(all_hyps[nn], p);
+			all_vp[nn].calcVarqBeta(all_hyps[nn], p, n_effects);
 		}
 	}
 
@@ -868,11 +884,6 @@ public:
 		// We compute elbo on starting point hence need variance estimates
 		// Also resizes all variance arrays.
 
-		// Would need vp.s_sq to compute properly, which in turn needs vp.sw_sq...
-		vp.sw_sq.resize(n_env);
-		vp.sw_sq = eps;
-		vp.calcEdZtZ(dXtEEX, n_env);
-
 		// Update beta ssq
 		int ee = 0;
 		vp.s1_beta_sq.resize(n_var);
@@ -885,21 +896,28 @@ public:
 			vp.s2_beta_sq /= (hyps.spike_relative_var(ee) * (N - 1.0) + 1.0);
 		}
 
-		// Update gamma ssq
-		ee = 1;
-		vp.s1_gam_sq.resize(n_var);
-		vp.s1_gam_sq  = hyps.slab_var(ee);
-		vp.s1_gam_sq /= (hyps.slab_relative_var(ee) * (N - 1.0) + 1.0);
+		if(n_effects > 1) {
+			// Would need vp.s_sq to compute properly, which in turn needs vp.sw_sq...
+			vp.sw_sq.resize(n_env);
+			vp.sw_sq = eps;
+			vp.calcEdZtZ(dXtEEX, n_env);
 
-		if(p.mode_mog_prior_gam) {
-			vp.s2_gam_sq.resize(n_var);
-			vp.s2_gam_sq = hyps.spike_var(ee);
-			vp.s2_gam_sq /= (hyps.spike_relative_var(ee) * (N - 1.0) + 1.0);
+			// Update gamma ssq
+			ee = 1;
+			vp.s1_gam_sq.resize(n_var);
+			vp.s1_gam_sq = hyps.slab_var(ee);
+			vp.s1_gam_sq /= (hyps.slab_relative_var(ee) * (N - 1.0) + 1.0);
+
+			if (p.mode_mog_prior_gam) {
+				vp.s2_gam_sq.resize(n_var);
+				vp.s2_gam_sq = hyps.spike_var(ee);
+				vp.s2_gam_sq /= (hyps.spike_relative_var(ee) * (N - 1.0) + 1.0);
+			}
 		}
 
 		vp.varB.resize(n_var);
 		vp.varG.resize(n_var);
-		vp.calcVarqBeta(hyps, p);
+		vp.calcVarqBeta(hyps, p, n_effects);
 
 		// for covars
 		if(p.use_vb_on_covars){
@@ -1136,27 +1154,6 @@ public:
 		}
 	}
 
-	void rescanGWAS(const VariationalParametersLite& vp,
-					Eigen::Ref<Eigen::VectorXd> neglogp){
-		// casts used is DATA_AS_FLOAT
-		Eigen::VectorXd pheno = (Y.cast<double>() - vp.ym.cast<double>());
-		Eigen::VectorXd Z_kk(n_samples);
-
-		for(std::uint32_t jj = 0; jj < n_var; jj++ ){
-			Z_kk = (X.col(jj).cast<double>().cwiseProduct(vp.eta.cast<double>()));
-			double ztz_inv = 1.0 / Z_kk.dot(Z_kk);
-			double gam = Z_kk.dot(pheno) * ztz_inv;
-			double rss_null = (pheno - Z_kk * gam).squaredNorm();
-
-			// T-test of variant j
-			boost_m::students_t t_dist(n_samples - 1);
-			double main_se_j    = std::sqrt(rss_null / (N - 1.0) * ztz_inv);
-			double main_tstat_j = gam / main_se_j;
-			double main_pval_j  = 2 * boost_m::cdf(boost_m::complement(t_dist, fabs(main_tstat_j)));
-
-			neglogp(jj) = -1 * std::log10(main_pval_j);
-		}
-	}
 	/********** Helper functions ************/
 	void print_time_check(){
 		auto now = std::chrono::system_clock::now();
@@ -1439,6 +1436,133 @@ public:
 		hyps.pve /= (hyps.pve.sum() + 1.0);
 	}
 
+	void rescanGWAS(const VariationalParametersLite& vp,
+					Eigen::Ref<Eigen::VectorXd> neglogp){
+		// casts used is DATA_AS_FLOAT
+		Eigen::VectorXd pheno = (Y.cast<double>() - vp.ym.cast<double>());
+		Eigen::VectorXd Z_kk(n_samples);
+
+		for(std::uint32_t jj = 0; jj < n_var; jj++ ){
+			Z_kk = (X.col(jj).cast<double>().cwiseProduct(vp.eta.cast<double>()));
+			double ztz_inv = 1.0 / Z_kk.dot(Z_kk);
+			double gam = Z_kk.dot(pheno) * ztz_inv;
+			double rss_null = (pheno - Z_kk * gam).squaredNorm();
+
+			// T-test of variant j
+			boost_m::students_t t_dist(n_samples - 1);
+			double main_se_j    = std::sqrt(rss_null / (N - 1.0) * ztz_inv);
+			double main_tstat_j = gam / main_se_j;
+			double main_pval_j  = 2 * boost_m::cdf(boost_m::complement(t_dist, fabs(main_tstat_j)));
+
+			neglogp(jj) = -1 * std::log10(main_pval_j);
+		}
+	}
+
+	void compute_residuals_per_chr(const VariationalParametersLite& vp,
+			std::vector<Eigen::VectorXd>& chr_residuals){
+
+		std::set<int> chrs(X.chromosome.begin(), X.chromosome.end());
+		assert(chr_residuals.size() == n_chrs);
+
+		// casts used if DATA_AS_FLOAT
+		Eigen::VectorXd map_residuals;
+		if (n_effects > 1) {
+			map_residuals = (Y - vp.ym - vp.ym.cwiseProduct(vp.eta)).cast<double>();
+		} else {
+			map_residuals = (Y - vp.ym).cast<double>();
+		}
+
+		// Compute predicted effects from each chromosome
+		Eigen::VectorXd Eq_beta, Eq_gam;
+		std::vector<Eigen::VectorXd> pred_main(n_chrs), pred_int(n_chrs);
+
+		Eq_beta = vp.alpha_beta * vp.mu1_beta;
+		if(p.mode_mog_prior_beta) Eq_beta.array() += (1 - vp.alpha_beta) * vp.mu2_beta;
+		for (auto cc : chrs){
+			pred_main[cc] = X.mult_vector_by_chr(cc, Eq_beta);
+		}
+
+		if (n_effects > 1) {
+			Eq_gam  = vp.alpha_gam  * vp.mu1_gam;
+			if(p.mode_mog_prior_gam) Eq_gam.array() += (1 - vp.alpha_gam) * vp.mu2_gam;
+			for (auto cc : chrs){
+				pred_int[cc]  = X.mult_vector_by_chr(cc, Eq_gam);
+			}
+		}
+
+		// Compute mean-centered residuals for each chromosome
+		for (auto cc : chrs){
+			if (n_effects > 1){
+				chr_residuals[cc] = map_residuals + pred_main[cc] + pred_int[cc].cwiseProduct(vp.eta.cast<double>());
+			} else {
+				chr_residuals[cc] = map_residuals + pred_main[cc];
+			}
+			chr_residuals[cc].array() -= chr_residuals[cc].mean();
+		}
+	}
+
+	void LOCO_pvals(const VariationalParametersLite& vp,
+					const std::vector<Eigen::VectorXd>& chr_residuals,
+					Eigen::Ref<Eigen::VectorXd> neglogp_beta,
+					Eigen::Ref<Eigen::VectorXd> neglogp_gam,
+					Eigen::Ref<Eigen::VectorXd> neglogp_joint){
+		assert(neglogp_beta.rows()  == n_var);
+		assert(neglogp_gam.rows()   == n_var);
+		assert(neglogp_joint.rows() == n_var);
+		assert(n_effects == 1 || n_effects == 2);
+
+		std::set<int> chrs(X.chromosome.begin(), X.chromosome.end());
+		assert(chr_residuals.size() == n_chrs);
+
+		// Compute p-vals per variant (p=3 as residuals mean centered)
+		Eigen::MatrixXd H_kk(n_samples, n_effects);
+		boost_m::students_t t_dist(n_samples - n_effects - 1);
+		boost_m::fisher_f f_dist(n_effects, n_samples - n_effects - 1);
+		for(std::uint32_t jj = 0; jj < n_var; jj++ ){
+			int chr = X.chromosome[jj];
+			H_kk.col(0) = X.col(jj).cast<double>();
+
+			if(n_effects == 1){
+				double ztz_inv = 1.0 / H_kk.squaredNorm();
+				double tau = (H_kk.transpose() * chr_residuals[chr])(0,0) * ztz_inv;
+				double rss_null = (chr_residuals[chr] - H_kk * tau).squaredNorm();
+				// T-test of variant j
+				double main_se_j    = std::sqrt(rss_null / (N - 1.0) * ztz_inv);
+				double main_tstat_j = tau / main_se_j;
+				double main_pval_j  = 2 * boost_m::cdf(boost_m::complement(t_dist, fabs(main_tstat_j)));
+
+				neglogp_beta(jj) = -1 * std::log10(main_pval_j);
+			} else if (n_effects > 1){
+				H_kk.col(1) = H_kk.col(0).cwiseProduct(vp.eta.cast<double>());
+
+				// Model Fitting - p=3 as residuals mean centered
+				Eigen::Matrix2d HtH     = H_kk.transpose() * H_kk;
+				Eigen::Matrix2d HtH_inv = HtH.inverse(); // should be efficient for 2x2 matrix
+				Eigen::Vector2d tau     = HtH_inv * H_kk.transpose() * chr_residuals[chr];
+
+				double rss_null = chr_residuals[chr].squaredNorm();
+				double rss_alt  = (chr_residuals[chr] - H_kk * tau).squaredNorm();
+
+				// T-test on beta
+				double beta_tstat = tau[0] / sqrt(rss_alt * HtH_inv(0, 0) / (N - 3.0));
+				double beta_pval  = 2 * boost_m::cdf(boost_m::complement(t_dist, fabs(beta_tstat)));
+				neglogp_beta[jj]  = -1 * std::log10(beta_pval);
+
+				// T-test on gamma
+				double gam_tstat  = tau[1] / sqrt(rss_alt * HtH_inv(1, 1) / (N - 3.0));
+				double gam_pval   = 2 * boost_m::cdf(boost_m::complement(t_dist, fabs(gam_tstat)));
+				neglogp_gam[jj]   = -1 * std::log10(gam_pval);
+
+				// F-test over main+int effects of snp_j
+				double joint_fstat, joint_pval;
+				joint_fstat       = (rss_null - rss_alt) / 2.0;
+				joint_fstat      /= rss_alt / (N - 3.0);
+				joint_pval        = 1.0 - boost_m::cdf(f_dist, joint_fstat);
+				neglogp_joint[jj] = -1 * std::log10(joint_pval);
+			}
+		}
+	}
+
 	/********** Output functions ************/
 	void write_trackers_to_file(const std::string& file_prefix,
                                 const std::vector< VbTracker >& trackers,
@@ -1555,20 +1679,14 @@ public:
 			outf << std::endl;
 		}
 
-
-		// MAP snp-stats to file
+		/*********** Stats from MAP to file ************/
+		std::vector<Eigen::VectorXd> map_residuals_by_chr(n_chrs);
 		long int ii_map = std::distance(weights.begin(), std::max_element(weights.begin(), weights.end()));
-		write_snp_stats_to_file(outf_map, n_effects, n_var, trackers[ii_map].vp, X, p, true);
-		if(p.use_vb_on_covars) {
-			write_covars_to_file(outf_map_covar, trackers[ii_map].vp);
-		}
-
-
-
+		VariationalParametersLite vp_map = trackers[ii_map].vp;
 
 		// Predicted effects to file
-		VariationalParametersLite vp_map = trackers[ii_map].vp;
 		calcPredEffects(vp_map);
+		compute_residuals_per_chr(vp_map, map_residuals_by_chr);
 		if(n_effects == 1) {
 			outf_map_pred << "Xbeta" << std::endl;
 			for (std::uint32_t ii = 0; ii < n_samples; ii++) {
@@ -1592,6 +1710,16 @@ public:
 			if(ll + 1 < n_env) outf_weights << " ";
 		}
 		outf_weights << std::endl;
+
+		// Compute LOCO p-values
+		Eigen::VectorXd neglogp_beta(n_var), neglogp_gam(n_var), neglogp_joint(n_var);
+		LOCO_pvals(vp_map, map_residuals_by_chr, neglogp_beta, neglogp_gam, neglogp_joint);
+
+		// MAP snp-stats to file
+		write_snp_stats_to_file(outf_map, n_effects, n_var, vp_map, X, p, true, neglogp_beta, neglogp_gam, neglogp_joint);
+		if(p.use_vb_on_covars) {
+			write_covars_to_file(outf_map_covar, vp_map);
+		}
 
 		// Rescan of map
 		if(n_env > 1) {

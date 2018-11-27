@@ -170,6 +170,11 @@ void parse_arguments(parameters &p, int argc, char *argv[]) {
 #ifdef DEBUG
 		std::cout << "- in DEBUG mode" << std::endl;
 #endif
+#ifdef EIGEN_USE_MKL_ALL
+		std::cout << "- compiled with Intel MKL backend" << std::endl;
+#else
+        std::cout << "- compiled with native Eigen backend" << std::endl;
+#endif
 #ifdef OSX
 		std::cout << "- OSX compatible" << std::endl;
 #endif

@@ -77,19 +77,13 @@ public:
 	// sgd
 	long int count;
 
-#ifdef DATA_AS_FLOAT
+
 	VariationalParameters(EigenRefDataVector my_ym,
 						  EigenRefDataVector my_yx,
 						  EigenRefDataVector my_eta,
 						  EigenRefDataVector my_eta_sq) : yx(my_yx), ym(my_ym),
 																   eta(my_eta), eta_sq(my_eta_sq){};
-#else
-	VariationalParameters(Eigen::Ref<Eigen::VectorXd> my_ym,
-			Eigen::Ref<Eigen::VectorXd> my_yx,
-			Eigen::Ref<Eigen::VectorXd> my_eta,
-			Eigen::Ref<Eigen::VectorXd> my_eta_sq) : yx(my_yx), ym(my_ym),
-				eta(my_eta), eta_sq(my_eta_sq){};
-#endif
+
 	~VariationalParameters(){};
 
 	void init_from_lite(const VariationalParametersLite& init) {
@@ -147,7 +141,8 @@ public:
 	}
 
 	void calcVarqBeta(const Hyps& hyps,
-			const parameters& p){
+			const parameters& p,
+			const int& n_effects){
 		// Variance of effect size beta under approximating distribution q(u, beta)
 
 		varB = alpha_beta * (s1_beta_sq + (1.0 - alpha_beta) * mu1_beta.square());
@@ -156,10 +151,12 @@ public:
 			varB -= 2.0 * alpha_beta * (1.0 - alpha_beta) * mu1_beta * mu2_beta;
 		}
 
-		varG = alpha_gam * (s1_gam_sq + (1.0 - alpha_gam) * mu1_gam.square());
-		if(p.mode_mog_prior_gam){
-			varG += (1.0 - alpha_gam) * (s2_gam_sq + (alpha_gam) * mu2_gam.square());
-			varG -= 2.0 * alpha_gam * (1.0 - alpha_gam) * mu1_gam * mu2_gam;
+		if (n_effects > 1) {
+			varG = alpha_gam * (s1_gam_sq + (1.0 - alpha_gam) * mu1_gam.square());
+			if (p.mode_mog_prior_gam) {
+				varG += (1.0 - alpha_gam) * (s2_gam_sq + (alpha_gam) * mu2_gam.square());
+				varG -= 2.0 * alpha_gam * (1.0 - alpha_gam) * mu1_gam * mu2_gam;
+			}
 		}
 	}
 };
