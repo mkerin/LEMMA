@@ -7,6 +7,11 @@ src/tools/*
 data/*
 tests/data/*
 
+cmake-build*
+CMakeFiles/*
+traces/*
+instruments*
+
 # Ignore any executables
 bin/*
 
@@ -35,3 +40,4 @@ examples/test_genotype_mat
 examples/test_updates
 examples/test_updates_constants_out_of_loop
 examples/test_updates_internal_dot
+examples/test_mkl_Xtv

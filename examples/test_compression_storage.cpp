@@ -66,7 +66,6 @@ int main() {
 	// vector-Vector
 	std::cout << "vector-vector [write to double]" << std::endl;
     boost::timer::auto_cpu_timer t3a(5, "Lookup value: %ts \n");
-	double yy;
 	for(int kk = 0; kk < L; kk++){
 		for (int bb = 0; bb < 64; bb++){
 			double y = m.transpose() * v;
@@ -77,7 +76,6 @@ int main() {
 
 	std::cout << "vector-vector [write to eigen]" << std::endl;
     boost::timer::auto_cpu_timer t3b(5, "Lookup value: %ts \n");
-	double yy;
 	for(int kk = 0; kk < L; kk++){
 		for (int bb = 0; bb < 64; bb++){
 			Y[bb] = m.transpose() * v;

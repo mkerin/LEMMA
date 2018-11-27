@@ -1,6 +1,8 @@
 // Adapted from example/bgen_to_vcf.cpp by Gavin Band
 // From project at http://bitbucket.org/gavinband/bgen/get/master.tar.gz
 
+#define EIGEN_USE_MKL_ALL
+
 #include <boost/algorithm/string/predicate.hpp>
 #include <boost/lexical_cast.hpp>
 #include <algorithm>

@@ -115,6 +115,8 @@ public:
                             p( dat.params ) {
 		assert(std::includes(dat.hyps_names.begin(), dat.hyps_names.end(), hyps_names.begin(), hyps_names.end()));
 		std::cout << "Initialising vbayes object" << std::endl;
+		mkl_set_num_threads_local(p.n_thread);
+
 
 		// Data size params
 		n_effects      = dat.n_effects;
@@ -212,7 +214,7 @@ public:
 #else
 			vp_init.eta     = E.matrix() * vp_init.muw.matrix();
 #endif
-			vp_init.eta_sq  = vp_init.eta.array().square();
+			vp_init.eta_sq  = vp_init.eta.cwiseProduct(vp_init.eta);
 
 			// ym, yx
 			calcPredEffects(vp_init);

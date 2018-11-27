@@ -167,7 +167,12 @@ void parse_arguments(parameters &p, int argc, char *argv[]) {
 #else
 		std::cout << "- Data encoded as doubles" << std::endl;
 #endif
-
+#ifdef DEBUG
+		std::cout << "- in DEBUG mode" << std::endl;
+#endif
+#ifdef OSX
+		std::cout << "- OSX compatible" << std::endl;
+#endif
 		// For vectorise profiling
 		Eigen::VectorXi aa1 = Eigen::VectorXi::Random(256000);
 		Eigen::VectorXi aa2 = Eigen::VectorXi::Random(256000);

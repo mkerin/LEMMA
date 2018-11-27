@@ -570,7 +570,7 @@ class Data
 			++n_cols;
 			col_names.push_back(s1);
 		}
-		std::cout << " Detected " << n_cols << " column(s) from " << filename << std::endl;
+		std::cout << n_grid << " x " << n_cols << " matrix read from " << filename << std::endl;
 
 		// Write remainder of file to Eigen matrix M
 		M.resize(n_grid, n_cols);
@@ -966,9 +966,10 @@ class Data
 		unsigned long n_cols;
 		std::vector< std::string > col_names;
 		std::map<int, bool> missing_rows;
-		read_txt_file( params.env_weights_file, E_weights, n_cols, col_names, missing_rows );
+		// read_txt_file( params.env_weights_file, E_weights, n_cols, col_names, missing_rows );
+		read_grid_file(params.env_weights_file, E_weights, col_names);
 
-		assert(n_cols == 1);
+		assert(E_weights.rows() == n_env);
 		assert(missing_rows.empty());
 	}
 

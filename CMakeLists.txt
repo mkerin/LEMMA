@@ -3,43 +3,64 @@ project(bgen_prog VERSION 0.10.3)
 
 set(CMAKE_CXX_STANDARD 11)
 
-#Bring the headers, such as Student.h into the project
-#include_directories(include)
-
-## Laptop build
-#Compilation flags
+##Compilation flags
 if(CMAKE_CURRENT_SOURCE_DIR MATCHES /Users/kerin)
-    # OSX File System - Laptop
+    message("Laptop build (OSX)")
+    set(BGEN /Users/kerin/software/bgen)
     if(CMAKE_BUILD_TYPE STREQUAL Release)
         message("Release build")
-        set(LOC_COMPILE_OPTS -DOSX -Wno-deprecated -O3 -g)
+        set(LOC_COMPILE_OPTS -DOSX -Wno-deprecated -Wno-parentheses -O3 -g)
         set(LINKER_OPTS -O3 -g)
     else()
         message("Debug build")
-        set(LOC_COMPILE_OPTS -DOSX -Wno-deprecated -DDEBUG -pg -Og -g)
+        set(LOC_COMPILE_OPTS -DOSX -Wno-deprecated -Wno-parentheses -DDEBUG -pg -Og -g)
         set(LINKER_OPTS -pg -Og -g)
     endif()
-    set(BGEN /Users/kerin/software/bgen)
     set(LIB-DIRS "-L${BGEN}/build/3rd_party/boost_1_55_0")
 elseif(CMAKE_CURRENT_SOURCE_DIR MATCHES /well/marchini/kebl4230)
     # LINUX File System - Rescomp
+    message("Rescomp build (Linux)")
     set(BGEN /well/marchini/kebl4230/software/bgen/)
     set(LIBS rt)
-    set(LOC_COMPILE_OPTS -Wno-deprecated -O3 -static -static-libgcc -static-libstdc++ -lz -fopenmp)
+    set(LOC_COMPILE_OPTS -Wno-deprecated -Wno-parentheses -O3 -static -static-libgcc -static-libstdc++ -lz -fopenmp)
     set(LINKER_OPTS -O3 -fopenmp)
     set(LIB-DIRS "-L${BGEN}/build/3rd_party/boost_1_55_0 -L/well/marchini/kebl4230/software/boost_1_62_0/stage/lib")
 elseif(CMAKE_CURRENT_SOURCE_DIR MATCHES /homes/kerin)
     # LINUX File System - Garganey
+    message("Garganey build (Linux)")
     set(BGEN /homes/kerin/projects/bgen/)
     set(LIBS rt)
-    set(LOC_COMPILE_OPTS -Wno-deprecated -O3 -fopenmp -g)
+    set(LOC_COMPILE_OPTS -Wno-deprecated -Wno-parentheses -O3 -fopenmp -g)
     set(LINKER_OPTS -O3 -fopenmp -g)
     set(LIB-DIRS "-L${BGEN}/build/3rd_party/boost_1_55_0")
 else()
     message( FATAL_ERROR "Unexpected root directory structure. Where is the BGEN lib located?")
 endif()
 
+##Add INTEL MKL lib
+if(CMAKE_CURRENT_SOURCE_DIR MATCHES /Users/kerin)
+    # OSX File System - Laptop
+    set(MKLROOT /opt/intel/compilers_and_libraries_2019.1.144/mac/mkl)
+    list(APPEND LINKER_OPTS -L${MKLROOT}/lib -Wl,-rpath,${MKLROOT}/lib -lmkl_intel_lp64 -lmkl_sequential -lmkl_core -lpthread -lm -ldl)
+    list(APPEND LOC_COMPILE_OPTS -m64 -I${MKLROOT}/include)
+elseif(CMAKE_CURRENT_SOURCE_DIR MATCHES /well/marchini/kebl4230)
+    # LINUX File System - Rescomp
+    set(MKLROOT NA)
+    list(APPEND LINKER_OPTS -L${MKLROOT}/lib/intel64 -Wl,--no-as-needed -lmkl_intel_lp64 -lmkl_gnu_thread -lmkl_core -lgomp -lpthread -lm -ldl)
+    list(APPEND LOC_COMPILE_OPTS -m64 -I${MKLROOT}/include)
+elseif(CMAKE_CURRENT_SOURCE_DIR MATCHES /homes/kerin)
+    # LINUX File System - Garganey w/ Intel MKL
+    set(MKLROOT /homes/kerin/intel/compilers_and_libraries_2019.1.144/linux/mkl)
+    list(APPEND LINKER_OPTS -L${MKLROOT}/lib/intel64 -Wl,--no-as-needed -lmkl_intel_lp64 -lmkl_gnu_thread -lmkl_core -lgomp -lpthread -lm -ldl)
+    list(APPEND LOC_COMPILE_OPTS -m64 -I${MKLROOT}/include)
+else()
+    message( FATAL_ERROR "Unexpected root directory structure. Where is the MKL lib located?")
+endif()
+message(${LOC_COMPILE_OPTS})
+
 set(SOURCES src/bgen_prog.cpp)
+
+
 
 ##Platform invariant variables
 find_library(BGEN_LIB bgen HINTS ${BGEN}/build)

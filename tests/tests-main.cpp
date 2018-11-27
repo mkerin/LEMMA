@@ -2,6 +2,8 @@
 #define CATCH_CONFIG_MAIN
 #include "catch.hpp"
 
+#define EIGEN_USE_MKL_ALL
+
 #include <algorithm>
 #include <cmath>
 #include <iostream>

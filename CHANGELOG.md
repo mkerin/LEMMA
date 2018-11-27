@@ -1,6 +1,7 @@
 # Version 0.10.3
 
 Changes:
+- Now compile with INTEL MKL
 - DATA_AS_FLOAT implemented. Preliminary testing suggests this is a 2x speedup with small changes in accuracy
 - Initialise logw with numeric_limits::min()
 - interim outputs include low maintenance measure of wall clock time
@@ -33,6 +34,7 @@ Bugfix:
 - Now able to run only main effects model
 - Need to transpose snpstats.row() to assign to Eigen::ArrayXd vp.muw
 - Init weights from sumstats if n_env > 1
+- read_environment_weights() should read from env_weights_file! (+ use read_grid_file())
 
 Changes:
 - Ability to set minimum difference in variances of MoG.
@@ -43,6 +45,7 @@ Changes:
 - All variant metadata stored in genotype matrix object.
 - Close outf_scan after writing.
 - Check hyp grid values are finite
+- Cleaner timing output
 
 # Version 0.9.2
 Bugfixes:
