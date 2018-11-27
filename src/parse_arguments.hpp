@@ -624,7 +624,7 @@ void parse_arguments(parameters &p, int argc, char *argv[]) {
 		std::exit(EXIT_FAILURE);
 	}
 
-	if(p.interaction_analysis && p.covar_file == "NULL"){
+	if(p.x_param_name != "NULL" && p.covar_file == "NULL"){
 		throw std::runtime_error("ERROR: --covar must be provided if --interaction analysis is being run.");
 	}
 
