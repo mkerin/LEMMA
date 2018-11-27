@@ -279,8 +279,8 @@ EigenDataMatrix col_block(const std::uint32_t& ch_start,
 	if(low_mem){
 		double ww = intervalWidth;
 
-		EigenDataArrayX  E = 0.5 * ww - compressed_dosage_means.segment(ch_start, ch_len).array();
-		EigenDataArrayX  S = compressed_dosage_inv_sds.segment(ch_start, ch_len);
+		EigenDataArrayX  E = (0.5 * ww - compressed_dosage_means.segment(ch_start, ch_len).array()).cast<scalarData>();
+		EigenDataArrayX  S = compressed_dosage_inv_sds.segment(ch_start, ch_len).cast<scalarData>();
 		EigenDataArrayXX res;
 
 		res = ww * M.block(0, ch_start, nn, ch_len).cast<scalarData>();

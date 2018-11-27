@@ -1055,7 +1055,7 @@ public:
 //		}
 
 		// Recompute eta_sq
-		vp.eta_sq  = vp.eta.array().square();
+		vp.eta_sq  = vp.eta.array().square().matrix();
 #ifdef DATA_AS_FLOAT
 		vp.eta_sq += E.square().matrix() * vp.sw_sq.matrix().cast<float>();
 #else
