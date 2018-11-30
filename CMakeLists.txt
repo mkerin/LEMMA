@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.7.2)
-project(bgen_prog VERSION 0.10.3)
+project(bgen_prog VERSION 0.10.4)
 
 set(CMAKE_CXX_STANDARD 11)
 

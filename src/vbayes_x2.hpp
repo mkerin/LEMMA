@@ -111,7 +111,7 @@ public:
 
 	explicit VBayesX2( Data& dat ) : X( dat.G ),
                             Y(Eigen::Map<EigenDataVector>(dat.Y.data(), dat.Y.rows())),
-                            C( dat.W ),
+                            C( dat.E ),
                             dXtEEX( dat.dXtEEX ),
                             snpstats( dat.snpstats ),
                             p( dat.params ) {
@@ -126,8 +126,8 @@ public:
 		n_env          = dat.n_env;
 		n_var2         = n_effects * dat.n_var;
 		n_samples      = dat.n_samples;
-		n_covar        = dat.n_covar;
-		covar_names    = dat.covar_names;
+		n_covar        = dat.n_env;
+		covar_names    = dat.env_names;
 		env_names      = dat.env_names;
 		N              = (double) n_samples;
 
@@ -1044,15 +1044,6 @@ public:
 			// Update eta
 			vp.eta += (vp.muw(ll) * E.col(ll)).matrix();
 		}
-
-		// rescale weights such that vector eta has variance 1
-//		if(p.rescale_eta){
-//			double sigma = (vp.eta.array() - (vp.eta.array().sum() / N)).matrix().squaredNorm() / (N-1);
-//			vp.muw /= std::sqrt(sigma);
-//			vp.eta = E.matrix() * vp.muw.matrix();
-//			double sigma2 = (vp.eta.array() - (vp.eta.array().sum() / N)).matrix().squaredNorm() / (N-1);
-//			std::cout << "Eta rescaled; variance " << sigma << " -> variance " << sigma2 <<std::endl;
-//		}
 
 		// Recompute eta_sq
 		vp.eta_sq  = vp.eta.array().square().matrix();

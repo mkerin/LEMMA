@@ -37,9 +37,6 @@
 namespace boost_io = boost::iostreams;
 namespace boost_m = boost::math;
 
-inline std::size_t find_covar_index( const std::string& colname, std::vector< std::string > col_names );
-
-
 class Data
 {
 	public :
@@ -191,30 +188,14 @@ class Data
 		// Environmental vars - subset of covars
 		if(params.env_file != "NULL"){
 			read_environment();
-        } else if(params.x_param_name != "NULL"){
-            std::size_t x_col = find_covar_index(params.x_param_name, covar_names);
-            E                = W.col(x_col);
-            n_env            = 1;
-            E_reduced        = false;
-            env_names.push_back(params.x_param_name);
-        } else if(params.interaction_analysis){
-            E                = W.col(0);
-            n_env            = 1;
-            E_reduced        = false;
-            env_names.push_back(covar_names[0]);
-        } else {
-		    n_env = 0;
-		}
+        }
 
-		if(params.env_weights_file != "NULL" && n_env > 1 && params.env_file != "NULL"){
+		if(params.env_weights_file != "NULL" && params.env_file != "NULL"){
 			read_environment_weights();
 		}
 
 		if(params.interaction_analysis){
-			n_effects = 2;  // 1 more than actually present... n_effects?
-		} else {
-			n_effects = 1;
-			assert(n_env == 0);
+			n_effects = 2;
 		}
 
 		// Exclude samples with missing values in phenos / covars / filters
@@ -255,13 +236,22 @@ class Data
 			scale_matrix( E, n_env, env_names );
 		}
 
-		// Y2 always contains the controlled phenotype
-		if(n_covar > 0 && params.use_vb_on_covars){
-			Y2 = Y;
-			regress_out_covars(Y2);
-		} else if (n_covar > 0){
-			regress_out_covars(Y);
-			Y2 = Y;
+		// Project C from Y and E when C is present
+		if(n_covar > 0) {
+			regress_first_mat_from_second(W, "covars", covar_names, Y);
+			regress_first_mat_from_second(W, "covars", covar_names, E);
+		}
+
+		// If not 'use_Vb_on_covars' then also project E from Y
+		// Y2 should always have C and E regressed out
+		if(n_env > 0) {
+			if (params.use_vb_on_covars) {
+				Y2 = Y;
+				regress_first_mat_from_second(E, "envs", env_names, Y2);
+			} else {
+				regress_first_mat_from_second(E, "envs", env_names, Y);
+				Y2 = Y;
+			}
 		}
 	}
 
@@ -1075,7 +1065,7 @@ class Data
 	}
 
 	void calc_snpstats(){
-		std::cout << "Reordering/computing results for snpwise scan" << std::endl;
+		std::cout << "Reordering/computing snpwise scan...";
 		MyTimer my_timer("snpwise scan constructed in %ts \n");
 		snpstats.resize(n_var, n_env + 3);
 		std::vector<std::string>::iterator it;
@@ -1131,7 +1121,8 @@ class Data
 				snpstats.row(jj) = external_snpstats.row(it - external_snpstats_SNPID.begin());
 			}
 		}
-		std::cout << n_snpstats_computed << " computed from raw data, " << n_var - n_snpstats_computed << " read from file" << std::endl;
+		std::cout << " (" << n_snpstats_computed << " computed from raw data, ";
+		std::cout << n_var - n_snpstats_computed << " read from file)" << std::endl;
 
 		if(params.snpstats_file == "NULL"){
 			std::string ofile_scan = fstream_init(outf_scan, "", "_snpwise_scan");
@@ -1151,7 +1142,7 @@ class Data
 	}
 
 	void calc_dxteex(){
-		std::cout << "Reordering/building dXtEEX array" << std::endl;
+		std::cout << "Reordering/building dXtEEX array...";
 		MyTimer t_calcDXtEEX("dXtEEX array constructed in %ts \n");
 		t_calcDXtEEX.resume();
 		EigenDataArrayX cl_j;
@@ -1175,7 +1166,7 @@ class Data
 				dXtEEX.row(jj) = external_dXtEEX.row(it - external_dXtEEX_SNPID.begin());
 			}
 		}
-		std::cout << n_dxteex_computed << " computed from raw data, " << n_var - n_dxteex_computed << " read from file" << std::endl;
+		std::cout << " (" << n_dxteex_computed << " computed from raw data, " << n_var - n_dxteex_computed << " read from file)" << std::endl;
 	}
 
 	void read_grids(){
@@ -1186,7 +1177,6 @@ class Data
 
 
 		read_grid_file( params.hyps_grid_file, hyps_grid, hyps_names );
-//		read_grid_file( params.hyps_probs_file, imprt_grid, imprt_names );
 
 		// Verify header of grid file as expected
 		if(params.interaction_analysis){
@@ -1200,15 +1190,14 @@ class Data
 					double sigma_g_sum  = hyps_grid.col(2).array().abs().sum();
 					double lambda_g_sum = hyps_grid.col(4).array().abs().sum();
 					if(sigma_g_sum > 1e-6 || lambda_g_sum > 1e-6){
-						throw std::runtime_error("In a main effects only analysis columns for sigma_g and lambda_g should either be absent or contain zeros");
+						std::cout << "WARNING: You have non-zero hyperparameters for interaction effects,";
+						std::cout << " but no environmental variables provided." << std::endl;
 					}
 				} else {
 					throw std::runtime_error("Column names of --hyps_grid must be sigma sigma_b lambda_b or sigma sigma_b sigma_g lambda_b lambda_g");
 				}
 			}
 		}
-
-		// If
 
 		// Option to provide separate grid to evaluate in round 1
 		std::vector< std::string > r1_hyps_names, r1_probs_names;
@@ -1313,25 +1302,26 @@ class Data
 		return M_tmp;
 	}
 
-	void regress_out_covars(EigenDataMatrix& yy){
-		std::cout << "Regressing out covars:" << std::endl;
-		for(int cc = 0; cc < std::min(n_covar, (unsigned long) 10); cc++){
-			std::cout << ( cc > 0 ? ", " : "" ) << covar_names[cc];
+	void regress_first_mat_from_second(const EigenDataMatrix& A,
+			const std::string& Astring,
+			const std::vector<std::string>& A_names,
+			EigenDataMatrix& yy){
+		//
+		std::cout << "Regressing out " << Astring << ":" << std::endl;
+		unsigned long nnn = A_names.size();
+		for(int cc = 0; cc < std::min(nnn, (unsigned long) 10); cc++){
+			std::cout << ( cc > 0 ? ", " : "" ) << A_names[cc];
 		}
-		if (n_covar > 10){
-			std::cout << "... (" << n_covar << " variables)";
+		if (nnn > 10){
+			std::cout << "... (" << nnn << " variables)";
 		}
 		std::cout << std::endl;
 
-		Eigen::MatrixXd WtW = (W.transpose() * W).cast<double>();
-		Eigen::MatrixXd Wty = (W.transpose() * yy).cast<double>();
+		Eigen::MatrixXd AtA = (A.transpose() * A).cast<double>();
+		Eigen::MatrixXd Aty = (A.transpose() * yy).cast<double>();
 
-		Eigen::MatrixXd bb = solve(WtW, Wty);
-#ifdef DATA_AS_FLOAT
-		yy -= W * bb.cast<float>();
-#else
-		yy -= W * bb;
-#endif
+		Eigen::MatrixXd bb = solve(AtA, Aty);
+		yy -= A * bb.cast<scalarData>();
 	}
 
 	void reduce_to_complete_cases() {
@@ -1342,9 +1332,7 @@ class Data
 
 		incomplete_cases.insert(missing_covars.begin(), missing_covars.end());
 		incomplete_cases.insert(missing_phenos.begin(), missing_phenos.end());
-		if(params.env_file != "NULL"){
-			incomplete_cases.insert(missing_envs.begin(), missing_envs.end());
-		}
+		incomplete_cases.insert(missing_envs.begin(), missing_envs.end());
 
 		if(n_pheno > 0){
 			Y = reduce_mat_to_complete_cases( Y, Y_reduced, n_pheno, incomplete_cases );
@@ -1387,16 +1375,5 @@ class Data
 		return ofile;
 	}
 };
-
-inline std::size_t find_covar_index(const std::string& colname, std::vector< std::string > col_names ){
-	std::size_t x_col;
-	std::vector<std::string>::iterator it;
-	it = std::find(col_names.begin(), col_names.end(), colname);
-	if (it == col_names.end()){
-		throw std::invalid_argument("Can't locate parameter " + colname);
-	}
-	x_col = it - col_names.begin();
-	return x_col;
-}
 
 #endif

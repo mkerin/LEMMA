@@ -98,7 +98,7 @@ void parse_arguments(parameters &p, int argc, char *argv[]) {
 		"--use_vb_on_covars",
 		"--threads",
 		"--low_mem",
-		"--interaction",
+		"--high_mem",
 		"--incl_sample_ids",
 		"--incl_rsids",
 		"--rsid",
@@ -120,7 +120,6 @@ void parse_arguments(parameters &p, int argc, char *argv[]) {
 		"--vb_iter_max",
 		"--burnin_maxhyps",
 		"--env_update_repeats",
-		"--rescale_eta",
 		"--gamma_updates_thresh",
 		"--init_weights_with_snpwise_scan",
 		"--dxteex",
@@ -279,11 +278,6 @@ void parse_arguments(parameters &p, int argc, char *argv[]) {
 				i += 0;
 			}
 
-			if(strcmp(in_str, "--rescale_eta") == 0) {
-				p.rescale_eta = true;
-				i += 0;
-			}
-
 			if(strcmp(in_str, "--gamma_updates_thresh") == 0) {
 				p.restrict_gamma_updates = true;
 				p.gamma_updates_thresh = std::stod(argv[i + 1]);
@@ -367,6 +361,11 @@ void parse_arguments(parameters &p, int argc, char *argv[]) {
 
 			if(strcmp(in_str, "--low_mem") == 0) {
 				p.low_mem = true;
+				i += 0;
+			}
+
+			if(strcmp(in_str, "--high_mem") == 0) {
+				p.low_mem = false;
 				i += 0;
 			}
 
@@ -575,13 +574,6 @@ void parse_arguments(parameters &p, int argc, char *argv[]) {
 				i += 1;
 			}
 
-			if(strcmp(in_str, "--interaction") == 0) {
-				check_counts(in_str, i, 1, argc);
-				p.interaction_analysis = true;
-				p.x_param_name = argv[i + 1]; // include sample ids file
-				i += 1;
-			}
-
 			if(strcmp(in_str, "--genetic_confounders") == 0) {
 				check_counts(in_str, i, 1, argc);
 				int jj = i+1;
@@ -622,10 +614,6 @@ void parse_arguments(parameters &p, int argc, char *argv[]) {
 		std::cout << "ERROR: search grids for hyperparameter values";
 		std::cout << "should be provided in conjunction with --mode_vb." << std::endl;
 		std::exit(EXIT_FAILURE);
-	}
-
-	if(p.x_param_name != "NULL" && p.covar_file == "NULL"){
-		throw std::runtime_error("ERROR: --covar must be provided if --interaction analysis is being run.");
 	}
 
 	if(p.env_file == "NULL" && p.env_weights_file != "NULL"){

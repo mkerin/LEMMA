@@ -9,7 +9,7 @@
 class parameters {
 	public :
 		std::string bgen_file, chr, out_file, pheno_file, env_file, covar_file, bgi_file;
-		std::string incl_sids_file, x_param_name, incl_rsids_file, recombination_file;
+		std::string incl_sids_file, incl_rsids_file, recombination_file;
 		std::string r1_hyps_grid_file, r1_probs_grid_file, hyps_grid_file;
 		std::string env_weights_file, hyps_probs_file, vb_init_file;
 		std::string dxteex_file, snpstats_file;
@@ -24,7 +24,7 @@ class parameters {
 		bool elbo_tol_set_by_user, alpha_tol_set_by_user, mode_empirical_bayes;
 		bool keep_constant_variants, user_requests_round1, scale_pheno;
 		bool mode_alternating_updates;
-		bool rescale_eta, restrict_gamma_updates;
+		bool restrict_gamma_updates;
 		bool init_weights_with_snpwise_scan, flip_high_maf_variants, min_spike_diff_set;
 		bool mode_mog_prior_beta, mode_mog_prior_gam;
 		double min_maf, min_info, elbo_tol, alpha_tol, gamma_updates_thresh;
@@ -47,11 +47,9 @@ class parameters {
 		vb_init_file("NULL"),
 		incl_sids_file("NULL"),
 		incl_rsids_file("NULL"),
-		x_param_name("NULL"),
 		dxteex_file("NULL"),
 		env_weights_file("NULL") {
-		rescale_eta = false;
-		flip_high_maf_variants = true;
+		flip_high_maf_variants = false;
 		init_weights_with_snpwise_scan = false;
 		restrict_gamma_updates = false;
 		n_thread = 1;
@@ -60,7 +58,7 @@ class parameters {
 		interaction_analysis = false;
 		chunk_size = 256;
 		main_chunk_size = 64;
-		gxe_chunk_size = 1;
+		gxe_chunk_size = 16;
 		missing_code = -999;
 		vb_iter_max = 10000;
 		spike_diff_factor = 1000000.0; // Initial diff in variance of spike & slab
@@ -70,7 +68,7 @@ class parameters {
 		info_lim = false;
 		mode_empirical_bayes = false;
 		mode_alternating_updates = false;
-		low_mem = false;
+		low_mem = true;
 		mode_vb = false;
 		mode_mog_prior_beta = false;
 		mode_mog_prior_gam = false;

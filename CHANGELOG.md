@@ -1,3 +1,15 @@
+# Version 0.10.4
+
+Changes:
+- Covars regressed from pheno and env (Y = E alpha + X beta + Z gamma)
+- More flexible input of hyps grid in main effects mode.
+- Removal of --interaction flag.
+- Use --low_mem implementation by default.
+
+TODO:
+- Stop flipping variants if maf > 0.5 (misleading if triplet snps).
+- regress covars from genotypes.
+
 # Version 0.10.3
 
 Changes:
