@@ -5,6 +5,8 @@ Changes:
 - More flexible input of hyps grid in main effects mode.
 - Removal of --interaction flag.
 - Use --low_mem implementation by default.
+- Flag --mode_no_gxe to run Y = E alpha + X beta
+- dxteex only computed if n_effects > 1 (interaction mode)
 
 TODO:
 - Stop flipping variants if maf > 0.5 (misleading if triplet snps).

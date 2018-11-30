@@ -24,7 +24,7 @@ class parameters {
 		bool elbo_tol_set_by_user, alpha_tol_set_by_user, mode_empirical_bayes;
 		bool keep_constant_variants, user_requests_round1, scale_pheno;
 		bool mode_alternating_updates;
-		bool restrict_gamma_updates;
+		bool restrict_gamma_updates, mode_no_gxe;
 		bool init_weights_with_snpwise_scan, flip_high_maf_variants, min_spike_diff_set;
 		bool mode_mog_prior_beta, mode_mog_prior_gam;
 		double min_maf, min_info, elbo_tol, alpha_tol, gamma_updates_thresh;
@@ -70,6 +70,7 @@ class parameters {
 		mode_alternating_updates = false;
 		low_mem = true;
 		mode_vb = false;
+		mode_no_gxe = false;
 		mode_mog_prior_beta = false;
 		mode_mog_prior_gam = false;
 		select_snps = false;

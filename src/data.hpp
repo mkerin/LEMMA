@@ -194,8 +194,10 @@ class Data
 			read_environment_weights();
 		}
 
-		if(params.interaction_analysis){
+		if(!params.mode_no_gxe && params.interaction_analysis){
 			n_effects = 2;
+		} else {
+			n_effects = 1;
 		}
 
 		// Exclude samples with missing values in phenos / covars / filters

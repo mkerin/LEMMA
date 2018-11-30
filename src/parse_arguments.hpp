@@ -117,6 +117,7 @@ void parse_arguments(parameters &p, int argc, char *argv[]) {
 		"--force_round1",
 		"--raw_phenotypes",
 		"--mode_alternating_updates",
+		"--mode_no_gxe",
 		"--vb_iter_max",
 		"--burnin_maxhyps",
 		"--env_update_repeats",
@@ -315,6 +316,11 @@ void parse_arguments(parameters &p, int argc, char *argv[]) {
 
 			if(strcmp(in_str, "--mode_mog_beta") == 0) {
 				p.mode_mog_prior_beta = true;
+				i += 0;
+			}
+
+            if(strcmp(in_str, "--mode_no_gxe") == 0) {
+				p.mode_no_gxe = true;
 				i += 0;
 			}
 
