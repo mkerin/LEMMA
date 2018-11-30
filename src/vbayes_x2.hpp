@@ -589,7 +589,7 @@ public:
 			check_monotonic_elbo(all_hyps[nn], all_vp[nn], count, logw_prev[nn], "updateAlphaMu");
 
 			// Update env-weights
-			if (n_env > 1) {
+			if (n_effects > 1 && n_env > 1) {
 				for (int uu = 0; uu < p.env_update_repeats; uu++) {
 					updateEnvWeights(env_fwd_pass, all_hyps[nn], all_vp[nn]);
 					updateEnvWeights(env_back_pass, all_hyps[nn], all_vp[nn]);
@@ -1110,7 +1110,7 @@ public:
 
 		// weights
 		double kl_weights = 0.0;
-		if(n_env > 1) {
+		if(n_effects > 1 && n_env > 1) {
 			kl_weights += (double) n_env / 2.0;
 			kl_weights += vp.sw_sq.log().sum() / 2.0;
 			kl_weights -= vp.sw_sq.sum() / 2.0;
@@ -1691,16 +1691,18 @@ public:
 		}
 
 		// weights to file
-		for (int ll = 0; ll < n_env; ll++){
-			outf_weights << env_names[ll];
-			if(ll + 1 < n_env) outf_weights << " ";
+		if(n_effects > 1) {
+			for (int ll = 0; ll < n_env; ll++) {
+				outf_weights << env_names[ll];
+				if (ll + 1 < n_env) outf_weights << " ";
+			}
+			outf_weights << std::endl;
+			for (int ll = 0; ll < n_env; ll++) {
+				outf_weights << vp_map.muw(ll);
+				if (ll + 1 < n_env) outf_weights << " ";
+			}
+			outf_weights << std::endl;
 		}
-		outf_weights << std::endl;
-		for (int ll = 0; ll < n_env; ll++){
-			outf_weights << vp_map.muw(ll);
-			if(ll + 1 < n_env) outf_weights << " ";
-		}
-		outf_weights << std::endl;
 
 		// Compute LOCO p-values
 		Eigen::VectorXd neglogp_beta(n_var), neglogp_gam(n_var), neglogp_joint(n_var);
@@ -1713,7 +1715,7 @@ public:
 		}
 
 		// Rescan of map
-		if(n_env > 1) {
+		if(n_effects > 1) {
 			Eigen::VectorXd gam_neglogp(n_var);
 			rescanGWAS(trackers[ii_map].vp, gam_neglogp);
 			outf_rescan << "chr rsid pos a0 a1 maf info neglogp" << std::endl;

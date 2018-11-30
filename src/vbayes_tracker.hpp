@@ -143,11 +143,13 @@ public:
 
 
 		// Weights
-		for (int ll = 0; ll < n_env; ll++){
-			outf_weights << vp.muw(ll);
-			if(ll < n_env - 1) outf_weights << "\t";
+		if(n_effects > 1) {
+			for (int ll = 0; ll < n_env; ll++) {
+				outf_weights << vp.muw(ll);
+				if (ll < n_env - 1) outf_weights << "\t";
+			}
+			outf_weights << std::endl;
 		}
-		outf_weights << std::endl;
 
 		time_check = std::chrono::system_clock::now();
 	}
@@ -202,19 +204,21 @@ public:
 
 		// Initialise fstreams
 		fstream_init(outf_iter, dir, "_iter_updates", false);
-		fstream_init(outf_weights, dir, "_env_weights", false);
 
 		// Weights - add header + initial values
-		for (int ll = 0; ll < n_env; ll++){
-			outf_weights << env_names[ll];
-			if(ll + 1 < n_env) outf_weights << " ";
+		if(n_effects > 1) {
+			fstream_init(outf_weights, dir, "_env_weights", false);
+			for (int ll = 0; ll < n_env; ll++) {
+				outf_weights << env_names[ll];
+				if (ll + 1 < n_env) outf_weights << " ";
+			}
+			outf_weights << std::endl;
+			for (int ll = 0; ll < n_env; ll++) {
+				outf_weights << vp.muw(ll);
+				if (ll + 1 < n_env) outf_weights << " ";
+			}
+			outf_weights << std::endl;
 		}
-		outf_weights << std::endl;
-		for (int ll = 0; ll < n_env; ll++){
-			outf_weights << vp.muw(ll);
-			if(ll + 1 < n_env) outf_weights << " ";
-		}
-		outf_weights << std::endl;
 
 		// Diagnostics - add header
 		outf_iter    << "count\tsigma";

@@ -240,8 +240,8 @@ class Data
 
 		// Project C from Y and E when C is present
 		if(n_covar > 0) {
-			regress_first_mat_from_second(W, "covars", covar_names, Y);
-			regress_first_mat_from_second(W, "covars", covar_names, E);
+			regress_first_mat_from_second(W, "covars", covar_names, Y, "pheno");
+			regress_first_mat_from_second(W, "covars", covar_names, E, "env");
 		}
 
 		// If not 'use_Vb_on_covars' then also project E from Y
@@ -249,9 +249,9 @@ class Data
 		if(n_env > 0) {
 			if (params.use_vb_on_covars) {
 				Y2 = Y;
-				regress_first_mat_from_second(E, "envs", env_names, Y2);
+				regress_first_mat_from_second(E, Y2);
 			} else {
-				regress_first_mat_from_second(E, "envs", env_names, Y);
+				regress_first_mat_from_second(E, "envs", env_names, Y, "pheno");
 				Y2 = Y;
 			}
 		}
@@ -1305,11 +1305,22 @@ class Data
 	}
 
 	void regress_first_mat_from_second(const EigenDataMatrix& A,
+			EigenDataMatrix& yy){
+
+		Eigen::MatrixXd AtA = (A.transpose() * A).cast<double>();
+		Eigen::MatrixXd Aty = (A.transpose() * yy).cast<double>();
+
+		Eigen::MatrixXd bb = solve(AtA, Aty);
+		yy -= A * bb.cast<scalarData>();
+	}
+
+	void regress_first_mat_from_second(const EigenDataMatrix& A,
 			const std::string& Astring,
 			const std::vector<std::string>& A_names,
-			EigenDataMatrix& yy){
+			EigenDataMatrix& yy,
+			const std::string& yy_string){
 		//
-		std::cout << "Regressing out " << Astring << ":" << std::endl;
+		std::cout << "Regressing " << Astring << " from " << yy_string << ":" << std::endl;
 		unsigned long nnn = A_names.size();
 		for(int cc = 0; cc < std::min(nnn, (unsigned long) 10); cc++){
 			std::cout << ( cc > 0 ? ", " : "" ) << A_names[cc];
