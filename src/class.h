@@ -49,7 +49,7 @@ class parameters {
 		incl_rsids_file("NULL"),
 		dxteex_file("NULL"),
 		env_weights_file("NULL") {
-		flip_high_maf_variants = false;
+		flip_high_maf_variants = true;
 		init_weights_with_snpwise_scan = false;
 		restrict_gamma_updates = false;
 		n_thread = 1;
