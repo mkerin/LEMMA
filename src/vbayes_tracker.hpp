@@ -233,7 +233,9 @@ public:
 			}
 			outf_iter << "\tlambda" << ee;
 		}
-		outf_iter << "\ts_x\ts_z\tvar_covar";
+		outf_iter << "\ts_x";
+		if(n_effects > 1) outf_iter << "\ts_z";
+		outf_iter << "\tvar_covar";
 		outf_iter << "\telbo\tmax_alpha_diff\tsecs" << std::endl;
 
 	}

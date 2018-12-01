@@ -87,7 +87,6 @@ class Data
 
 	boost_io::filtering_ostream outf_scan;
 
-	std::chrono::system_clock::time_point start;
 	bool filters_applied;
 
 	// grid things for vbayes
@@ -96,12 +95,6 @@ class Data
 	Eigen::ArrayXXd alpha_init, mu_init;
 
 	explicit Data( const parameters& p ) : params(p), G(p) {
-		// system time at start
-		start = std::chrono::system_clock::now();
-		std::time_t start_time = std::chrono::system_clock::to_time_t(start);
-		std::cout << "Starting analysis at " << std::ctime(&start_time) << std::endl;
-		std::cout << "Compiled from git branch: master" << std::endl;
-
 		Eigen::setNbThreads(params.n_thread);
 		int n = Eigen::nbThreads( );
 		std::cout << "Threads used by eigen: " << n << std::endl;
@@ -124,11 +117,6 @@ class Data
 
 	~Data() {
 		// system time at end
-		auto end = std::chrono::system_clock::now();
-		std::chrono::duration<double> elapsed_seconds = end-start;
-		std::time_t end_time = std::chrono::system_clock::to_time_t(end);
-		std::cout << "Analysis finished at " << std::ctime(&end_time);
-		std::cout << "Elapsed time: " << elapsed_seconds.count() << "s" << std::endl;
 	}
 
 	void apply_filters(){

@@ -140,10 +140,6 @@ void parse_arguments(parameters &p, int argc, char *argv[]) {
 	}
 
 	if (argc == 1) {
-		std::cout << "======-----"<< std::endl;
-		std::cout << "Matt's BGEN PROG" << std::endl;
-		std::cout << "======-----" << std::endl << std::endl;
-
 #ifdef EIGEN_VECTORIZE
 		std::cout << "Details:" << std::endl;
 		std::cout << "- vectorization with SSE is ON" << std::endl;

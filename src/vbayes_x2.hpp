@@ -139,8 +139,6 @@ public:
 		E = dat.E;
 
 		// Allocate memory - fwd/back pass vectors
-		std::cout << "Allocating indices for fwd/back passes" << std::endl;
-
 		for(std::uint32_t kk = 0; kk < n_var * n_effects; kk++){
 			fwd_pass.push_back(kk);
 			back_pass.push_back(n_var2 - kk - 1);
@@ -440,13 +438,14 @@ public:
 				alpha_prev[nn] = all_vp[nn].alpha_beta;
 			}
 			std::vector<double> logw_prev = i_logw;
+			std::vector<double> alpha_diff(n_grid);
 
 			// WARNING: logw_prev copied by value (just want to check updates improve elbo)
 			updateAllParams(count, round_index, all_vp, all_hyps, logw_prev, logw_updates);
-			std::vector<double> alpha_diff(n_grid);
 			for (int nn = 0; nn < n_grid; nn++){
 				i_logw[nn]     = calc_logw(all_hyps[nn], all_vp[nn]);
 				alpha_diff[nn] = (alpha_prev[nn] - all_vp[nn].alpha_beta).abs().maxCoeff();
+				logw_updates[nn].push_back(i_logw[nn]);
 				alpha_diff_updates[nn].push_back(alpha_diff[nn]);
 			}
 
@@ -584,34 +583,34 @@ public:
 
 		// Update main & interaction effects
 		updateAlphaMu(iter_chunks, all_hyps, all_vp, is_fwd_pass);
-
 		for (int nn = 0; nn < n_grid; nn++) {
 			check_monotonic_elbo(all_hyps[nn], all_vp[nn], count, logw_prev[nn], "updateAlphaMu");
+		}
 
-			// Update env-weights
-			if (n_effects > 1 && n_env > 1) {
+		// Update env-weights
+		if (n_effects > 1 && n_env > 1) {
+			for (int nn = 0; nn < n_grid; nn++) {
 				for (int uu = 0; uu < p.env_update_repeats; uu++) {
 					updateEnvWeights(env_fwd_pass, all_hyps[nn], all_vp[nn]);
 					updateEnvWeights(env_back_pass, all_hyps[nn], all_vp[nn]);
 				}
 				check_monotonic_elbo(all_hyps[nn], all_vp[nn], count, logw_prev[nn], "updateEnvWeights");
 			}
+		}
 
-			// Log updates
-			i_logw[nn] = calc_logw(all_hyps[nn], all_vp[nn]);
-			double alpha_diff = 0;
-
-			compute_pve(all_hyps[nn]);
-
-			// Maximise hyps
-			if (round_index > 1 && p.mode_empirical_bayes) {
-				if (count >= p.burnin_maxhyps) maximiseHyps(all_hyps[nn], all_vp[nn]);
-
-				i_logw[nn] = calc_logw(all_hyps[nn], all_vp[nn]);
-
-				compute_pve(all_hyps[nn]);
+		// Maximise hyps
+		if (round_index > 1 && p.mode_empirical_bayes) {
+			for (int nn = 0; nn < n_grid; nn++) {
+				if (count >= p.burnin_maxhyps) {
+					maximiseHyps(all_hyps[nn], all_vp[nn]);
+					check_monotonic_elbo(all_hyps[nn], all_vp[nn], count, logw_prev[nn], "maxHyps");
+				}
 			}
-			logw_updates[nn].push_back(i_logw[nn]);
+		}
+
+		// Compute pve
+		for (int nn = 0; nn < n_grid; nn++) {
+			compute_pve(all_hyps[nn]);
 		}
 	}
 

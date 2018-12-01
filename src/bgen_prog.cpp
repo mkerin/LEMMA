@@ -10,6 +10,7 @@
 #include <iostream>
 #include <fstream>
 #include <cassert>
+#include <chrono>
 #include <cstdlib>
 #include <stdexcept>
 #include <memory>
@@ -21,6 +22,14 @@
 
 int main( int argc, char** argv ) {
 	parameters p;
+
+	std::cout << "============="<< std::endl;
+	std::cout << "LEMMA v" << VERSION_MAJOR << "." << VERSION_MINOR << "." << VERSION_PATCH << std::endl;
+	std::cout << "=============" << std::endl << std::endl;
+
+	auto start = std::chrono::system_clock::now();
+	std::time_t start_time = std::chrono::system_clock::to_time_t(start);
+	std::cout << "Starting analysis at " << std::ctime(&start_time) << std::endl;
 
 	try {
 		auto data_start = std::chrono::system_clock::now();
@@ -85,4 +94,10 @@ int main( int argc, char** argv ) {
 		std::cerr << "!! Uh-oh, error parsing bgen file.\n" ;
 		return -1 ;
 	}
+
+	auto end = std::chrono::system_clock::now();
+	std::chrono::duration<double> elapsed_seconds = end-start;
+	std::time_t end_time = std::chrono::system_clock::to_time_t(end);
+	std::cout << "Analysis finished at " << std::ctime(&end_time);
+	std::cout << "Elapsed time: " << elapsed_seconds.count() << "s" << std::endl;
 }

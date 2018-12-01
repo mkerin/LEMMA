@@ -58,6 +58,11 @@ else()
 endif()
 message(${LOC_COMPILE_OPTS})
 
+##Add project version number to preprocessor macros
+list(APPEND LOC_COMPILE_OPTS -DVERSION_MAJOR=${PROJECT_VERSION_MAJOR})
+list(APPEND LOC_COMPILE_OPTS -DVERSION_MINOR=${PROJECT_VERSION_MINOR})
+list(APPEND LOC_COMPILE_OPTS -DVERSION_PATCH=${PROJECT_VERSION_PATCH})
+
 set(SOURCES src/bgen_prog.cpp)
 
 
