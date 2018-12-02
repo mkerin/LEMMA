@@ -1101,7 +1101,7 @@ public:
 		// covariates
 		double kl_covar = 0.0;
 		if(p.use_vb_on_covars){
-			kl_covar += (double) n_covar * (1.0 - hyps.sigma * sigma_c) / 2.0;
+			kl_covar += (double) n_covar * (1.0 - std::log(hyps.sigma * sigma_c)) / 2.0;
 			kl_covar += vp.sc_sq.log().sum() / 2.0;
 			kl_covar -= vp.sc_sq.sum() / 2.0 / hyps.sigma / sigma_c;
 			kl_covar -= vp.muc.square().sum() / 2.0 / hyps.sigma / sigma_c;

@@ -408,7 +408,7 @@ TEST_CASE( "Example 3: multi-env w/ covars" ){
 			CHECK(vp.alpha_beta(1) == Approx(0.1415361555));
 			CHECK(vp.alpha_beta(63) == Approx(0.1724736345));
 			CHECK(vp.muw(0, 0) == Approx(0.1127445891));
-			CHECK(VB.calc_logw(all_hyps[0], vp) == Approx(-20076.0449393003));
+			CHECK(VB.calc_logw(all_hyps[0], vp) == Approx(-94.4656200443));
 
 			VB.updateAllParams(1, round_index, all_vp, all_hyps, logw_prev, logw_updates);
 
@@ -418,7 +418,7 @@ TEST_CASE( "Example 3: multi-env w/ covars" ){
 			CHECK(vp.alpha_beta(1) == Approx(0.1338797264));
 			CHECK(vp.alpha_beta(63) == Approx(0.1730150924));
 			CHECK(vp.muw(0, 0) == Approx(0.0460748751));
-			CHECK(VB.calc_logw(all_hyps[0], vp) == Approx(-20075.3681431899));
+			CHECK(VB.calc_logw(all_hyps[0], vp) == Approx(-93.7888239338));
 		}
 
 		std::vector< VbTracker > trackers(VB.hyps_grid.rows());
@@ -426,10 +426,102 @@ TEST_CASE( "Example 3: multi-env w/ covars" ){
 		SECTION("Ex3. Vbayes_X2 inference correct"){
 			CHECK(trackers[0].count == 33);
 			CHECK(trackers[3].count == 33);
-			CHECK(trackers[0].logw == Approx(-20075.279701215));
-			CHECK(trackers[1].logw == Approx(-20074.9040629751));
-			CHECK(trackers[2].logw == Approx(-20075.2341616388));
-			CHECK(trackers[3].logw == Approx(-20075.9304539824));
+			CHECK(trackers[0].logw == Approx(-93.7003814019));
+			CHECK(trackers[1].logw == Approx(-93.3247434264));
+			CHECK(trackers[2].logw == Approx(-93.6548417528));
+			CHECK(trackers[3].logw == Approx(-94.3511347264));
+		}
+	}
+}
+
+TEST_CASE( "Example 4: multi-env w/ covars" ){
+	parameters p;
+
+	SECTION("Ex4. No filters applied, high mem mode"){
+		char* argv[] = { (char*) "bin/bgen_prog", (char*) "--mode_vb", (char*) "--high_mem",
+						 (char*) "--use_vb_on_covars", (char*) "--mode_empirical_bayes",
+						 (char*) "--vb_iter_max", (char*) "30",
+						 (char*) "--environment", (char*) "data/io_test/n50_p100_env.txt",
+						 (char*) "--bgen", (char*) "data/io_test/n50_p100.bgen",
+						 (char*) "--out", (char*) "data/io_test/fake_env.out",
+						 (char*) "--pheno", (char*) "data/io_test/pheno.txt",
+						 (char*) "--hyps_grid", (char*) "data/io_test/single_hyps_gxage.txt",
+						 (char*) "--hyps_probs", (char*) "data/io_test/single_hyps_gxage_probs.txt",
+						 (char*) "--vb_init", (char*) "data/io_test/answer_init.txt"};
+		int argc = sizeof(argv)/sizeof(argv[0]);
+		parse_arguments(p, argc, argv);
+		Data data( p );
+
+		data.read_non_genetic_data();
+		data.standardise_non_genetic_data();
+		SECTION( "Ex4. Non genetic data standardised + covars regressed"){
+			CHECK(data.params.scale_pheno);
+			CHECK(data.params.use_vb_on_covars);
+			CHECK(data.params.covar_file == "NULL");
+//			CHECK(data.Y(0,0) == Approx(-3.6676363273605137)); Centered
+			CHECK(data.Y(0,0) == Approx(-1.5800573524786081)); // Scaled
+			CHECK(data.Y2(0,0) == Approx(-1.5567970303));
+//			CHECK(data.W(0,0) == Approx(0.8957059881));
+			CHECK(data.E(0,0) == Approx(0.8957059881));
+		}
+		data.read_full_bgen();
+
+		data.calc_dxteex();
+		data.calc_snpstats();
+		if(p.vb_init_file != "NULL"){
+			data.read_alpha_mu();
+		}
+		VBayesX2 VB(data);
+		VB.check_inputs();
+		SECTION("Ex4. Vbayes_X2 initialised correctly"){
+			CHECK(VB.n_samples == 50);
+			CHECK(VB.N == 50.0);
+			CHECK(VB.n_env == 4);
+			CHECK(VB.n_effects == 2);
+			CHECK(VB.vp_init.muw(0) == 0.25);
+			CHECK(VB.p.init_weights_with_snpwise_scan == false);
+			CHECK(VB.dXtEEX(0, 0) == Approx(38.9390135703));
+		}
+
+		SECTION("Ex4. Explicitly checking hyps") {
+			// Set up for RunInnerLoop
+			long n_grid = VB.hyps_grid.rows();
+			std::vector<Hyps> all_hyps;
+			VB.unpack_hyps(VB.hyps_grid, all_hyps);
+
+			// Set up for updateAllParams
+			std::vector<VariationalParameters> all_vp;
+			VB.setup_variational_params(all_hyps, all_vp);
+
+			int round_index = 2;
+			std::vector<double> logw_prev(n_grid, -1);
+			std::vector<std::vector< double >> logw_updates(n_grid);
+
+			VB.updateAllParams(0, round_index, all_vp, all_hyps, logw_prev, logw_updates);
+			VariationalParameters& vp = all_vp[0];
+			Hyps& hyps = all_hyps[0];
+
+			CHECK(vp.alpha_beta(0)          == Approx(0.1339235799));
+			CHECK(vp.alpha_beta(1)          == Approx(0.1415361555));
+			CHECK(vp.alpha_beta(63)         == Approx(0.1724736345));
+			CHECK(vp.muw(0, 0)              == Approx(0.1127445891));
+			CHECK(hyps.sigma                == Approx(0.6953636046));
+			CHECK(hyps.lambda[0]            == Approx(0.1698152775));
+			CHECK(hyps.lambda[1]            == Approx(0.1350333198));
+			CHECK(hyps.slab_relative_var[0] == Approx(0.0081893295));
+			CHECK(hyps.slab_relative_var[1] == Approx(0.005117116));
+
+			VB.updateAllParams(1, round_index, all_vp, all_hyps, logw_prev, logw_updates);
+
+			CHECK(vp.alpha_beta(0)          == Approx(0.1475535664));
+			CHECK(vp.alpha_beta(1)          == Approx(0.1539872875));
+			CHECK(vp.alpha_beta(63)         == Approx(0.3139615442));
+			CHECK(vp.muw(0, 0)              == Approx(0.062497288));
+			CHECK(hyps.sigma                == Approx(0.6027825451));
+			CHECK(hyps.lambda[0]            == Approx(0.1994659195));
+			CHECK(hyps.lambda[1]            == Approx(0.1169821203));
+			CHECK(hyps.slab_relative_var[0] == Approx(0.0125774267));
+			CHECK(hyps.slab_relative_var[1] == Approx(0.0042557827));
 		}
 	}
 }

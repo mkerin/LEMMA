@@ -9,6 +9,9 @@ Changes:
 - dxteex only computed if n_effects > 1 (interaction mode)
 - software version number included in commandline output
 
+Bugfix:
+- forgot to use log in elbo when use_vb_on_covars
+
 TODO:
 - Stop flipping variants if maf > 0.5 (misleading if triplet snps).
 - regress covars from genotypes.
