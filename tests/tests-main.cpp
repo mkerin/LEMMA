@@ -6,6 +6,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
 #include <iostream>
 #include <sys/stat.h>
 #include "../src/tools/eigen3.3/Dense"
@@ -203,7 +204,7 @@ TEST_CASE( "Example 1: single-env" ){
 			Hyps& hyps = all_hyps[0];
 
 			int round_index = 2;
-			std::vector<double> logw_prev(n_grid, -1);
+			std::vector<double> logw_prev(n_grid, -std::numeric_limits<double>::max());
 			std::vector<std::vector< double >> logw_updates(n_grid);
 
 			// Ground zero as expected
@@ -302,7 +303,7 @@ TEST_CASE( "Example 2: multi-env" ){
 			Hyps& hyps = all_hyps[0];
 
 			int round_index = 2;
-			std::vector<double> logw_prev(n_grid, -1);
+			std::vector<double> logw_prev(n_grid, -std::numeric_limits<double>::max());
 			std::vector<std::vector< double >> logw_updates(n_grid);
 
 			VB.updateAllParams(0, round_index, all_vp, all_hyps, logw_prev, logw_updates);
@@ -395,7 +396,7 @@ TEST_CASE( "Example 3: multi-env w/ covars" ){
 			VB.setup_variational_params(all_hyps, all_vp);
 
 			int round_index = 2;
-			std::vector<double> logw_prev(n_grid, -1);
+			std::vector<double> logw_prev(n_grid, -std::numeric_limits<double>::max());
 			std::vector<std::vector< double >> logw_updates(n_grid);
 
 			VB.updateAllParams(0, round_index, all_vp, all_hyps, logw_prev, logw_updates);
@@ -494,7 +495,7 @@ TEST_CASE( "Example 4: multi-env w/ covars" ){
 			VB.setup_variational_params(all_hyps, all_vp);
 
 			int round_index = 2;
-			std::vector<double> logw_prev(n_grid, -1);
+			std::vector<double> logw_prev(n_grid, -std::numeric_limits<double>::max());
 			std::vector<std::vector< double >> logw_updates(n_grid);
 
 			VB.updateAllParams(0, round_index, all_vp, all_hyps, logw_prev, logw_updates);
@@ -604,7 +605,7 @@ TEST_CASE( "Example 6: single-env w MoG + hyps max" ){
 			VB.setup_variational_params(all_hyps, all_vp);
 
 			int round_index = 2;
-			std::vector<double> logw_prev(n_grid, -1);
+			std::vector<double> logw_prev(n_grid, -std::numeric_limits<double>::max());
 			std::vector<std::vector< double >> logw_updates(n_grid);
 
 			VB.updateAllParams(0, round_index, all_vp, all_hyps, logw_prev, logw_updates);
