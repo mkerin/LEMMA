@@ -6,7 +6,7 @@
 #include <iomanip>
 #include <set>
 #include <cstring>
-#include <sys/stat.h>
+#include <boost/filesystem.hpp>
 #include "class.h"
 #include "version.h"
 #include "my_timer.hpp"
@@ -69,8 +69,12 @@ void check_counts(const std::string& in_str, int i, int num, int argc) {
 void check_file_exists(const std::string& filename){
 	// Throw error if given file does not exist.
 	// NB: Doesn't check if file is empty etc.
-	struct stat buf;
-	if(stat(filename.c_str(), &buf) != 0){
+//	struct stat buf;
+//	if(stat(filename.c_str(), &buf) != 0){
+//		std::cout << "File " << filename << " does not exist" << std::endl;
+//		throw std::runtime_error("ERROR: file does not exist");
+//	}
+	if(!boost::filesystem::exists( filename )){
 		std::cout << "File " << filename << " does not exist" << std::endl;
 		throw std::runtime_error("ERROR: file does not exist");
 	}

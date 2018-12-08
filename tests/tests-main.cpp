@@ -1,8 +1,8 @@
 // tests-main.cpp
 #define CATCH_CONFIG_MAIN
+#define EIGEN_USE_MKL_ALL
 #include "catch.hpp"
 
-#define EIGEN_USE_MKL_ALL
 
 #include <algorithm>
 #include <cmath>
@@ -92,14 +92,12 @@ TEST_CASE( "Algebra in Eigen3" ) {
 	SECTION("selfAdjoit views"){
 		Eigen::MatrixXd m3(3, 3);
 		m3.triangularView<Eigen::StrictlyUpper>() = X.transpose() * X;
-		std::cout << m3 << std::endl;
 		CHECK(m3(0, 1) == 78);
 	}
 
 	SECTION("colwise subtraction between vector and matrix"){
 		Eigen::MatrixXd res;
 		res = -1*(X.colwise() - v1);
-		std::cout << res << std::endl;
 		CHECK(res(0, 0) == 0);
 		CHECK(res.rows() == 3);
 		CHECK(res.cols() == 3);
@@ -181,6 +179,7 @@ TEST_CASE( "Example 1: single-env" ){
 			CHECK(VB.dXtEEX(0, 0) == Approx(87.1907593967));
 		}
 
+		std::vector< VbTracker > trackers(VB.hyps_grid.rows());
         SECTION("Ex1. Explicitly checking updates"){
 			// Initialisation
 #ifdef DATA_AS_FLOAT
@@ -218,7 +217,7 @@ TEST_CASE( "Example 1: single-env" ){
 			CHECK(vp.yx(0) == Approx(0.0081544079));
 			CHECK(vp.eta(0) == Approx(-0.5894793969));
 
-			VB.updateAllParams(0, round_index, all_vp, all_hyps, logw_prev, logw_updates);
+			VB.updateAllParams(0, round_index, all_vp, all_hyps, logw_prev, trackers, logw_updates);
 
 			CHECK(VB.X.col(0)(0) == Approx(1.8570984229));
 			CHECK(vp.s1_beta_sq(0) == Approx(0.0031087381));
@@ -229,7 +228,7 @@ TEST_CASE( "Example 1: single-env" ){
 			CHECK(vp.alpha_beta(63) == Approx(0.1784518373));
 			CHECK(VB.calc_logw(hyps, vp) == Approx(-60.983398393));
 
-			VB.updateAllParams(1, round_index, all_vp, all_hyps, logw_prev, logw_updates);
+			VB.updateAllParams(1, round_index, all_vp, all_hyps, logw_prev, trackers, logw_updates);
 
 			CHECK(vp.alpha_beta(0) == Approx(0.1350711123));
 			CHECK(vp.mu1_beta(0) == Approx(-0.0205395866));
@@ -238,7 +237,6 @@ TEST_CASE( "Example 1: single-env" ){
 			CHECK(VB.calc_logw(hyps, vp) == Approx(-60.606081598));
 		}
 
-		std::vector< VbTracker > trackers(VB.hyps_grid.rows());
 		VB.run_inference(VB.hyps_grid, false, 2, trackers);
 		SECTION("Ex1. Vbayes_X2 inference correct") {
 			CHECK(trackers[0].count == 33);
@@ -289,6 +287,7 @@ TEST_CASE( "Example 2: multi-env" ){
 			CHECK(VB.dXtEEX(0, 0) == Approx(38.9390135703));
 		}
 
+		std::vector< VbTracker > trackers(VB.hyps_grid.rows());
 		SECTION("Ex2. Explicitly checking updates"){
 			// Set up for RunInnerLoop
 			long n_grid = VB.hyps_grid.rows();
@@ -306,7 +305,7 @@ TEST_CASE( "Example 2: multi-env" ){
 			std::vector<double> logw_prev(n_grid, -std::numeric_limits<double>::max());
 			std::vector<std::vector< double >> logw_updates(n_grid);
 
-			VB.updateAllParams(0, round_index, all_vp, all_hyps, logw_prev, logw_updates);
+			VB.updateAllParams(0, round_index, all_vp, all_hyps, logw_prev, trackers, logw_updates);
 
 			CHECK(vp.alpha_beta(0) == Approx(0.1339907047));
 			CHECK(vp.alpha_beta(1) == Approx(0.1393645403 ));
@@ -314,7 +313,7 @@ TEST_CASE( "Example 2: multi-env" ){
 			CHECK(vp.muw(0) == Approx(0.1096760209));
 			CHECK(VB.calc_logw(hyps, vp) == Approx(-68.2656816517));
 
-			VB.updateAllParams(1, round_index, all_vp, all_hyps, logw_prev, logw_updates);
+			VB.updateAllParams(1, round_index, all_vp, all_hyps, logw_prev, trackers, logw_updates);
 
 			CHECK(vp.alpha_beta(0) == Approx(0.1292192489));
 			CHECK(vp.alpha_beta(1) == Approx(0.1326174323));
@@ -323,7 +322,6 @@ TEST_CASE( "Example 2: multi-env" ){
 			CHECK(VB.calc_logw(hyps, vp) == Approx(-67.6870841008));
 		}
 
-		std::vector< VbTracker > trackers(VB.hyps_grid.rows());
 		VB.run_inference(VB.hyps_grid, false, 2, trackers);
 		SECTION("Ex2. Vbayes_X2 inference correct"){
 			CHECK(trackers[0].count == 35);
@@ -385,6 +383,7 @@ TEST_CASE( "Example 3: multi-env w/ covars" ){
 			CHECK(VB.dXtEEX(0, 0) == Approx(38.9390135703));
 		}
 
+		std::vector< VbTracker > trackers(VB.hyps_grid.rows());
 		SECTION("Ex3. Explicitly checking updates"){
 			// Set up for RunInnerLoop
 			long n_grid = VB.hyps_grid.rows();
@@ -399,7 +398,7 @@ TEST_CASE( "Example 3: multi-env w/ covars" ){
 			std::vector<double> logw_prev(n_grid, -std::numeric_limits<double>::max());
 			std::vector<std::vector< double >> logw_updates(n_grid);
 
-			VB.updateAllParams(0, round_index, all_vp, all_hyps, logw_prev, logw_updates);
+			VB.updateAllParams(0, round_index, all_vp, all_hyps, logw_prev, trackers, logw_updates);
 			VariationalParameters& vp = all_vp[0];
 			Hyps& hyps = all_hyps[0];
 
@@ -411,7 +410,7 @@ TEST_CASE( "Example 3: multi-env w/ covars" ){
 			CHECK(vp.muw(0, 0) == Approx(0.1127445891));
 			CHECK(VB.calc_logw(all_hyps[0], vp) == Approx(-94.4656200443));
 
-			VB.updateAllParams(1, round_index, all_vp, all_hyps, logw_prev, logw_updates);
+			VB.updateAllParams(1, round_index, all_vp, all_hyps, logw_prev, trackers, logw_updates);
 
 			CHECK(vp.muc(0) == Approx(0.1463805515));
 			CHECK(vp.muc(3) == Approx(-0.1128544804));
@@ -422,7 +421,6 @@ TEST_CASE( "Example 3: multi-env w/ covars" ){
 			CHECK(VB.calc_logw(all_hyps[0], vp) == Approx(-93.7888239338));
 		}
 
-		std::vector< VbTracker > trackers(VB.hyps_grid.rows());
 		VB.run_inference(VB.hyps_grid, false, 2, trackers);
 		SECTION("Ex3. Vbayes_X2 inference correct"){
 			CHECK(trackers[0].count == 33);
@@ -484,6 +482,7 @@ TEST_CASE( "Example 4: multi-env w/ covars" ){
 			CHECK(VB.dXtEEX(0, 0) == Approx(38.9390135703));
 		}
 
+		std::vector< VbTracker > trackers(VB.hyps_grid.rows());
 		SECTION("Ex4. Explicitly checking hyps") {
 			// Set up for RunInnerLoop
 			long n_grid = VB.hyps_grid.rows();
@@ -498,7 +497,7 @@ TEST_CASE( "Example 4: multi-env w/ covars" ){
 			std::vector<double> logw_prev(n_grid, -std::numeric_limits<double>::max());
 			std::vector<std::vector< double >> logw_updates(n_grid);
 
-			VB.updateAllParams(0, round_index, all_vp, all_hyps, logw_prev, logw_updates);
+			VB.updateAllParams(0, round_index, all_vp, all_hyps, logw_prev, trackers, logw_updates);
 			VariationalParameters& vp = all_vp[0];
 			Hyps& hyps = all_hyps[0];
 
@@ -512,7 +511,7 @@ TEST_CASE( "Example 4: multi-env w/ covars" ){
 			CHECK(hyps.slab_relative_var[0] == Approx(0.0081893295));
 			CHECK(hyps.slab_relative_var[1] == Approx(0.005117116));
 
-			VB.updateAllParams(1, round_index, all_vp, all_hyps, logw_prev, logw_updates);
+			VB.updateAllParams(1, round_index, all_vp, all_hyps, logw_prev, trackers, logw_updates);
 
 			CHECK(vp.alpha_beta(0)          == Approx(0.1475535664));
 			CHECK(vp.alpha_beta(1)          == Approx(0.1539872875));
@@ -593,7 +592,7 @@ TEST_CASE( "Example 6: single-env w MoG + hyps max" ){
 			CHECK(VB.dXtEEX(0, 0) == Approx(87.204591182113916));
 		}
 
-
+		std::vector< VbTracker > trackers(VB.hyps_grid.rows());
 		SECTION("Ex6. Explicitly checking updates"){
 			// Set up for RunInnerLoop
 			long n_grid = VB.hyps_grid.rows();
@@ -608,7 +607,7 @@ TEST_CASE( "Example 6: single-env w MoG + hyps max" ){
 			std::vector<double> logw_prev(n_grid, -std::numeric_limits<double>::max());
 			std::vector<std::vector< double >> logw_updates(n_grid);
 
-			VB.updateAllParams(0, round_index, all_vp, all_hyps, logw_prev, logw_updates);
+			VB.updateAllParams(0, round_index, all_vp, all_hyps, logw_prev, trackers, logw_updates);
 			VariationalParameters& vp = all_vp[0];
 			Hyps& hyps = all_hyps[0];
 
@@ -625,7 +624,7 @@ TEST_CASE( "Example 6: single-env w MoG + hyps max" ){
 			CHECK(hyps.spike_var(0) == Approx(0.0000368515));
 			CHECK(VB.calc_logw(hyps, vp) == Approx(-52.129381445));
 
-			VB.updateAllParams(1, round_index, all_vp, all_hyps, logw_prev, logw_updates);
+			VB.updateAllParams(1, round_index, all_vp, all_hyps, logw_prev, trackers, logw_updates);
 
 			CHECK(vp.alpha_beta(0) == Approx(0.1428104733));
 			CHECK(vp.mu1_beta(0) == Approx(-0.01972825));
@@ -693,7 +692,6 @@ TEST_CASE( "Example 6: single-env w MoG + hyps max" ){
 			// CHECK(rss_null == Approx(7.9181184549));
 		}
 
-		std::vector< VbTracker > trackers(VB.hyps_grid.rows());
 		VB.run_inference(VB.hyps_grid, false, 2, trackers);
 		SECTION("Ex6. Vbayes_X2 inference correct"){
 //			CHECK(trackers[0].count == 741);
@@ -711,3 +709,77 @@ TEST_CASE( "Example 6: single-env w MoG + hyps max" ){
 		}
 	}
 }
+
+
+TEST_CASE( "Edge case 1: error in alpha" ){
+	parameters p;
+
+	SECTION("Ex1. No filters applied, low mem mode"){
+		char* argv[] = { (char*) "bin/bgen_prog", (char*) "--mode_vb", (char*) "--low_mem",
+						 (char*) "--bgen", (char*) "data/io_test/n50_p100.bgen",
+						 (char*) "--out", (char*) "data/io_test/fake_age.out",
+						 (char*) "--pheno", (char*) "data/io_test/pheno.txt",
+						 (char*) "--hyps_grid", (char*) "data/io_test/hyperpriors_gxage.txt",
+						 (char*) "--hyps_probs", (char*) "data/io_test/hyperpriors_gxage_probs.txt",
+						 (char*) "--vb_init", (char*) "data/io_test/answer_init.txt",
+						 (char*) "--environment", (char*) "data/io_test/age.txt"};
+		int argc = sizeof(argv)/sizeof(argv[0]);
+		parse_arguments(p, argc, argv);
+		Data data( p );
+		data.read_non_genetic_data();
+		data.standardise_non_genetic_data();
+		data.read_full_bgen();
+
+		data.calc_dxteex();
+		if(p.vb_init_file != "NULL"){
+			data.read_alpha_mu();
+		}
+		VBayesX2 VB(data);
+		VB.check_inputs();
+		SECTION("Ex1. Vbayes_X2 initialised correctly"){
+			CHECK(VB.n_samples == 50);
+			CHECK(VB.N == 50.0);
+			CHECK(VB.n_env == 1);
+//			CHECK(VB.n_covar == 1);
+			CHECK(VB.n_effects == 2);
+			CHECK(VB.vp_init.muw(0) == 1.0);
+			CHECK(!VB.p.init_weights_with_snpwise_scan);
+			CHECK(VB.dXtEEX(0, 0) == Approx(87.1907593967));
+		}
+
+		std::vector< VbTracker > trackers(VB.hyps_grid.rows());
+		SECTION("Ex1. Explicitly checking updates"){
+			// Initialisation
+#ifdef DATA_AS_FLOAT
+			CHECK( (double)  VB.vp_init.ym(0) == Approx(0.0003200434));
+#else
+			CHECK(VB.vp_init.ym(0) == Approx(0.0003200476));
+#endif
+			CHECK(VB.vp_init.yx(0) == Approx(0.0081544079));
+			CHECK(VB.vp_init.eta(0) == Approx(-0.5894793969));
+
+			// Set up for RunInnerLoop
+			long n_grid = VB.hyps_grid.rows();
+			long n_samples = VB.n_samples;
+			std::vector<Hyps> all_hyps;
+			VB.unpack_hyps(VB.hyps_grid, all_hyps);
+
+			// Set up for updateAllParams
+			std::vector<VariationalParameters> all_vp;
+			VB.setup_variational_params(all_hyps, all_vp);
+			VariationalParameters& vp = all_vp[0];
+			Hyps& hyps = all_hyps[0];
+
+			int round_index = 2;
+			std::vector<double> logw_prev(n_grid, -std::numeric_limits<double>::max());
+			std::vector<std::vector< double >> logw_updates(n_grid);
+
+			// Ground zero as expected
+//			CHECK(vp.alpha_beta(0) * vp.mu1_beta(0) == Approx(-0.00015854116408000002));
+			vp.alpha_beta(0) = std::nan("1");
+
+			CHECK_THROWS(VB.updateAllParams(0, round_index, all_vp, all_hyps, logw_prev, trackers, logw_updates));
+		}
+	}
+}
+

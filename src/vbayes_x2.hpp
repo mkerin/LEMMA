@@ -442,7 +442,7 @@ public:
 			std::vector<double> alpha_diff(n_grid);
 
 			// WARNING: logw_prev copied by value (just want to check updates improve elbo)
-			updateAllParams(count, round_index, all_vp, all_hyps, logw_prev, logw_updates);
+			updateAllParams(count, round_index, all_vp, all_hyps, logw_prev, all_tracker, logw_updates);
 			for (int nn = 0; nn < n_grid; nn++){
 				i_logw[nn]     = calc_logw(all_hyps[nn], all_vp[nn]);
 				alpha_diff[nn] = (alpha_prev[nn] - all_vp[nn].alpha_beta).abs().maxCoeff();
@@ -558,6 +558,7 @@ public:
 			             std::vector<VariationalParameters>& all_vp,
 						 std::vector<Hyps>& all_hyps,
 						 std::vector<double> logw_prev,
+						 std::vector<VbTracker>& trackers,
 						 std::vector<std::vector< double >>& logw_updates){
 		std::vector< std::uint32_t > iter;
 		std::vector< std::vector< std::uint32_t >> iter_chunks;
@@ -583,7 +584,7 @@ public:
 		}
 
 		// Update main & interaction effects
-		updateAlphaMu(iter_chunks, all_hyps, all_vp, is_fwd_pass);
+		updateAlphaMu(iter_chunks, all_hyps, all_vp, trackers, is_fwd_pass);
 		for (int nn = 0; nn < n_grid; nn++) {
 			check_monotonic_elbo(all_hyps[nn], all_vp[nn], count, logw_prev[nn], "updateAlphaMu");
 		}
@@ -637,6 +638,7 @@ public:
 	void updateAlphaMu(const std::vector< std::vector< std::uint32_t >>& iter_chunks,
                        const std::vector<Hyps>& all_hyps,
                        std::vector<VariationalParameters>& all_vp,
+                       std::vector<VbTracker>& trackers,
                        const bool& is_fwd_pass){
 		// Divide updates into chunks
 		// Partition chunks amongst available threads
@@ -671,7 +673,7 @@ public:
 				Eigen::Ref<Eigen::VectorXd> A = AA.col(nn);
 
 				unsigned long memoize_id = ((is_fwd_pass) ? ch : ch + iter_chunks.size());
-				adjustParams(nn, memoize_id, chunk, D, A, all_hyps, all_vp, rr_diff);
+				adjustParams(nn, memoize_id, chunk, D, A, all_hyps, all_vp, trackers, rr_diff);
 			}
 
 			// Update residuals
@@ -702,6 +704,7 @@ public:
 			const Eigen::Ref<const Eigen::VectorXd>& A,
 			const std::vector<Hyps>& all_hyps,
 			std::vector<VariationalParameters>& all_vp,
+			std::vector<VbTracker>& trackers,
 			Eigen::Ref<Eigen::MatrixXd> rr_diff){
 
 		int ee                 = chunk[0] / n_var;
@@ -720,7 +723,7 @@ public:
 				}
 			}
 
-			_internal_updateAlphaMu_beta(chunk, A, D_correlations[memoize_id], all_hyps[nn], all_vp[nn], rr_diff.col(nn));
+			_internal_updateAlphaMu_beta(chunk, A, D_correlations[memoize_id], all_hyps[nn], all_vp[nn], trackers[nn], rr_diff.col(nn));
 		} else {
 
 			// Update interaction effects
@@ -734,7 +737,7 @@ public:
 				}
 			}
 
-			_internal_updateAlphaMu_gam(chunk, A, D_corr, all_hyps[nn], all_vp[nn], rr_diff.col(nn));
+			_internal_updateAlphaMu_gam(chunk, A, D_corr, all_hyps[nn], all_vp[nn], trackers[nn], rr_diff.col(nn));
 		}
 	}
 
@@ -765,6 +768,7 @@ public:
 									  const Eigen::Ref<const Eigen::MatrixXd>& D_corr,
 									  const Hyps& hyps,
 									  VariationalParameters& vp,
+									  VbTracker& tracker,
 									  Eigen::Ref<Eigen::MatrixXd> rr_k_diff){
 
 		unsigned long ch_len = iter_chunk.size();
@@ -803,7 +807,6 @@ public:
 			vp.mu1_beta(jj)                            = vp.s1_beta_sq(jj) * AA / hyps.sigma;
 			if (p.mode_mog_prior_beta) vp.mu2_beta(jj) = vp.s2_beta_sq(jj) * AA / hyps.sigma;
 
-
 			// Update alpha
 			double ff_k;
 			ff_k                        = vp.mu1_beta(jj) * vp.mu1_beta(jj) / vp.s1_beta_sq(jj);
@@ -815,7 +818,7 @@ public:
 			rr_k_diff(ii, 0)                       = vp.alpha_beta(jj) * vp.mu1_beta(jj) - rr_k(ii);
 			if(p.mode_mog_prior_beta) rr_k_diff(ii, 0) += (1.0 - vp.alpha_beta(jj)) * vp.mu2_beta(jj);
 
-			check_nan(vp.alpha_beta(jj), ff_k, offset, hyps, iter_chunk[ii], rr_k_diff, A, D_corr, alpha_cnst);
+			check_nan(vp.alpha_beta(jj), ff_k, offset, hyps, iter_chunk[ii], rr_k_diff, A, D_corr, vp, tracker, alpha_cnst);
 		}
 	}
 
@@ -827,6 +830,8 @@ public:
 					const Eigen::Ref<const Eigen::MatrixXd> rr_k_diff,
 					const Eigen::Ref<const Eigen::VectorXd>& A,
 					const Eigen::Ref<const Eigen::MatrixXd>& D_corr,
+				   VariationalParameters& vp,
+				   VbTracker& tracker,
 					const Eigen::Ref<const Eigen::ArrayXd> alpha_cnst){
 		// check for NaNs and spit out diagnostics if so.
 
@@ -834,16 +839,16 @@ public:
 			// TODO: print diagnostics to cout
 			// TODO: write all snpstats to file
 			std::cout << "NaN detected at SNP index: (";
- 			std::cout << ii << ", " << ii % n_var << ")" << std::endl;
+ 			std::cout << ii % n_var << ", " << ii / n_var << ")" << std::endl;
 			std::cout << "alpha_cnst" << std::endl << alpha_cnst << std::endl << std::endl;
 			std::cout << "offset" << std::endl << offset << std::endl << std::endl;
 			std::cout << "hyps" << std::endl << hyps << std::endl << std::endl;
 			std::cout << "rr_k_diff" << std::endl << rr_k_diff << std::endl << std::endl;
 			std::cout << "A" << std::endl << A << std::endl << std::endl;
 			std::cout << "D_corr" << std::endl << D_corr << std::endl << std::endl;
+			tracker.push_interim_param_values(0, n_effects, n_var, vp, X);
 			throw std::runtime_error("NaN detected");
 		}
-
 	}
 
 	void _internal_updateAlphaMu_gam(const std::vector< std::uint32_t >& iter_chunk,
@@ -851,6 +856,7 @@ public:
 									 const Eigen::Ref<const Eigen::MatrixXd>& D_corr,
 									 const Hyps& hyps,
 									 VariationalParameters& vp,
+									 VbTracker& tracker,
 									 Eigen::Ref<Eigen::MatrixXd> rr_k_diff){
 
 		int ch_len = iter_chunk.size();
@@ -864,19 +870,16 @@ public:
 			alpha_cnst = (hyps.lambda / (1.0 - hyps.lambda) + eps).log() - hyps.slab_var.log() / 2.0;
 		}
 
-		// Vector of previous values
-		Eigen::VectorXd rr_k(ch_len);
-		for (int ii = 0; ii < ch_len; ii++){
-			std::uint32_t jj = iter_chunk[ii] % n_var;
-			rr_k(ii)                       = vp.alpha_gam(jj) * vp.mu1_gam(jj);
-			if(p.mode_mog_prior_gam) rr_k(ii) += (1.0 - vp.alpha_gam(jj)) * vp.mu2_gam(jj);
-		}
-
 		// adjust updates within chunk
 		// Need to be able to go backwards during a back_pass
+		Eigen::VectorXd rr_k(ch_len);
 		assert(rr_k_diff.rows() == ch_len);
 		for (int ii = 0; ii < ch_len; ii++){
 			std::uint32_t jj = (iter_chunk[ii] % n_var); // variant index
+
+			// Log prev value
+			rr_k(ii)                       = vp.alpha_gam(jj) * vp.mu1_gam(jj);
+			if(p.mode_mog_prior_gam) rr_k(ii) += (1.0 - vp.alpha_gam(jj)) * vp.mu2_gam(jj);
 
 			// Update s_sq
 			vp.s1_gam_sq(jj)                        = hyps.slab_var(ee);
@@ -893,7 +896,6 @@ public:
 			vp.mu1_gam(jj)                       = vp.s1_gam_sq(jj) * AA / hyps.sigma;
 			if (p.mode_mog_prior_gam) vp.mu2_gam(jj) = vp.s2_gam_sq(jj) * AA / hyps.sigma;
 
-
 			// Update alpha
 			double ff_k;
 			ff_k                        = vp.mu1_gam(jj) * vp.mu1_gam(jj) / vp.s1_gam_sq(jj);
@@ -905,7 +907,7 @@ public:
 			rr_k_diff(ii, 0)                       = vp.alpha_gam(jj) * vp.mu1_gam(jj) - rr_k(ii);
 			if(p.mode_mog_prior_gam) rr_k_diff(ii, 0) += (1.0 - vp.alpha_gam(jj)) * vp.mu2_gam(jj);
 
-			check_nan(vp.alpha_gam(jj), ff_k, offset, hyps, iter_chunk[ii], rr_k_diff, A, D_corr, alpha_cnst);
+			check_nan(vp.alpha_gam(jj), ff_k, offset, hyps, iter_chunk[ii], rr_k_diff, A, D_corr, vp, tracker, alpha_cnst);
 		}
 	}
 

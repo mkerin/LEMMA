@@ -465,50 +465,69 @@ class Data
 
 		// Want to read in a sid to be included, and skip along bgen_ids until
 		// we find it.
-		int ii = 0, bb = 0;
 		std::stringstream ss;
 		std::string line;
-		try {
-			while (getline(fg, line)) {
-				ss.clear();
-				ss.str(line);
-				std::string s;
-				ss >> s;
-				if (bb >= n_samples){
-					throw std::logic_error("ERROR: Either you have tried "
-					"to include an id not present in the BGEN file, or the "
-					"the provided ids are in the wrong order");
-				}
-				while(s != bgen_ids[bb]) {
-					incomplete_cases[bb] = true;
-					bb++;
-					if (bb >= n_samples){
-						std::cout << "Failed to find a match for sample_id:";
-						std::cout << "The first 10 bgen ids are:" << std::endl;
-						for(int iii = 0; iii < 10; iii++){
-							std::cout << bgen_ids[iii] << std::endl;
-						}
-						std::cout << s << std::endl;
-						throw std::logic_error("ERROR: Either you have tried "
-						"to include an id not present in the BGEN file, or the "
-						"the provided ids are in the wrong order");
-					}
-				}
-
-				// bgen_ids[bb] == s
-				bb++;
-				ii++;
-			}
-
-			for (int jj = bb; jj < n_samples; jj++){
-				incomplete_cases[jj] = true;
-			}
-		} catch (const std::exception &exc) {
-			// throw std::runtime_error("ERROR: problem converting incl_sample_ids.");
-			throw;
+		std::vector<std::string> user_sample_ids;
+		while (getline(fg, line)) {
+			ss.clear();
+			ss.str(line);
+			std::string s;
+			ss >> s;
+			user_sample_ids.push_back(s);
 		}
+
+		std::vector<std::string>::iterator it;
+		for (std::uint32_t ii = 0; ii < n_samples; ii++){
+			it = find (user_sample_ids.begin(), user_sample_ids.end(), bgen_ids[ii]);
+			if (it == user_sample_ids.end()){
+				incomplete_cases[ii] = true;
+			}
+		}
+
+//		int ii = 0, bb = 0;
+//		std::stringstream ss;
+//		std::string line;
+//		try {
+//			while (getline(fg, line)) {
+//				ss.clear();
+//				ss.str(line);
+//				std::string s;
+//				ss >> s;
+//				if (bb >= n_samples){
+//					throw std::logic_error("ERROR: Either you have tried "
+//					"to include an id not present in the BGEN file, or the "
+//					"the provided ids are in the wrong order");
+//				}
+//				while(s != bgen_ids[bb]) {
+//					incomplete_cases[bb] = true;
+//					bb++;
+//					if (bb >= n_samples){
+//						std::cout << "Failed to find a match for sample_id:";
+//						std::cout << "The first 10 bgen ids are:" << std::endl;
+//						for(int iii = 0; iii < 10; iii++){
+//							std::cout << bgen_ids[iii] << std::endl;
+//						}
+//						std::cout << s << std::endl;
+//						throw std::logic_error("ERROR: Either you have tried "
+//						"to include an id not present in the BGEN file, or the "
+//						"the provided ids are in the wrong order");
+//					}
+//				}
+//
+//				// bgen_ids[bb] == s
+//				bb++;
+//				ii++;
+//			}
+//
+//			for (int jj = bb; jj < n_samples; jj++){
+//				incomplete_cases[jj] = true;
+//			}
+//		} catch (const std::exception &exc) {
+//			// throw std::runtime_error("ERROR: problem converting incl_sample_ids.");
+//			throw;
+//		}
 		// n_samples = ii;
-		std::cout << "Subsetted down to " << ii << " ids from --incl_sample_ids";
+		std::cout << "Subsetted down to " << user_sample_ids.size() << " ids from --incl_sample_ids";
 		std::cout << std::endl;
 	}
 
