@@ -597,6 +597,7 @@ void parse_arguments(parameters &p, int argc, char *argv[]) {
 
 	// Sanity checks here
 	if(p.range || p.select_snps){
+		p.bgi_file = p.bgen_file + ".bgi";
 		if(!boost::filesystem::exists( p.bgi_file )){
 			std::cout << "If using --range the BGEN index file " << p.bgi_file << " must exist" << std::endl;
 			throw std::runtime_error("ERROR: file does not exist");
