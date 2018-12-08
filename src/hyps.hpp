@@ -95,6 +95,16 @@ public:
 		lambda << my_lam_b;
 		s_x << n_var;
 	}
+
+	friend std::ostream& operator<< (std::ostream &os, const Hyps& hyps);
 };
+
+std::ostream& operator<<(std::ostream& os, const Hyps& hyps){
+	os << hyps.sigma << std::endl;
+	os << hyps.lambda << std::endl;
+	os << hyps.slab_var << std::endl;
+	os << hyps.spike_var << std::endl;
+	return os;
+}
 
 #endif //BGEN_PROG_HYPS_HPP

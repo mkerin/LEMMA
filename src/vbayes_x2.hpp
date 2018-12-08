@@ -11,6 +11,7 @@ https://stackoverflow.com/questions/3283021/compile-a-standalone-static-executab
 
 #include <algorithm>
 #include <chrono>     // start/end time info
+#include <cmath>      // isnan
 #include <ctime>      // start/end time info
 #include <cstdint>    // uint32_t
 #include <iostream>
@@ -813,7 +814,36 @@ public:
 
 			rr_k_diff(ii, 0)                       = vp.alpha_beta(jj) * vp.mu1_beta(jj) - rr_k(ii);
 			if(p.mode_mog_prior_beta) rr_k_diff(ii, 0) += (1.0 - vp.alpha_beta(jj)) * vp.mu2_beta(jj);
+
+			check_nan(vp.alpha_beta(jj), ff_k, offset, hyps, iter_chunk[ii], rr_k_diff, A, D_corr, alpha_cnst);
 		}
+	}
+
+	void check_nan(const double& alpha,
+					const double& ff_k,
+					const double& offset,
+					const Hyps& hyps,
+					const std::uint32_t& ii,
+					const Eigen::Ref<const Eigen::MatrixXd> rr_k_diff,
+					const Eigen::Ref<const Eigen::VectorXd>& A,
+					const Eigen::Ref<const Eigen::MatrixXd>& D_corr,
+					const Eigen::Ref<const Eigen::ArrayXd> alpha_cnst){
+		// check for NaNs and spit out diagnostics if so.
+
+		if(std::isnan(alpha)){
+			// TODO: print diagnostics to cout
+			// TODO: write all snpstats to file
+			std::cout << "NaN detected at SNP index: (";
+ 			std::cout << ii << ", " << ii % n_var << ")" << std::endl;
+			std::cout << "alpha_cnst" << std::endl << alpha_cnst << std::endl << std::endl;
+			std::cout << "offset" << std::endl << offset << std::endl << std::endl;
+			std::cout << "hyps" << std::endl << hyps << std::endl << std::endl;
+			std::cout << "rr_k_diff" << std::endl << rr_k_diff << std::endl << std::endl;
+			std::cout << "A" << std::endl << A << std::endl << std::endl;
+			std::cout << "D_corr" << std::endl << D_corr << std::endl << std::endl;
+			throw std::runtime_error("NaN detected");
+		}
+
 	}
 
 	void _internal_updateAlphaMu_gam(const std::vector< std::uint32_t >& iter_chunk,
@@ -874,6 +904,8 @@ public:
 
 			rr_k_diff(ii, 0)                       = vp.alpha_gam(jj) * vp.mu1_gam(jj) - rr_k(ii);
 			if(p.mode_mog_prior_gam) rr_k_diff(ii, 0) += (1.0 - vp.alpha_gam(jj)) * vp.mu2_gam(jj);
+
+			check_nan(vp.alpha_gam(jj), ff_k, offset, hyps, iter_chunk[ii], rr_k_diff, A, D_corr, alpha_cnst);
 		}
 	}
 
@@ -1678,14 +1710,14 @@ public:
 		calcPredEffects(vp_map);
 		compute_residuals_per_chr(vp_map, map_residuals_by_chr);
 		if(n_effects == 1) {
-			outf_map_pred << "Xbeta" << std::endl;
+			outf_map_pred << "Xbeta Y" << std::endl;
 			for (std::uint32_t ii = 0; ii < n_samples; ii++) {
-				outf_map_pred << vp_map.ym(ii) << std::endl;
+				outf_map_pred << vp_map.ym(ii) << " " << Y(ii) << std::endl;
 			}
 		} else {
-			outf_map_pred << "Xbeta eta Xgamma" << std::endl;
+			outf_map_pred << "Xbeta eta Xgamma Y" << std::endl;
 			for (std::uint32_t ii = 0; ii < n_samples; ii++) {
-				outf_map_pred << vp_map.ym(ii) << " " << vp_map.eta(ii) << " " << vp_map.yx(ii) << std::endl;
+				outf_map_pred << vp_map.ym(ii) << " " << vp_map.eta(ii) << " " << vp_map.yx(ii) << " " << Y(ii) << std::endl;
 			}
 		}
 
