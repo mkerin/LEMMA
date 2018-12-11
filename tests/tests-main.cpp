@@ -345,7 +345,6 @@ TEST_CASE( "Example 3: multi-env w/ covars" ){
 						 (char*) "--out", (char*) "data/io_test/fake_env.out",
 						 (char*) "--pheno", (char*) "data/io_test/pheno.txt",
 						 (char*) "--hyps_grid", (char*) "data/io_test/hyperpriors_gxage.txt",
-						 (char*) "--hyps_probs", (char*) "data/io_test/hyperpriors_gxage_probs.txt",
 						 (char*) "--vb_init", (char*) "data/io_test/answer_init.txt"};
 		int argc = sizeof(argv)/sizeof(argv[0]);
 		parse_arguments(p, argc, argv);
@@ -410,6 +409,19 @@ TEST_CASE( "Example 3: multi-env w/ covars" ){
 			CHECK(vp.muw(0, 0) == Approx(0.1127445891));
 			CHECK(VB.calc_logw(all_hyps[0], vp) == Approx(-94.4656200443));
 
+			CHECK(vp.alpha_gam(0) == Approx(0.1348765515));
+			CHECK(vp.alpha_gam(1) == Approx(0.1348843768));
+			CHECK(vp.alpha_gam(63) == Approx(0.1351395247));
+			CHECK(vp.mu1_beta(0) == Approx(-0.0189890299));
+			CHECK(vp.mu1_beta(1) == Approx(-0.0275538256));
+			CHECK(vp.mu1_beta(63) == Approx(-0.0470801956));
+			CHECK(vp.mu1_gam(0) == Approx(0.0048445126));
+			CHECK(vp.mu1_gam(1) == Approx(0.0005509309));
+			CHECK(vp.mu1_gam(63) == Approx(-0.0040966814));
+			CHECK(vp.s1_gam_sq(0) == Approx(0.0035251837));
+			CHECK(vp.s1_gam_sq(1) == Approx(0.0035489038));
+			CHECK(vp.s1_gam_sq(63) == Approx(0.0035479273));
+
 			VB.updateAllParams(1, round_index, all_vp, all_hyps, logw_prev, trackers, logw_updates);
 
 			CHECK(vp.muc(0) == Approx(0.1463805515));
@@ -419,6 +431,33 @@ TEST_CASE( "Example 3: multi-env w/ covars" ){
 			CHECK(vp.alpha_beta(63) == Approx(0.1730150924));
 			CHECK(vp.muw(0, 0) == Approx(0.0460748751));
 			CHECK(VB.calc_logw(all_hyps[0], vp) == Approx(-93.7888239338));
+
+
+			CHECK(vp.alpha_gam(0) == Approx(0.1228414938));
+			CHECK(vp.alpha_gam(1) == Approx(0.1244760462));
+			CHECK(vp.alpha_gam(63) == Approx(0.1240336666));
+			CHECK(vp.mu1_gam(0) == Approx(-0.0013406961));
+			CHECK(vp.mu1_gam(1) == Approx(-0.0021107307));
+			CHECK(vp.mu1_gam(63) == Approx(0.0010160659));
+			CHECK(vp.s1_gam_sq(0) == Approx(0.0028616572));
+			CHECK(vp.s1_gam_sq(1) == Approx(0.0029466955));
+			CHECK(vp.s1_gam_sq(63) == Approx(0.0029262235));
+
+			VB.updateAllParams(2, round_index, all_vp, all_hyps, logw_prev, trackers, logw_updates);
+
+			CHECK(vp.alpha_beta(0) == Approx(0.1291159583));
+			CHECK(vp.alpha_beta(1) == Approx(0.1337078986));
+			CHECK(vp.alpha_beta(63) == Approx(0.1846784602));
+			CHECK(vp.alpha_gam(0) == Approx(0.1205867018));
+			CHECK(vp.alpha_gam(1) == Approx(0.1223799879));
+			CHECK(vp.alpha_gam(63) == Approx(0.1219421923));
+			CHECK(vp.mu1_beta(0) == Approx(-0.0099430405));
+			CHECK(vp.mu1_beta(1) == Approx(-0.0186819136));
+			CHECK(vp.mu1_beta(63) == Approx(-0.0522879252));
+			CHECK(vp.mu1_gam(0) == Approx(-0.0010801898));
+			CHECK(vp.mu1_gam(1) == Approx(-0.0010635764));
+			CHECK(vp.mu1_gam(63) == Approx(-0.0006202975));
+			CHECK(vp.muw(0, 0) == Approx(0.0285866235));
 		}
 
 		VB.run_inference(VB.hyps_grid, false, 2, trackers);
