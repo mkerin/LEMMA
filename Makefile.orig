@@ -45,6 +45,11 @@ laptop: FLAGS += -DOSX -lz -msse2
 laptop: $(TARGET)
 laptop: examples/test_matrix_matrix_mult
 
+# MKL
+MKLROOT=/homes/kerin/intel/compilers_and_libraries_2019.1.144/linux/mkl
+MKLFLAGS= -L${MKLROOT}/lib/intel64 -Wl,--no-as-needed -lmkl_intel_lp64
+MKLFLAGS+= -lmkl_gnu_thread -lmkl_core -lgomp -lpthread -lm -ldl
+MKLFLAGS+= -m64 -I${MKLROOT}/include
 
 # INCLUDES += -I$(BGEN)build/genfile/include/ -I$(BGEN)3rd_party/zstd-1.1.0/lib/ \
 #             -I$(BGEN)build/db/include/ -I$(BGEN)3rd_party/sqlite3 -I$(BGEN)3rd_party/boost_1_55_0
@@ -126,7 +131,9 @@ examples/profile_read_cols: examples/profile_read_cols.cpp
 #
 examples/test_matrix_matrix_mult: examples/test_matrix_matrix_mult.cpp
 	$(CXX) $< -o $@ $(FLAGS)  -fopenmp -O3
-
+#
+examples/profile_vb_pass_w_intel_mkl: examples/profile_vb_pass_w_intel_mkl.cpp
+	$(CXX) $< -o $@ -std=c++11 $(MKLFLAGS) -fopenmp -O3
 
 
 # IO Tests
