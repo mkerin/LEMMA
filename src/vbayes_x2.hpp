@@ -1455,7 +1455,7 @@ public:
 				hyps.pve[ee] += (1 - hyps.lambda[ee]) * hyps.spike_relative_var[ee] * hyps.s_x[ee];
 			}
 
-			hyps.pve_large[ee] /= (hyps.pve.sum() + 1.0);
+			hyps.pve_large /= (hyps.pve.sum() + 1.0);
 		}
 		hyps.pve /= (hyps.pve.sum() + 1.0);
 	}
