@@ -11,6 +11,7 @@ Changes:
 
 Bugfix:
 - forgot to use log in elbo when use_vb_on_covars
+- bugfix in pve_large
 
 TODO:
 - Stop flipping variants if maf > 0.5 (misleading if triplet snps).
