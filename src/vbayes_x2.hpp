@@ -51,7 +51,6 @@ public:
 	const double alpha_tol = 1e-4;
 	const double logw_tol = 1e-2;
 	const double sigma_c = 10000;
-	const int    n_chrs = 22; // Likely to break with X chromosome
 	std::vector< std::string > covar_names;
 	std::vector< std::string > env_names;
 
@@ -70,6 +69,11 @@ public:
 	bool          run_round1;
 	double N; // (double) n_samples
 
+	// Chromosomes in data
+	int    n_chrs;
+	std::vector<int> chrs_present;
+	std::vector<int> chrs_index;
+
 
 	//
 	parameters& p;
@@ -87,6 +91,7 @@ public:
 	EigenDataArrayX  Cty;         // vector of W^T x y where C the matrix of covariates
 	EigenDataArrayXX E;          // matrix of variables used for GxE interactions
 	EigenDataMatrix& C;          // matrix of covariates (superset of GxE variables)
+	Eigen::MatrixXd XtE;          // matrix of covariates (superset of GxE variables)
 
 	Eigen::ArrayXXd& dXtEEX;     // P x n_env^2; col (l * n_env + m) is the diagonal of X^T * diag(E_l * E_m) * X
 	Eigen::MatrixXd r1_hyps_grid;
@@ -132,12 +137,23 @@ public:
 		env_names      = dat.env_names;
 		N              = (double) n_samples;
 
+		std::set<int> tmp(X.chromosome.begin(), X.chromosome.end());
+		chrs_present.assign(tmp.begin(), tmp.end());
+		n_chrs = chrs_present.size();
+		for (int cc = 0; cc < n_chrs; cc++){
+			chrs_index.push_back(cc);
+		}
+
 
 		p.main_chunk_size = (unsigned int) std::min((long int) p.main_chunk_size, (long int) n_var);
 		p.gxe_chunk_size = (unsigned int) std::min((long int) p.gxe_chunk_size, (long int) n_var);
 
 		// Read environmental variables
 		E = dat.E;
+		if(n_env > 0) {
+			XtE = X.transpose_multiply(E);
+			XtE.transposeInPlace();
+		}
 
 		// Allocate memory - fwd/back pass vectors
 		for(std::uint32_t kk = 0; kk < n_var * n_effects; kk++){
@@ -1100,6 +1116,7 @@ public:
 		// WARNING: Updates S_x in hyps
 		hyps.s_x(0) = (double) n_var;
 		hyps.s_x(1) = (dXtEEX.rowwise() * muw_sq.transpose()).sum() / (N - 1.0);
+		hyps.s_x(1) -= (XtE * vp.muw.matrix()).array().square().sum() / N / (N - 1.0);
 	}
 
 	double calc_logw(const Hyps& hyps,
@@ -1485,7 +1502,7 @@ public:
 	void compute_residuals_per_chr(const VariationalParametersLite& vp,
 			std::vector<Eigen::VectorXd>& chr_residuals){
 
-		std::set<int> chrs(X.chromosome.begin(), X.chromosome.end());
+//		std::set<int> chrs(X.chromosome.begin(), X.chromosome.end());
 		assert(chr_residuals.size() == n_chrs);
 
 		// casts used if DATA_AS_FLOAT
@@ -1502,20 +1519,20 @@ public:
 
 		Eq_beta = vp.alpha_beta * vp.mu1_beta;
 		if(p.mode_mog_prior_beta) Eq_beta.array() += (1 - vp.alpha_beta) * vp.mu2_beta;
-		for (auto cc : chrs){
-			pred_main[cc] = X.mult_vector_by_chr(cc, Eq_beta);
+		for (auto cc : chrs_index){
+			pred_main[cc] = X.mult_vector_by_chr(chrs_present[cc], Eq_beta);
 		}
 
 		if (n_effects > 1) {
 			Eq_gam  = vp.alpha_gam  * vp.mu1_gam;
 			if(p.mode_mog_prior_gam) Eq_gam.array() += (1 - vp.alpha_gam) * vp.mu2_gam;
-			for (auto cc : chrs){
-				pred_int[cc]  = X.mult_vector_by_chr(cc, Eq_gam);
+			for (auto cc : chrs_index){
+				pred_int[cc]  = X.mult_vector_by_chr(chrs_present[cc], Eq_gam);
 			}
 		}
 
 		// Compute mean-centered residuals for each chromosome
-		for (auto cc : chrs){
+		for (auto cc : chrs_index){
 			if (n_effects > 1){
 				chr_residuals[cc] = map_residuals + pred_main[cc] + pred_int[cc].cwiseProduct(vp.eta.cast<double>());
 			} else {
@@ -1535,7 +1552,7 @@ public:
 		assert(neglogp_joint.rows() == n_var);
 		assert(n_effects == 1 || n_effects == 2);
 
-		std::set<int> chrs(X.chromosome.begin(), X.chromosome.end());
+//		std::set<int> chrs(X.chromosome.begin(), X.chromosome.end());
 		assert(chr_residuals.size() == n_chrs);
 
 		// Compute p-vals per variant (p=3 as residuals mean centered)
@@ -1543,13 +1560,14 @@ public:
 		boost_m::students_t t_dist(n_samples - n_effects - 1);
 		boost_m::fisher_f f_dist(n_effects, n_samples - n_effects - 1);
 		for(std::uint32_t jj = 0; jj < n_var; jj++ ){
-			int chr = X.chromosome[jj];
+			int chr1 = X.chromosome[jj];
+			int cc = std::find(chrs_present.begin(), chrs_present.end(), chr1) - chrs_present.begin();
 			H_kk.col(0) = X.col(jj).cast<double>();
 
 			if(n_effects == 1){
 				double ztz_inv = 1.0 / H_kk.squaredNorm();
-				double tau = (H_kk.transpose() * chr_residuals[chr])(0,0) * ztz_inv;
-				double rss_null = (chr_residuals[chr] - H_kk * tau).squaredNorm();
+				double tau = (H_kk.transpose() * chr_residuals[cc])(0,0) * ztz_inv;
+				double rss_null = (chr_residuals[cc] - H_kk * tau).squaredNorm();
 				// T-test of variant j
 				double main_se_j    = std::sqrt(rss_null / (N - 1.0) * ztz_inv);
 				double main_tstat_j = tau / main_se_j;
@@ -1562,10 +1580,10 @@ public:
 				// Model Fitting - p=3 as residuals mean centered
 				Eigen::Matrix2d HtH     = H_kk.transpose() * H_kk;
 				Eigen::Matrix2d HtH_inv = HtH.inverse(); // should be efficient for 2x2 matrix
-				Eigen::Vector2d tau     = HtH_inv * H_kk.transpose() * chr_residuals[chr];
+				Eigen::Vector2d tau     = HtH_inv * H_kk.transpose() * chr_residuals[cc];
 
-				double rss_null = chr_residuals[chr].squaredNorm();
-				double rss_alt  = (chr_residuals[chr] - H_kk * tau).squaredNorm();
+				double rss_null = chr_residuals[cc].squaredNorm();
+				double rss_alt  = (chr_residuals[cc] - H_kk * tau).squaredNorm();
 
 				// T-test on beta
 				double beta_tstat = tau[0] / sqrt(rss_alt * HtH_inv(0, 0) / (N - 3.0));
@@ -1712,14 +1730,32 @@ public:
 		calcPredEffects(vp_map);
 		compute_residuals_per_chr(vp_map, map_residuals_by_chr);
 		if(n_effects == 1) {
-			outf_map_pred << "Xbeta Y" << std::endl;
+			outf_map_pred << "Y Xbeta";
+			for(auto cc : chrs_index){
+				outf_map_pred << " residuals_excl_chr" << chrs_present[cc];
+			}
+			outf_map_pred << std::endl;
+
 			for (std::uint32_t ii = 0; ii < n_samples; ii++) {
-				outf_map_pred << vp_map.ym(ii) << " " << Y(ii) << std::endl;
+				outf_map_pred << Y(ii) << " " << vp_map.ym(ii);
+				for(auto cc : chrs_index){
+					outf_map_pred << " " << map_residuals_by_chr[cc](ii);
+				}
+				outf_map_pred << std::endl;
 			}
 		} else {
-			outf_map_pred << "Xbeta eta Xgamma Y" << std::endl;
+			outf_map_pred << "Y Xbeta eta Xgamma";
+			for(auto cc : chrs_index){
+				outf_map_pred << " residuals_excl_chr" << chrs_present[cc];
+			}
+			outf_map_pred << std::endl;
 			for (std::uint32_t ii = 0; ii < n_samples; ii++) {
-				outf_map_pred << vp_map.ym(ii) << " " << vp_map.eta(ii) << " " << vp_map.yx(ii) << " " << Y(ii) << std::endl;
+				outf_map_pred << Y(ii) << " " << vp_map.ym(ii);
+				outf_map_pred << " " << vp_map.eta(ii) << " " << vp_map.yx(ii);
+				for(auto cc : chrs_index){
+					outf_map_pred << " " << map_residuals_by_chr[cc](ii);
+				}
+				outf_map_pred << std::endl;
 			}
 		}
 

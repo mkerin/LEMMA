@@ -11,6 +11,9 @@ cmake-build*
 CMakeFiles/*
 traces/*
 instruments*
+examples/*
+tests/*.bak
+tests/*.backup
 
 # Ignore any executables
 bin/*
