@@ -237,41 +237,63 @@ public:
 
 	// Eigen matrix multiplication
 #ifdef DATA_AS_FLOAT
-	Eigen::VectorXf operator*(const Eigen::Ref<const Eigen::VectorXd>&  rhs){
+	// Eigen matrix multiplication
+	EigenDataMatrix operator*(const Eigen::Ref<const Eigen::MatrixXd>& rhs){
 		if(!scaling_performed){
 			calc_scaled_values();
 		}
-
+		assert(rhs.rows() == pp);
 		if(low_mem){
-			auto vec_total = rhs.sum() * intervalWidth * 0.5;
-			Eigen::VectorXf rhs_trans = rhs.cast<float>().cwiseProduct(compressed_dosage_inv_sds.cast<float>());
-			auto offset = rhs_trans.sum() * intervalWidth * 0.5;
-			offset -= rhs_trans.dot(compressed_dosage_means.cast<float>());
-			return ((M.cast<float>() * rhs_trans).array() * intervalWidth + offset).matrix();
+			EigenDataMatrix res;
+			res = M.cast<scalarData>() * compressed_dosage_inv_sds.cast<scalarData>().asDiagonal() * rhs.cast<scalarData>() * intervalWidth;
+			res.array().rowwise() += (compressed_dosage_inv_sds.cast<scalarData>().asDiagonal() * rhs.cast<scalarData>()).array().colwise().sum() * intervalWidth * 0.5;
+			res.array().rowwise() -= (compressed_dosage_inv_sds.cast<scalarData>().cwiseProduct(compressed_dosage_means.cast<scalarData>()).asDiagonal() * rhs.cast<scalarData>()).array().colwise().sum();
+			return res;
 		} else {
-			return G * rhs.cast<float>();
-		}
-	}
-#else
-	Eigen::VectorXd operator*(const Eigen::Ref<const Eigen::VectorXd>&  rhs){
-		if(!scaling_performed){
-			calc_scaled_values();
-		}
-
-		if(low_mem){
-			auto vec_total = rhs.sum() * intervalWidth * 0.5;
-			Eigen::VectorXd rhs_trans = rhs.cwiseProduct(compressed_dosage_inv_sds);
-			auto offset = rhs_trans.sum() * intervalWidth * 0.5;
-			offset -= compressed_dosage_means.dot(rhs_trans);
-			return ((M.cast<double>() * rhs_trans).array() * intervalWidth + offset).matrix();
-		} else {
-			return G * rhs;
+			return G * rhs.cast<scalarData>();
 		}
 	}
 #endif
 
-EigenDataMatrix col_block(const std::uint32_t& ch_start,
-						  const int& ch_len){
+	// Eigen matrix multiplication
+	EigenDataMatrix operator*(EigenRefDataMatrix rhs){
+		if(!scaling_performed){
+			calc_scaled_values();
+		}
+		assert(rhs.rows() == pp);
+		if(low_mem){
+			EigenDataMatrix res;
+			res = M.cast<scalarData>() * compressed_dosage_inv_sds.cast<scalarData>().asDiagonal() * rhs * intervalWidth;
+			res.array().rowwise() += (compressed_dosage_inv_sds.cast<scalarData>().asDiagonal() * rhs).array().colwise().sum() * intervalWidth * 0.5;
+			res.array().rowwise() -= (compressed_dosage_inv_sds.cast<scalarData>().cwiseProduct(compressed_dosage_means.cast<scalarData>()).asDiagonal() * rhs).array().colwise().sum();
+			return res;
+		} else {
+			return G * rhs;
+		}
+	}
+
+	Eigen::MatrixXd transpose_multiply(EigenRefDataArrayXX lhs){
+		// G.transpose_vector_multiply(y) <=> (y^t G)^t <=> G^t y
+		assert(lhs.rows() == nn);
+		if(!scaling_performed){
+			calc_scaled_values();
+		}
+
+		if(low_mem){
+			Eigen::MatrixXd res;
+			Eigen::VectorXd colsums = lhs.colwise().sum().matrix().cast<double>();
+
+			res = intervalWidth * (lhs.cast<double>().matrix().transpose() * M.cast<double>() * compressed_dosage_inv_sds.asDiagonal());
+			res += 0.5 * intervalWidth * colsums * compressed_dosage_inv_sds.transpose();
+			res += colsums * compressed_dosage_inv_sds.cwiseProduct(compressed_dosage_means).transpose();
+			return res;
+		} else {
+			return lhs.cast<double>().matrix().transpose() * G.cast<double>();
+		}
+	}
+
+	EigenDataMatrix col_block(const std::uint32_t& ch_start,
+							  const int& ch_len){
 	if(!scaling_performed){
 		calc_scaled_values();
 	}

@@ -429,6 +429,10 @@ class Data
 
 	void read_incl_rsids(){
 		boost_io::filtering_istream fg;
+		std::string gz_str = ".gz";
+		if (params.incl_rsids_file.find(gz_str) != std::string::npos) {
+			fg.push(boost_io::gzip_decompressor());
+		}
 		fg.push(boost_io::file_source(params.incl_rsids_file));
 		if (!fg) {
 			std::cout << "ERROR: " << params.incl_rsids_file << " not opened." << std::endl;
@@ -452,6 +456,10 @@ class Data
 
 	void read_incl_sids(){
 		boost_io::filtering_istream fg;
+		std::string gz_str = ".gz";
+		if (params.incl_sids_file.find(gz_str) != std::string::npos) {
+			fg.push(boost_io::gzip_decompressor());
+		}
 		fg.push(boost_io::file_source(params.incl_sids_file));
 		if (!fg) {
 			std::cout << "ERROR: " << params.incl_sids_file << " not opened." << std::endl;
@@ -539,6 +547,10 @@ class Data
 		// how many rows there will be and we can assume no missing values.
 
 		boost_io::filtering_istream fg;
+		std::string gz_str = ".gz";
+		if (filename.find(gz_str) != std::string::npos) {
+			fg.push(boost_io::gzip_decompressor());
+		}
 		fg.push(boost_io::file_source(filename));
 		if (!fg) {
 			std::cout << "ERROR: " << filename << " not opened." << std::endl;
@@ -615,6 +627,10 @@ class Data
 		// init_chr, init_pos, init_a0, init_a1;
 
 		boost_io::filtering_istream fg;
+		std::string gz_str = ".gz";
+		if (filename.find(gz_str) != std::string::npos) {
+			fg.push(boost_io::gzip_decompressor());
+		}
 		fg.push(boost_io::file_source(filename));
 		if (!fg) {
 			std::cout << "ERROR: " << filename << " not opened." << std::endl;
@@ -714,6 +730,10 @@ class Data
 		// TODO: Implement how to deal with missing values.
 
 		boost_io::filtering_istream fg;
+		std::string gz_str = ".gz";
+		if (filename.find(gz_str) != std::string::npos) {
+			fg.push(boost_io::gzip_decompressor());
+		}
 		fg.push(boost_io::file_source(filename));
 		if (!fg) {
 			std::cout << "ERROR: " << filename << " not opened." << std::endl;
@@ -790,6 +810,10 @@ class Data
 		// TODO: Implement how to deal with missing values.
 
 		boost_io::filtering_istream fg;
+		std::string gz_str = ".gz";
+		if (filename.find(gz_str) != std::string::npos) {
+			fg.push(boost_io::gzip_decompressor());
+		}
 		fg.push(boost_io::file_source(filename));
 		if (!fg) {
 			std::cout << "ERROR: " << filename << " not opened." << std::endl;
@@ -1012,6 +1036,10 @@ class Data
 
 		// Reading from file
 		boost_io::filtering_istream fg;
+		std::string gz_str = ".gz";
+		if (filename.find(gz_str) != std::string::npos) {
+			fg.push(boost_io::gzip_decompressor());
+		}
 		fg.push(boost_io::file_source(filename));
 		if (!fg) {
 			std::cout << "ERROR: " << filename << " not opened." << std::endl;

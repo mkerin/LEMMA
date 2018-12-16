@@ -340,7 +340,7 @@ TEST_CASE( "Example 3: multi-env w/ covars" ){
 	SECTION("Ex3. No filters applied, high mem mode"){
 		char* argv[] = { (char*) "bin/bgen_prog", (char*) "--mode_vb", (char*) "--high_mem",
 						 (char*) "--use_vb_on_covars",
-						 (char*) "--environment", (char*) "data/io_test/n50_p100_env.txt",
+						 (char*) "--environment", (char*) "data/io_test/n50_p100_env.txt.gz",
 						 (char*) "--bgen", (char*) "data/io_test/n50_p100.bgen",
 						 (char*) "--out", (char*) "data/io_test/fake_env.out",
 						 (char*) "--pheno", (char*) "data/io_test/pheno.txt",
@@ -536,10 +536,13 @@ TEST_CASE( "Example 4: multi-env + mog + covars + emp_bayes" ){
 			int round_index = 2;
 			std::vector<double> logw_prev(n_grid, -std::numeric_limits<double>::max());
 			std::vector<std::vector< double >> logw_updates(n_grid);
-
-			VB.updateAllParams(0, round_index, all_vp, all_hyps, logw_prev, trackers, logw_updates);
 			VariationalParameters& vp = all_vp[0];
 			Hyps& hyps = all_hyps[0];
+
+			EigenDataVector check_ym;
+			EigenDataVector Eq_beta;
+
+			VB.updateAllParams(0, round_index, all_vp, all_hyps, logw_prev, trackers, logw_updates);
 
 			CHECK(vp.alpha_beta(0)            == Approx(0.1339032153));
 			CHECK(vp.alpha_beta(1)            == Approx(0.1413799597));
@@ -551,6 +554,12 @@ TEST_CASE( "Example 4: multi-env + mog + covars + emp_bayes" ){
 			CHECK(hyps.lambda[1]            == Approx(0.1350333198));
 			CHECK(hyps.slab_relative_var[0] == Approx(0.0081833922));
 			CHECK(hyps.slab_relative_var[1] == Approx(0.0051150827));
+
+			Eq_beta = vp.alpha_beta * vp.mu1_beta;
+			if(p.mode_mog_prior_beta) Eq_beta.array() += (1 - vp.alpha_beta) * vp.mu2_beta;
+			check_ym  = VB.X * Eq_beta;
+			check_ym += VB.C * vp.muc.cast<scalarData>().matrix();
+			CHECK(vp.ym(0)            == check_ym(0));
 
 			VB.updateAllParams(1, round_index, all_vp, all_hyps, logw_prev, trackers, logw_updates);
 
@@ -566,9 +575,15 @@ TEST_CASE( "Example 4: multi-env + mog + covars + emp_bayes" ){
 			CHECK(hyps.slab_relative_var[0] == Approx(0.0125648575));
 			CHECK(hyps.slab_relative_var[1] == Approx(0.0042537538));
 			CHECK(hyps.s_x[0]               == Approx(64.0));
-			CHECK(hyps.s_x[1]               == Approx(0.2658034479));
-			CHECK(hyps.pve[1]               == Approx(0.0001139822));
-			CHECK(hyps.pve_large[1]         == Approx(0.000113981));
+			CHECK(hyps.s_x[1]               == Approx(0.259499063));
+			CHECK(hyps.pve[1]               == Approx(0.000111278));
+			CHECK(hyps.pve_large[1]         == Approx(0.0001112768));
+
+			Eq_beta = vp.alpha_beta * vp.mu1_beta;
+			if(p.mode_mog_prior_beta) Eq_beta.array() += (1 - vp.alpha_beta) * vp.mu2_beta;
+			check_ym  = VB.X * Eq_beta;
+			check_ym += VB.C * vp.muc.cast<scalarData>().matrix();
+			CHECK(vp.ym(0)            == Approx(check_ym(0)));
 
 			VB.updateAllParams(2, round_index, all_vp, all_hyps, logw_prev, trackers, logw_updates);
 
@@ -584,9 +599,9 @@ TEST_CASE( "Example 4: multi-env + mog + covars + emp_bayes" ){
 			CHECK(hyps.slab_relative_var[0] == Approx(0.0158099281));
 			CHECK(hyps.slab_relative_var[1] == Approx(0.0033998137));
 			CHECK(hyps.s_x[0]               == Approx(64.0));
-			CHECK(hyps.s_x[1]               == Approx(0.1035936049));
-			CHECK(hyps.pve[1]               == Approx(0.0000295386));
-			CHECK(hyps.pve_large[1]         == Approx(0.0000295381));
+			CHECK(hyps.s_x[1]               == Approx(0.1012145499));
+			CHECK(hyps.pve[1]               == Approx(0.0000288603));
+			CHECK(hyps.pve_large[1]         == Approx(0.0000288598));
 		}
 	}
 }

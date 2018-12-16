@@ -8,10 +8,13 @@ Changes:
 - Flag --mode_no_gxe to run Y = E alpha + X beta
 - dxteex only computed if n_effects > 1 (interaction mode)
 - software version number included in commandline output
+- ability to read from gzipped files
+- pvals computed as LOCO
 
 Bugfix:
 - forgot to use log in elbo when use_vb_on_covars
 - bugfix in pve_large
+- mean center s_z
 
 TODO:
 - Stop flipping variants if maf > 0.5 (misleading if triplet snps).
