@@ -10,6 +10,7 @@ Changes:
 - software version number included in commandline output
 - ability to read from gzipped files
 - pvals computed as LOCO
+- print rows x cols of files read in
 
 Bugfix:
 - forgot to use log in elbo when use_vb_on_covars
