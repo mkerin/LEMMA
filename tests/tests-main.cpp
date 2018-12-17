@@ -540,7 +540,7 @@ TEST_CASE( "Example 4: multi-env + mog + covars + emp_bayes" ){
 			Hyps& hyps = all_hyps[0];
 
 			EigenDataVector check_ym;
-			EigenDataVector Eq_beta;
+			Eigen::VectorXd Eq_beta;
 
 			VB.updateAllParams(0, round_index, all_vp, all_hyps, logw_prev, trackers, logw_updates);
 

@@ -149,11 +149,13 @@ public:
 		p.gxe_chunk_size = (unsigned int) std::min((long int) p.gxe_chunk_size, (long int) n_var);
 
 		// Read environmental variables
+		std::cout << "Computing XtE" << std::endl;
 		E = dat.E;
 		if(n_env > 0) {
 			XtE = X.transpose_multiply(E);
 			XtE.transposeInPlace();
 		}
+		std::cout << "XtE computed" << std::endl;
 
 		// Allocate memory - fwd/back pass vectors
 		for(std::uint32_t kk = 0; kk < n_var * n_effects; kk++){

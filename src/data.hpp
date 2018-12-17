@@ -581,7 +581,7 @@ class Data
 			++n_cols;
 			col_names.push_back(s1);
 		}
-		std::cout << n_grid << " x " << n_cols << " matrix read from " << filename << std::endl;
+		std::cout << " Reading matrix of size " << n_grid << " x " << n_cols << " from " << filename << std::endl;
 
 		// Write remainder of file to Eigen matrix M
 		M.resize(n_grid, n_cols);
@@ -661,7 +661,7 @@ class Data
 			++n_cols;
 			col_names.push_back(s);
 		}
-		std::cout << " Detected " << n_cols << " column(s) from " << filename << std::endl;
+		std::cout << " Reading matrix of size " << n_grid << " x " << n_cols << " from " << filename << std::endl;
 
 		// Write remainder of file to Eigen matrix M
 		M.resize(n_grid, n_cols);
@@ -755,7 +755,7 @@ class Data
 			++n_cols;
 			col_names.push_back(s);
 		}
-		std::cout << " Detected " << n_cols << " column(s) from " << filename << std::endl;
+		std::cout << " Reading matrix of size " << n_samples << " x " << n_cols << " from " << filename << std::endl;
 
 		// Write remainder of file to Eigen matrix M
 		incomplete_row.clear();
@@ -835,7 +835,7 @@ class Data
 			++n_cols;
 			col_names.push_back(s);
 		}
-		std::cout << " Detected " << n_cols << " column(s) from " << filename << std::endl;
+		std::cout << " Reading matrix of size " << n_samples << " x " << n_cols << " from " << filename << std::endl;
 
 		// Write remainder of file to Eigen matrix M
 		incomplete_row.clear();
