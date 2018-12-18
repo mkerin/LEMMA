@@ -273,7 +273,7 @@ public:
 	}
 
 	Eigen::MatrixXd transpose_multiply(EigenRefDataArrayXX lhs){
-		// G.transpose_vector_multiply(y) <=> (y^t G)^t <=> G^t y
+		// Return G^t lhs
 		assert(lhs.rows() == nn);
 		if(!scaling_performed){
 			calc_scaled_values();
@@ -284,16 +284,20 @@ public:
 			Eigen::VectorXd colsums = lhs.colwise().sum().matrix().cast<double>();
 
 			// Diagnostic messages as worried about RAM
-			std::cout << "About to compute lhs_t_M" << std::endl;
-			Eigen::MatrixXd lhs_t_M = lhs.cast<double>().matrix().transpose() * M.cast<double>();
-			std::cout << "Computed lhs_t_M" << std::endl;
+			std::cout << "About to compute Mt_lhs" << std::endl;
+			Eigen::MatrixXd Mt_lhs(pp, lhs.cols());
+			for (int ll = 0; ll < lhs.cols(); ll++){
+				EigenRefDataVector tmp = lhs.col(ll);
+				Mt_lhs.col(ll) = tmp.cast<double>().transpose() * M.cast<double>();
+			}
+			std::cout << "Computed Mt_lhs" << std::endl;
 
-			res = intervalWidth * (lhs_t_M * compressed_dosage_inv_sds.asDiagonal());
-			res += 0.5 * intervalWidth * colsums * compressed_dosage_inv_sds.transpose();
-			res += colsums * compressed_dosage_inv_sds.cwiseProduct(compressed_dosage_means).transpose();
+			res = intervalWidth * (compressed_dosage_inv_sds.asDiagonal() * Mt_lhs);
+			res += 0.5 * intervalWidth * compressed_dosage_inv_sds * colsums.transpose();
+			res += compressed_dosage_inv_sds.cwiseProduct(compressed_dosage_means) * colsums.transpose();
 			return res;
 		} else {
-			return lhs.cast<double>().matrix().transpose() * G.cast<double>();
+			return (G.transpose() * lhs.matrix()).cast<double>();
 		}
 	}
 

@@ -259,7 +259,6 @@ TEST_CASE( "Example 2: multi-env" ){
 						 (char*) "--out", (char*) "data/io_test/fake_env.out",
 						 (char*) "--pheno", (char*) "data/io_test/pheno.txt",
 						 (char*) "--hyps_grid", (char*) "data/io_test/hyperpriors_gxage.txt",
-						 (char*) "--hyps_probs", (char*) "data/io_test/hyperpriors_gxage_probs.txt",
 						 (char*) "--vb_init", (char*) "data/io_test/answer_init.txt"};
 		int argc = sizeof(argv)/sizeof(argv[0]);
 		parse_arguments(p, argc, argv);
