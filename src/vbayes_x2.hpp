@@ -153,7 +153,6 @@ public:
 		E = dat.E;
 		if(n_env > 0) {
 			XtE = X.transpose_multiply(E);
-			XtE.transposeInPlace();
 		}
 		std::cout << "XtE computed" << std::endl;
 
