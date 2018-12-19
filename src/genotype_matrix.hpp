@@ -238,14 +238,19 @@ public:
 	// Eigen matrix multiplication
 #ifdef DATA_AS_FLOAT
 	// Eigen matrix multiplication
-	EigenDataMatrix operator*(const Eigen::Ref<const Eigen::MatrixXd>& rhs){
+	EigenDataMatrix operator*(Eigen::Ref<Eigen::MatrixXd> rhs){
 		if(!scaling_performed){
 			calc_scaled_values();
 		}
 		assert(rhs.rows() == pp);
 		if(low_mem){
-			EigenDataMatrix res;
-			res = M.cast<scalarData>() * compressed_dosage_inv_sds.cast<scalarData>().asDiagonal() * rhs.cast<scalarData>() * intervalWidth;
+			EigenDataMatrix res(nn, rhs.cols());
+			for (int ll = 0; ll < rhs.cols(); ll++){
+				Eigen::Ref<Eigen::MatrixXd> tmp = rhs.col(ll);
+				res.col(ll) = M.cast<scalarData>() * compressed_dosage_inv_sds.cast<scalarData>().asDiagonal() * tmp.cast<scalarData>();
+			}
+			res *= intervalWidth;
+			// res = M.cast<scalarData>() * compressed_dosage_inv_sds.cast<scalarData>().asDiagonal() * rhs.cast<scalarData>() * intervalWidth;
 			res.array().rowwise() += (compressed_dosage_inv_sds.cast<scalarData>().asDiagonal() * rhs.cast<scalarData>()).array().colwise().sum() * intervalWidth * 0.5;
 			res.array().rowwise() -= (compressed_dosage_inv_sds.cast<scalarData>().cwiseProduct(compressed_dosage_means.cast<scalarData>()).asDiagonal() * rhs.cast<scalarData>()).array().colwise().sum();
 			return res;
@@ -262,8 +267,13 @@ public:
 		}
 		assert(rhs.rows() == pp);
 		if(low_mem){
-			EigenDataMatrix res;
-			res = M.cast<scalarData>() * compressed_dosage_inv_sds.cast<scalarData>().asDiagonal() * rhs * intervalWidth;
+			EigenDataMatrix res(nn, rhs.cols());
+			for (int ll = 0; ll < rhs.cols(); ll++){
+				EigenRefDataVector tmp = rhs.col(ll);
+				res.col(ll) = M.cast<scalarData>() * compressed_dosage_inv_sds.cast<scalarData>().asDiagonal() * tmp.cast<scalarData>();
+			}
+			res *= intervalWidth;
+			// res = M.cast<scalarData>() * compressed_dosage_inv_sds.cast<scalarData>().asDiagonal() * rhs * intervalWidth;
 			res.array().rowwise() += (compressed_dosage_inv_sds.cast<scalarData>().asDiagonal() * rhs).array().colwise().sum() * intervalWidth * 0.5;
 			res.array().rowwise() -= (compressed_dosage_inv_sds.cast<scalarData>().cwiseProduct(compressed_dosage_means.cast<scalarData>()).asDiagonal() * rhs).array().colwise().sum();
 			return res;
