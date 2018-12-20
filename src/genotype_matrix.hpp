@@ -246,7 +246,7 @@ public:
 		if(low_mem){
 			EigenDataMatrix res(nn, rhs.cols());
 			for (int ll = 0; ll < rhs.cols(); ll++){
-				Eigen::Ref<Eigen::MatrixXd> tmp = rhs.col(ll);
+				Eigen::Ref<Eigen::VectorXd> tmp = rhs.col(ll);
 				res.col(ll) = M.cast<scalarData>() * compressed_dosage_inv_sds.cast<scalarData>().asDiagonal() * tmp.cast<scalarData>();
 			}
 			res *= intervalWidth;

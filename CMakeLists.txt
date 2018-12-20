@@ -45,7 +45,7 @@ if(CMAKE_CURRENT_SOURCE_DIR MATCHES /Users/kerin)
     list(APPEND LOC_COMPILE_OPTS -m64 -I${MKLROOT}/include)
 elseif(CMAKE_CURRENT_SOURCE_DIR MATCHES /well/marchini/kebl4230)
     # LINUX File System - Rescomp
-    set(MKLROOT NA)
+    set(MKLROOT /users/marchini/kebl4230/intel/compilers_and_libraries_2019.0.117/linux/mkl)
     list(APPEND LINKER_OPTS -L${MKLROOT}/lib/intel64 -Wl,--no-as-needed -lmkl_intel_lp64 -lmkl_gnu_thread -lmkl_core -lgomp -lpthread -lm -ldl)
     list(APPEND LOC_COMPILE_OPTS -m64 -I${MKLROOT}/include)
 elseif(CMAKE_CURRENT_SOURCE_DIR MATCHES /homes/kerin)
@@ -57,6 +57,7 @@ else()
     message( FATAL_ERROR "Unexpected root directory structure. Where is the MKL lib located?")
 endif()
 message(${LOC_COMPILE_OPTS})
+message(${LINKER_OPTS})
 
 ##Add project version number to preprocessor macros
 list(APPEND LOC_COMPILE_OPTS -DVERSION_MAJOR=${PROJECT_VERSION_MAJOR})
