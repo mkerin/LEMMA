@@ -9,7 +9,7 @@ Changes:
 - dxteex only computed if n_effects > 1 (interaction mode)
 - software version number included in commandline output
 - ability to read from gzipped files
-- pvals computed as LOCO
+- output pvals + test stats computed with LOCO strategy
 - print rows x cols of files read in
 
 Bugfix:

@@ -1547,10 +1547,16 @@ public:
 					const std::vector<Eigen::VectorXd>& chr_residuals,
 					Eigen::Ref<Eigen::VectorXd> neglogp_beta,
 					Eigen::Ref<Eigen::VectorXd> neglogp_gam,
-					Eigen::Ref<Eigen::VectorXd> neglogp_joint){
+					Eigen::Ref<Eigen::VectorXd> neglogp_joint,
+					Eigen::Ref<Eigen::VectorXd> test_stat_beta,
+					Eigen::Ref<Eigen::VectorXd> test_stat_gam,
+					Eigen::Ref<Eigen::VectorXd> test_stat_joint){
 		assert(neglogp_beta.rows()  == n_var);
 		assert(neglogp_gam.rows()   == n_var);
 		assert(neglogp_joint.rows() == n_var);
+		assert(test_stat_beta.rows()  == n_var);
+		assert(test_stat_gam.rows()   == n_var);
+		assert(test_stat_joint.rows() == n_var);
 		assert(n_effects == 1 || n_effects == 2);
 
 //		std::set<int> chrs(X.chromosome.begin(), X.chromosome.end());
@@ -1575,6 +1581,7 @@ public:
 				double main_pval_j  = 2 * boost_m::cdf(boost_m::complement(t_dist, fabs(main_tstat_j)));
 
 				neglogp_beta(jj) = -1 * std::log10(main_pval_j);
+				test_stat_beta(jj) = main_tstat_j;
 			} else if (n_effects > 1){
 				H_kk.col(1) = H_kk.col(0).cwiseProduct(vp.eta.cast<double>());
 
@@ -1589,19 +1596,23 @@ public:
 				// T-test on beta
 				double beta_tstat = tau[0] / sqrt(rss_alt * HtH_inv(0, 0) / (N - 3.0));
 				double beta_pval  = 2 * boost_m::cdf(boost_m::complement(t_dist, fabs(beta_tstat)));
-				neglogp_beta[jj]  = -1 * std::log10(beta_pval);
 
 				// T-test on gamma
 				double gam_tstat  = tau[1] / sqrt(rss_alt * HtH_inv(1, 1) / (N - 3.0));
 				double gam_pval   = 2 * boost_m::cdf(boost_m::complement(t_dist, fabs(gam_tstat)));
-				neglogp_gam[jj]   = -1 * std::log10(gam_pval);
 
 				// F-test over main+int effects of snp_j
 				double joint_fstat, joint_pval;
 				joint_fstat       = (rss_null - rss_alt) / 2.0;
 				joint_fstat      /= rss_alt / (N - 3.0);
 				joint_pval        = 1.0 - boost_m::cdf(f_dist, joint_fstat);
+
+				neglogp_beta[jj]  = -1 * std::log10(beta_pval);
+				neglogp_gam[jj]   = -1 * std::log10(gam_pval);
 				neglogp_joint[jj] = -1 * std::log10(joint_pval);
+				test_stat_beta[jj]  = beta_tstat;
+				test_stat_gam[jj]   = gam_tstat;
+				test_stat_joint[jj] = joint_fstat;
 			}
 		}
 	}
@@ -1776,10 +1787,11 @@ public:
 
 		// Compute LOCO p-values
 		Eigen::VectorXd neglogp_beta(n_var), neglogp_gam(n_var), neglogp_joint(n_var);
-		LOCO_pvals(vp_map, map_residuals_by_chr, neglogp_beta, neglogp_gam, neglogp_joint);
+		Eigen::VectorXd test_stat_beta(n_var), test_stat_gam(n_var), test_stat_joint(n_var);
+		LOCO_pvals(vp_map, map_residuals_by_chr, neglogp_beta, neglogp_gam, neglogp_joint, test_stat_beta, test_stat_gam, test_stat_joint);
 
 		// MAP snp-stats to file
-		write_snp_stats_to_file(outf_map, n_effects, n_var, vp_map, X, p, true, neglogp_beta, neglogp_gam, neglogp_joint);
+		write_snp_stats_to_file(outf_map, n_effects, n_var, vp_map, X, p, true, neglogp_beta, neglogp_gam, neglogp_joint, test_stat_beta, test_stat_gam, test_stat_joint);
 		if(p.use_vb_on_covars) {
 			write_covars_to_file(outf_map_covar, vp_map);
 		}
