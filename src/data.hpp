@@ -328,6 +328,7 @@ class Data
 			double maf_j = d1 / (2.0 * valid_count);
 
 			// Flip dosage vector if maf > 0.5
+			// NB: info invariant to flipping
 			if(params.flip_high_maf_variants && maf_j > 0.5){
 				dosage_j = (2.0 - dosage_j);
 				for (std::uint32_t ii = 0; ii < n_samples; ii++){
@@ -336,7 +337,6 @@ class Data
 					}
 				}
 
-				f2       = 4.0 * valid_count - 4.0 * d1 + f2;
 				d1       = dosage_j.sum();
 				maf_j    = d1 / (2.0 * valid_count);
 			}

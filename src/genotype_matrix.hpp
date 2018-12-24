@@ -342,22 +342,15 @@ public:
 		}
 
 		// Find chr block
-		std::uint32_t chr_st, chr_size;
-		bool first_var_found = false, block_end_found = false;
-		for (std::uint32_t jj = 0; jj < pp; jj++){
-			if(!first_var_found && chromosome[jj] == chr){
-				first_var_found = true;
-				chr_st = jj;
-			} else if(first_var_found && chromosome[jj] != chr){
-				chr_size = jj - chr_st;
-				block_end_found = true;
-			} else if(block_end_found && chromosome[jj] == chr){
-				std::cout << "WARNING: genotype matrix not sorted by chromosome. LOCO snpstats computed incorrectly." << std::endl;
-			}
-		}
-		if(!block_end_found){
-			chr_size = pp - chr_st;
-		}
+		// Chromosomes read via bgen guaranteed to be ordered in blocks
+		std::vector<int> tmp;
+		tmp.push_back(chr);
+		auto it_start = std::find(chromosome.begin(), chromosome.end(), chr);
+		auto it_end = std::find_end(chromosome.begin(), chromosome.end(), tmp.begin(), tmp.end());
+		long chr_st, chr_en, chr_size;
+		chr_st = it_start - chromosome.begin();
+		chr_en = it_end - chromosome.begin();
+		chr_size = chr_en - chr_st + 1;
 
 		Eigen::VectorXd res;
 		if(low_mem){

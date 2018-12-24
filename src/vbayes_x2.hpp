@@ -79,8 +79,10 @@ public:
 	parameters& p;
 	std::vector< std::uint32_t > fwd_pass;
 	std::vector< std::uint32_t > back_pass;
-	std::vector< std::vector < std::uint32_t >> fwd_pass_chunks;
-	std::vector< std::vector < std::uint32_t >> back_pass_chunks;
+//	std::vector< std::vector < std::uint32_t >> fwd_pass_chunks;
+//	std::vector< std::vector < std::uint32_t >> back_pass_chunks;
+	std::vector< std::vector < std::uint32_t >> main_fwd_pass_chunks, gxe_fwd_pass_chunks;
+	std::vector< std::vector < std::uint32_t >> main_back_pass_chunks, gxe_back_pass_chunks;
 	std::vector< int > env_fwd_pass;
 	std::vector< int > env_back_pass;
 	std::map<unsigned long, Eigen::MatrixXd> D_correlations; //We can keep D^t D for the main effects
@@ -137,6 +139,19 @@ public:
 		env_names      = dat.env_names;
 		N              = (double) n_samples;
 
+//		// env-main effects
+//		if(p.use_vb_on_covars) {
+//			n_covar = dat.n_env + dat.n_covar;
+//			covar_names = dat.env_names;
+//			covar_names.insert(covar_names.end(), dat.covar_names.begin(), dat.covar_names.end());
+//			C.resize(n_samples, n_covar);
+//			C << dat.E, dat.W;
+//		} else {
+//			n_covar = dat.n_env;
+//			covar_names = dat.env_names;
+//			C = dat.E;
+//		}
+
 		std::set<int> tmp(X.chromosome.begin(), X.chromosome.end());
 		chrs_present.assign(tmp.begin(), tmp.end());
 		n_chrs = chrs_present.size();
@@ -174,13 +189,37 @@ public:
 		if(n_effects > 1){
 			n_chunks += n_gxe_segs;
 		}
+//
+//		fwd_pass_chunks.resize(n_chunks);
+//		back_pass_chunks.resize(n_chunks);
+//		for(std::uint32_t kk = 0; kk < n_effects * n_var; kk++){
+//			std::uint32_t ch_index = (kk < n_var ? kk / p.main_chunk_size : n_main_segs + (kk % n_var) / p.gxe_chunk_size);
+//			fwd_pass_chunks[ch_index].push_back(kk);
+//			back_pass_chunks[n_chunks - 1 - ch_index].push_back(kk);
+//		}
 
-		fwd_pass_chunks.resize(n_chunks);
-		back_pass_chunks.resize(n_chunks);
-		for(std::uint32_t kk = 0; kk < n_effects * n_var; kk++){
-			std::uint32_t ch_index = (kk < n_var ? kk / p.main_chunk_size : n_main_segs + (kk % n_var) / p.gxe_chunk_size);
-			fwd_pass_chunks[ch_index].push_back(kk);
-			back_pass_chunks[n_chunks - 1 - ch_index].push_back(kk);
+		main_fwd_pass_chunks.resize(n_main_segs);
+		main_back_pass_chunks.resize(n_main_segs);
+		gxe_fwd_pass_chunks.resize(n_gxe_segs);
+		gxe_back_pass_chunks.resize(n_gxe_segs);
+		for(std::uint32_t kk = 0; kk < n_var; kk++){
+			std::uint32_t main_ch_index = kk / p.main_chunk_size;
+			std::uint32_t gxe_ch_index = kk / p.gxe_chunk_size;
+			main_fwd_pass_chunks[main_ch_index].push_back(kk);
+			main_back_pass_chunks[n_main_segs - 1 - main_ch_index].push_back(kk);
+			gxe_fwd_pass_chunks[gxe_ch_index].push_back(kk + n_var);
+			gxe_back_pass_chunks[n_gxe_segs - 1 - gxe_ch_index].push_back(kk + n_var);
+		}
+
+
+//		for (long ii = 0; ii < n_chunks; ii++){
+//			std::reverse(back_pass_chunks[ii].begin(), back_pass_chunks[ii].end());
+//		}
+		for (long ii = 0; ii < n_main_segs; ii++) {
+			std::reverse(main_back_pass_chunks[ii].begin(), main_back_pass_chunks[ii].end());
+		}
+		for (long ii = 0; ii < n_gxe_segs; ii++) {
+			std::reverse(gxe_back_pass_chunks[ii].begin(), gxe_back_pass_chunks[ii].end());
 		}
 
 //		for (auto chunk : fwd_pass_chunks){
@@ -196,9 +235,24 @@ public:
 //			}
 //			std::cout << std::endl;
 //		}
+//
+//		for (auto chunk : gxe_back_pass_chunks){
+//			for (auto ii : chunk){
+//				std::cout << ii << " ";
+//			}
+//			std::cout << std::endl;
+//		}
+//
+//		for (auto chunk : main_back_pass_chunks){
+//			for (auto ii : chunk){
+//				std::cout << ii << " ";
+//			}
+//			std::cout << std::endl;
+//		}
 
-		for (long ii = 0; ii < n_chunks; ii++){
-			std::reverse(back_pass_chunks[ii].begin(), back_pass_chunks[ii].end());
+		if(n_effects == 1){
+			gxe_back_pass_chunks.clear();
+			gxe_fwd_pass_chunks.clear();
 		}
 
 		// non random initialisation
@@ -582,16 +636,6 @@ public:
 		unsigned long n_grid = all_hyps.size();
 		std::vector<double> i_logw(n_grid);
 
-		// Alternate between back and fwd passes
-		bool is_fwd_pass = (count % 2 == 0);
-		if(is_fwd_pass){
-			iter = fwd_pass;
-			iter_chunks = fwd_pass_chunks;
-		} else {
-			iter = back_pass;
-			iter_chunks = back_pass_chunks;
-		}
-
 		// Update covar main effects
 		for (int nn = 0; nn < n_grid; nn++) {
 			if (p.use_vb_on_covars) {
@@ -601,9 +645,28 @@ public:
 		}
 
 		// Update main & interaction effects
-		updateAlphaMu(iter_chunks, all_hyps, all_vp, trackers, is_fwd_pass);
+		std::string ms;
+		bool is_fwd_pass = (count % 2 == 0);
+		if(is_fwd_pass) {
+			ms = "updateAlphaMu_fwd_main";
+			updateAlphaMu(main_fwd_pass_chunks, all_hyps, all_vp, trackers, is_fwd_pass);
+		} else {
+			ms = "updateAlphaMu_back_gxe";
+			updateAlphaMu(gxe_back_pass_chunks, all_hyps, all_vp, trackers, is_fwd_pass);
+		}
 		for (int nn = 0; nn < n_grid; nn++) {
-			check_monotonic_elbo(all_hyps[nn], all_vp[nn], count, logw_prev[nn], "updateAlphaMu");
+			check_monotonic_elbo(all_hyps[nn], all_vp[nn], count, logw_prev[nn], ms);
+		}
+
+		if(is_fwd_pass){
+			ms = "updateAlphaMu_fwd_gxe";
+			updateAlphaMu(gxe_fwd_pass_chunks, all_hyps, all_vp, trackers, is_fwd_pass);
+		} else {
+			ms = "updateAlphaMu_back_main";
+			updateAlphaMu(main_back_pass_chunks, all_hyps, all_vp, trackers, is_fwd_pass);
+		}
+		for (int nn = 0; nn < n_grid; nn++) {
+			check_monotonic_elbo(all_hyps[nn], all_vp[nn], count, logw_prev[nn], ms);
 		}
 
 		// Update env-weights
@@ -1250,11 +1313,7 @@ public:
 
 		// Env weights - cast if DATA_AS_FLOAT
 		vp.muw     = 1.0 / (double) n_env;
-#ifdef DATA_AS_FLOAT
-		vp.eta     = E.matrix() * vp.muw.matrix().cast<float>();
-#else
-		vp.eta     = E.matrix() * vp.muw.matrix();
-#endif
+		vp.eta     = E.matrix() * vp.muw.matrix().cast<scalarData>();
 		vp.eta_sq  = vp.eta.array().square().matrix();
 		vp.calcEdZtZ(dXtEEX, n_env);
 	}
@@ -1269,11 +1328,7 @@ public:
 
 		vp.ym = X * rr_beta;
 		if(p.use_vb_on_covars){
-#ifdef DATA_AS_FLOAT
-			vp.ym += C * vp.muc.matrix().cast<float>();
-#else
-			vp.ym += C * vp.muc.matrix();
-#endif
+			vp.ym += C * vp.muc.matrix().cast<scalarData>();
 		}
 
 		if(n_effects > 1) {
@@ -1296,11 +1351,7 @@ public:
 
 		vp.ym = X * rr_beta;
 		if(p.use_vb_on_covars){
-#ifdef DATA_AS_FLOAT
-			vp.ym += C * vp.muc.matrix().cast<float>();
-#else
-			vp.ym += C * vp.muc.matrix();
-#endif
+			vp.ym += C * vp.muc.matrix().cast<scalarData>();
 		}
 
 		if(n_effects > 1) {
@@ -1501,9 +1552,13 @@ public:
 	}
 
 	void compute_residuals_per_chr(const VariationalParametersLite& vp,
+			std::vector<Eigen::VectorXd>& pred_main,
+			std::vector<Eigen::VectorXd>& pred_int,
 			std::vector<Eigen::VectorXd>& chr_residuals){
 
 //		std::set<int> chrs(X.chromosome.begin(), X.chromosome.end());
+		assert(pred_main.size() == n_chrs);
+		assert(pred_int.size() == n_chrs);
 		assert(chr_residuals.size() == n_chrs);
 
 		// casts used if DATA_AS_FLOAT
@@ -1516,7 +1571,6 @@ public:
 
 		// Compute predicted effects from each chromosome
 		Eigen::VectorXd Eq_beta, Eq_gam;
-		std::vector<Eigen::VectorXd> pred_main(n_chrs), pred_int(n_chrs);
 
 		Eq_beta = vp.alpha_beta * vp.mu1_beta;
 		if(p.mode_mog_prior_beta) Eq_beta.array() += (1 - vp.alpha_beta) * vp.mu2_beta;
@@ -1670,9 +1724,7 @@ public:
 		std::vector< double > weights(my_n_grid);
 		if(my_n_grid > 1){
 			for (int ii = 0; ii < my_n_grid; ii++){
-				if(p.mode_empirical_bayes){
-					weights[ii] = trackers[ii].logw;
-				}
+				weights[ii] = trackers[ii].logw;
 			}
 			normaliseLogWeights(weights);
 		} else {
@@ -1734,13 +1786,13 @@ public:
 		}
 
 		/*********** Stats from MAP to file ************/
-		std::vector<Eigen::VectorXd> map_residuals_by_chr(n_chrs);
+		std::vector<Eigen::VectorXd> map_residuals_by_chr(n_chrs), pred_main(n_chrs), pred_int(n_chrs);
 		long int ii_map = std::distance(weights.begin(), std::max_element(weights.begin(), weights.end()));
 		VariationalParametersLite vp_map = trackers[ii_map].vp;
 
 		// Predicted effects to file
 		calcPredEffects(vp_map);
-		compute_residuals_per_chr(vp_map, map_residuals_by_chr);
+		compute_residuals_per_chr(vp_map, pred_main, pred_int, map_residuals_by_chr);
 		if(n_effects == 1) {
 			outf_map_pred << "Y Xbeta";
 			for(auto cc : chrs_index){

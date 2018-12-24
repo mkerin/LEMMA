@@ -28,12 +28,14 @@ int main( int argc, char** argv ) {
 	std::cout << "=============" << std::endl << std::endl;
 
 	auto start = std::chrono::system_clock::now();
-	std::time_t start_time = std::chrono::system_clock::to_time_t(start);
-	std::cout << "Starting analysis at " << std::ctime(&start_time) << std::endl;
 
 	try {
 		auto data_start = std::chrono::system_clock::now();
 		parse_arguments(p, argc, argv);
+
+		std::time_t start_time = std::chrono::system_clock::to_time_t(start);
+		std::cout << "Starting analysis at " << std::ctime(&start_time) << std::endl;
+
 		Data data( p );
 
 		data.apply_filters();
@@ -88,7 +90,6 @@ int main( int argc, char** argv ) {
 		outf_time << "read_data " << elapsed_reading_data.count() << std::endl;
 		outf_time << "full_inference " << elapsed_vb.count() << std::endl;
 		outf_time << "vb_outer_loop " << VB.elapsed_innerLoop.count() << std::endl;
-		return 0 ;
 	}
 	catch( genfile::bgen::BGenError const& e ) {
 		std::cerr << "!! Uh-oh, error parsing bgen file.\n" ;
@@ -100,4 +101,5 @@ int main( int argc, char** argv ) {
 	std::time_t end_time = std::chrono::system_clock::to_time_t(end);
 	std::cout << "Analysis finished at " << std::ctime(&end_time);
 	std::cout << "Elapsed time: " << elapsed_seconds.count() << "s" << std::endl;
+	return 0;
 }
