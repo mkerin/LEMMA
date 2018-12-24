@@ -649,10 +649,10 @@ public:
 		bool is_fwd_pass = (count % 2 == 0);
 		if(is_fwd_pass) {
 			ms = "updateAlphaMu_fwd_main";
-			updateAlphaMu(main_fwd_pass_chunks, all_hyps, all_vp, trackers, is_fwd_pass);
+			updateAlphaMu(main_fwd_pass_chunks, all_hyps, all_vp, trackers, is_fwd_pass, logw_prev, count);
 		} else {
 			ms = "updateAlphaMu_back_gxe";
-			updateAlphaMu(gxe_back_pass_chunks, all_hyps, all_vp, trackers, is_fwd_pass);
+			updateAlphaMu(gxe_back_pass_chunks, all_hyps, all_vp, trackers, is_fwd_pass, logw_prev, count);
 		}
 		for (int nn = 0; nn < n_grid; nn++) {
 			check_monotonic_elbo(all_hyps[nn], all_vp[nn], count, logw_prev[nn], ms);
@@ -660,10 +660,10 @@ public:
 
 		if(is_fwd_pass){
 			ms = "updateAlphaMu_fwd_gxe";
-			updateAlphaMu(gxe_fwd_pass_chunks, all_hyps, all_vp, trackers, is_fwd_pass);
+			updateAlphaMu(gxe_fwd_pass_chunks, all_hyps, all_vp, trackers, is_fwd_pass, logw_prev, count);
 		} else {
 			ms = "updateAlphaMu_back_main";
-			updateAlphaMu(main_back_pass_chunks, all_hyps, all_vp, trackers, is_fwd_pass);
+			updateAlphaMu(main_back_pass_chunks, all_hyps, all_vp, trackers, is_fwd_pass, logw_prev, count);
 		}
 		for (int nn = 0; nn < n_grid; nn++) {
 			check_monotonic_elbo(all_hyps[nn], all_vp[nn], count, logw_prev[nn], ms);
@@ -719,7 +719,9 @@ public:
                        const std::vector<Hyps>& all_hyps,
                        std::vector<VariationalParameters>& all_vp,
                        std::vector<VbTracker>& trackers,
-                       const bool& is_fwd_pass){
+                       const bool& is_fwd_pass,
+                       std::vector<double> logw_prev,
+                       int count){
 		// Divide updates into chunks
 		// Partition chunks amongst available threads
 		unsigned long n_grid = all_hyps.size();
@@ -770,6 +772,17 @@ public:
 				YX.noalias() += D * rr_diff;
 			}
 #endif
+			// TODO: only on sometimes
+			if(p.verbose3) {
+				for (int nn = 0; nn < n_grid; nn++) {
+					// update summary quantity
+					all_vp[nn].calcVarqBeta(all_hyps[nn], p, n_effects);
+				}
+
+				for (int nn = 0; nn < n_grid; nn++) {
+					check_monotonic_elbo(all_hyps[nn], all_vp[nn], count, logw_prev[nn], "updateAlphaMu_internal");
+				}
+			}
 		}
 
 		for (int nn = 0; nn < n_grid; nn++){

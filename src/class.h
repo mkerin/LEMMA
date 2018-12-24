@@ -20,7 +20,7 @@ class parameters {
 		std::uint32_t range_start, range_end;
 		bool range, maf_lim, info_lim, select_snps, xtra_verbose;
 		bool geno_check, mode_vb, use_vb_on_covars;
-		bool select_rsid, interaction_analysis, verbose, low_mem;
+		bool select_rsid, interaction_analysis, verbose, verbose3, low_mem;
 		bool elbo_tol_set_by_user, alpha_tol_set_by_user, mode_empirical_bayes;
 		bool keep_constant_variants, user_requests_round1, scale_pheno;
 		bool mode_alternating_updates;
@@ -77,6 +77,7 @@ class parameters {
 		select_rsid = false;
 		geno_check = true; // check allele probs sum to 1 by default
 		verbose = false;
+		verbose3 = false;
 		xtra_verbose = false;
 		use_vb_on_covars = false;
 		alpha_tol_set_by_user = false;

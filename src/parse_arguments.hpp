@@ -132,6 +132,7 @@ void parse_arguments(parameters &p, int argc, char *argv[]) {
 		"--mode_mog_gamma",
 		"--gxe_chunk_size",
 		"--main_chunk_size",
+		"--v3rbose",
 		"--spike_diff_factor",
 		"--min_spike_diff_factor"
 	};
@@ -346,6 +347,11 @@ void parse_arguments(parameters &p, int argc, char *argv[]) {
 
 			if(strcmp(in_str, "--force_round1") == 0) {
 				p.user_requests_round1 = true;
+				i += 0;
+			}
+
+			if(strcmp(in_str, "--v3erbose") == 0) {
+				p.verbose3 = true;
 				i += 0;
 			}
 
