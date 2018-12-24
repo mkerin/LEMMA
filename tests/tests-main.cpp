@@ -249,13 +249,13 @@ TEST_CASE( "Example 1: single-env" ){
 	}
 }
 
-TEST_CASE( "Example 2: multi-env" ){
+TEST_CASE( "Example 2a: multi-env + bgen over 2chr" ){
 	parameters p;
 
 	SECTION("Ex2. No filters applied, high mem mode"){
 		char* argv[] = { (char*) "bin/bgen_prog", (char*) "--mode_vb", (char*) "--high_mem",
 						 (char*) "--environment", (char*) "data/io_test/n50_p100_env.txt",
-						 (char*) "--bgen", (char*) "data/io_test/n50_p100.bgen",
+						 (char*) "--bgen", (char*) "data/io_test/n50_p100_chr2.bgen",
 						 (char*) "--out", (char*) "data/io_test/fake_env.out",
 						 (char*) "--pheno", (char*) "data/io_test/pheno.txt",
 						 (char*) "--hyps_grid", (char*) "data/io_test/hyperpriors_gxage.txt",
@@ -278,12 +278,13 @@ TEST_CASE( "Example 2: multi-env" ){
 		SECTION("Ex2. Vbayes_X2 initialised correctly"){
 			CHECK(VB.n_samples == 50);
 			CHECK(VB.N == 50.0);
+			CHECK(VB.n_var == 73);
 			CHECK(VB.n_env == 4);
 			// CHECK(VB.n_covar == 4);
 			//CHECK(VB.n_effects == 2);
 			CHECK(VB.vp_init.muw(0) == 0.25);
 			CHECK(VB.p.init_weights_with_snpwise_scan == false);
-			CHECK(VB.dXtEEX(0, 0) == Approx(38.9390135703));
+			CHECK(VB.dXtEEX(0, 0) == Approx(44.6629676819));
 		}
 
 		std::vector< VbTracker > trackers(VB.hyps_grid.rows());
@@ -306,29 +307,66 @@ TEST_CASE( "Example 2: multi-env" ){
 
 			VB.updateAllParams(0, round_index, all_vp, all_hyps, logw_prev, trackers, logw_updates);
 
-			CHECK(vp.alpha_beta(0) == Approx(0.1339907047));
-			CHECK(vp.alpha_beta(1) == Approx(0.1393645403 ));
-			CHECK(vp.alpha_beta(63) == Approx(0.1700976171));
-			CHECK(vp.muw(0) == Approx(0.1096760209));
-			CHECK(VB.calc_logw(hyps, vp) == Approx(-68.2656816517));
+			CHECK(vp.alpha_beta(0) == Approx(0.0103168718));
+			CHECK(vp.alpha_beta(1) == Approx(0.0101560491));
+			CHECK(vp.alpha_beta(63) == Approx(0.0098492375));
+			CHECK(vp.alpha_gam(0) == Approx(0.013394603));
+			CHECK(vp.muw(0) == Approx(0.1593944543));
+			CHECK(VB.calc_logw(hyps, vp) == Approx(-71.1292851018));
 
 			VB.updateAllParams(1, round_index, all_vp, all_hyps, logw_prev, trackers, logw_updates);
 
-			CHECK(vp.alpha_beta(0) == Approx(0.1292192489));
-			CHECK(vp.alpha_beta(1) == Approx(0.1326174323));
-			CHECK(vp.alpha_beta(63) == Approx(0.1704601589));
-			CHECK(vp.muw(0) == Approx(0.0455626691));
-			CHECK(VB.calc_logw(hyps, vp) == Approx(-67.6870841008));
+			CHECK(vp.alpha_beta(0) == Approx(0.0101823562));
+			CHECK(vp.alpha_beta(1) == Approx(0.0100615294));
+			CHECK(vp.alpha_beta(63) == Approx(0.0098486026));
+			CHECK(vp.muw(0) == Approx(0.031997336));
+			CHECK(VB.calc_logw(hyps, vp) == Approx(-69.8529334166));
 		}
 
 		VB.run_inference(VB.hyps_grid, false, 2, trackers);
 		SECTION("Ex2. Vbayes_X2 inference correct"){
-			CHECK(trackers[0].count == 35);
-			CHECK(trackers[3].count == 35);
-			CHECK(trackers[0].logw == Approx(-67.6055600008));
-			CHECK(trackers[1].logw == Approx(-67.3497693394));
-			CHECK(trackers[2].logw == Approx(-67.757622793));
-			CHECK(trackers[3].logw == Approx(-68.5048150566));
+			CHECK(trackers[0].count == 10);
+			CHECK(trackers[3].count == 10);
+			CHECK(trackers[0].logw == Approx(-69.7419880272));
+			CHECK(trackers[1].logw == Approx(-69.9470990972));
+			CHECK(trackers[2].logw == Approx(-70.1298787803));
+			CHECK(trackers[3].logw == Approx(-70.2928879787));
+		}
+
+		SECTION("Partition residuals amongst chromosomes"){
+			int n_chrs = VB.n_chrs;
+			long n_samples = VB.n_samples;
+			std::vector<Eigen::VectorXd> map_residuals_by_chr(n_chrs), pred_main(n_chrs), pred_int(n_chrs);
+			long ii_map = 0;
+			VariationalParametersLite vp_map = trackers[ii_map].vp;
+
+			// Predicted effects to file
+			VB.calcPredEffects(vp_map);
+			VB.compute_residuals_per_chr(vp_map, pred_main, pred_int, map_residuals_by_chr);
+
+			Eigen::VectorXd check_Xgam = Eigen::VectorXd::Zero(n_samples);
+			Eigen::VectorXd check_Xbeta = Eigen::VectorXd::Zero(n_samples);
+			Eigen::VectorXd check_resid = Eigen::VectorXd::Zero(n_samples);
+			for (int cc = 0; cc < n_chrs; cc++){
+				check_Xbeta += pred_main[cc];
+				check_Xgam += pred_int[cc];
+				check_resid += map_residuals_by_chr[cc];
+			}
+			if(VB.p.use_vb_on_covars) {
+				check_Xbeta += (VB.C * vp_map.muc.matrix().cast<scalarData>()).cast<double>();
+				check_resid += (VB.C * vp_map.muc.matrix().cast<scalarData>()).cast<double>();
+			}
+			check_resid -= VB.Y.cast<double>();
+			check_resid /= (double) (n_chrs-1);
+
+			Eigen::VectorXd resid = (VB.Y - vp_map.ym - vp_map.yx.cwiseProduct(vp_map.eta)).cast<double>();
+
+			CHECK(n_chrs == 2);
+			CHECK(pred_main[0](0) == Approx(0.0275588533));
+			CHECK(pred_main[1](0) == Approx(-0.0404733278));
+			CHECK(check_Xbeta(0)  == Approx(vp_map.ym(0)));
+			CHECK(check_Xgam(0)   == Approx(vp_map.yx(0)));
+			CHECK(check_resid(0)  == Approx(resid(0)));
 		}
 	}
 }
@@ -558,7 +596,7 @@ TEST_CASE( "Example 4: multi-env + mog + covars + emp_bayes" ){
 			if(p.mode_mog_prior_beta) Eq_beta.array() += (1 - vp.alpha_beta) * vp.mu2_beta;
 			check_ym  = VB.X * Eq_beta;
 			check_ym += VB.C * vp.muc.cast<scalarData>().matrix();
-			CHECK(vp.ym(0)            == check_ym(0));
+			CHECK(vp.ym(0)            == Approx(check_ym(0)));
 
 			VB.updateAllParams(1, round_index, all_vp, all_hyps, logw_prev, trackers, logw_updates);
 

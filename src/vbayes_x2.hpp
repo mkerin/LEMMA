@@ -1793,28 +1793,32 @@ public:
 		// Predicted effects to file
 		calcPredEffects(vp_map);
 		compute_residuals_per_chr(vp_map, pred_main, pred_int, map_residuals_by_chr);
+		Eigen::VectorXd Ealpha = Eigen::VectorXd::Zero(n_samples);
+		if(p.use_vb_on_covars) {
+			Ealpha += (C * vp_map.muc.matrix().cast<scalarData>()).cast<double>();
+		}
 		if(n_effects == 1) {
-			outf_map_pred << "Y Xbeta";
+			outf_map_pred << "Y Ealpha Xbeta";
 			for(auto cc : chrs_index){
 				outf_map_pred << " residuals_excl_chr" << chrs_present[cc];
 			}
 			outf_map_pred << std::endl;
 
 			for (std::uint32_t ii = 0; ii < n_samples; ii++) {
-				outf_map_pred << Y(ii) << " " << vp_map.ym(ii);
+				outf_map_pred << Y(ii) << " " << Ealpha(ii) << " " << vp_map.ym(ii) - Ealpha(ii);
 				for(auto cc : chrs_index){
 					outf_map_pred << " " << map_residuals_by_chr[cc](ii);
 				}
 				outf_map_pred << std::endl;
 			}
 		} else {
-			outf_map_pred << "Y Xbeta eta Xgamma";
+			outf_map_pred << "Y Ealpha Xbeta eta Xgamma";
 			for(auto cc : chrs_index){
 				outf_map_pred << " residuals_excl_chr" << chrs_present[cc];
 			}
 			outf_map_pred << std::endl;
 			for (std::uint32_t ii = 0; ii < n_samples; ii++) {
-				outf_map_pred << Y(ii) << " " << vp_map.ym(ii);
+				outf_map_pred << Y(ii) << " " << Ealpha(ii) << " " << vp_map.ym(ii) - Ealpha(ii);
 				outf_map_pred << " " << vp_map.eta(ii) << " " << vp_map.yx(ii);
 				for(auto cc : chrs_index){
 					outf_map_pred << " " << map_residuals_by_chr[cc](ii);

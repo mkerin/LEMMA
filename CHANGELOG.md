@@ -11,6 +11,7 @@ Changes:
 - ability to read from gzipped files
 - output pvals + test stats computed with LOCO strategy
 - print rows x cols of files read in
+- monotonic elbo check for main and gxe effects
 
 Bugfix:
 - forgot to use log in elbo when use_vb_on_covars
