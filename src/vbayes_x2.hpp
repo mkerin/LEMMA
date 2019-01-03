@@ -122,7 +122,8 @@ public:
                             C( dat.E ),
                             dXtEEX( dat.dXtEEX ),
                             snpstats( dat.snpstats ),
-                            p( dat.params ) {
+                            p( dat.params ),
+                            vp_init( dat.params ){
 		assert(std::includes(dat.hyps_names.begin(), dat.hyps_names.end(), hyps_names.begin(), hyps_names.end()));
 		std::cout << "Initialising vbayes object" << std::endl;
 		mkl_set_num_threads_local(p.n_thread);
@@ -351,7 +352,7 @@ public:
 		// Round 1; looking for best start point
 		if(run_round1){
 
-			std::vector< VbTracker > trackers(n_thread);
+			std::vector< VbTracker > trackers(n_thread, p);
 			long r1_n_grid = r1_hyps_grid.rows();
 			run_inference(r1_hyps_grid, true, 1, trackers);
 
@@ -388,7 +389,7 @@ public:
 		boost_io::close(outf_inits);
 
 		long n_grid = r1_hyps_grid.rows();
-		std::vector< VbTracker > trackers(n_grid);
+		std::vector< VbTracker > trackers(n_grid, p);
 		run_inference(hyps_grid, false, 2, trackers);
 
 		write_trackers_to_file("", trackers, hyps_grid);
@@ -614,10 +615,12 @@ public:
 
 		// Init variational params
 		for (int nn = 0; nn < n_grid; nn++){
-			VariationalParameters vp(YM.col(nn), YX.col(nn), ETA.col(nn), ETA_SQ.col(nn));
+			VariationalParameters vp(p, YM.col(nn), YX.col(nn), ETA.col(nn), ETA_SQ.col(nn));
 			vp.init_from_lite(vp_init);
-			updateSSq(all_hyps[nn], vp);
-
+			vp.resize(n_samples, n_var, n_covar, n_env);
+			if(n_effects > 1) {
+				vp.calcEdZtZ(dXtEEX, n_env);
+			}
 
 			all_vp.push_back(vp);
 		}
@@ -775,19 +778,9 @@ public:
 			// TODO: only on sometimes
 			if(p.verbose3) {
 				for (int nn = 0; nn < n_grid; nn++) {
-					// update summary quantity
-					all_vp[nn].calcVarqBeta(all_hyps[nn], p, n_effects);
-				}
-
-				for (int nn = 0; nn < n_grid; nn++) {
 					check_monotonic_elbo(all_hyps[nn], all_vp[nn], count, logw_prev[nn], "updateAlphaMu_internal");
 				}
 			}
-		}
-
-		for (int nn = 0; nn < n_grid; nn++){
-			// update summary quantity
-			all_vp[nn].calcVarqBeta(all_hyps[nn], p, n_effects);
 		}
 	}
 
@@ -882,8 +875,7 @@ public:
 			std::uint32_t jj = iter_chunk[ii];
 
 			// Log prev value
-			rr_k(ii)                            = vp.alpha_beta(jj) * vp.mu1_beta(jj);
-			if(p.mode_mog_prior_beta) rr_k(ii) += (1.0 - vp.alpha_beta(jj)) * vp.mu2_beta(jj);
+			rr_k(ii) = vp.mean_beta(jj);
 
 			// Update s_sq
 			vp.s1_beta_sq(jj)                        = hyps.slab_var(ee);
@@ -908,8 +900,7 @@ public:
 			if (p.mode_mog_prior_beta) ff_k -= std::log(vp.s2_beta_sq(jj));
 			vp.alpha_beta(jj)           = sigmoid(ff_k / 2.0 + alpha_cnst(ee));
 
-			rr_k_diff(ii, 0)                       = vp.alpha_beta(jj) * vp.mu1_beta(jj) - rr_k(ii);
-			if(p.mode_mog_prior_beta) rr_k_diff(ii, 0) += (1.0 - vp.alpha_beta(jj)) * vp.mu2_beta(jj);
+			rr_k_diff(ii, 0) = vp.mean_beta(jj) - rr_k(ii);
 
 			check_nan(vp.alpha_beta(jj), ff_k, offset, hyps, iter_chunk[ii], rr_k_diff, A, D_corr, vp, tracker, alpha_cnst);
 		}
@@ -971,8 +962,7 @@ public:
 			std::uint32_t jj = (iter_chunk[ii] % n_var); // variant index
 
 			// Log prev value
-			rr_k(ii)                       = vp.alpha_gam(jj) * vp.mu1_gam(jj);
-			if(p.mode_mog_prior_gam) rr_k(ii) += (1.0 - vp.alpha_gam(jj)) * vp.mu2_gam(jj);
+			rr_k(ii) = vp.mean_gam(jj);
 
 			// Update s_sq
 			vp.s1_gam_sq(jj)                        = hyps.slab_var(ee);
@@ -997,60 +987,9 @@ public:
 			if (p.mode_mog_prior_gam) ff_k -= std::log(vp.s2_gam_sq(jj));
 			vp.alpha_gam(jj)           = sigmoid(ff_k / 2.0 + alpha_cnst(ee));
 
-			rr_k_diff(ii, 0)                       = vp.alpha_gam(jj) * vp.mu1_gam(jj) - rr_k(ii);
-			if(p.mode_mog_prior_gam) rr_k_diff(ii, 0) += (1.0 - vp.alpha_gam(jj)) * vp.mu2_gam(jj);
+			rr_k_diff(ii, 0) = vp.mean_gam(jj) - rr_k(ii);
 
 			check_nan(vp.alpha_gam(jj), ff_k, offset, hyps, iter_chunk[ii], rr_k_diff, A, D_corr, vp, tracker, alpha_cnst);
-		}
-	}
-
-	void updateSSq(const Hyps& hyps,
-                   VariationalParameters& vp){
-		// Used only when initialising VB.
-		// We compute elbo on starting point hence need variance estimates
-		// Also resizes all variance arrays.
-
-		// Update beta ssq
-		int ee = 0;
-		vp.s1_beta_sq.resize(n_var);
-		vp.s1_beta_sq  = hyps.slab_var(ee);
-		vp.s1_beta_sq /= hyps.slab_relative_var(ee) * (N - 1.0) + 1.0;
-
-		if(p.mode_mog_prior_beta) {
-			vp.s2_beta_sq.resize(n_var);
-			vp.s2_beta_sq = hyps.spike_var(ee);
-			vp.s2_beta_sq /= (hyps.spike_relative_var(ee) * (N - 1.0) + 1.0);
-		}
-
-		if(n_effects > 1) {
-			// Would need vp.s_sq to compute properly, which in turn needs vp.sw_sq...
-			vp.sw_sq.resize(n_env);
-			vp.sw_sq = eps;
-			vp.calcEdZtZ(dXtEEX, n_env);
-
-			// Update gamma ssq
-			ee = 1;
-			vp.s1_gam_sq.resize(n_var);
-			vp.s1_gam_sq = hyps.slab_var(ee);
-			vp.s1_gam_sq /= (hyps.slab_relative_var(ee) * (N - 1.0) + 1.0);
-
-			if (p.mode_mog_prior_gam) {
-				vp.s2_gam_sq.resize(n_var);
-				vp.s2_gam_sq = hyps.spike_var(ee);
-				vp.s2_gam_sq /= (hyps.spike_relative_var(ee) * (N - 1.0) + 1.0);
-			}
-		}
-
-		vp.varB.resize(n_var);
-		vp.varG.resize(n_var);
-		vp.calcVarqBeta(hyps, p, n_effects);
-
-		// for covars
-		if(p.use_vb_on_covars){
-			vp.sc_sq.resize(n_covar);
-			for (int cc = 0; cc < n_covar; cc++){
-				vp.sc_sq(cc) = hyps.sigma * sigma_c / (sigma_c * (N - 1.0) + 1.0);
-			}
 		}
 	}
 
@@ -1141,6 +1080,7 @@ public:
                           Hyps& hyps,
                           VariationalParameters& vp){
 
+		Eigen::ArrayXd varG = vp.var_gam();
 		for (int ll : iter){
 			// Log previous mean weight
 			double r_ll = vp.muw(ll);
@@ -1148,7 +1088,7 @@ public:
 			// Update s_sq
 			double denom = hyps.sigma;
 			denom       += (vp.yx.array() * E.col(ll)).square().sum();
-			denom       += (vp.varG * dXtEEX.col(ll*n_env + ll)).sum();
+			denom       += (varG * dXtEEX.col(ll*n_env + ll)).sum();
 			vp.sw_sq(ll) = hyps.sigma / denom;
 
 			// Remove dependance on current weight
@@ -1164,7 +1104,7 @@ public:
 
 			double eff = ((Y - vp.ym).array() * E.col(ll) * vp.yx.array()).sum();
 			eff       -= (vp.yx.array() * E.col(ll) * vp.eta.array() * vp.yx.array()).sum();
-			eff       -= (vp.varG * env_vars).sum();
+			eff       -= (varG * env_vars).sum();
 			vp.muw(ll) = vp.sw_sq(ll) * eff / hyps.sigma;
 
 			// Update eta
@@ -1332,12 +1272,7 @@ public:
 	}
 
 	void calcPredEffects(VariationalParameters& vp){
-		Eigen::VectorXd rr_beta, rr_gam;
-		if(p.mode_mog_prior_beta){
-			rr_beta = vp.alpha_beta * (vp.mu1_beta - vp.mu2_beta) + vp.mu2_beta;
-		} else {
-			rr_beta = vp.alpha_beta * vp.mu1_beta;
-		}
+		Eigen::VectorXd rr_beta = vp.mean_beta();
 
 		vp.ym = X * rr_beta;
 		if(p.use_vb_on_covars){
@@ -1345,22 +1280,13 @@ public:
 		}
 
 		if(n_effects > 1) {
-			if (p.mode_mog_prior_gam) {
-				rr_gam = vp.alpha_gam * (vp.mu1_gam - vp.mu2_gam) + vp.mu2_gam;
-			} else {
-				rr_gam = vp.alpha_gam * vp.mu1_gam;
-			}
+			Eigen::VectorXd rr_gam = vp.mean_gam();
 			vp.yx = X * rr_gam;
 		}
 	}
 
 	void calcPredEffects(VariationalParametersLite& vp) {
-		Eigen::VectorXd rr_beta, rr_gam;
-		if(p.mode_mog_prior_beta){
-			rr_beta = vp.alpha_beta * (vp.mu1_beta - vp.mu2_beta) + vp.mu2_beta;
-		} else {
-			rr_beta = vp.alpha_beta * vp.mu1_beta;
-		}
+		Eigen::VectorXd rr_beta = vp.mean_beta();
 
 		vp.ym = X * rr_beta;
 		if(p.use_vb_on_covars){
@@ -1368,11 +1294,7 @@ public:
 		}
 
 		if(n_effects > 1) {
-			if (p.mode_mog_prior_gam) {
-				rr_gam = vp.alpha_gam * (vp.mu1_gam - vp.mu2_gam) + vp.mu2_gam;
-			} else {
-				rr_gam = vp.alpha_gam * vp.mu1_gam;
-			}
+			Eigen::VectorXd rr_gam = vp.mean_gam();
 			vp.yx = X * rr_gam;
 		}
 	}
@@ -1444,9 +1366,9 @@ public:
 		if(p.use_vb_on_covars){
 			int_linear += (N - 1.0) * vp.sc_sq.sum(); // covar main
 		}
-		int_linear += (N - 1.0) * vp.varB.sum();  // beta
+		int_linear += (N - 1.0) * vp.var_beta().sum();  // beta
 		if(n_effects > 1) {
-			int_linear += (vp.EdZtZ * vp.varG).sum(); // gamma
+			int_linear += (vp.EdZtZ * vp.var_gam()).sum(); // gamma
 		}
 
 		return int_linear;
@@ -1585,15 +1507,13 @@ public:
 		// Compute predicted effects from each chromosome
 		Eigen::VectorXd Eq_beta, Eq_gam;
 
-		Eq_beta = vp.alpha_beta * vp.mu1_beta;
-		if(p.mode_mog_prior_beta) Eq_beta.array() += (1 - vp.alpha_beta) * vp.mu2_beta;
+		Eq_beta = vp.mean_beta();
 		for (auto cc : chrs_index){
 			pred_main[cc] = X.mult_vector_by_chr(chrs_present[cc], Eq_beta);
 		}
 
 		if (n_effects > 1) {
-			Eq_gam  = vp.alpha_gam  * vp.mu1_gam;
-			if(p.mode_mog_prior_gam) Eq_gam.array() += (1 - vp.alpha_gam) * vp.mu2_gam;
+			Eq_gam = vp.mean_gam();
 			for (auto cc : chrs_index){
 				pred_int[cc]  = X.mult_vector_by_chr(chrs_present[cc], Eq_gam);
 			}

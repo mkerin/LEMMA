@@ -39,7 +39,7 @@ public:
 	int           count;              // Number of iterations to convergence at each step
 	std::vector< double > logw_updates;  // elbo updates at each ii
 	std::vector< double > alpha_diffs;  // elbo updates at each ii
-	VariationalParametersLite vp;                  // best mu at each ii
+	VariationalParametersLite vp;         // best mu at each ii
 	double          logw;                // best logw at each ii
 	Hyps           hyps;                // hyps values at end of VB inference.
 
@@ -54,7 +54,11 @@ public:
 
 	std::chrono::system_clock::time_point time_check;
 
-	VbTracker(){
+	VbTracker(parameters my_params) : p(my_params), vp(my_params){
+		allow_interim_push = false;
+	}
+
+	VbTracker(const VbTracker& tracker) : p(tracker.p), vp(tracker.p){
 		allow_interim_push = false;
 	}
 
@@ -156,7 +160,7 @@ public:
 
 	void push_interim_output(const GenotypeMatrix& X,
                              const std::uint32_t n_var,
-							 const std::uint32_t n_effects){
+							 const int& n_effects){
 		// Assumes that information for all measures that we track have between
 		// added to VbTracker at index ii.
 

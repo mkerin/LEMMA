@@ -2,44 +2,17 @@
 #define VARIATIONAL_PARAMETERS_HPP
 
 #include <iostream>
+#include <limits>
 #include "hyps.hpp"
 #include "utils.hpp"
 #include "class.h"
 #include "tools/eigen3.3/Dense"
 
-// Store subset of Variational Parameters to be RAM efficient
-struct VariationalParametersLite {
-	// Other quantities to track
-	EigenDataVector yx;    // N x 1
-	EigenDataVector ym;    // N x 1
-	EigenDataVector eta;
-	EigenDataVector eta_sq;
-
-	// Variational parameters for slab
-	Eigen::ArrayXd alpha_beta; // P x (E+1)
-	Eigen::ArrayXd mu1_beta;    // P x (E+1)
-	Eigen::ArrayXd mu2_beta;    // P x (E+1)
-	Eigen::ArrayXd s1_beta_sq;    // P x (E+1)
-	Eigen::ArrayXd s2_beta_sq;    // P x (E+1)
-
-	// Variational parameters for spike (MoG prior mode)
-	Eigen::ArrayXd alpha_gam; // P x (E+1)
-	Eigen::ArrayXd mu1_gam;    // P x (E+1)
-	Eigen::ArrayXd mu2_gam;    // P x (E+1)
-	Eigen::ArrayXd s1_gam_sq;    // P x (E+1)
-	Eigen::ArrayXd s2_gam_sq;    // P x (E+1)
-
-	// Variational parameters for covariate main effects
-	Eigen::ArrayXd  muc;    // C x 1
-
-	// Variational params for weights
-	Eigen::ArrayXd  muw;    // n_env x 1
-};
-
-class VariationalParameters {
+class VariationalParamsBase {
 public:
 	// This stores parameters used in VB and some summary quantities that
 	// depend on those parameters.
+	parameters p;
 
 	// Variational parameters for slab (params 1)
 	Eigen::ArrayXd alpha_beta; // P x (E+1)
@@ -63,25 +36,120 @@ public:
 	Eigen::ArrayXd muw;      // n_env x 1
 	Eigen::ArrayXd sw_sq;    // n_env x 1
 
+	VariationalParamsBase(parameters my_params) : p(my_params){};
+
+	/*** utility functions ***/
+	void resize(std::int32_t n_samples, std::int32_t n_var, long n_covar, long n_env){
+		s1_beta_sq.resize(n_var);
+		if(p.mode_mog_prior_beta) {
+			s2_beta_sq.resize(n_var);
+		}
+
+		if(n_env > 0) {
+			double eps = std::numeric_limits<double>::min();
+			sw_sq.resize(n_env);
+			sw_sq = eps; // For EdZtZ
+
+			s1_gam_sq.resize(n_var);
+			if (p.mode_mog_prior_gam) {
+				s2_gam_sq.resize(n_var);
+			}
+		}
+
+		// for covars
+		if(p.use_vb_on_covars){
+			sc_sq.resize(n_covar);
+		}
+	}
+
+	/*** mean of latent variables ***/
+	Eigen::VectorXd mean_beta() const {
+		Eigen::VectorXd rr_beta;
+		if(p.mode_mog_prior_beta){
+			rr_beta = alpha_beta * (mu1_beta - mu2_beta) + mu2_beta;
+		} else {
+			rr_beta = alpha_beta * mu1_beta;
+		}
+		return rr_beta;
+	}
+
+	Eigen::VectorXd mean_gam() const {
+		Eigen::VectorXd rr_gam;
+		if(p.mode_mog_prior_gam){
+			rr_gam = alpha_gam * (mu1_gam - mu2_gam) + mu2_gam;
+		} else {
+			rr_gam = alpha_gam * mu1_gam;
+		}
+		return rr_gam;
+	}
+
+	double mean_beta(std::uint32_t jj) const {
+		double rr_beta = alpha_beta(jj) * mu1_beta(jj);
+		if(p.mode_mog_prior_beta){
+			rr_beta += (1.0 - alpha_beta(jj)) * mu2_beta(jj);
+		}
+		return rr_beta;
+	}
+
+	double mean_gam(std::uint32_t jj) const {
+		double rr_gam = alpha_gam(jj) * mu1_gam(jj);
+		if(p.mode_mog_prior_gam){
+			rr_gam += (1.0 - alpha_gam(jj)) * mu2_gam(jj);
+		}
+		return rr_gam;
+	}
+
+	/*** variance of latent variables ***/
+	Eigen::ArrayXd var_beta() const {
+		Eigen::ArrayXd varB = alpha_beta * (s1_beta_sq + (1.0 - alpha_beta) * mu1_beta.square());
+		if(p.mode_mog_prior_beta){
+			varB += (1.0 - alpha_beta) * (s2_beta_sq + (alpha_beta) * mu2_beta.square());
+			varB -= 2.0 * alpha_beta * (1.0 - alpha_beta) * mu1_beta * mu2_beta;
+		}
+		return varB;
+	}
+
+	Eigen::ArrayXd var_gam() const {
+		Eigen::ArrayXd varG = alpha_gam * (s1_gam_sq + (1.0 - alpha_gam) * mu1_gam.square());
+		if (p.mode_mog_prior_gam) {
+			varG += (1.0 - alpha_gam) * (s2_gam_sq + (alpha_gam) * mu2_gam.square());
+			varG -= 2.0 * alpha_gam * (1.0 - alpha_gam) * mu1_gam * mu2_gam;
+		}
+		return varG;
+	}
+};
+
+// Store subset of Variational Parameters to be RAM efficient
+class VariationalParametersLite : public VariationalParamsBase {
+public:
+	// Other quantities to track
+	EigenDataVector yx;    // N x 1
+	EigenDataVector ym;    // N x 1
+	EigenDataVector eta;
+	EigenDataVector eta_sq;
+
+	VariationalParametersLite(parameters my_params) : VariationalParamsBase(my_params) {};
+};
+
+class VariationalParameters : public VariationalParamsBase {
+public:
+	// This stores parameters used in VB and some summary quantities that
+	// depend on those parameters.
+
 	// Summary quantities
 	EigenRefDataVector yx;      // N x 1
 	EigenRefDataVector ym;      // N x 1
 	EigenRefDataVector eta;     // expected value of matrix product E x w
 	EigenRefDataVector eta_sq;  // expected value (E x w) cdot (E x w)
 
-	Eigen::ArrayXd  EdZtZ;   // expectation of the diagonal of Z^t Z
-	Eigen::ArrayXd varB;    // variance of beta, gamma under approximating distn
-	Eigen::ArrayXd varG;    // variance of beta, gamma under approximating distn
+	Eigen::ArrayXd EdZtZ;   // expectation of the diagonal of Z^t Z
 
 
-	// sgd
-	long int count;
-
-
-	VariationalParameters(EigenRefDataVector my_ym,
+	VariationalParameters(parameters my_params,
+						  EigenRefDataVector my_ym,
 						  EigenRefDataVector my_yx,
 						  EigenRefDataVector my_eta,
-						  EigenRefDataVector my_eta_sq) : yx(my_yx), ym(my_ym),
+						  EigenRefDataVector my_eta_sq) : VariationalParamsBase(my_params), yx(my_yx), ym(my_ym),
 																   eta(my_eta), eta_sq(my_eta_sq){};
 
 	~VariationalParameters(){};
@@ -97,13 +165,11 @@ public:
 		mu2_gam    = init.mu2_gam;
 
 		muc   = init.muc;
-
-		count = 0;
 		muw   = init.muw;
 	}
 
 	VariationalParametersLite convert_to_lite(){
-		VariationalParametersLite vplite;
+		VariationalParametersLite vplite(p);
 		vplite.ym         = ym;
 		vplite.yx         = yx;
 		vplite.alpha_beta = alpha_beta;
@@ -136,26 +202,6 @@ public:
 		if(n_env > 1) {
 			for (int ll = 0; ll < n_env; ll++) {
 				EdZtZ += dXtEEX.col(ll * n_env + ll) * sw_sq(ll);
-			}
-		}
-	}
-
-	void calcVarqBeta(const Hyps& hyps,
-			const parameters& p,
-			const int& n_effects){
-		// Variance of effect size beta under approximating distribution q(u, beta)
-
-		varB = alpha_beta * (s1_beta_sq + (1.0 - alpha_beta) * mu1_beta.square());
-		if(p.mode_mog_prior_beta){
-			varB += (1.0 - alpha_beta) * (s2_beta_sq + (alpha_beta) * mu2_beta.square());
-			varB -= 2.0 * alpha_beta * (1.0 - alpha_beta) * mu1_beta * mu2_beta;
-		}
-
-		if (n_effects > 1) {
-			varG = alpha_gam * (s1_gam_sq + (1.0 - alpha_gam) * mu1_gam.square());
-			if (p.mode_mog_prior_gam) {
-				varG += (1.0 - alpha_gam) * (s2_gam_sq + (alpha_gam) * mu2_gam.square());
-				varG -= 2.0 * alpha_gam * (1.0 - alpha_gam) * mu1_gam * mu2_gam;
 			}
 		}
 	}
