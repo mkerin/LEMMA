@@ -1,3 +1,9 @@
+# Version 0.10.5
+
+Changes:
+- Multithreaded read from bgen
+- bugfix in GenotypeMatrix::mult_vector_by_chr
+
 # Version 0.10.4
 
 Changes:

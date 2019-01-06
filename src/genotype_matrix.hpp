@@ -354,10 +354,9 @@ public:
 
 		Eigen::VectorXd res;
 		if(low_mem){
-			auto vec_total = rhs.sum() * intervalWidth * 0.5;
 			Eigen::VectorXd rhs_trans = rhs.cwiseProduct(compressed_dosage_inv_sds);
-			auto offset = rhs_trans.sum() * intervalWidth * 0.5;
-			offset -= compressed_dosage_means.dot(rhs_trans);
+			auto offset = rhs_trans.segment(chr_st, chr_size).sum() * intervalWidth * 0.5;
+			offset -= compressed_dosage_means.segment(chr_st, chr_size).dot(rhs_trans.segment(chr_st, chr_size));
 
 			res = M.block(0, chr_st, nn, chr_size).cast<double>() * rhs_trans.segment(chr_st, chr_size);
 			return (res.array() * intervalWidth + offset).matrix();
@@ -532,6 +531,40 @@ public:
 		missing_genos.resize(p);
 		nn = n;
 		pp = p;
+
+		al_0.resize(p);
+		al_1.resize(p);
+		maf.resize(p);
+		info.resize(p);
+		rsid.resize(p);
+		chromosome.resize(p);
+		position.resize(p);
+		SNPKEY.resize(p);
+		SNPID.resize(p);
+	}
+
+	void move_variant(std::uint32_t old_index, std::uint32_t new_index){
+		// If shuffle variants + assoicated information left if we decide to
+		// exclude from analysis.
+		assert(new_index < old_index);
+
+		if(low_mem){
+			M.col(new_index) = M.col(old_index);
+		} else {
+			G.col(new_index) = G.col(old_index);
+		}
+
+//		std::cout << "Moving " << rsid[old_index] << " from " << old_index << " to " << new_index << std::endl;
+
+		al_0[new_index]       = al_0[old_index];
+		al_1[new_index]       = al_1[old_index];
+		maf[new_index]        = maf[old_index];
+		info[new_index]       = info[old_index];
+		rsid[new_index]       = rsid[old_index];
+		chromosome[new_index] = chromosome[old_index];
+		position[new_index]   = position[new_index];
+		SNPKEY[new_index]     = SNPKEY[old_index];
+		SNPID[new_index]      = SNPID[old_index];
 	}
 
 	template <typename T, typename T2>
@@ -547,6 +580,16 @@ public:
 		missing_genos.resize(p);
 		nn = n;
 		pp = p;
+
+		al_0.resize(p);
+		al_1.resize(p);
+		maf.resize(p);
+		info.resize(p);
+		rsid.resize(p);
+		chromosome.resize(p);
+		position.resize(p);
+		SNPKEY.resize(p);
+		SNPID.resize(p);
 	}
 
 	friend std::ostream &operator<<( std::ostream &output, const GenotypeMatrix &gg ) {

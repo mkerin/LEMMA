@@ -9,10 +9,12 @@
 #include <chrono>      // start/end time info
 #include <ctime>       // start/end time info
 #include <map>
+#include <mutex>
 #include <vector>
 #include <string>
 #include <string>
 #include <stdexcept>
+#include <thread>
 #include "class.h"
 #include "utils.hpp"
 #include "my_timer.hpp"
@@ -47,9 +49,9 @@ class Data
 	unsigned long n_covar; // number of covariates
 	unsigned long n_env; // number of env variables
 	int n_effects;   // number of environmental interactions
-	std::uint32_t n_samples; // number of samples
+	long n_samples; // number of samples
 	bool bgen_pass;
-	std::uint32_t n_var;
+	long n_var;
 	std::size_t n_var_parsed; // Track progress through IndexQuery
 	long int n_dxteex_computed;
 	long int n_snpstats_computed;
@@ -77,7 +79,9 @@ class Data
 	Eigen::ArrayXXd dXtEEX;
 	Eigen::ArrayXXd external_dXtEEX;
 	Eigen::MatrixXd E_weights;
+
 	genfile::bgen::View::UniquePtr bgenView;
+	std::vector<genfile::bgen::View::UniquePtr> bgenViews;
 
 	// For gxe genome-wide scan
 	// cols neglogp-main, neglogp-gxe, coeff-gxe-main, coeff-gxe-env..
@@ -88,6 +92,7 @@ class Data
 	boost_io::filtering_ostream outf_scan;
 
 	bool filters_applied;
+	std::mutex mtx;
 
 	// grid things for vbayes
 	std::vector< std::string > hyps_names;
@@ -99,9 +104,16 @@ class Data
 		int n = Eigen::nbThreads( );
 		std::cout << "Threads used by eigen: " << n << std::endl;
 
+
+		// Create vector of bgen views for mutlithreading
 		bgenView = genfile::bgen::View::create(p.bgen_file);
+		for (int nn = 0; nn < params.n_thread; nn++){
+			genfile::bgen::View::UniquePtr bgenView = genfile::bgen::View::create(p.bgen_file);
+			bgenViews.push_back(std::move(bgenView));
+		}
+
 		bgen_pass = true;
-		n_samples = (std::uint32_t) bgenView->number_of_samples();
+		n_samples = (long) bgenView->number_of_samples();
 		n_var_parsed = 0;
 		filters_applied = false;
 
@@ -125,22 +137,34 @@ class Data
 			read_incl_sids();
 		}
 
+		// filter - init queries
+		genfile::bgen::IndexQuery::UniquePtr query = genfile::bgen::IndexQuery::create(params.bgi_file);
+		std::vector<genfile::bgen::IndexQuery::UniquePtr> queries;
+		for (int nn = 0; nn < params.n_thread; nn++){
+			genfile::bgen::IndexQuery::UniquePtr my_query = genfile::bgen::IndexQuery::create(params.bgi_file);
+			queries.push_back(move(my_query));
+		}
+
 		// filter - range
 		if (params.range){
 			std::cout << "Selecting range..." << std::endl;
-			genfile::bgen::IndexQuery::UniquePtr query = genfile::bgen::IndexQuery::create(params.bgi_file);
 			genfile::bgen::IndexQuery::GenomicRange rr1(params.chr, params.range_start, params.range_end);
-			query->include_range( rr1 ).initialise();
-			bgenView->set_query( query );
+			query->include_range( rr1 );
+
+			for (int nn = 0; nn < params.n_thread; nn++){
+				queries[nn]->include_range( rr1 );
+			}
 		}
 
 		// filter - incl rsids
 		if(params.select_snps){
 			read_incl_rsids();
 			std::cout << "Filtering SNPs by rsid..." << std::endl;
-			genfile::bgen::IndexQuery::UniquePtr query = genfile::bgen::IndexQuery::create(params.bgi_file);
-			query->include_rsids( rsid_list ).initialise();
-			bgenView->set_query( query );
+			query->include_rsids( rsid_list );
+
+			for (int nn = 0; nn < params.n_thread; nn++){
+				queries[nn]->include_rsids( rsid_list );
+			}
 		}
 
 		// filter - select single rsid
@@ -151,9 +175,27 @@ class Data
 			for (long int kk = 0; kk < n_rsids; kk++){
 				std::cout << params.rsid[kk]<< std::endl;
 			}
-			genfile::bgen::IndexQuery::UniquePtr query = genfile::bgen::IndexQuery::create(params.bgi_file);
-			query->include_rsids( params.rsid ).initialise();
-			bgenView->set_query( query );
+			query->include_rsids( params.rsid );
+
+			for (int nn = 0; nn < params.n_thread; nn++){
+				queries[nn]->include_rsids( params.rsid );
+			}
+		}
+
+		// filter - apply queries
+		query->initialise();
+		for (int nn = 0; nn < params.n_thread; nn++){
+			queries[nn]->initialise();
+		}
+
+		bgenView->set_query( query );
+		for (int nn = 0; nn < params.n_thread; nn++){
+			bgenViews[nn]->set_query( queries[nn] );
+		}
+
+		// print summaries
+		for (int nn = 0; nn < params.n_thread; nn++){
+			bgenViews[nn]->summarise(std::cout);
 		}
 
 		filters_applied = true;
@@ -253,13 +295,107 @@ class Data
 		if(params.flip_high_maf_variants){
 			std::cout << "Flipping variants with MAF > 0.5" << std::endl;
 		}
-		t_readFullBgen.resume();
-		read_bgen_chunk();
-		t_readFullBgen.stop();
+
+		// Resize G to expected num of snps
+		long n_exp_var = bgenView->number_of_variants();
+		G.resize(n_samples, n_exp_var);
+
+
+		// Setup
+		std::vector<char> bgens_pass;
+		std::vector<long> snp_indices;
+		for (int nn = 0; nn < params.n_thread; nn++){
+			bgens_pass.push_back(1);
+			snp_indices.push_back(nn);
+		}
+
+		// Read in chunks of snps with multi threads
+		long n_constant_variance = 0;
+		long ch                  = 0;
+		n_var               = 0;
+		n_var_parsed        = 0; //mutex locked
+		// dxteex_cnt          = 0; //mutex locked
+		bool any_bgens_pass = true;
+		std::thread bgen_threads[params.n_bgen_thread];
+		while(any_bgens_pass){
+			// Read in chunk w/ multiple threads
+#ifdef OSX
+			read_bgen_chunk(bgenViews[0], snp_indices[0], bgens_pass[0], 0);
+			for (int nn = 1; nn < params.n_bgen_thread; nn++){
+				read_bgen_chunk(bgenViews[nn], snp_indices[nn], bgens_pass[nn], nn);
+			}
+#else
+			for (int nn = 1; nn < params.n_bgen_thread; nn++){
+				bgen_threads[nn] = std::thread( [this, &bgens_pass, &snp_indices, nn] {
+					read_bgen_chunk(bgenViews[nn], sn_indices[nn], bgens_pass[nn], nn)
+				});
+			}
+			read_bgen_chunk(bgenViews[0], snp_indices[0], bgens_pass[0], 0);
+			for (int nn = 1; nn < params.n_bgen_thread; nn++){
+			 	bgen_threads[nn].join();
+			}
+#endif
+
+			// Check chunk for invalid SNPs
+			std::vector<long> valid_cols;
+			for (long jj = ch * params.chunk_size; jj < n_var_parsed; jj++){
+				double sigma  = G.compressed_dosage_sds[jj];
+				double d1     = G.compressed_dosage_means[jj] * (double) n_samples;
+				if (params.maf_lim && (G.maf[jj] < params.min_maf || G.maf[jj] > 1 - params.min_maf)) {
+					continue;
+				}
+				if (params.info_lim && G.info[jj] < params.min_info) {
+					continue;
+				}
+				if(!params.keep_constant_variants && d1 < 5.0){
+					n_constant_variance++;
+					continue;
+				}
+				if(!params.keep_constant_variants && sigma <= 1e-12){
+					n_constant_variance++;
+					continue;
+				}
+				valid_cols.push_back(jj);
+			}
+
+			// Remove invalid snps and update indexes
+			for (long jj = 0; jj < valid_cols.size(); jj++) {
+				auto old_index = valid_cols[jj];
+				auto new_index = jj + (ch * params.chunk_size);
+				if(old_index != new_index){
+					G.move_variant(old_index, new_index);
+					// dXtEEX.col(new_index) = dXtEEX.col(old_index);
+				}
+			}
+			long invalid_snps = params.chunk_size - valid_cols.size();
+			for (int nn = 0; nn < snp_indices.size(); nn++){
+				snp_indices[nn] -= invalid_snps;
+			}
+
+			any_bgens_pass = std::any_of(bgens_pass.begin(), bgens_pass.end(), [](const bool& v) { return v; });
+			ch++;
+			n_var += valid_cols.size();
+		}
+
+		// double check snp indexes
+		G.conservativeResize(n_samples, n_var);
+
+		if(n_constant_variance > 0){
+			std::cout << n_constant_variance << " variants removed due to ";
+			std::cout << "constant variance" << std::endl;
+		}
+
+
+//		t_readFullBgen.resume();
+//		read_bgen_chunk();
+//		t_readFullBgen.stop();
 		std::cout << "BGEN contained " << n_var << " variants." << std::endl;
 	}
 
-	bool read_bgen_chunk() {
+	void read_bgen_chunk(genfile::bgen::View::UniquePtr& myBgenView,
+                         long int& snp_index,
+                         char& bgen_pass_char,
+                         const int& thread_num) {
 		// Wrapper around BgenView to read in a 'chunk' of data. Remembers
 		// if last call hit the EOF, and returns false if so.
 		// Assumed that:
@@ -268,7 +404,7 @@ class Data
 		// - scale + centering happening internally
 
 		// Exit function if last call hit EOF.
-		if (!bgen_pass) return false;
+		bool bgen_pass = (bool) bgen_pass_char;
 
 		// Temporary variables to store info from read_variant()
 		std::string chr_j ;
@@ -286,22 +422,34 @@ class Data
 		// Resize genotype matrix
 		G.resize(n_samples, params.chunk_size);
 
-		long int n_constant_variance = 0;
-		std::uint32_t jj = 0;
+		long jj = 0;
+		bool first_pass = true;
 		while ( jj < params.chunk_size && bgen_pass ) {
-			bgen_pass = bgenView->read_variant( &SNPID_j, &rsid_j, &chr_j, &pos_j, &alleles_j );
+			bgen_pass = myBgenView->read_variant( &SNPID_j, &rsid_j, &chr_j, &pos_j, &alleles_j );
+
+			// Skip variants that other threads are due to read
+			int no_vars_skipped = (first_pass) ? thread_num : params.n_thread - 1;
+			int cnt = 0;
+			while(bgen_pass && cnt < no_vars_skipped) {
+				myBgenView->ignore_genotype_data_block();
+				myBgenView->read_variant( &SNPID_j, &rsid_j, &chr_j, &pos_j, &alleles_j );
+				cnt++;
+			}
 			if (!bgen_pass) break;
+
+			mtx.lock();
 			n_var_parsed++;
+			mtx.unlock();
 
 			// Read probs + check maf filter
-			bgenView->read_genotype_data_block( setter );
+			myBgenView->read_genotype_data_block( setter );
 
 			// maf + info filters; computed on valid sample_ids & variants whose alleles
 			// sum to 1
 			std::map<int, bool> missing_genos;
 			Eigen::ArrayXd dosage_j(n_samples);
 			double f2 = 0.0, valid_count = 0.0;
-			std::uint32_t ii_obs = 0;
+			long ii_obs = 0;
 			for( std::size_t ii = 0; ii < probs.size(); ii++ ) {
 				if (incomplete_cases.count(ii) == 0) {
 					f1 = dosage = check = 0.0;
@@ -331,7 +479,7 @@ class Data
 			// NB: info invariant to flipping
 			if(params.flip_high_maf_variants && maf_j > 0.5){
 				dosage_j = (2.0 - dosage_j);
-				for (std::uint32_t ii = 0; ii < n_samples; ii++){
+				for (long ii = 0; ii < n_samples; ii++){
 					if (missing_genos.count(ii) > 0){
 						dosage_j[ii] = 0.0;
 					}
@@ -351,33 +499,17 @@ class Data
 			double sigma = (dosage_j - mu).square().sum();
 			sigma = std::sqrt(sigma/(valid_count - 1.0));
 
-			// Filters
-			if (params.maf_lim && (maf_j < params.min_maf || maf_j > 1 - params.min_maf)) {
-				continue;
-			}
-			if (params.info_lim && info_j < params.min_info) {
-				continue;
-			}
-			if(!params.keep_constant_variants && d1 < 5.0){
-				n_constant_variance++;
-				continue;
-			}
-			if(!params.keep_constant_variants && sigma <= 1e-12){
-				n_constant_variance++;
-				continue;
-			}
-
 			// filters passed; write contextual info
-			G.al_0.push_back(alleles_j[0]);
-			G.al_1.push_back(alleles_j[1]);
-			G.maf.push_back(maf_j);
-			G.info.push_back(info_j);
-			G.rsid.push_back(rsid_j);
-			G.chromosome.push_back(std::stoi(chr_j));
-			G.position.push_back(pos_j);
+			G.al_0[snp_index]     = alleles_j[0];
+			G.al_1[snp_index]     = alleles_j[1];
+			G.maf[snp_index]      = maf_j;
+			G.info[snp_index]     = info_j;
+			G.rsid[snp_index]     = rsid_j;
+			G.chromosome[snp_index] = std::stoi(chr_j);
+			G.position[snp_index] = pos_j;
 			std::string key_j = chr_j + "~" + std::to_string(pos_j) + "~" + alleles_j[0] + "~" + alleles_j[1];
-			G.SNPKEY.push_back(key_j);
-			G.SNPID.push_back(SNPID_j);
+			G.SNPKEY[snp_index]   = key_j;
+			G.SNPID[snp_index]    = SNPID_j;
 
 			// filters passed; write dosage to G
 			// Note that we only write dosage for valid sample ids
@@ -385,46 +517,45 @@ class Data
 			if(!missing_genos.empty()){
 				n_var_incomplete += 1;
 				missing_calls += (double) missing_genos.size();
-				for (std::uint32_t ii = 0; ii < n_samples; ii++){
+				for (long ii = 0; ii < n_samples; ii++){
 					if (missing_genos.count(ii) > 0){
 						dosage_j[ii] = mu;
 					}
 				}
 			}
 
-			for (std::uint32_t ii = 0; ii < n_samples; ii++){
+			for (long ii = 0; ii < n_samples; ii++){
 				G.assign_index(ii, jj, dosage_j[ii]);
 			}
-			// G.compressed_dosage_sds[jj] = sigma;
-			// G.compressed_dosage_means[jj] = mu;
 
-			jj++;
+			// NB: these get recomputed after compression
+			G.compressed_dosage_sds[jj] = sigma;
+			G.compressed_dosage_means[jj] = mu;
+
+			jj += params.n_thread;
+			snp_index += params.n_thread;
+			first_pass = false;
 		}
 
 		// need to resize G whilst retaining existing coefficients if while
 		// loop exits early due to EOF.
-		G.conservativeResize(n_samples, jj);
-		assert( G.rsid.size() == jj );
-		n_var = jj;
+		// G.conservativeResize(n_samples, jj);
+		// assert( G.rsid.size() == jj );
+		// n_var = jj;
 
-		chunk_missingness = missing_calls / (double) (n_var * n_samples);
-		if(chunk_missingness > 0.0){
-			std::cout << "Chunk missingness " << chunk_missingness << "(";
- 			std::cout << n_var_incomplete << "/" << n_var;
-			std::cout << " variants incomplete)" << std::endl;
-		}
+		// chunk_missingness = missing_calls / (double) (n_var * n_samples);
+		// if(chunk_missingness > 0.0){
+		// 	std::cout << "Chunk missingness " << chunk_missingness << "(";
+ 		// 	std::cout << n_var_incomplete << "/" << n_var;
+		// 	std::cout << " variants incomplete)" << std::endl;
+		// }
+		//
+		// if(n_constant_variance > 0){
+		// 	std::cout << n_constant_variance << " variants removed due to ";
+		// 	std::cout << "constant variance" << std::endl;
+		// }
 
-		if(n_constant_variance > 0){
-			std::cout << n_constant_variance << " variants removed due to ";
-			std::cout << "constant variance" << std::endl;
-		}
-
-		if(jj == 0){
-			// Immediate EOF
-			return false;
-		} else {
-			return true;
-		}
+		if (!bgen_pass) bgen_pass_char = 0;
 	}
 
 	void read_incl_rsids(){
@@ -485,7 +616,7 @@ class Data
 		}
 
 		std::vector<std::string>::iterator it;
-		for (std::uint32_t ii = 0; ii < n_samples; ii++){
+		for (long ii = 0; ii < n_samples; ii++){
 			it = find (user_sample_ids.begin(), user_sample_ids.end(), bgen_ids[ii]);
 			if (it == user_sample_ids.end()){
 				incomplete_cases[ii] = true;
@@ -1167,7 +1298,7 @@ class Data
 
 			outf_scan << "chr rsid pos a0 a1 af info neglogp_main neglogp_gxe";
 			outf_scan << std::endl;
-			for (std::uint32_t kk = 0; kk < n_var; kk++){
+			for (long kk = 0; kk < n_var; kk++){
 				outf_scan << G.chromosome[kk] << " " << G.rsid[kk] << " " << G.position[kk];
 				outf_scan << " " << G.al_0[kk] << " " << G.al_1[kk];
 				outf_scan << " " << G.maf[kk] << " " << G.info[kk];

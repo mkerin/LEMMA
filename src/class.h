@@ -15,7 +15,7 @@ class parameters {
 		std::string dxteex_file, snpstats_file;
 		std::vector< std::string > rsid;
 		long int chunk_size, vb_iter_max;
-		int missing_code, burnin_maxhyps, env_update_repeats, n_gconf;
+		int missing_code, burnin_maxhyps, env_update_repeats, n_gconf, n_bgen_thread;
 		unsigned int n_thread, main_chunk_size, gxe_chunk_size;
 		std::uint32_t range_start, range_end;
 		bool range, maf_lim, info_lim, select_snps, xtra_verbose;
@@ -53,6 +53,7 @@ class parameters {
 		init_weights_with_snpwise_scan = false;
 		restrict_gamma_updates = false;
 		n_thread = 1;
+		n_bgen_thread = 1;
 		burnin_maxhyps = 0;
 		env_update_repeats = 1;
 		interaction_analysis = false;

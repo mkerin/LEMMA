@@ -112,6 +112,7 @@ TEST_CASE("Data") {
 
 	SECTION("n50_p100.bgen + non genetic data") {
 		p.bgen_file = "data/io_test/n50_p100.bgen";
+		p.bgi_file = "data/io_test/n50_p100.bgen.bgi";
 		Data data(p);
 
 		data.read_non_genetic_data();
@@ -159,6 +160,7 @@ TEST_CASE("Data") {
 
 	SECTION("n50_p100_chr2.bgen") {
 		p.bgen_file = "data/io_test/n50_p100_chr2.bgen";
+		p.bgi_file = "data/io_test/n50_p100_chr2.bgen.bgi";
 		Data data(p);
 
 		data.read_non_genetic_data();
@@ -182,6 +184,51 @@ TEST_CASE("Data") {
 			CHECK(data.dXtEEX(0, 0) == Approx(54.8912155253));
 			CHECK(data.n_dxteex_computed == 73);
 		}
+	}
+
+	SECTION("n50_p100_chr2.bgen w/ 2 chunks") {
+		p.bgen_file = "data/io_test/n50_p100_chr2.bgen";
+		p.bgi_file = "data/io_test/n50_p100_chr2.bgen.bgi";
+		p.chunk_size = 72;
+		p.n_bgen_thread = 2;
+		Data data(p);
+
+		data.read_non_genetic_data();
+		data.standardise_non_genetic_data();
+		data.read_full_bgen();
+		SECTION("Ex1. bgen read in & standardised correctly") {
+			CHECK(data.G.low_mem);
+			CHECK(data.params.low_mem);
+			CHECK(data.params.flip_high_maf_variants);
+			CHECK(data.G(0, 0) == Approx(-0.7105269065));
+			CHECK(data.G(0, 1) == Approx(-0.6480740698));
+			CHECK(data.G(0, 2) == Approx(-0.7105104917));
+			CHECK(data.G(0, 3) == Approx(-0.586791551));
+			CHECK(data.n_var == 73);
+		}
+	}
+
+	SECTION("Check mult_vector_by_chr"){
+		p.bgen_file = "data/io_test/n50_p100_chr2.bgen";
+		p.bgi_file = "data/io_test/n50_p100_chr2.bgen.bgi";
+		Data data(p);
+
+		data.read_non_genetic_data();
+		data.read_full_bgen();
+
+		Eigen::VectorXd vv = Eigen::VectorXd::Ones(data.G.pp);
+		Eigen::VectorXd v1 = data.G.mult_vector_by_chr(1, vv);
+		Eigen::VectorXd v2 = data.G.mult_vector_by_chr(22, vv);
+
+		CHECK(v1(0) == Approx(-9.6711528276));
+		CHECK(v1(1) == Approx(-0.4207388213));
+		CHECK(v1(2) == Approx(-3.0495872499));
+		CHECK(v1(3) == Approx(-9.1478619829));
+
+		CHECK(v2(0) == Approx(-15.6533077013));
+		CHECK(v2(1) == Approx(6.8078348334));
+		CHECK(v2(2) == Approx(-4.4887853578));
+		CHECK(v2(3) == Approx(8.9980192447));
 	}
 }
 //

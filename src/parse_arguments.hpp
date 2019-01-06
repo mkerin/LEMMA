@@ -390,8 +390,10 @@ void parse_arguments(parameters &p, int argc, char *argv[]) {
 			if(strcmp(in_str, "--bgen") == 0) {
 				check_counts(in_str, i, 1, argc);
 				p.bgen_file = argv[i + 1]; // bgen file
+				p.bgi_file = p.bgen_file + ".bgi";
 
 				check_file_exists(p.bgen_file);
+				check_file_exists(p.bgi_file);
 				i += 1;
 			}
 
@@ -524,6 +526,7 @@ void parse_arguments(parameters &p, int argc, char *argv[]) {
 			if(strcmp(in_str, "--threads") == 0) {
 				check_counts(in_str, i, 1, argc);
 				p.n_thread = atoi(argv[i + 1]);
+				p.n_bgen_thread = std::min(4, atoi(argv[i + 1]));
 				if(p.n_thread < 1) throw std::runtime_error("--threads must be positive.");
 				i += 1;
 			}
