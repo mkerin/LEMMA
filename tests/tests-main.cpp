@@ -637,139 +637,179 @@ TEST_CASE("Data") {
 //	}
 //}
 //
-//TEST_CASE( "Example 4: multi-env + mog + covars + emp_bayes" ){
-//	parameters p;
-//
-//	SECTION("Ex4. No filters applied, high mem mode"){
-//		char* argv[] = { (char*) "bin/bgen_prog", (char*) "--mode_vb", (char*) "--low_mem",
-//						 (char*) "--use_vb_on_covars", (char*) "--mode_empirical_bayes",
-//						 (char*) "--effects_prior_mog",
-//						 (char*) "--vb_iter_max", (char*) "10",
-//						 (char*) "--environment", (char*) "data/io_test/n50_p100_env.txt",
-//						 (char*) "--bgen", (char*) "data/io_test/n50_p100.bgen",
-//						 (char*) "--out", (char*) "data/io_test/fake_env.out",
-//						 (char*) "--pheno", (char*) "data/io_test/pheno.txt",
-//						 (char*) "--hyps_grid", (char*) "data/io_test/single_hyps_gxage.txt",
-//						 (char*) "--hyps_probs", (char*) "data/io_test/single_hyps_gxage_probs.txt",
-//						 (char*) "--vb_init", (char*) "data/io_test/answer_init.txt"};
-//		int argc = sizeof(argv)/sizeof(argv[0]);
-//		parse_arguments(p, argc, argv);
-//		Data data( p );
-//
-//		data.read_non_genetic_data();
-//		data.standardise_non_genetic_data();
-//		SECTION( "Ex4. Non genetic data standardised + covars regressed"){
-//			CHECK(data.params.scale_pheno);
-//			CHECK(data.params.use_vb_on_covars);
-//			CHECK(data.params.covar_file == "NULL");
-////			CHECK(data.Y(0,0) == Approx(-3.6676363273605137)); Centered
-//			CHECK(data.Y(0,0) == Approx(-1.5800573524786081)); // Scaled
-//			CHECK(data.Y2(0,0) == Approx(-1.5567970303));
-////			CHECK(data.W(0,0) == Approx(0.8957059881));
-//			CHECK(data.E(0,0) == Approx(0.8957059881));
-//		}
-//		data.read_full_bgen();
-//
-//		data.calc_dxteex();
-//		data.calc_snpstats();
-//		if(p.vb_init_file != "NULL"){
-//			data.read_alpha_mu();
-//		}
-//		VBayesX2 VB(data);
-//		VB.check_inputs();
-//		SECTION("Ex4. Vbayes_X2 initialised correctly"){
-//			CHECK(VB.n_samples == 50);
-//			CHECK(VB.N == 50.0);
-//			CHECK(VB.n_env == 4);
-//			CHECK(VB.n_effects == 2);
-//			CHECK(VB.vp_init.muw(0) == 0.25);
-//			CHECK(VB.p.init_weights_with_snpwise_scan == false);
-//			CHECK(VB.dXtEEX(0, 0) == Approx(38.9963604264));
-//		}
-//
-//		std::vector< VbTracker > trackers(VB.hyps_grid.rows(), p);
-//		SECTION("Ex4. Explicitly checking hyps") {
-//			// Set up for RunInnerLoop
-//			long n_grid = VB.hyps_grid.rows();
-//			std::vector<Hyps> all_hyps;
-//			VB.unpack_hyps(VB.hyps_grid, all_hyps);
-//
-//			// Set up for updateAllParams
-//			std::vector<VariationalParameters> all_vp;
-//			VB.setup_variational_params(all_hyps, all_vp);
-//
-//			int round_index = 2;
-//			std::vector<double> logw_prev(n_grid, -std::numeric_limits<double>::max());
-//			std::vector<std::vector< double >> logw_updates(n_grid);
-//			VariationalParameters& vp = all_vp[0];
-//			Hyps& hyps = all_hyps[0];
-//
-//			EigenDataVector check_ym;
-//			Eigen::VectorXd Eq_beta;
-//
-//			VB.updateAllParams(0, round_index, all_vp, all_hyps, logw_prev, trackers, logw_updates);
-//
-//			CHECK(vp.alpha_beta(0)            == Approx(0.1339032153));
-//			CHECK(vp.alpha_beta(1)            == Approx(0.1413799597));
-//			CHECK(vp.alpha_beta(63)           == Approx(0.1722999226));
-//			CHECK(vp.muw(0, 0)              == Approx(0.1129510095));
-//
-//			CHECK(hyps.sigma                == Approx(0.6956395607));
-//			CHECK(hyps.lambda[0]            == Approx(0.1697910485));
-//			CHECK(hyps.lambda[1]            == Approx(0.1350333198));
-//			CHECK(hyps.slab_relative_var[0] == Approx(0.0081833922));
-//			CHECK(hyps.slab_relative_var[1] == Approx(0.0051150827));
-//
-//			Eq_beta = vp.alpha_beta * vp.mu1_beta;
-//			if(p.mode_mog_prior_beta) Eq_beta.array() += (1 - vp.alpha_beta) * vp.mu2_beta;
-//			check_ym  = VB.X * Eq_beta;
-//			check_ym += VB.C * vp.muc.cast<scalarData>().matrix();
-//			CHECK(vp.ym(0)            == Approx(check_ym(0)));
-//
-//			VB.updateAllParams(1, round_index, all_vp, all_hyps, logw_prev, trackers, logw_updates);
-//
-//			CHECK(vp.alpha_beta(0)            == Approx(0.1475445081));
-//			CHECK(vp.muw(0, 0)              == Approx(0.0627874101));
-//			CHECK(vp.alpha_gam(63)           == Approx(0.1183555819));
-//			CHECK(vp.mu1_gam(63)              == Approx(0.0013071544));
-//			CHECK(vp.s1_gam_sq(63)            == Approx(0.0026294351));
-//
-//			CHECK(hyps.sigma                == Approx(0.6031329457));
-//			CHECK(hyps.lambda[0]            == Approx(0.1994253645));
-//			CHECK(hyps.lambda[1]            == Approx(0.1169875913));
-//			CHECK(hyps.slab_relative_var[0] == Approx(0.0125648575));
-//			CHECK(hyps.slab_relative_var[1] == Approx(0.0042537538));
-//			CHECK(hyps.s_x[0]               == Approx(64.0));
-//			CHECK(hyps.s_x[1]               == Approx(0.259499063));
-//			CHECK(hyps.pve[1]               == Approx(0.000111278));
-//			CHECK(hyps.pve_large[1]         == Approx(0.0001112768));
-//
-//			Eq_beta = vp.alpha_beta * vp.mu1_beta;
-//			if(p.mode_mog_prior_beta) Eq_beta.array() += (1 - vp.alpha_beta) * vp.mu2_beta;
-//			check_ym  = VB.X * Eq_beta;
-//			check_ym += VB.C * vp.muc.cast<scalarData>().matrix();
-//			CHECK(vp.ym(0)            == Approx(check_ym(0)));
-//
-//			VB.updateAllParams(2, round_index, all_vp, all_hyps, logw_prev, trackers, logw_updates);
-//
-//			CHECK(vp.alpha_beta(63)           == Approx(0.2849674292));
-//			CHECK(vp.muw(0, 0)              == Approx(0.0385493631));
-//			CHECK(vp.alpha_gam(63)           == Approx(0.1035741368));
-//			CHECK(vp.mu1_gam(63)              == Approx(-0.0008068742));
-//			CHECK(vp.s1_gam_sq(63)            == Approx(0.0019506006));
-//
-//			CHECK(hyps.sigma                == Approx(0.5604876755));
-//			CHECK(hyps.lambda[0]            == Approx(0.2187750882));
-//			CHECK(hyps.lambda[1]            == Approx(0.1024356641));
-//			CHECK(hyps.slab_relative_var[0] == Approx(0.0158099281));
-//			CHECK(hyps.slab_relative_var[1] == Approx(0.0033998137));
-//			CHECK(hyps.s_x[0]               == Approx(64.0));
-//			CHECK(hyps.s_x[1]               == Approx(0.1012145499));
-//			CHECK(hyps.pve[1]               == Approx(0.0000288603));
-//			CHECK(hyps.pve_large[1]         == Approx(0.0000288598));
-//		}
-//	}
-//}
+TEST_CASE( "Example 4: multi-env + mog + covars + emp_bayes" ){
+	parameters p;
+
+	SECTION("Ex4. No filters applied, high mem mode"){
+		char* argv[] = { (char*) "bin/bgen_prog", (char*) "--mode_vb", (char*) "--low_mem",
+						 (char*) "--use_vb_on_covars", (char*) "--mode_empirical_bayes",
+						 (char*) "--effects_prior_mog",
+						 (char*) "--vb_iter_max", (char*) "10",
+						 (char*) "--environment", (char*) "data/io_test/n50_p100_env.txt",
+						 (char*) "--bgen", (char*) "data/io_test/n50_p100.bgen",
+						 (char*) "--out", (char*) "data/io_test/config4.out",
+						 (char*) "--pheno", (char*) "data/io_test/pheno.txt",
+						 (char*) "--hyps_grid", (char*) "data/io_test/single_hyps_gxage.txt",
+						 (char*) "--hyps_probs", (char*) "data/io_test/single_hyps_gxage_probs.txt",
+						 (char*) "--vb_init", (char*) "data/io_test/answer_init.txt"};
+		int argc = sizeof(argv)/sizeof(argv[0]);
+		parse_arguments(p, argc, argv);
+		Data data( p );
+
+		data.read_non_genetic_data();
+		data.standardise_non_genetic_data();
+		SECTION( "Ex4. Non genetic data standardised + covars regressed"){
+			CHECK(data.params.scale_pheno);
+			CHECK(data.params.use_vb_on_covars);
+			CHECK(data.params.covar_file == "NULL");
+//			CHECK(data.Y(0,0) == Approx(-3.6676363273605137)); Centered
+			CHECK(data.Y(0,0) == Approx(-1.5800573524786081)); // Scaled
+			CHECK(data.Y2(0,0) == Approx(-1.5567970303));
+//			CHECK(data.W(0,0) == Approx(0.8957059881));
+			CHECK(data.E(0,0) == Approx(0.8957059881));
+		}
+		data.read_full_bgen();
+
+		data.calc_dxteex();
+		data.calc_snpstats();
+		if(p.vb_init_file != "NULL"){
+			data.read_alpha_mu();
+		}
+		VBayesX2 VB(data);
+		VB.check_inputs();
+		SECTION("Ex4. Vbayes_X2 initialised correctly"){
+			CHECK(VB.n_samples == 50);
+			CHECK(VB.N == 50.0);
+			CHECK(VB.n_env == 4);
+			CHECK(VB.n_effects == 2);
+			CHECK(VB.vp_init.muw(0) == 0.25);
+			CHECK(VB.p.init_weights_with_snpwise_scan == false);
+			CHECK(VB.dXtEEX(0, 0) == Approx(38.9963604264));
+		}
+
+		std::vector< VbTracker > trackers(VB.hyps_grid.rows(), p);
+		SECTION("Ex4. Explicitly checking hyps") {
+			// Set up for RunInnerLoop
+			long n_grid = VB.hyps_grid.rows();
+			std::vector<Hyps> all_hyps;
+			VB.unpack_hyps(VB.hyps_grid, all_hyps);
+
+			// Set up for updateAllParams
+			std::vector<VariationalParameters> all_vp;
+			VB.setup_variational_params(all_hyps, all_vp);
+
+			int round_index = 2;
+			std::vector<double> logw_prev(n_grid, -std::numeric_limits<double>::max());
+			std::vector<std::vector< double >> logw_updates(n_grid);
+			VariationalParameters& vp = all_vp[0];
+			Hyps& hyps = all_hyps[0];
+
+			EigenDataVector check_ym;
+			Eigen::VectorXd Eq_beta;
+
+			VB.updateAllParams(0, round_index, all_vp, all_hyps, logw_prev, trackers, logw_updates);
+
+			CHECK(vp.alpha_beta(0)            == Approx(0.1339032153));
+			CHECK(vp.alpha_beta(1)            == Approx(0.1413799597));
+			CHECK(vp.alpha_beta(63)           == Approx(0.1722999226));
+			CHECK(vp.muw(0, 0)              == Approx(0.1129510095));
+
+			CHECK(hyps.sigma                == Approx(0.6956395607));
+			CHECK(hyps.lambda[0]            == Approx(0.1697910485));
+			CHECK(hyps.lambda[1]            == Approx(0.1350333198));
+			CHECK(hyps.slab_relative_var[0] == Approx(0.0081833922));
+			CHECK(hyps.slab_relative_var[1] == Approx(0.0051150827));
+
+			Eq_beta = vp.alpha_beta * vp.mu1_beta;
+			if(p.mode_mog_prior_beta) Eq_beta.array() += (1 - vp.alpha_beta) * vp.mu2_beta;
+			check_ym  = VB.X * Eq_beta;
+			check_ym += VB.C * vp.muc.cast<scalarData>().matrix();
+			CHECK(vp.ym(0)            == Approx(check_ym(0)));
+
+			VB.updateAllParams(1, round_index, all_vp, all_hyps, logw_prev, trackers, logw_updates);
+
+			CHECK(vp.alpha_beta(0)            == Approx(0.1475445081));
+			CHECK(vp.muw(0, 0)              == Approx(0.0627874101));
+			CHECK(vp.alpha_gam(63)           == Approx(0.1183555819));
+			CHECK(vp.mu1_gam(63)              == Approx(0.0013071544));
+			CHECK(vp.s1_gam_sq(63)            == Approx(0.0026294351));
+
+			CHECK(hyps.sigma                == Approx(0.6031329457));
+			CHECK(hyps.lambda[0]            == Approx(0.1994253645));
+			CHECK(hyps.lambda[1]            == Approx(0.1169875913));
+			CHECK(hyps.slab_relative_var[0] == Approx(0.0125648575));
+			CHECK(hyps.slab_relative_var[1] == Approx(0.0042537538));
+			CHECK(hyps.s_x[0]               == Approx(64.0));
+			CHECK(hyps.s_x[1]               == Approx(0.259499063));
+			CHECK(hyps.pve[1]               == Approx(0.000111278));
+			CHECK(hyps.pve_large[1]         == Approx(0.0001112768));
+
+			Eq_beta = vp.alpha_beta * vp.mu1_beta;
+			if(p.mode_mog_prior_beta) Eq_beta.array() += (1 - vp.alpha_beta) * vp.mu2_beta;
+			check_ym  = VB.X * Eq_beta;
+			check_ym += VB.C * vp.muc.cast<scalarData>().matrix();
+			CHECK(vp.ym(0)            == Approx(check_ym(0)));
+
+			VB.updateAllParams(2, round_index, all_vp, all_hyps, logw_prev, trackers, logw_updates);
+
+			CHECK(vp.alpha_beta(63)           == Approx(0.2849674292));
+			CHECK(vp.muw(0, 0)              == Approx(0.0385493631));
+			CHECK(vp.alpha_gam(63)           == Approx(0.1035741368));
+			CHECK(vp.mu1_gam(63)              == Approx(-0.0008068742));
+			CHECK(vp.s1_gam_sq(63)            == Approx(0.0019506006));
+
+			CHECK(hyps.sigma                == Approx(0.5604876755));
+			CHECK(hyps.lambda[0]            == Approx(0.2187750882));
+			CHECK(hyps.lambda[1]            == Approx(0.1024356641));
+			CHECK(hyps.slab_relative_var[0] == Approx(0.0158099281));
+			CHECK(hyps.slab_relative_var[1] == Approx(0.0033998137));
+			CHECK(hyps.s_x[0]               == Approx(64.0));
+			CHECK(hyps.s_x[1]               == Approx(0.1012145499));
+			CHECK(hyps.pve[1]               == Approx(0.0000288603));
+			CHECK(hyps.pve_large[1]         == Approx(0.0000288598));
+
+			CHECK(VB.calc_logw(hyps, vp) == Approx(-88.2465631083));
+			VbTracker tracker(p);
+			tracker.init_interim_output(0,2, VB.n_effects, VB.n_env, VB.env_names, vp);
+			tracker.dump_state(2, VB.n_covar, VB.n_var, VB.n_env, VB.n_effects, vp, hyps, VB.X, VB.covar_names, VB.env_names);
+
+			// Checking logw
+			double int_linear = -1.0 * VB.calcExpLinear(hyps, vp) / 2.0 / hyps.sigma;
+			int_linear -= VB.N * std::log(2.0 * VB.PI * hyps.sigma) / 2.0;
+			CHECK(int_linear  == Approx(-58.4732270913045));
+
+			CHECK(VB.calcExpLinear(hyps, vp)  == Approx(30.26634));
+			CHECK(VB.calcKLBeta(hyps, vp)  == Approx(-5.339218));
+			CHECK(VB.calcKLGamma(hyps, vp)  == Approx(-0.004956151));
+
+			// check int_linear
+
+			// Expectation of linear regression log-likelihood
+			int_linear  = (VB.Y - vp.ym).squaredNorm();
+			int_linear -= 2.0 * (VB.Y - vp.ym).cwiseProduct(vp.eta).dot(vp.yx);
+			int_linear += vp.yx.cwiseProduct(vp.eta_sq).dot(vp.yx);
+			CHECK(int_linear == Approx(21.57235));
+
+			double int_linear2  = (VB.Y - vp.ym - vp.yx.cwiseProduct(vp.eta)).squaredNorm();
+			int_linear2 -= vp.yx.cwiseProduct(vp.eta).squaredNorm();
+			int_linear2 += vp.yx.cwiseProduct(vp.eta_sq).dot(vp.yx);
+			CHECK(int_linear2 == Approx(21.57235));
+
+
+			// variances
+			CHECK(vp.sc_sq.sum() == Approx(0.04923524));
+			CHECK(vp.var_beta().sum() == Approx(0.1040104));
+			CHECK((vp.EdZtZ * vp.var_gam()).sum() == Approx(1.184956));
+
+			CHECK(vp.EdZtZ.sum() == Approx(6114.099));
+			CHECK(vp.eta_sq.sum() == Approx(99.8159));
+
+			double dztz0 = (VB.X.col(0).array().square() * vp.eta_sq.array()).sum();
+			CHECK(dztz0 == Approx(95.82891));
+			CHECK(vp.EdZtZ(0) == Approx(95.82891));
+		}
+	}
+}
 //
 //TEST_CASE( "Example 6: single-env w MoG + hyps max" ){
 //	parameters p;

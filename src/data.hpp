@@ -606,18 +606,18 @@ class Data
 		// we find it.
 		std::stringstream ss;
 		std::string line;
-		std::vector<std::string> user_sample_ids;
+		std::set<std::string> user_sample_ids;
 		while (getline(fg, line)) {
 			ss.clear();
 			ss.str(line);
 			std::string s;
 			ss >> s;
-			user_sample_ids.push_back(s);
+			user_sample_ids.insert(s);
 		}
 
-		std::vector<std::string>::iterator it;
+		std::set<std::string>::iterator it;
 		for (long ii = 0; ii < n_samples; ii++){
-			it = find (user_sample_ids.begin(), user_sample_ids.end(), bgen_ids[ii]);
+			it = user_sample_ids.find(bgen_ids[ii]);
 			if (it == user_sample_ids.end()){
 				incomplete_cases[ii] = true;
 			}

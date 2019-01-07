@@ -9,6 +9,10 @@
 #include "tools/eigen3.3/Dense"
 #include "class.h"
 
+#include <boost/iostreams/filtering_stream.hpp>
+
+namespace boost_io = boost::iostreams;
+
 class Hyps{
 	int sigma_ind   = 0;
 	int sigma_b_ind = 1;
@@ -29,13 +33,14 @@ public:
 	Eigen::ArrayXd pve;
 	Eigen::ArrayXd pve_large;
 
-	Hyps(){};
+	parameters p;
+
+	Hyps(parameters my_params) : p(my_params) {};
 
 	void init_from_grid(int n_effects,
 						int ii,
 						int n_var,
 						const Eigen::Ref<const Eigen::MatrixXd>& hyps_grid,
-						const parameters& p,
 						const double& my_s_z){
 		// Implicit that n_effects > 1
 
@@ -67,8 +72,7 @@ public:
 	void init_from_grid(int n_effects,
 						int ii,
 						int n_var,
-						const Eigen::Ref<const Eigen::MatrixXd>& hyps_grid,
-						const parameters& p){
+						const Eigen::Ref<const Eigen::MatrixXd>& hyps_grid){
 		/*** Implicit that n_effects == 1 ***/
 
 		// Unpack
@@ -97,6 +101,7 @@ public:
 	}
 
 	friend std::ostream& operator<< (std::ostream &os, const Hyps& hyps);
+	friend boost_io::filtering_ostream& operator<< (boost_io::filtering_ostream &os, const Hyps& hyps);
 };
 
 std::ostream& operator<<(std::ostream& os, const Hyps& hyps){
@@ -104,6 +109,26 @@ std::ostream& operator<<(std::ostream& os, const Hyps& hyps){
 	os << hyps.lambda << std::endl;
 	os << hyps.slab_var << std::endl;
 	os << hyps.spike_var << std::endl;
+	return os;
+}
+
+boost_io::filtering_ostream& operator<<(boost_io::filtering_ostream& os, const Hyps& hyps){
+	std::vector<std::string> effects = {"_beta", "_gam"};
+	int n_effects = hyps.lambda.rows();
+	os << std::scientific << std::setprecision(7);
+	os << "hyp value" << std::endl;
+	os << "sigma " << hyps.sigma << std::endl;
+	for (int ii = 0; ii < n_effects; ii++){
+		os << "lambda" << ii+1 << " " << hyps.lambda[ii] << std::endl;
+	}
+	for (int ii = 0; ii < n_effects; ii++){
+		os << "sigma" << effects[ii] << "0 " << hyps.slab_relative_var[ii] << std::endl;
+	}
+	for (int ii = 0; ii < n_effects; ii++) {
+		if((ii == 0 && hyps.p.mode_mog_prior_beta) || (ii == 1 && hyps.p.mode_mog_prior_gam)) {
+			os << "sigma" << effects[ii] << "1 " << hyps.spike_relative_var[ii] << std::endl;
+		}
+	}
 	return os;
 }
 

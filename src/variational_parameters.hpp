@@ -117,6 +117,32 @@ public:
 		}
 		return varG;
 	}
+
+	Eigen::ArrayXd mean_beta_sq(int u0) const {
+		// if u0 == 1; E[u \beta^2]
+		// if u0 == 0; E[1 - u \beta^2]
+		Eigen::ArrayXd res;
+		assert(u0 == 1 || u0 == 2);
+		if(u0 == 1)
+			res = alpha_beta * (s1_beta_sq + mu1_beta.square());
+		else if (u0 == 2 && p.mode_mog_prior_beta){
+			res = (1 - alpha_beta) * (s2_beta_sq + mu2_beta.square());
+		}
+		return res;
+	}
+
+	Eigen::ArrayXd mean_gam_sq(int u0) const {
+		// if u0 == 1; E[u \beta^2]
+		// if u0 == 0; E[1 - u \beta^2]
+		Eigen::ArrayXd res;
+		assert(u0 == 1 || u0 == 2);
+		if(u0 == 1)
+			res = alpha_gam * (s1_gam_sq + mu1_gam.square());
+		else if (u0 == 2 && p.mode_mog_prior_gam){
+			res = (1 - alpha_gam) * (s2_gam_sq + mu2_gam.square());
+		}
+		return res;
+	}
 };
 
 // Store subset of Variational Parameters to be RAM efficient

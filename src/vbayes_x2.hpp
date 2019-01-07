@@ -168,7 +168,7 @@ public:
 		std::cout << "Computing XtE" << std::endl;
 		E = dat.E;
 		if(n_env > 0) {
-			XtE = X.transpose_multiply(E);
+			XtE = F;
 		}
 		std::cout << "XtE computed" << std::endl;
 
@@ -413,13 +413,6 @@ public:
 			chunks[ch_index].push_back(ii);
 		}
 
-		// Allocate trackers
-		assert(trackers.size() == n_grid);
-		for (int nn = 0; nn < n_grid; nn++){
-			trackers[nn].set_main_filepath(p.out_file);
-			trackers[nn].p = p;
-		}
-
 		runOuterLoop(round_index, hyps_grid, n_grid, chunks[0], random_init, trackers);
 	}
 
@@ -454,7 +447,7 @@ public:
 
 		long n_grid = outer_hyps_grid.rows();
 		for (int ii = 0; ii < n_grid; ii++) {
-			Hyps i_hyps;
+			Hyps i_hyps(p);
 			if (n_effects == 2) {
 				Eigen::ArrayXd muw_sq(n_env * n_env);
 				for (int ll = 0; ll < n_env; ll++) {
@@ -464,9 +457,9 @@ public:
 				}
 				double my_s_z = (dXtEEX.rowwise() * muw_sq.transpose()).sum() / (N - 1.0);
 
-				i_hyps.init_from_grid(n_effects, ii, n_var, outer_hyps_grid, p, my_s_z);
+				i_hyps.init_from_grid(n_effects, ii, n_var, outer_hyps_grid, my_s_z);
 			} else if (n_effects == 1){
-				i_hyps.init_from_grid(n_effects, ii, n_var, outer_hyps_grid, p);
+				i_hyps.init_from_grid(n_effects, ii, n_var, outer_hyps_grid);
 			}
 
 			all_hyps.push_back(i_hyps);
@@ -503,7 +496,7 @@ public:
 			logw_updates[nn].push_back(i_logw[nn]);
 			converged[nn] = 0;
 
-			all_tracker[nn].interim_output_init(nn, round_index, n_effects, n_env, env_names, all_vp[nn]);
+			all_tracker[nn].init_interim_output(nn, round_index, n_effects, n_env, env_names, all_vp[nn]);
 		}
 
 		while(!all_converged && count < p.vb_iter_max){
@@ -530,7 +523,7 @@ public:
 				if (p.xtra_verbose && count % 20 == 0) {
 					all_tracker[nn].push_interim_param_values(count, n_effects, n_var, all_vp[nn], X);
 				}
-				all_tracker[nn].push_interim_iter_update(count, all_hyps[nn], i_logw[nn], alpha_diff[nn], n_effects,
+				all_tracker[nn].push_interim_hyps(count, all_hyps[nn], i_logw[nn], alpha_diff[nn], n_effects,
 												 n_var, n_env, all_vp[nn]);
 			}
 
@@ -587,7 +580,7 @@ public:
 				all_tracker[nn].logw_updates = logw_updates[nn];
 				all_tracker[nn].alpha_diffs = alpha_diff_updates[nn];
 			}
-			all_tracker[nn].push_interim_output(X, n_var, n_effects);
+			all_tracker[nn].push_vp_converged(X, n_var, n_effects);
 		}
 	}
 
@@ -965,6 +958,7 @@ public:
 			rr_k(ii) = vp.mean_gam(jj);
 
 			// Update s_sq
+			double tmp = (gxe_chunk_size > 1 && p.n_thread == 1) ? vp.EdZtZ(jj) : D_corr(ii, ii);
 			vp.s1_gam_sq(jj)                        = hyps.slab_var(ee);
 			vp.s1_gam_sq(jj)                       /= (hyps.slab_relative_var(ee) * vp.EdZtZ(jj) + 1);
 			if(p.mode_mog_prior_gam) vp.s2_gam_sq(jj)  = hyps.spike_var(ee);
@@ -1143,27 +1137,12 @@ public:
 		double int_linear = -1.0 * calcExpLinear(hyps, vp) / 2.0 / hyps.sigma;
 		int_linear -= N * std::log(2.0 * PI * hyps.sigma) / 2.0;
 
-		// gamma
-		int ee;
-		double col_sum, int_gamma = 0;
-		ee = 0;
-		col_sum = vp.alpha_beta.sum();
-		int_gamma += col_sum * std::log(hyps.lambda(ee) + eps);
-		int_gamma -= col_sum * std::log(1.0 - hyps.lambda(ee) + eps);
-		int_gamma += (double) n_var *  std::log(1.0 - hyps.lambda(ee) + eps);
-
-		if(n_effects > 1) {
-			ee = 1;
-			col_sum = vp.alpha_gam.sum();
-			int_gamma += col_sum * std::log(hyps.lambda(ee) + eps);
-			int_gamma -= col_sum * std::log(1.0 - hyps.lambda(ee) + eps);
-			int_gamma += (double) n_var * std::log(1.0 - hyps.lambda(ee) + eps);
-		}
-
 		// kl-beta
-		double int_klbeta = calcIntKLBeta(hyps, vp);
+		double kl_beta = calcKLBeta(hyps, vp);
+
+		double kl_gamma = 0;
 		if(n_effects > 1) {
-			int_klbeta += calcIntKLGamma(hyps, vp);
+			kl_gamma += calcKLGamma(hyps, vp);
 		}
 
 		// covariates
@@ -1184,7 +1163,7 @@ public:
 			kl_weights -= vp.muw.square().sum() / 2.0;
 		}
 
-		double res = int_linear + int_gamma + int_klbeta + kl_covar + kl_weights;
+		double res = int_linear + kl_beta + kl_gamma + kl_covar + kl_weights;
 
 		return res;
 	}
@@ -1374,70 +1353,68 @@ public:
 		return int_linear;
 	}
 
-	double calcIntKLBeta(const Hyps& hyps,
+	double calcKLBeta(const Hyps& hyps,
 						 const VariationalParameters& vp){
 		// KL Divergence of log[ p(beta | u, theta) / q(u, beta) ]
-		double col_sum, res;
+		double res = 0;
 		int ee = 0;
+
+		res += std::log(hyps.lambda(ee) + eps) * vp.alpha_beta.sum();
+		res += std::log(1.0 - hyps.lambda(ee) + eps) * ((double) n_var - vp.alpha_beta.sum());
+
+		res -= (vp.alpha_beta * vp.alpha_beta.log()).sum();
+		res -= ((1 - vp.alpha_beta) * (1 - vp.alpha_beta).log()).sum();
 
 		// beta
 		if(p.mode_mog_prior_beta){
-			res  = n_var / 2.0;
+			res += n_var / 2.0;
 
-			res -= (vp.alpha_beta * (vp.mu1_beta.square() + vp.s1_beta_sq)).sum() / 2.0 / hyps.slab_var(ee);
+			res -= vp.mean_beta_sq(1).sum() / 2.0 / hyps.slab_var(ee);
+			res -= vp.mean_beta_sq(2).sum() / 2.0 / hyps.spike_var(ee);
+
 			res += (vp.alpha_beta * vp.s1_beta_sq.log()).sum() / 2.0;
-
-			res -= ((1.0 - vp.alpha_beta) * (vp.mu2_beta.square() + vp.s2_beta_sq)).sum() / 2.0 / hyps.spike_var(ee);
 			res += ((1.0 - vp.alpha_beta) * vp.s2_beta_sq.log()).sum() / 2.0;
 
-			col_sum = vp.alpha_beta.sum();
-			res -= std::log(hyps.slab_var(ee))  * col_sum / 2.0;
-			res -= std::log(hyps.spike_var(ee)) * (n_var - col_sum) / 2.0;
+			res -= std::log(hyps.slab_var(ee))  * vp.alpha_beta.sum() / 2.0;
+			res -= std::log(hyps.spike_var(ee)) * (n_var - vp.alpha_beta.sum()) / 2.0;
 		} else {
-			res  = (vp.alpha_beta * vp.s1_beta_sq.log()).sum() / 2.0;
+			res += (vp.alpha_beta * vp.s1_beta_sq.log()).sum() / 2.0;
 			res -= (vp.alpha_beta * (vp.mu1_beta.square() + vp.s1_beta_sq)).sum() / 2.0 / hyps.slab_var(ee);
 
-			col_sum = vp.alpha_beta.sum();
-			res += col_sum * (1 - std::log(hyps.slab_var(ee))) / 2.0;
-		}
-
-		for (std::uint32_t kk = 0; kk < n_var; kk++){
-			res -= vp.alpha_beta(kk) * std::log(vp.alpha_beta(kk) + eps);
-			res -= (1 - vp.alpha_beta(kk)) * std::log(1 - vp.alpha_beta(kk) + eps);
+			res += (1 - std::log(hyps.slab_var(ee))) * vp.alpha_beta.sum() / 2.0;
 		}
 		return res;
 	}
 
-	double calcIntKLGamma(const Hyps& hyps,
+	double calcKLGamma(const Hyps& hyps,
 						  const VariationalParameters& vp){
 		// KL Divergence of log[ p(beta | u, theta) / q(u, beta) ]
-		double col_sum, res;
+		double res = 0;
 		int ee = 1;
+
+		res += std::log(hyps.lambda(ee) + eps) * vp.alpha_gam.sum();
+		res += std::log(1.0 - hyps.lambda(ee) + eps) * ((double) n_var - vp.alpha_gam.sum());
+
+		res -= (vp.alpha_gam * vp.alpha_gam.log()).sum();
+		res -= ((1 - vp.alpha_gam) * (1 - vp.alpha_gam).log()).sum();
 
 		// beta
 		if(p.mode_mog_prior_gam){
-			res  = n_var / 2.0;
+			res += n_var / 2.0;
 
-			res -= (vp.alpha_gam * (vp.mu1_gam.square() + vp.s1_gam_sq)).sum() / 2.0 / hyps.slab_var(ee);
+			res -= vp.mean_gam_sq(1).sum() / 2.0 / hyps.slab_var(ee);
+			res -= vp.mean_gam_sq(2).sum() / 2.0 / hyps.spike_var(ee);
+
 			res += (vp.alpha_gam * vp.s1_gam_sq.log()).sum() / 2.0;
-
-			res -= ((1.0 - vp.alpha_gam) * (vp.mu2_gam.square() + vp.s2_gam_sq)).sum() / 2.0 / hyps.spike_var(ee);
 			res += ((1.0 - vp.alpha_gam) * vp.s2_gam_sq.log()).sum() / 2.0;
 
-			col_sum = vp.alpha_gam.sum();
-			res -= std::log(hyps.slab_var(ee))  * col_sum / 2.0;
-			res -= std::log(hyps.spike_var(ee)) * (n_var - col_sum) / 2.0;
+			res -= std::log(hyps.slab_var(ee))  * vp.alpha_gam.sum() / 2.0;
+			res -= std::log(hyps.spike_var(ee)) * (n_var - vp.alpha_gam.sum()) / 2.0;
 		} else {
-			res  = (vp.alpha_gam * vp.s1_gam_sq.log()).sum() / 2.0;
+			res += (vp.alpha_gam * vp.s1_gam_sq.log()).sum() / 2.0;
 			res -= (vp.alpha_gam * (vp.mu1_gam.square() + vp.s1_gam_sq)).sum() / 2.0 / hyps.slab_var(ee);
 
-			col_sum = vp.alpha_gam.sum();
-			res += col_sum * (1 - std::log(hyps.slab_var(ee))) / 2.0;
-		}
-
-		for (std::uint32_t kk = 0; kk < n_var; kk++){
-			res -= vp.alpha_gam(kk) * std::log(vp.alpha_gam(kk) + eps);
-			res -= (1 - vp.alpha_gam(kk)) * std::log(1 - vp.alpha_gam(kk) + eps);
+			res += (1 - std::log(hyps.slab_var(ee))) * vp.alpha_gam.sum() / 2.0;
 		}
 		return res;
 	}

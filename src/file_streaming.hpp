@@ -43,6 +43,7 @@ void write_snp_stats_to_file(boost_io::filtering_ostream& ofile,
 	Eigen::ArrayXXd      mean_gam  = vp.alpha_gam * vp.mu1_gam;
 	if(p.mode_mog_prior_beta) mean_gam += (1 - vp.alpha_gam) * vp.mu2_gam;
 
+	ofile << std::scientific << std::setprecision(7);
 
 	for (std::uint32_t kk = 0; kk < n_var; kk++){
 		ofile << X.chromosome[kk] << " " << X.rsid[kk] << " " << X.position[kk];
@@ -63,17 +64,10 @@ void write_snp_stats_to_file(boost_io::filtering_ostream& ofile,
 			ofile << " " << mean_gam(kk);
 			ofile << " " << vp.alpha_gam(kk);
 			ofile << " " << vp.mu1_gam(kk);
-
-			ofile << std::scientific << std::setprecision(4);
 			ofile << " " << vp.s1_gam_sq(kk);
-			ofile << std::setprecision(9) << std::fixed;
-
 			if (write_mog && p.mode_mog_prior_gam) {
 				ofile << " " << vp.mu2_gam(kk);
-
-				ofile << std::scientific << std::setprecision(4);
 				ofile << " " << vp.s2_gam_sq(kk);
-				ofile << std::setprecision(9) << std::fixed;
 			}
 		}
 		ofile << std::endl;
@@ -105,6 +99,7 @@ void write_snp_stats_to_file(boost_io::filtering_ostream& ofile,
 	Eigen::ArrayXXd      mean_gam  = vp.alpha_gam * vp.mu1_gam;
 	if(p.mode_mog_prior_beta) mean_gam += (1 - vp.alpha_gam) * vp.mu2_gam;
 
+	ofile << std::scientific << std::setprecision(7);
 
 	for (std::uint32_t kk = 0; kk < n_var; kk++){
 		ofile << X.chromosome[kk] << " " << X.rsid[kk] << " " << X.position[kk];
@@ -125,17 +120,10 @@ void write_snp_stats_to_file(boost_io::filtering_ostream& ofile,
 			ofile << " " << mean_gam(kk);
 			ofile << " " << vp.alpha_gam(kk);
 			ofile << " " << vp.mu1_gam(kk);
-
-			ofile << std::scientific << std::setprecision(4);
 			ofile << " " << vp.s1_gam_sq(kk);
-			ofile << std::setprecision(9) << std::fixed;
-
 			if (write_mog && p.mode_mog_prior_gam) {
 				ofile << " " << vp.mu2_gam(kk);
-
-				ofile << std::scientific << std::setprecision(4);
 				ofile << " " << vp.s2_gam_sq(kk);
-				ofile << std::setprecision(9) << std::fixed;
 			}
 		}
 		ofile << std::endl;
@@ -175,7 +163,7 @@ void write_snp_stats_to_file(boost_io::filtering_ostream& ofile,
 	Eigen::ArrayXXd      mean_gam  = vp.alpha_gam * vp.mu1_gam;
 	if(p.mode_mog_prior_beta) mean_gam += (1 - vp.alpha_gam) * vp.mu2_gam;
 
-
+	ofile << std::scientific << std::setprecision(7);
 	for (std::uint32_t kk = 0; kk < n_var; kk++){
 		ofile << X.chromosome[kk] << " " << X.rsid[kk] << " " << X.position[kk];
 		ofile << " " << X.al_0[kk] << " " << X.al_1[kk] << " " << X.maf[kk] << " " << X.info[kk];
@@ -197,17 +185,10 @@ void write_snp_stats_to_file(boost_io::filtering_ostream& ofile,
 			ofile << " " << mean_gam(kk);
 			ofile << " " << vp.alpha_gam(kk);
 			ofile << " " << vp.mu1_gam(kk);
-
-			ofile << std::scientific << std::setprecision(4);
 			ofile << " " << vp.s1_gam_sq(kk);
-			ofile << std::setprecision(9) << std::fixed;
-
 			if (write_mog && p.mode_mog_prior_gam) {
 				ofile << " " << vp.mu2_gam(kk);
-
-				ofile << std::scientific << std::setprecision(4);
 				ofile << " " << vp.s2_gam_sq(kk);
-				ofile << std::setprecision(9) << std::fixed;
 			}
 			ofile << " " << test_stat_gam(kk);
 			ofile << " " << neglogp_gam(kk);
