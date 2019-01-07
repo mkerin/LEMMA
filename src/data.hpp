@@ -327,7 +327,7 @@ class Data
 #else
 			for (int nn = 1; nn < params.n_bgen_thread; nn++){
 				bgen_threads[nn] = std::thread( [this, &bgens_pass, &snp_indices, nn] {
-					read_bgen_chunk(bgenViews[nn], sn_indices[nn], bgens_pass[nn], nn)
+					read_bgen_chunk(bgenViews[nn], snp_indices[nn], bgens_pass[nn], nn);
 				});
 			}
 			read_bgen_chunk(bgenViews[0], snp_indices[0], bgens_pass[0], 0);

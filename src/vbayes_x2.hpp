@@ -168,7 +168,7 @@ public:
 		std::cout << "Computing XtE" << std::endl;
 		E = dat.E;
 		if(n_env > 0) {
-			XtE = F;
+			XtE = X.transpose_multiply(E);
 		}
 		std::cout << "XtE computed" << std::endl;
 
@@ -958,7 +958,7 @@ public:
 			rr_k(ii) = vp.mean_gam(jj);
 
 			// Update s_sq
-			double tmp = (gxe_chunk_size > 1 && p.n_thread == 1) ? vp.EdZtZ(jj) : D_corr(ii, ii);
+			double tmp = (p.gxe_chunk_size > 1 && p.n_thread == 1) ? vp.EdZtZ(jj) : D_corr(ii, ii);
 			vp.s1_gam_sq(jj)                        = hyps.slab_var(ee);
 			vp.s1_gam_sq(jj)                       /= (hyps.slab_relative_var(ee) * vp.EdZtZ(jj) + 1);
 			if(p.mode_mog_prior_gam) vp.s2_gam_sq(jj)  = hyps.spike_var(ee);
