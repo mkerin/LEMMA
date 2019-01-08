@@ -3,6 +3,8 @@
 Changes:
 - Multithreaded read from bgen
 - bugfix in GenotypeMatrix::mult_vector_by_chr
+- VbTracker::dump_state
+- Refactoring of elbo; confident this is correct
 
 # Version 0.10.4
 

@@ -372,6 +372,13 @@ class Data
 				snp_indices[nn] -= invalid_snps;
 			}
 
+			// Report progress
+			if((ch+1) % 100 == 0){
+				std::cout << "Chunk " << ch+1 << " completed (";
+				std::cout << n_var_parsed-1 << "/" << bgenView->number_of_variants();
+				std::cout << " variants parsed)" << std::endl;
+			}
+
 			any_bgens_pass = std::any_of(bgens_pass.begin(), bgens_pass.end(), [](const bool& v) { return v; });
 			ch++;
 			n_var += valid_cols.size();
@@ -385,10 +392,6 @@ class Data
 			std::cout << "constant variance" << std::endl;
 		}
 
-
-//		t_readFullBgen.resume();
-//		read_bgen_chunk();
-//		t_readFullBgen.stop();
 		std::cout << "BGEN contained " << n_var << " variants." << std::endl;
 	}
 
@@ -432,7 +435,7 @@ class Data
 			int cnt = 0;
 			while(bgen_pass && cnt < no_vars_skipped) {
 				myBgenView->ignore_genotype_data_block();
-				myBgenView->read_variant( &SNPID_j, &rsid_j, &chr_j, &pos_j, &alleles_j );
+				bgen_pass = myBgenView->read_variant( &SNPID_j, &rsid_j, &chr_j, &pos_j, &alleles_j );
 				cnt++;
 			}
 			if (!bgen_pass) break;
