@@ -132,7 +132,7 @@ void parse_arguments(parameters &p, int argc, char *argv[]) {
 		"--mode_mog_gamma",
 		"--gxe_chunk_size",
 		"--main_chunk_size",
-		"--v3rbose",
+		"--mode_debug",
 		"--spike_diff_factor",
 		"--min_spike_diff_factor"
 	};
@@ -350,8 +350,8 @@ void parse_arguments(parameters &p, int argc, char *argv[]) {
 				i += 0;
 			}
 
-			if(strcmp(in_str, "--v3erbose") == 0) {
-				p.verbose3 = true;
+			if(strcmp(in_str, "--mode_debug") == 0) {
+				p.mode_debug = true;
 				i += 0;
 			}
 

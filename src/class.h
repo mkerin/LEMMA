@@ -20,11 +20,11 @@ class parameters {
 		std::uint32_t range_start, range_end;
 		bool range, maf_lim, info_lim, select_snps, xtra_verbose;
 		bool geno_check, mode_vb, use_vb_on_covars;
-		bool select_rsid, interaction_analysis, verbose, verbose3, low_mem;
+		bool select_rsid, interaction_analysis, verbose, low_mem;
 		bool elbo_tol_set_by_user, alpha_tol_set_by_user, mode_empirical_bayes;
 		bool keep_constant_variants, user_requests_round1, scale_pheno;
 		bool mode_alternating_updates;
-		bool restrict_gamma_updates, mode_no_gxe;
+		bool restrict_gamma_updates, mode_no_gxe, mode_debug;
 		bool init_weights_with_snpwise_scan, flip_high_maf_variants, min_spike_diff_set;
 		bool mode_mog_prior_beta, mode_mog_prior_gam;
 		double min_maf, min_info, elbo_tol, alpha_tol, gamma_updates_thresh;
@@ -74,11 +74,11 @@ class parameters {
 		mode_no_gxe = false;
 		mode_mog_prior_beta = false;
 		mode_mog_prior_gam = false;
+		mode_debug = false;
 		select_snps = false;
 		select_rsid = false;
 		geno_check = true; // check allele probs sum to 1 by default
 		verbose = false;
-		verbose3 = false;
 		xtra_verbose = false;
 		use_vb_on_covars = false;
 		alpha_tol_set_by_user = false;

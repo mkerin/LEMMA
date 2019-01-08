@@ -663,6 +663,28 @@ public:
 		}
 		for (int nn = 0; nn < n_grid; nn++) {
 			check_monotonic_elbo(all_hyps[nn], all_vp[nn], count, logw_prev[nn], ms);
+			if(p.mode_debug){
+				EigenDataVector aa, bb, ym = X * all_vp[nn].mean_beta().matrix() + C * all_vp[nn].muc.matrix();
+				aa = (ym.array() - ym.array().sum() / (double) n_samples);
+				bb = all_vp[nn].ym.array() - all_vp[nn].ym.array().sum() / (double) n_samples;
+				double corr = aa.dot(bb) / aa.squaredNorm() / bb.squaredNorm();
+				if(corr < 1 - 1e-6){
+					std::cout << "Cor(ym, vp.ym) = " << corr << " at " << count << std::endl;
+				}
+			}
+			if(p.mode_debug){
+				EigenDataVector aa, bb, yx = X * all_vp[nn].mean_gam().matrix();
+				aa = (yx.array() - yx.array().sum() / (double) n_samples);
+				bb = all_vp[nn].yx.array() - all_vp[nn].yx.array().sum() / (double) n_samples;
+				double corr = aa.dot(bb) / aa.squaredNorm() / bb.squaredNorm();
+				if(corr < 1 - 1e-6){
+					std::cout << "Cor(yx, vp.yx) = " << corr << " at " << count << std::endl;
+				}
+			}
+		}
+
+		if(p.mode_debug){
+			EigenDataVector ym = X * all_vp.
 		}
 
 		// Update env-weights
@@ -755,21 +777,13 @@ public:
 			}
 
 			// Update residuals
-#ifdef DATA_AS_FLOAT
 			if(ee == 0){
-				YM.noalias() += D * rr_diff.cast<float>();
+				YM.noalias() += D * rr_diff.cast<scalarData>();
 			} else {
-				YX.noalias() += D * rr_diff.cast<float>();
+				YX.noalias() += D * rr_diff.cast<scalarData>();
 			}
-#else
-			if(ee == 0){
-				YM.noalias() += D * rr_diff;
-			} else {
-				YX.noalias() += D * rr_diff;
-			}
-#endif
-			// TODO: only on sometimes
-			if(p.verbose3) {
+
+			if(p.mode_debug) {
 				for (int nn = 0; nn < n_grid; nn++) {
 					check_monotonic_elbo(all_hyps[nn], all_vp[nn], count, logw_prev[nn], "updateAlphaMu_internal");
 				}
