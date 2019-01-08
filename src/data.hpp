@@ -50,9 +50,8 @@ class Data
 	unsigned long n_env; // number of env variables
 	int n_effects;   // number of environmental interactions
 	long n_samples; // number of samples
-	bool bgen_pass;
 	long n_var;
-	std::size_t n_var_parsed; // Track progress through IndexQuery
+	long n_var_parsed; // Track progress through IndexQuery
 	long int n_dxteex_computed;
 	long int n_snpstats_computed;
 
@@ -112,7 +111,6 @@ class Data
 			bgenViews.push_back(std::move(bgenView));
 		}
 
-		bgen_pass = true;
 		n_samples = (long) bgenView->number_of_samples();
 		n_var_parsed = 0;
 		filters_applied = false;
@@ -289,7 +287,6 @@ class Data
 
 	void read_full_bgen(){
 		std::cout << "Reading in BGEN" << std::endl;
-		params.chunk_size = bgenView->number_of_variants();
 		MyTimer t_readFullBgen("BGEN parsed in %ts \n");
 
 		if(params.flip_high_maf_variants){
@@ -303,15 +300,16 @@ class Data
 
 		// Setup
 		std::vector<char> bgens_pass;
-		std::vector<long> snp_indices;
+		std::vector<long> snp_indices(4, 0);
 		for (int nn = 0; nn < params.n_thread; nn++){
 			bgens_pass.push_back(1);
-			snp_indices.push_back(nn);
+//			snp_indices.push_back(nn);
 		}
 
 		// Read in chunks of snps with multi threads
 		long n_constant_variance = 0;
 		long ch                  = 0;
+		long n_invalid = 0;
 		n_var               = 0;
 		n_var_parsed        = 0; //mutex locked
 		// dxteex_cnt          = 0; //mutex locked
@@ -319,7 +317,7 @@ class Data
 		std::thread bgen_threads[params.n_bgen_thread];
 		while(any_bgens_pass){
 			// Read in chunk w/ multiple threads
-#ifdef OSX
+#ifdef DEBUG
 			read_bgen_chunk(bgenViews[0], snp_indices[0], bgens_pass[0], 0);
 			for (int nn = 1; nn < params.n_bgen_thread; nn++){
 				read_bgen_chunk(bgenViews[nn], snp_indices[nn], bgens_pass[nn], nn);
@@ -338,7 +336,7 @@ class Data
 
 			// Check chunk for invalid SNPs
 			std::vector<long> valid_cols;
-			for (long jj = ch * params.chunk_size; jj < n_var_parsed; jj++){
+			for (long jj = n_var; jj < n_var_parsed - n_invalid; jj++){
 				double sigma  = G.compressed_dosage_sds[jj];
 				double d1     = G.compressed_dosage_means[jj] * (double) n_samples;
 				if (params.maf_lim && (G.maf[jj] < params.min_maf || G.maf[jj] > 1 - params.min_maf)) {
@@ -361,15 +359,15 @@ class Data
 			// Remove invalid snps and update indexes
 			for (long jj = 0; jj < valid_cols.size(); jj++) {
 				auto old_index = valid_cols[jj];
-				auto new_index = jj + (ch * params.chunk_size);
+				auto new_index = jj + n_var;
 				if(old_index != new_index){
 					G.move_variant(old_index, new_index);
 					// dXtEEX.col(new_index) = dXtEEX.col(old_index);
 				}
 			}
-			long invalid_snps = params.chunk_size - valid_cols.size();
+			long invalid_snps_in_chunk = n_var_parsed - ch * params.chunk_size - valid_cols.size();
 			for (int nn = 0; nn < snp_indices.size(); nn++){
-				snp_indices[nn] -= invalid_snps;
+				snp_indices[nn] -= invalid_snps_in_chunk;
 			}
 
 			// Report progress
@@ -382,6 +380,7 @@ class Data
 			any_bgens_pass = std::any_of(bgens_pass.begin(), bgens_pass.end(), [](const bool& v) { return v; });
 			ch++;
 			n_var += valid_cols.size();
+			n_invalid += invalid_snps_in_chunk;
 		}
 
 		// double check snp indexes
@@ -422,27 +421,22 @@ class Data
 		double dosage_mean, dosage_sigma, missing_calls = 0.0;
 		int n_var_incomplete = 0;
 
-		// Resize genotype matrix
-		G.resize(n_samples, params.chunk_size);
-
 		long jj = 0;
-		bool first_pass = true;
 		while ( jj < params.chunk_size && bgen_pass ) {
-			bgen_pass = myBgenView->read_variant( &SNPID_j, &rsid_j, &chr_j, &pos_j, &alleles_j );
-
 			// Skip variants that other threads are due to read
-			int no_vars_skipped = (first_pass) ? thread_num : params.n_thread - 1;
-			int cnt = 0;
-			while(bgen_pass && cnt < no_vars_skipped) {
-				myBgenView->ignore_genotype_data_block();
+			while(bgen_pass && ((snp_index % params.n_thread) != thread_num) && jj < params.chunk_size) {
 				bgen_pass = myBgenView->read_variant( &SNPID_j, &rsid_j, &chr_j, &pos_j, &alleles_j );
-				cnt++;
+				if(bgen_pass) {
+					myBgenView->ignore_genotype_data_block();
+					jj += 1;
+					snp_index++;
+				}
 			}
 			if (!bgen_pass) break;
+			if (jj >= params.chunk_size) break;
 
-			mtx.lock();
-			n_var_parsed++;
-			mtx.unlock();
+			bgen_pass = myBgenView->read_variant( &SNPID_j, &rsid_j, &chr_j, &pos_j, &alleles_j );
+			if (!bgen_pass) break;
 
 			// Read probs + check maf filter
 			myBgenView->read_genotype_data_block( setter );
@@ -528,16 +522,18 @@ class Data
 			}
 
 			for (long ii = 0; ii < n_samples; ii++){
-				G.assign_index(ii, jj, dosage_j[ii]);
+				G.assign_index(ii, snp_index, dosage_j[ii]);
 			}
 
 			// NB: these get recomputed after compression
-			G.compressed_dosage_sds[jj] = sigma;
-			G.compressed_dosage_means[jj] = mu;
+			G.compressed_dosage_sds[snp_index] = sigma;
+			G.compressed_dosage_means[snp_index] = mu;
 
-			jj += params.n_thread;
-			snp_index += params.n_thread;
-			first_pass = false;
+			jj += 1;
+			snp_index++;
+			mtx.lock();
+			n_var_parsed++;
+			mtx.unlock();
 		}
 
 		// need to resize G whilst retaining existing coefficients if while

@@ -174,6 +174,14 @@ TEST_CASE("Data") {
 			CHECK(data.G(0, 1) == Approx(-0.6480740698));
 			CHECK(data.G(0, 2) == Approx(-0.7105104917));
 			CHECK(data.G(0, 3) == Approx(-0.586791551));
+			CHECK(data.G(0, 60) == Approx(1.4862052498));
+			CHECK(data.G(0, 61) == Approx(-0.3299831646));
+			CHECK(data.G(0, 62) == Approx(-1.0968694989));
+			CHECK(data.G(0, 63) == Approx(-0.5227553607));
+			CHECK(data.G.compressed_dosage_means(60) == Approx(0.9821875));
+			CHECK(data.G.compressed_dosage_means(61) == Approx(0.10390625));
+			CHECK(data.G.compressed_dosage_means(62) == Approx(0.68328125));
+			CHECK(data.G.compressed_dosage_means(63) == Approx(0.28359375));
 			CHECK(data.n_var == 73);
 		}
 
@@ -204,6 +212,14 @@ TEST_CASE("Data") {
 			CHECK(data.G(0, 1) == Approx(-0.6480740698));
 			CHECK(data.G(0, 2) == Approx(-0.7105104917));
 			CHECK(data.G(0, 3) == Approx(-0.586791551));
+			CHECK(data.G(0, 60) == Approx(1.4862052498));
+			CHECK(data.G(0, 61) == Approx(-0.3299831646));
+			CHECK(data.G(0, 62) == Approx(-1.0968694989));
+			CHECK(data.G(0, 63) == Approx(-0.5227553607));
+			CHECK(data.G.compressed_dosage_means(60) == Approx(0.9821875));
+			CHECK(data.G.compressed_dosage_means(61) == Approx(0.10390625));
+			CHECK(data.G.compressed_dosage_means(62) == Approx(0.68328125));
+			CHECK(data.G.compressed_dosage_means(63) == Approx(0.28359375));
 			CHECK(data.n_var == 73);
 		}
 	}

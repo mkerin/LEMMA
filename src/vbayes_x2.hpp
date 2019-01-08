@@ -1463,6 +1463,17 @@ public:
 			boost_m::students_t t_dist(n_samples - 1);
 			double main_se_j    = std::sqrt(rss_null / (N - 1.0) * ztz_inv);
 			double main_tstat_j = gam / main_se_j;
+			if(!std::isfinite(main_tstat_j)){
+				std::cout << main_se_j << std::endl;
+				std::cout << main_tstat_j << std::endl;
+				std::cout << rss_null << std::endl;
+				std::cout << gam << std::endl;
+				std::cout << ztz_inv << std::endl;
+				std::cout << "eta" << std::endl;
+				std::cout << vp.eta << std::endl;
+				std::cout << "col" << std::endl;
+				std::cout << X.col(jj) << std::endl;
+			}
 			double main_pval_j  = 2 * boost_m::cdf(boost_m::complement(t_dist, fabs(main_tstat_j)));
 
 			neglogp(jj) = -1 * std::log10(main_pval_j);
