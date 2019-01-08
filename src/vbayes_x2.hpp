@@ -1362,8 +1362,11 @@ public:
 		res += std::log(hyps.lambda(ee) + eps) * vp.alpha_beta.sum();
 		res += std::log(1.0 - hyps.lambda(ee) + eps) * ((double) n_var - vp.alpha_beta.sum());
 
-		res -= (vp.alpha_beta * (eps + vp.alpha_beta).log()).sum();
-		res -= ((1 - vp.alpha_beta) * (1 + eps - vp.alpha_beta).log()).sum();
+		// Need std::log for eps guard to work
+		for (std::uint32_t kk = 0; kk < n_var; kk++){
+			res -= vp.alpha_beta(kk) * std::log(vp.alpha_beta(kk) + eps);
+			res -= (1 - vp.alpha_beta(kk)) * std::log(1 - vp.alpha_beta(kk) + eps);
+		}
 
 		// beta
 		if(p.mode_mog_prior_beta){
@@ -1395,8 +1398,11 @@ public:
 		res += std::log(hyps.lambda(ee) + eps) * vp.alpha_gam.sum();
 		res += std::log(1.0 - hyps.lambda(ee) + eps) * ((double) n_var - vp.alpha_gam.sum());
 
-		res -= (vp.alpha_gam * (eps + vp.alpha_gam).log()).sum();
-		res -= ((1 - vp.alpha_gam) * (1 + eps - vp.alpha_gam).log()).sum();
+		// Need std::log for eps guard to work
+		for (std::uint32_t kk = 0; kk < n_var; kk++){
+			res -= vp.alpha_gam(kk) * std::log(vp.alpha_gam(kk) + eps);
+			res -= (1 - vp.alpha_gam(kk)) * std::log(1 - vp.alpha_gam(kk) + eps);
+		}
 
 		// beta
 		if(p.mode_mog_prior_gam){
