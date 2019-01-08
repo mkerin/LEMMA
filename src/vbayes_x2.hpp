@@ -1362,8 +1362,8 @@ public:
 		res += std::log(hyps.lambda(ee) + eps) * vp.alpha_beta.sum();
 		res += std::log(1.0 - hyps.lambda(ee) + eps) * ((double) n_var - vp.alpha_beta.sum());
 
-		res -= (vp.alpha_beta * vp.alpha_beta.log()).sum();
-		res -= ((1 - vp.alpha_beta) * (1 - vp.alpha_beta).log()).sum();
+		res -= (vp.alpha_beta * (eps + vp.alpha_beta).log()).sum();
+		res -= ((1 - vp.alpha_beta) * (1 + eps - vp.alpha_beta).log()).sum();
 
 		// beta
 		if(p.mode_mog_prior_beta){
@@ -1395,8 +1395,8 @@ public:
 		res += std::log(hyps.lambda(ee) + eps) * vp.alpha_gam.sum();
 		res += std::log(1.0 - hyps.lambda(ee) + eps) * ((double) n_var - vp.alpha_gam.sum());
 
-		res -= (vp.alpha_gam * vp.alpha_gam.log()).sum();
-		res -= ((1 - vp.alpha_gam) * (1 - vp.alpha_gam).log()).sum();
+		res -= (vp.alpha_gam * (eps + vp.alpha_gam).log()).sum();
+		res -= ((1 - vp.alpha_gam) * (1 + eps - vp.alpha_gam).log()).sum();
 
 		// beta
 		if(p.mode_mog_prior_gam){
