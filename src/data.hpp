@@ -1334,6 +1334,22 @@ class Data
 			}
 		}
 		std::cout << " (" << n_dxteex_computed << " computed from raw data, " << n_var - n_dxteex_computed << " read from file)" << std::endl;
+
+		if(params.mode_debug){
+			boost_io::filtering_ostream outf;
+			std::string ofile = fstream_init(outf, "", "_dxteex_dump");
+			std::cout << "Writing dxteex to " << ofile << std::endl;
+
+			outf << std::scientific << std::setprecision(8);
+			for (long jj = 0; jj < n_var; jj++) {
+				outf << G.SNPID[jj] << " " << G.chromosome[jj] << " " << G.rsid[jj] << " " << G.position[jj];
+				outf << " " << G.al_0[jj] << " " << G.al_1[jj];
+				for (int ll = 0; ll < n_env * n_env; ll++) {
+					outf << " " << dXtEEX(jj, ll);
+				}
+				outf << std::endl;
+			}
+		}
 	}
 
 	void read_grids(){
