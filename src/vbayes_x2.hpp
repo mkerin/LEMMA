@@ -128,7 +128,6 @@ public:
 		std::cout << "Initialising vbayes object" << std::endl;
 		mkl_set_num_threads_local(p.n_thread);
 
-
 		// Data size params
 		n_effects      = dat.n_effects;
 		n_var          = dat.n_var;
