@@ -352,6 +352,7 @@ void parse_arguments(parameters &p, int argc, char *argv[]) {
 
 			if(strcmp(in_str, "--mode_debug") == 0) {
 				p.mode_debug = true;
+				p.verbose = true;
 				i += 0;
 			}
 

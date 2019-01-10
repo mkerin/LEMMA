@@ -664,27 +664,34 @@ public:
 		for (int nn = 0; nn < n_grid; nn++) {
 			check_monotonic_elbo(all_hyps[nn], all_vp[nn], count, logw_prev[nn], ms);
 			if(p.mode_debug){
-				EigenDataVector aa, bb, ym = X * all_vp[nn].mean_beta().matrix() + C * all_vp[nn].muc.matrix();
+				EigenDataVector aa, bb;
+				Eigen::VectorXd rr_beta = all_vp[nn].mean_beta();
+				EigenDataVector ym = (X * rr_beta).template cast<scalarData>();
+				if(p.use_vb_on_covars){
+					ym += C * all_vp[nn].muc.matrix().cast<scalarData>();
+				}
 				aa = (ym.array() - ym.array().sum() / (double) n_samples);
 				bb = all_vp[nn].ym.array() - all_vp[nn].ym.array().sum() / (double) n_samples;
-				double corr = aa.dot(bb) / aa.squaredNorm() / bb.squaredNorm();
+				double aa_sig = std::sqrt(aa.squaredNorm() / (double) n_samples);
+				double bb_sig = std::sqrt(bb.squaredNorm() / (double) n_samples);
+				double corr = aa.dot(bb) / aa_sig / bb_sig;
 				if(corr < 1 - 1e-6){
 					std::cout << "Cor(ym, vp.ym) = " << corr << " at " << count << std::endl;
 				}
 			}
-			if(p.mode_debug){
-				EigenDataVector aa, bb, yx = X * all_vp[nn].mean_gam().matrix();
+			if(p.mode_debug && n_effects > 1){
+				EigenDataVector aa, bb;
+				Eigen::VectorXd rr_gam = all_vp[nn].mean_gam();
+				EigenDataVector yx = (X * rr_gam).template cast<scalarData>();
 				aa = (yx.array() - yx.array().sum() / (double) n_samples);
 				bb = all_vp[nn].yx.array() - all_vp[nn].yx.array().sum() / (double) n_samples;
-				double corr = aa.dot(bb) / aa.squaredNorm() / bb.squaredNorm();
+				double aa_sig = std::sqrt(aa.squaredNorm() / (double) n_samples);
+				double bb_sig = std::sqrt(bb.squaredNorm() / (double) n_samples);
+				double corr = aa.dot(bb) / aa_sig / bb_sig;
 				if(corr < 1 - 1e-6){
 					std::cout << "Cor(yx, vp.yx) = " << corr << " at " << count << std::endl;
 				}
 			}
-		}
-
-		if(p.mode_debug){
-			EigenDataVector ym = X * all_vp.
 		}
 
 		// Update env-weights
