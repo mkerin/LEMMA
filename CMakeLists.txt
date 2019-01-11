@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.7.2)
-project(bgen_prog VERSION 0.10.5)
+project(LEMMA VERSION 0.10.5)
 
 set(CMAKE_CXX_STANDARD 11)
 
@@ -13,8 +13,8 @@ if(CMAKE_CURRENT_SOURCE_DIR MATCHES /Users/kerin)
         set(LINKER_OPTS -O3 -g)
     else()
         message("Debug build")
-        set(LOC_COMPILE_OPTS -DOSX -Wno-deprecated -Wno-parentheses -DDEBUG -pg -Og -g)
-        set(LINKER_OPTS -Og -g)
+        set(LOC_COMPILE_OPTS -DOSX -Wno-deprecated -Wno-parentheses -DDEBUG -g)
+        set(LINKER_OPTS -g)
     endif()
     set(LIB-DIRS "-L${BGEN}/build/3rd_party/boost_1_55_0 -L/usr/local/opt/boost@1.55/lib")
 elseif(CMAKE_CURRENT_SOURCE_DIR MATCHES /well/marchini/kebl4230)

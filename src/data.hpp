@@ -87,6 +87,7 @@ class Data
 	Eigen::ArrayXXd snpstats;
 	Eigen::ArrayXXd external_snpstats;
 	std::vector< std::string > external_snpstats_SNPID;
+	bool bgen_pass;
 
 	boost_io::filtering_ostream outf_scan;
 
@@ -114,6 +115,7 @@ class Data
 		n_samples = (long) bgenView->number_of_samples();
 		n_var_parsed = 0;
 		filters_applied = false;
+		bgen_pass = true;
 
 		// Explicit initial values to eliminate linter errors..
 		n_pheno   = 0;
@@ -287,117 +289,19 @@ class Data
 
 	void read_full_bgen(){
 		std::cout << "Reading in BGEN" << std::endl;
+		params.chunk_size = bgenView->number_of_variants();
 		MyTimer t_readFullBgen("BGEN parsed in %ts \n");
 
 		if(params.flip_high_maf_variants){
 			std::cout << "Flipping variants with MAF > 0.5" << std::endl;
 		}
-
-		// Resize G to expected num of snps
-		long n_exp_var = bgenView->number_of_variants();
-		G.resize(n_samples, n_exp_var);
-
-
-		// Setup
-		std::vector<char> bgens_pass;
-		std::vector<long> snp_indices(4, 0);
-		for (int nn = 0; nn < params.n_thread; nn++){
-			bgens_pass.push_back(1);
-//			snp_indices.push_back(nn);
-		}
-
-		// Read in chunks of snps with multi threads
-		long n_constant_variance = 0;
-		long ch                  = 0;
-		long n_invalid = 0;
-		n_var               = 0;
-		n_var_parsed        = 0; //mutex locked
-		// dxteex_cnt          = 0; //mutex locked
-		bool any_bgens_pass = true;
-		std::thread bgen_threads[params.n_bgen_thread];
-		while(any_bgens_pass){
-			// Read in chunk w/ multiple threads
-#ifdef DEBUG
-			read_bgen_chunk(bgenViews[0], snp_indices[0], bgens_pass[0], 0);
-			for (int nn = 1; nn < params.n_bgen_thread; nn++){
-				read_bgen_chunk(bgenViews[nn], snp_indices[nn], bgens_pass[nn], nn);
-			}
-#else
-			for (int nn = 1; nn < params.n_bgen_thread; nn++){
-				bgen_threads[nn] = std::thread( [this, &bgens_pass, &snp_indices, nn] {
-					read_bgen_chunk(bgenViews[nn], snp_indices[nn], bgens_pass[nn], nn);
-				});
-			}
-			read_bgen_chunk(bgenViews[0], snp_indices[0], bgens_pass[0], 0);
-			for (int nn = 1; nn < params.n_bgen_thread; nn++){
-			 	bgen_threads[nn].join();
-			}
-#endif
-
-			// Check chunk for invalid SNPs
-			std::vector<long> valid_cols;
-			for (long jj = n_var; jj < n_var_parsed - n_invalid; jj++){
-				double sigma  = G.compressed_dosage_sds[jj];
-				double d1     = G.compressed_dosage_means[jj] * (double) n_samples;
-				if (params.maf_lim && (G.maf[jj] < params.min_maf || G.maf[jj] > 1 - params.min_maf)) {
-					continue;
-				}
-				if (params.info_lim && G.info[jj] < params.min_info) {
-					continue;
-				}
-				if(!params.keep_constant_variants && d1 < 5.0){
-					n_constant_variance++;
-					continue;
-				}
-				if(!params.keep_constant_variants && sigma <= 1e-12){
-					n_constant_variance++;
-					continue;
-				}
-				valid_cols.push_back(jj);
-			}
-
-			// Remove invalid snps and update indexes
-			for (long jj = 0; jj < valid_cols.size(); jj++) {
-				auto old_index = valid_cols[jj];
-				auto new_index = jj + n_var;
-				if(old_index != new_index){
-					G.move_variant(old_index, new_index);
-					// dXtEEX.col(new_index) = dXtEEX.col(old_index);
-				}
-			}
-			long invalid_snps_in_chunk = n_var_parsed - ch * params.chunk_size - valid_cols.size();
-			for (int nn = 0; nn < snp_indices.size(); nn++){
-				snp_indices[nn] -= invalid_snps_in_chunk;
-			}
-
-			// Report progress
-			if((ch+1) % 100 == 0){
-				std::cout << "Chunk " << ch+1 << " completed (";
-				std::cout << n_var_parsed-1 << "/" << bgenView->number_of_variants();
-				std::cout << " variants parsed)" << std::endl;
-			}
-
-			any_bgens_pass = std::any_of(bgens_pass.begin(), bgens_pass.end(), [](const bool& v) { return v; });
-			ch++;
-			n_var += valid_cols.size();
-			n_invalid += invalid_snps_in_chunk;
-		}
-
-		// double check snp indexes
-		G.conservativeResize(n_samples, n_var);
-
-		if(n_constant_variance > 0){
-			std::cout << n_constant_variance << " variants removed due to ";
-			std::cout << "constant variance" << std::endl;
-		}
-
+		t_readFullBgen.resume();
+		read_bgen_chunk();
+		t_readFullBgen.stop();
 		std::cout << "BGEN contained " << n_var << " variants." << std::endl;
 	}
 
-	void read_bgen_chunk(genfile::bgen::View::UniquePtr& myBgenView,
-                         long int& snp_index,
-                         char& bgen_pass_char,
-                         const int& thread_num) {
+	bool read_bgen_chunk() {
 		// Wrapper around BgenView to read in a 'chunk' of data. Remembers
 		// if last call hit the EOF, and returns false if so.
 		// Assumed that:
@@ -406,7 +310,7 @@ class Data
 		// - scale + centering happening internally
 
 		// Exit function if last call hit EOF.
-		bool bgen_pass = (bool) bgen_pass_char;
+		if (!bgen_pass) return false;
 
 		// Temporary variables to store info from read_variant()
 		std::string chr_j ;
@@ -421,32 +325,25 @@ class Data
 		double dosage_mean, dosage_sigma, missing_calls = 0.0;
 		int n_var_incomplete = 0;
 
-		long jj = 0;
-		while ( jj < params.chunk_size && bgen_pass ) {
-			// Skip variants that other threads are due to read
-			while(bgen_pass && ((snp_index % params.n_thread) != thread_num) && jj < params.chunk_size) {
-				bgen_pass = myBgenView->read_variant( &SNPID_j, &rsid_j, &chr_j, &pos_j, &alleles_j );
-				if(bgen_pass) {
-					myBgenView->ignore_genotype_data_block();
-					jj += 1;
-					snp_index++;
-				}
-			}
-			if (!bgen_pass) break;
-			if (jj >= params.chunk_size) break;
+		// Resize genotype matrix
+		G.resize(n_samples, params.chunk_size);
 
-			bgen_pass = myBgenView->read_variant( &SNPID_j, &rsid_j, &chr_j, &pos_j, &alleles_j );
+		long int n_constant_variance = 0;
+		std::uint32_t jj = 0;
+		while ( jj < params.chunk_size && bgen_pass ) {
+			bgen_pass = bgenView->read_variant( &SNPID_j, &rsid_j, &chr_j, &pos_j, &alleles_j );
 			if (!bgen_pass) break;
+			n_var_parsed++;
 
 			// Read probs + check maf filter
-			myBgenView->read_genotype_data_block( setter );
+			bgenView->read_genotype_data_block( setter );
 
 			// maf + info filters; computed on valid sample_ids & variants whose alleles
 			// sum to 1
 			std::map<int, bool> missing_genos;
 			Eigen::ArrayXd dosage_j(n_samples);
 			double f2 = 0.0, valid_count = 0.0;
-			long ii_obs = 0;
+			std::uint32_t ii_obs = 0;
 			for( std::size_t ii = 0; ii < probs.size(); ii++ ) {
 				if (incomplete_cases.count(ii) == 0) {
 					f1 = dosage = check = 0.0;
@@ -473,15 +370,15 @@ class Data
 			double maf_j = d1 / (2.0 * valid_count);
 
 			// Flip dosage vector if maf > 0.5
-			// NB: info invariant to flipping
 			if(params.flip_high_maf_variants && maf_j > 0.5){
 				dosage_j = (2.0 - dosage_j);
-				for (long ii = 0; ii < n_samples; ii++){
+				for (std::uint32_t ii = 0; ii < n_samples; ii++){
 					if (missing_genos.count(ii) > 0){
 						dosage_j[ii] = 0.0;
 					}
 				}
 
+				f2       = 4.0 * valid_count - 4.0 * d1 + f2;
 				d1       = dosage_j.sum();
 				maf_j    = d1 / (2.0 * valid_count);
 			}
@@ -496,17 +393,33 @@ class Data
 			double sigma = (dosage_j - mu).square().sum();
 			sigma = std::sqrt(sigma/(valid_count - 1.0));
 
+			// Filters
+			if (params.maf_lim && (maf_j < params.min_maf || maf_j > 1 - params.min_maf)) {
+				continue;
+			}
+			if (params.info_lim && info_j < params.min_info) {
+				continue;
+			}
+			if(!params.keep_constant_variants && d1 < 5.0){
+				n_constant_variance++;
+				continue;
+			}
+			if(!params.keep_constant_variants && sigma <= 1e-12){
+				n_constant_variance++;
+				continue;
+			}
+
 			// filters passed; write contextual info
-			G.al_0[snp_index]     = alleles_j[0];
-			G.al_1[snp_index]     = alleles_j[1];
-			G.maf[snp_index]      = maf_j;
-			G.info[snp_index]     = info_j;
-			G.rsid[snp_index]     = rsid_j;
-			G.chromosome[snp_index] = std::stoi(chr_j);
-			G.position[snp_index] = pos_j;
+			G.al_0[jj]     = alleles_j[0];
+			G.al_1[jj]     = alleles_j[1];
+			G.maf[jj]      = maf_j;
+			G.info[jj]     = info_j;
+			G.rsid[jj]     = rsid_j;
+			G.chromosome[jj] = std::stoi(chr_j);
+			G.position[jj] = pos_j;
 			std::string key_j = chr_j + "~" + std::to_string(pos_j) + "~" + alleles_j[0] + "~" + alleles_j[1];
-			G.SNPKEY[snp_index]   = key_j;
-			G.SNPID[snp_index]    = SNPID_j;
+			G.SNPKEY[jj]   = key_j;
+			G.SNPID[jj] = SNPID_j;
 
 			// filters passed; write dosage to G
 			// Note that we only write dosage for valid sample ids
@@ -514,47 +427,46 @@ class Data
 			if(!missing_genos.empty()){
 				n_var_incomplete += 1;
 				missing_calls += (double) missing_genos.size();
-				for (long ii = 0; ii < n_samples; ii++){
+				for (std::uint32_t ii = 0; ii < n_samples; ii++){
 					if (missing_genos.count(ii) > 0){
 						dosage_j[ii] = mu;
 					}
 				}
 			}
 
-			for (long ii = 0; ii < n_samples; ii++){
-				G.assign_index(ii, snp_index, dosage_j[ii]);
+			for (std::uint32_t ii = 0; ii < n_samples; ii++){
+				G.assign_index(ii, jj, dosage_j[ii]);
 			}
+			// G.compressed_dosage_sds[jj] = sigma;
+			// G.compressed_dosage_means[jj] = mu;
 
-			// NB: these get recomputed after compression
-			G.compressed_dosage_sds[snp_index] = sigma;
-			G.compressed_dosage_means[snp_index] = mu;
-
-			jj += 1;
-			snp_index++;
-			mtx.lock();
-			n_var_parsed++;
-			mtx.unlock();
+			jj++;
 		}
 
 		// need to resize G whilst retaining existing coefficients if while
 		// loop exits early due to EOF.
-		// G.conservativeResize(n_samples, jj);
-		// assert( G.rsid.size() == jj );
-		// n_var = jj;
+		G.conservativeResize(n_samples, jj);
+		assert( G.rsid.size() == jj );
+		n_var = jj;
 
-		// chunk_missingness = missing_calls / (double) (n_var * n_samples);
-		// if(chunk_missingness > 0.0){
-		// 	std::cout << "Chunk missingness " << chunk_missingness << "(";
- 		// 	std::cout << n_var_incomplete << "/" << n_var;
-		// 	std::cout << " variants incomplete)" << std::endl;
-		// }
-		//
-		// if(n_constant_variance > 0){
-		// 	std::cout << n_constant_variance << " variants removed due to ";
-		// 	std::cout << "constant variance" << std::endl;
-		// }
+		chunk_missingness = missing_calls / (double) (n_var * n_samples);
+		if(chunk_missingness > 0.0){
+			std::cout << "Chunk missingness " << chunk_missingness << "(";
+			std::cout << n_var_incomplete << "/" << n_var;
+			std::cout << " variants incomplete)" << std::endl;
+		}
 
-		if (!bgen_pass) bgen_pass_char = 0;
+		if(n_constant_variance > 0){
+			std::cout << n_constant_variance << " variants removed due to ";
+			std::cout << "constant variance" << std::endl;
+		}
+
+		if(jj == 0){
+			// Immediate EOF
+			return false;
+		} else {
+			return true;
+		}
 	}
 
 	void read_incl_rsids(){
@@ -699,7 +611,7 @@ class Data
 
 		// Reading column names
 		if (!getline(fg, line)) {
-			std::cout << "ERROR: " << filename << " not read." << std::endl;
+			std::cout << "ERROR: " << filename << " contains zero lines." << std::endl;
 			std::exit(EXIT_FAILURE);
 		}
 		std::stringstream ss;
@@ -779,7 +691,7 @@ class Data
 
 		// Reading column names
 		if (!getline(fg, line)) {
-			std::cout << "ERROR: " << filename << " not read." << std::endl;
+			std::cout << "ERROR: " << filename << " contains zero lines." << std::endl;
 			std::exit(EXIT_FAILURE);
 		}
 		std::stringstream ss;
@@ -873,7 +785,7 @@ class Data
 		// Reading column names
 		std::string line;
 		if (!getline(fg, line)) {
-			std::cout << "ERROR: " << filename << " not read." << std::endl;
+			std::cout << "ERROR: " << filename << " contains zero lines." << std::endl;
 			std::exit(EXIT_FAILURE);
 		}
 		std::stringstream ss;
@@ -953,7 +865,7 @@ class Data
 		// Reading column names
 		std::string line;
 		if (!getline(fg, line)) {
-			std::cout << "ERROR: " << filename << " not read." << std::endl;
+			std::cout << "ERROR: " << filename << " contains zero lines." << std::endl;
 			std::exit(EXIT_FAILURE);
 		}
 		std::stringstream ss;
@@ -1188,7 +1100,7 @@ class Data
 
 		// Reading column names
 		if (!getline(fg, line)) {
-			std::cout << "ERROR: " << filename << " not read." << std::endl;
+			std::cout << "ERROR: " << filename << " contains zero lines" << std::endl;
 			std::exit(EXIT_FAILURE);
 		}
 		std::stringstream ss;
@@ -1315,10 +1227,11 @@ class Data
 		EigenDataArrayX cl_j;
 		scalarData dztz_lmj;
 		dXtEEX.resize(n_var, n_env * n_env);
-		std::vector<std::string>::iterator it;
 		n_dxteex_computed = 0;
+		int dxteex_check = 0, se_cnt = 0;
+		double mean_ae = 0, max_ae = 0;
 		for (std::size_t jj = 0; jj < n_var; jj++){
-			it = std::find(external_dXtEEX_SNPID.begin(), external_dXtEEX_SNPID.end(), G.SNPID[jj]);
+			auto it = std::find(external_dXtEEX_SNPID.begin(), external_dXtEEX_SNPID.end(), G.SNPID[jj]);
 			if (it == external_dXtEEX_SNPID.end()){
 				n_dxteex_computed++;
 				cl_j = G.col(jj);
@@ -1331,7 +1244,29 @@ class Data
 				}
 			} else {
 				dXtEEX.row(jj) = external_dXtEEX.row(it - external_dXtEEX_SNPID.begin());
+				if(dxteex_check < 100){
+					dxteex_check++;
+					cl_j = G.col(jj);
+					for (int ll = 0; ll < n_env; ll++){
+						for (int mm = 0; mm <= ll; mm++){
+							dztz_lmj = (cl_j * E.array().col(ll) * E.array().col(mm) * cl_j).sum();
+							double x1 = std::abs(dXtEEX(jj, ll*n_env + mm) - dztz_lmj);
+							double x2 = std::abs(dXtEEX(jj, mm*n_env + ll) - dztz_lmj);
+							max_ae = std::max(x1, max_ae);
+							max_ae = std::max(x2, max_ae);
+							mean_ae += x1;
+							mean_ae += x2;
+							se_cnt++;
+						}
+					}
+				}
 			}
+		}
+		if(params.dxteex_file != "NULL" && n_dxteex_computed < n_var) {
+			mean_ae /= (double) se_cnt;
+			std::cout << "Checking correlations from 100 SNPs" << std::endl;
+			std::cout << " - max absolute error = " << max_ae << std::endl;
+			std::cout << " - mean absolute error = " << mean_ae << std::endl;
 		}
 		std::cout << " (" << n_dxteex_computed << " computed from raw data, " << n_var - n_dxteex_computed << " read from file)" << std::endl;
 	}
