@@ -26,7 +26,7 @@ class parameters {
 		bool mode_alternating_updates;
 		bool restrict_gamma_updates, mode_no_gxe, mode_debug;
 		bool init_weights_with_snpwise_scan, flip_high_maf_variants, min_spike_diff_set;
-		bool mode_mog_prior_beta, mode_mog_prior_gam;
+		bool mode_mog_prior_beta, mode_mog_prior_gam, mode_random_start;
 		double min_maf, min_info, elbo_tol, alpha_tol, gamma_updates_thresh;
 		double spike_diff_factor, min_spike_diff_factor;
 		std::vector < std::string > incl_sample_ids, gconf;
@@ -70,11 +70,12 @@ class parameters {
 		mode_empirical_bayes = false;
 		mode_alternating_updates = false;
 		low_mem = true;
-		mode_vb = false;
+		mode_vb = true;
 		mode_no_gxe = false;
 		mode_mog_prior_beta = false;
 		mode_mog_prior_gam = false;
 		mode_debug = false;
+		mode_random_start = false;
 		select_snps = false;
 		select_rsid = false;
 		geno_check = true; // check allele probs sum to 1 by default

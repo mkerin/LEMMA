@@ -107,7 +107,7 @@ class Data
 
 		// Create vector of bgen views for mutlithreading
 		bgenView = genfile::bgen::View::create(p.bgen_file);
-		for (int nn = 0; nn < params.n_thread; nn++){
+		for (int nn = 0; nn < params.n_bgen_thread; nn++){
 			genfile::bgen::View::UniquePtr bgenView = genfile::bgen::View::create(p.bgen_file);
 			bgenViews.push_back(std::move(bgenView));
 		}
@@ -140,7 +140,7 @@ class Data
 		// filter - init queries
 		genfile::bgen::IndexQuery::UniquePtr query = genfile::bgen::IndexQuery::create(params.bgi_file);
 		std::vector<genfile::bgen::IndexQuery::UniquePtr> queries;
-		for (int nn = 0; nn < params.n_thread; nn++){
+		for (int nn = 0; nn < params.n_bgen_thread; nn++){
 			genfile::bgen::IndexQuery::UniquePtr my_query = genfile::bgen::IndexQuery::create(params.bgi_file);
 			queries.push_back(move(my_query));
 		}
@@ -151,7 +151,7 @@ class Data
 			genfile::bgen::IndexQuery::GenomicRange rr1(params.chr, params.range_start, params.range_end);
 			query->include_range( rr1 );
 
-			for (int nn = 0; nn < params.n_thread; nn++){
+			for (int nn = 0; nn < params.n_bgen_thread; nn++){
 				queries[nn]->include_range( rr1 );
 			}
 		}
@@ -162,7 +162,7 @@ class Data
 			std::cout << "Filtering SNPs by rsid..." << std::endl;
 			query->include_rsids( rsid_list );
 
-			for (int nn = 0; nn < params.n_thread; nn++){
+			for (int nn = 0; nn < params.n_bgen_thread; nn++){
 				queries[nn]->include_rsids( rsid_list );
 			}
 		}
@@ -177,26 +177,24 @@ class Data
 			}
 			query->include_rsids( params.rsid );
 
-			for (int nn = 0; nn < params.n_thread; nn++){
+			for (int nn = 0; nn < params.n_bgen_thread; nn++){
 				queries[nn]->include_rsids( params.rsid );
 			}
 		}
 
 		// filter - apply queries
 		query->initialise();
-		for (int nn = 0; nn < params.n_thread; nn++){
+		for (int nn = 0; nn < params.n_bgen_thread; nn++){
 			queries[nn]->initialise();
 		}
 
 		bgenView->set_query( query );
-		for (int nn = 0; nn < params.n_thread; nn++){
+		for (int nn = 0; nn < params.n_bgen_thread; nn++){
 			bgenViews[nn]->set_query( queries[nn] );
 		}
 
 		// print summaries
-		for (int nn = 0; nn < params.n_thread; nn++){
-			bgenViews[nn]->summarise(std::cout);
-		}
+		bgenView->summarise(std::cout);
 
 		filters_applied = true;
 	}
@@ -233,9 +231,9 @@ class Data
 		// Exclude samples with missing values in phenos / covars / filters
 		reduce_to_complete_cases();
 
-		// Read in grids for importance sampling
-		if (params.mode_vb) {
-			read_grids();
+		// Read in hyperparameter values
+		if(params.hyps_grid_file != "NULL") {
+			read_hyps();
 		}
 
 		if(n_env > 1 && params.dxteex_file != "NULL"){
@@ -244,11 +242,6 @@ class Data
 
 		if(params.snpstats_file != "NULL"){
 			read_external_snpstats();
-		}
-
-		// Read starting point for VB approximation if provided
-		if(params.mode_vb && params.vb_init_file != "NULL"){
-			// read_alpha_mu();
 		}
 	}
 
@@ -584,7 +577,6 @@ class Data
 	void read_grid_file( const std::string& filename,
 						 Eigen::MatrixXd& M,
 						 std::vector< std::string >& col_names){
-		// Used in mode_vb only.
 		// Slightly different from read_txt_file in that I don't know
 		// how many rows there will be and we can assume no missing values.
 
@@ -663,7 +655,6 @@ class Data
                            Eigen::MatrixXd& M,
                            std::vector< std::string >& col_names,
                            std::vector< std::string >& init_key){
-		// Used in mode_vb only.
 		// Need custom function to deal with variable input. Sometimes
 		// we have string columns with rsid / a0 etc
 		// init_chr, init_pos, init_a0, init_a1;
@@ -1264,14 +1255,14 @@ class Data
 		}
 		if(params.dxteex_file != "NULL" && n_dxteex_computed < n_var) {
 			mean_ae /= (double) se_cnt;
-			std::cout << "Checking correlations from 100 SNPs" << std::endl;
+			std::cout << "Checking correlations from first 100 SNPs" << std::endl;
 			std::cout << " - max absolute error = " << max_ae << std::endl;
 			std::cout << " - mean absolute error = " << mean_ae << std::endl;
 		}
 		std::cout << " (" << n_dxteex_computed << " computed from raw data, " << n_var - n_dxteex_computed << " read from file)" << std::endl;
 	}
 
-	void read_grids(){
+	void read_hyps(){
 		// For use in vbayes object
 
 		std::vector< std::string > true_fixed_names = {"sigma", "sigma_b", "lambda_b"};

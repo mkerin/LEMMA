@@ -1228,7 +1228,7 @@ TEST_CASE("--dxteex case8") {
 		VB.run_inference(VB.hyps_grid, false, 2, trackers);
 		SECTION("Ex3. Vbayes_X2 inference correct"){
 			CHECK(trackers[0].count == 30);
-			CHECK(trackers[0].logw == Approx(-1159.4332292021));
+			CHECK(trackers[0].logw == Approx(-1158.983815245));
 		}
 	}
 }

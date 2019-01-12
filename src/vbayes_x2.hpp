@@ -139,6 +139,14 @@ public:
 		env_names      = dat.env_names;
 		N              = (double) n_samples;
 
+
+		random_params_init = false;
+		if(p.user_requests_round1){
+			run_round1     = true;
+		} else {
+			run_round1     = false;
+		}
+
 //		// env-main effects
 //		if(p.use_vb_on_covars) {
 //			n_covar = dat.n_env + dat.n_covar;
@@ -255,66 +263,66 @@ public:
 			gxe_fwd_pass_chunks.clear();
 		}
 
-		// non random initialisation
+		// Generate initial values for each run
 		if(p.vb_init_file != "NULL"){
-			std::cout << "Initialisation - set from file" << std::endl;
+			std::cout << "Beta and gamma initialised from file" << std::endl;
 
-			// Main effects
 			vp_init.alpha_beta     = dat.alpha_init.col(0);
 			vp_init.mu1_beta       = dat.mu_init.col(0);
-			vp_init.s1_beta_sq     = Eigen::ArrayXd::Zero(n_var);
-
-			if(p.mode_mog_prior_beta){
-				vp_init.mu2_beta   = Eigen::ArrayXd::Zero(n_var);
-				vp_init.s2_beta_sq = Eigen::ArrayXd::Zero(n_var);
-			}
-
 			// Interaction effects
 			if(n_effects > 1) {
 				assert(dat.alpha_init.cols() > 1);
-
 				vp_init.alpha_gam     = dat.alpha_init.col(1);
 				vp_init.mu1_gam       = dat.mu_init.col(1);
-				vp_init.s1_gam_sq     = Eigen::ArrayXd::Zero(n_var);
-
-				if (p.mode_mog_prior_gam) {
-					vp_init.mu2_gam   = Eigen::ArrayXd::Zero(n_var);
-					vp_init.s2_gam_sq = Eigen::ArrayXd::Zero(n_var);
-				}
-
-				// Env Weights
-				if(p.env_weights_file != "NULL"){
-					vp_init.muw     = dat.E_weights.col(0);
-				} else if (n_env > 1 && p.init_weights_with_snpwise_scan){
-					calc_snpwise_regression(vp_init);
-				} else {
-					vp_init.muw.resize(n_env);
-					vp_init.muw     = 1.0 / (double) n_env;
-				}
-
-				// cast used if DATA_AS_FLOAT
-				vp_init.eta     = E.matrix() * vp_init.muw.matrix().cast<scalarData>();
-				vp_init.eta_sq  = vp_init.eta.cwiseProduct(vp_init.eta);
 			}
-
-			// Covars
-			if(p.use_vb_on_covars){
-				vp_init.muc   = Eigen::ArrayXd::Zero(n_covar);
-			}
-
-
-			// ym, yx
-			calcPredEffects(vp_init);
 
 			random_params_init = false;
-			run_round1         = false;
-			if(p.user_requests_round1){
-				run_round1     = true;
-			}
-		} else {
+		} else if (p.mode_random_start){
+			std::cout << "Beta and gamma initialised with random draws" << std::endl;
 			random_params_init = true;
-			run_round1         = true;
+		} else {
+			std::cout << "Beta and gamma initialised at zero" << std::endl;
+			// zero initialisation
+			vp_init.alpha_beta    = Eigen::ArrayXd::Zero(n_var);
+			vp_init.mu1_beta       = Eigen::ArrayXd::Zero(n_var);
+
+			if(n_effects > 1) {
+				vp_init.alpha_gam = Eigen::ArrayXd::Zero(n_var);
+				vp_init.mu1_gam   = Eigen::ArrayXd::Zero(n_var);
+			}
 		}
+
+		vp_init.s1_beta_sq     = Eigen::ArrayXd::Zero(n_var);
+		if(p.mode_mog_prior_beta){
+			vp_init.mu2_beta   = Eigen::ArrayXd::Zero(n_var);
+			vp_init.s2_beta_sq = Eigen::ArrayXd::Zero(n_var);
+		}
+
+		if(n_effects > 1) {
+			vp_init.s1_gam_sq     = Eigen::ArrayXd::Zero(n_var);
+			if (p.mode_mog_prior_gam) {
+				vp_init.mu2_gam   = Eigen::ArrayXd::Zero(n_var);
+				vp_init.s2_gam_sq = Eigen::ArrayXd::Zero(n_var);
+			}
+
+			// Env Weights
+			if(p.env_weights_file != "NULL"){
+				vp_init.muw     = dat.E_weights.col(0);
+			} else if (n_env > 1 && p.init_weights_with_snpwise_scan){
+				calc_snpwise_regression(vp_init);
+			} else {
+				vp_init.muw.resize(n_env);
+				vp_init.muw     = 1.0 / (double) n_env;
+			}
+
+			// cast used if DATA_AS_FLOAT
+			vp_init.eta     = E.matrix() * vp_init.muw.matrix().cast<scalarData>();
+			vp_init.eta_sq  = vp_init.eta.cwiseProduct(vp_init.eta);
+		}
+		if(p.use_vb_on_covars){
+			vp_init.muc   = Eigen::ArrayXd::Zero(n_covar);
+		}
+		calcPredEffects(vp_init); // ym, yx
 
 		// Assign data - hyperparameters
 		hyps_grid           = dat.hyps_grid;
