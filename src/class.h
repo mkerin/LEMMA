@@ -49,7 +49,7 @@ class parameters {
 		incl_rsids_file("NULL"),
 		dxteex_file("NULL"),
 		env_weights_file("NULL") {
-		flip_high_maf_variants = true;
+		flip_high_maf_variants = false;
 		init_weights_with_snpwise_scan = false;
 		restrict_gamma_updates = false;
 		n_thread = 1;
@@ -59,7 +59,11 @@ class parameters {
 		interaction_analysis = false;
 		chunk_size = 256;
 		main_chunk_size = 64;
+#ifdef DATA_AS_FLOAT
 		gxe_chunk_size = 16;
+#else
+		gxe_chunk_size = 8;
+#endif
 		missing_code = -999;
 		vb_iter_max = 10000;
 		spike_diff_factor = 1000000.0; // Initial diff in variance of spike & slab
@@ -72,8 +76,8 @@ class parameters {
 		low_mem = true;
 		mode_vb = true;
 		mode_no_gxe = false;
-		mode_mog_prior_beta = false;
-		mode_mog_prior_gam = false;
+		mode_mog_prior_beta = true;
+		mode_mog_prior_gam = true;
 		mode_debug = false;
 		mode_random_start = false;
 		select_snps = false;
@@ -81,7 +85,7 @@ class parameters {
 		geno_check = true; // check allele probs sum to 1 by default
 		verbose = false;
 		xtra_verbose = false;
-		use_vb_on_covars = false;
+		use_vb_on_covars = true;
 		alpha_tol_set_by_user = false;
 		elbo_tol_set_by_user = false;
 		keep_constant_variants = false;

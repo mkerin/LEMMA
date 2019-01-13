@@ -40,9 +40,6 @@ int main( int argc, char** argv ) {
 
 		data.apply_filters();
 
-		// Summary info
-		data.bgenView->summarise(std::cout);
-
 		// Simple approach for the moment; don't bother about covariates etc
 
 		data.read_non_genetic_data();

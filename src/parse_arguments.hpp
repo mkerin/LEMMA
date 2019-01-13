@@ -99,7 +99,9 @@ void parse_arguments(parameters &p, int argc, char *argv[]) {
 		"--mode_vb",
 		"--mode_empirical_bayes",
 		"--effects_prior_mog",
+		"--mode_spike_slab",
 		"--use_vb_on_covars",
+        "--mode_regress_out_covars",
 		"--threads",
 		"--low_mem",
 		"--high_mem",
@@ -315,6 +317,12 @@ void parse_arguments(parameters &p, int argc, char *argv[]) {
 				i += 0;
 			}
 
+            if(strcmp(in_str, "--mode_spike_slab") == 0) {
+				p.mode_mog_prior_beta = false;
+				p.mode_mog_prior_gam = false;
+				i += 0;
+			}
+
 			if(strcmp(in_str, "--mode_mog_beta") == 0) {
 				p.mode_mog_prior_beta = true;
 				i += 0;
@@ -332,6 +340,11 @@ void parse_arguments(parameters &p, int argc, char *argv[]) {
 
 			if(strcmp(in_str, "--use_vb_on_covars") == 0) {
 				p.use_vb_on_covars = true;
+				i += 0;
+			}
+
+            if(strcmp(in_str, "--mode_regress_out_covars") == 0) {
+				p.use_vb_on_covars = false;
 				i += 0;
 			}
 
