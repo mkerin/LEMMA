@@ -240,7 +240,7 @@ class Data
 			read_external_dxteex();
 		}
 
-		if(params.snpstats_file != "NULL"){
+		if(params.snpstats_file != "NULL" && params.init_weights_with_snpwise_scan){
 			read_external_snpstats();
 		}
 	}
