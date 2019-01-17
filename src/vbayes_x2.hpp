@@ -798,8 +798,14 @@ public:
 			}
 
 			if(p.mode_debug) {
-				for (int nn = 0; nn < n_grid; nn++) {
-					check_monotonic_elbo(all_hyps[nn], all_vp[nn], count, logw_prev[nn], "updateAlphaMu_internal");
+				if(ee == 0) {
+					for (int nn = 0; nn < n_grid; nn++) {
+						check_monotonic_elbo(all_hyps[nn], all_vp[nn], count, logw_prev[nn], "updateAlphaMu_main_internal");
+					}
+				} else {
+					for (int nn = 0; nn < n_grid; nn++) {
+						check_monotonic_elbo(all_hyps[nn], all_vp[nn], count, logw_prev[nn], "updateAlphaMu_gxe_internal");
+					}
 				}
 			}
 		}

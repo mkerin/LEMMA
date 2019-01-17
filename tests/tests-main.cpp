@@ -107,54 +107,147 @@ TEST_CASE( "Algebra in Eigen3" ) {
 TEST_CASE("Data") {
 	parameters p;
 
-	p.env_file = "data/io_test/age.txt";
+	p.env_file = "data/io_test/n50_p100_env.txt";
 	p.pheno_file = "data/io_test/pheno.txt";
 
-	SECTION("n50_p100.bgen + non genetic data") {
+	SECTION("n50_p100.bgen (low mem) w covars") {
+		p.covar_file = "data/io_test/age.txt";
 		p.bgen_file = "data/io_test/n50_p100.bgen";
 		p.bgi_file = "data/io_test/n50_p100.bgen.bgi";
+		p.low_mem = true;
+		Data data(p);
+
+		data.read_non_genetic_data();
+		CHECK(data.n_env == 4);
+		CHECK(data.E(0, 0) == Approx(0.785198212));
+
+		data.standardise_non_genetic_data();
+		CHECK(data.params.use_vb_on_covars);
+		CHECK(data.E(0, 0) == Approx(0.9959851422));
+
+		data.read_full_bgen();
+		SECTION("Ex1. bgen read in & standardised correctly") {
+			CHECK(data.G.low_mem);
+			CHECK(data.params.low_mem);
+			CHECK(!data.params.flip_high_maf_variants);
+			CHECK(data.G(0, 0) == Approx(-1.8575040711));
+			CHECK(data.G(0, 1) == Approx(-0.7404793547));
+			CHECK(data.G(0, 2) == Approx(-0.5845122102));
+			CHECK(data.G(0, 3) == Approx(-0.6633007506));
+			CHECK(data.n_var == 67);
+		}
+
+		SECTION("dXtEEX computed correctly") {
+			data.calc_dxteex();
+			CHECK(data.dXtEEX(0, 0) == Approx(42.2994405499));
+			CHECK(data.dXtEEX(1, 0) == Approx(43.2979303929));
+			CHECK(data.dXtEEX(2, 0) == Approx(37.6440444004));
+			CHECK(data.dXtEEX(3, 0) == Approx(40.9258647207));
+
+			CHECK(data.dXtEEX(0, 4) == Approx(-4.0453940676));
+			CHECK(data.dXtEEX(1, 4) == Approx(-15.6140263169));
+			CHECK(data.dXtEEX(2, 4) == Approx(-13.2508795732));
+			CHECK(data.dXtEEX(3, 4) == Approx(-9.8081456731));
+		}
+	}
+
+	SECTION("n50_p100.bgen (low mem), covars, sample subset") {
+		p.covar_file = "data/io_test/age.txt";
+		p.bgen_file = "data/io_test/n50_p100.bgen";
+		p.bgi_file = "data/io_test/n50_p100.bgen.bgi";
+		p.incl_sids_file = "data/io_test/sample_ids.txt";
+		p.low_mem = true;
+		Data data(p);
+
+		data.read_non_genetic_data();
+		CHECK(data.n_env == 4);
+		CHECK(data.E(0, 0) == Approx(0.785198212));
+
+		data.standardise_non_genetic_data();
+		CHECK(data.params.use_vb_on_covars);
+		CHECK(data.E(0, 0) == Approx(0.8123860763));
+
+		data.read_full_bgen();
+
+		SECTION("dXtEEX computed correctly") {
+			data.calc_dxteex();
+			CHECK(data.dXtEEX(0, 0) == Approx(23.2334219303));
+			CHECK(data.dXtEEX(1, 0) == Approx(27.9920667408));
+			CHECK(data.dXtEEX(2, 0) == Approx(24.7041225993));
+			CHECK(data.dXtEEX(3, 0) == Approx(24.2423580715));
+
+			CHECK(data.dXtEEX(0, 4) == Approx(-1.056112897));
+			CHECK(data.dXtEEX(1, 4) == Approx(-8.526431457));
+			CHECK(data.dXtEEX(2, 4) == Approx(-6.5950206611));
+			CHECK(data.dXtEEX(3, 4) == Approx(-3.6842212598));
+		}
+	}
+
+	SECTION("n50_p100.bgen (low mem) + non genetic data") {
+		p.bgen_file = "data/io_test/n50_p100.bgen";
+		p.bgi_file = "data/io_test/n50_p100.bgen.bgi";
+		p.low_mem = true;
 		Data data(p);
 
 		data.read_non_genetic_data();
 		SECTION("Ex1. Raw non genetic data read in accurately") {
-//            CHECK(data.n_covar == 1);
-			CHECK(data.n_env == 1);
+			CHECK(data.n_env == 4);
 			CHECK(data.n_pheno == 1);
 			CHECK(data.n_samples == 50);
 			CHECK(data.Y(0, 0) == Approx(-1.18865038973338));
-			CHECK(data.E(0, 0) == Approx(-0.33472645347487201));
+			CHECK(data.E(0, 0) == Approx(0.785198212));
 		}
 //
 		data.standardise_non_genetic_data();
 		SECTION("Check non genetic data standardised + covars regressed") {
-			CHECK(data.params.scale_pheno == true);
-			CHECK(data.params.use_vb_on_covars == false);
+			CHECK(data.params.scale_pheno);
+			CHECK(data.params.use_vb_on_covars);
 			CHECK(data.params.covar_file == "NULL");
 //			CHECK(data.Y(0,0) == Approx(-3.6676363273605137)); Centered
-//			CHECK(data.Y(0,0) == Approx(-1.5800573524786081)); Scaled
-			CHECK(data.Y(0, 0) == Approx(-1.262491384814441));
-			CHECK(data.Y2(0, 0) == Approx(-1.262491384814441));
-			CHECK(data.E(0, 0) == Approx(-0.58947939694779772));
+			CHECK(data.Y(0,0) == Approx(-1.5800573524786081));
+			CHECK(data.Y2(0, 0) == Approx(-1.5567970303));
+			CHECK(data.E(0, 0) == Approx(0.8957059881));
 		}
 
 		data.read_full_bgen();
 		SECTION("Ex1. bgen read in & standardised correctly") {
 			CHECK(data.G.low_mem);
 			CHECK(data.params.low_mem);
-			CHECK(data.params.flip_high_maf_variants);
-			CHECK(data.G(0, 0) == Approx(1.8570984229));
-			CHECK(data.G(0, 1) == Approx(0.7526569116));
-			CHECK(data.G(0, 2) == Approx(0.596122248));
-			CHECK(data.G(0, 3) == Approx(0.6746578335));
-			CHECK(data.n_var == 64);
+			CHECK(!data.params.flip_high_maf_variants);
+			CHECK(data.G(0, 0) == Approx(-1.8575040711));
+			CHECK(data.G(0, 1) == Approx(-0.7404793547));
+			CHECK(data.G(0, 2) == Approx(-0.5845122102));
+			CHECK(data.G(0, 3) == Approx(-0.6633007506));
+			CHECK(data.n_var == 67);
+		}
+
+		SECTION("dXtEEX computed correctly") {
+			data.calc_dxteex();
+			CHECK(data.dXtEEX(0, 0) == Approx(38.9610805993));
+			CHECK(data.dXtEEX(1, 0) == Approx(38.2995451744));
+			CHECK(data.dXtEEX(2, 0) == Approx(33.7077899144));
+			CHECK(data.dXtEEX(3, 0) == Approx(35.7391671158));
+
+			CHECK(data.dXtEEX(0, 4) == Approx(-2.6239467101));
+			CHECK(data.dXtEEX(1, 4) == Approx(-13.0001255314));
+			CHECK(data.dXtEEX(2, 4) == Approx(-11.6635557299));
+			CHECK(data.dXtEEX(3, 4) == Approx(-7.2154836264));
 		}
 
 		SECTION("Ex1. Confirm calc_dxteex() reorders properly") {
-			data.params.dxteex_file = "data/io_test/inputs/dxteex_mixed.txt";
+			data.params.dxteex_file = "data/io_test/case8/dxteex_low_mem.txt";
 			data.read_external_dxteex();
 			data.calc_dxteex();
-			CHECK(data.dXtEEX(0, 0) == Approx(87.204591182113916));
-			CHECK(data.n_dxteex_computed == 1);
+			CHECK(data.dXtEEX(0, 0) == Approx(38.9610805993));
+			CHECK(data.dXtEEX(1, 0) == Approx(38.2995451744));
+			CHECK(data.dXtEEX(2, 0) == Approx(33.7077899144));
+			CHECK(data.dXtEEX(3, 0) == Approx(35.7391671158));
+
+			CHECK(data.dXtEEX(0, 4) == Approx(-2.6239467101));
+			CHECK(data.dXtEEX(1, 4) == Approx(-13.0001255314));
+			CHECK(data.dXtEEX(2, 4) == Approx(-11.6635557299));
+			CHECK(data.dXtEEX(3, 4) == Approx(-7.2154836264));
+			CHECK(data.n_dxteex_computed == 75);
 		}
 	}
 
@@ -169,28 +262,20 @@ TEST_CASE("Data") {
 		SECTION("Ex1. bgen read in & standardised correctly") {
 			CHECK(data.G.low_mem);
 			CHECK(data.params.low_mem);
-			CHECK(data.params.flip_high_maf_variants);
-			CHECK(data.G(0, 0) == Approx(-0.7105269065));
-			CHECK(data.G(0, 1) == Approx(-0.6480740698));
-			CHECK(data.G(0, 2) == Approx(-0.7105104917));
+			CHECK(!data.params.flip_high_maf_variants);
+			CHECK(data.G(0, 0) == Approx(0.7105269065));
+			CHECK(data.G(0, 1) == Approx(0.6480740698));
+			CHECK(data.G(0, 2) == Approx(0.7105195023));
 			CHECK(data.G(0, 3) == Approx(-0.586791551));
-			CHECK(data.G(0, 60) == Approx(1.4862052498));
-			CHECK(data.G(0, 61) == Approx(-0.3299831646));
-			CHECK(data.G(0, 62) == Approx(-1.0968694989));
-			CHECK(data.G(0, 63) == Approx(-0.5227553607));
-			CHECK(data.G.compressed_dosage_means(60) == Approx(0.9821875));
-			CHECK(data.G.compressed_dosage_means(61) == Approx(0.10390625));
-			CHECK(data.G.compressed_dosage_means(62) == Approx(0.68328125));
-			CHECK(data.G.compressed_dosage_means(63) == Approx(0.28359375));
-			CHECK(data.n_var == 73);
-		}
-
-		SECTION("Ex1. Confirm calc_dxteex() reorders properly") {
-			data.params.dxteex_file = "data/io_test/inputs/dxteex_mixed.txt";
-			data.read_external_dxteex();
-			data.calc_dxteex();
-			CHECK(data.dXtEEX(0, 0) == Approx(54.8912155253));
-			CHECK(data.n_dxteex_computed == 73);
+			CHECK(data.G(0, 60) == Approx(-1.4317770638));
+			CHECK(data.G(0, 61) == Approx(1.4862052498));
+			CHECK(data.G(0, 62) == Approx(-0.3299831646));
+			CHECK(data.G(0, 63) == Approx(-1.0968694989));
+			CHECK(data.G.compressed_dosage_means(60) == Approx(1.00203125));
+			CHECK(data.G.compressed_dosage_means(61) == Approx(0.9821875));
+			CHECK(data.G.compressed_dosage_means(62) == Approx(0.10390625));
+			CHECK(data.G.compressed_dosage_means(63) == Approx(0.68328125));
+			CHECK(data.n_var == 75);
 		}
 	}
 
@@ -253,6 +338,7 @@ TEST_CASE( "Example 1: single-env" ){
 
 	SECTION("Ex1. No filters applied, low mem mode"){
 		char* argv[] = { (char*) "bin/bgen_prog", (char*) "--mode_vb", (char*) "--low_mem",
+						 (char*) "--mode_spike_slab", (char*) "--mode_regress_out_covars",
 						 (char*) "--bgen", (char*) "data/io_test/n50_p100.bgen",
 						 (char*) "--out", (char*) "data/io_test/fake_age.out",
 						 (char*) "--pheno", (char*) "data/io_test/pheno.txt",
@@ -398,6 +484,7 @@ TEST_CASE( "Example 2a: multi-env + bgen over 2chr" ){
 
 	SECTION("Ex2. No filters applied, high mem mode"){
 		char* argv[] = { (char*) "bin/bgen_prog", (char*) "--mode_vb", (char*) "--high_mem",
+						 (char*) "--mode_spike_slab", (char*) "--mode_regress_out_covars",
 						 (char*) "--environment", (char*) "data/io_test/n50_p100_env.txt",
 						 (char*) "--bgen", (char*) "data/io_test/n50_p100_chr2.bgen",
 						 (char*) "--out", (char*) "data/io_test/fake_env.out",
@@ -520,7 +607,7 @@ TEST_CASE( "Example 3: multi-env w/ covars" ){
 
 	SECTION("Ex3. No filters applied, high mem mode"){
 		char* argv[] = { (char*) "bin/bgen_prog", (char*) "--mode_vb", (char*) "--high_mem",
-						 (char*) "--use_vb_on_covars",
+						 (char*) "--use_vb_on_covars", (char*) "--mode_spike_slab",
 						 (char*) "--environment", (char*) "data/io_test/n50_p100_env.txt.gz",
 						 (char*) "--bgen", (char*) "data/io_test/n50_p100.bgen",
 						 (char*) "--out", (char*) "data/io_test/fake_env.out",
@@ -854,7 +941,7 @@ TEST_CASE( "Example 6: single-env w MoG + hyps max" ){
 
 	SECTION("Ex6. No filters applied, high mem mode"){
 		char* argv[] = { (char*) "bin/bgen_prog", (char*) "--mode_vb", (char*) "--effects_prior_mog",
-						 (char*) "--vb_iter_max", (char*) "20",
+						 (char*) "--vb_iter_max", (char*) "20",  (char*) "--mode_regress_out_covars",
 						 (char*) "--mode_empirical_bayes", (char*) "--high_mem",
 						 (char*) "--bgen", (char*) "data/io_test/n50_p100.bgen",
 						 (char*) "--out", (char*) "data/io_test/fake_age.out",
@@ -1067,22 +1154,22 @@ TEST_CASE("--dxteex") {
 			CHECK(VB.n_effects == 2);
 			CHECK(VB.vp_init.muw(0) == 0.25);
 			CHECK(VB.p.init_weights_with_snpwise_scan == false);
-			CHECK(VB.dXtEEX(0, 0) == Approx(38.99636));
-			CHECK(VB.dXtEEX(1, 0) == Approx(38.3718));
-			CHECK(VB.dXtEEX(2, 0) == Approx(33.81659));
-			CHECK(VB.dXtEEX(3, 0) == Approx(35.8492));
+			CHECK(VB.dXtEEX(0, 0) == Approx(38.9610805993));
+			CHECK(VB.dXtEEX(1, 0) == Approx(38.2995451744));
+			CHECK(VB.dXtEEX(2, 0) == Approx(33.7077899144));
+			CHECK(VB.dXtEEX(3, 0) == Approx(35.7391671158));
 
-			CHECK(VB.dXtEEX(0, 4) == Approx(-2.63218));
-			CHECK(VB.dXtEEX(1, 4) == Approx(-12.96763));
-			CHECK(VB.dXtEEX(2, 4) == Approx(-11.66501));
-			CHECK(VB.dXtEEX(3, 4) == Approx(-7.20105));
+			CHECK(VB.dXtEEX(0, 4) == Approx(-2.6239467101));
+			CHECK(VB.dXtEEX(1, 4) == Approx(-13.0001255314));
+			CHECK(VB.dXtEEX(2, 4) == Approx(-11.6635557299));
+			CHECK(VB.dXtEEX(3, 4) == Approx(-7.2154836264));
 		}
 
 		std::vector< VbTracker > trackers(VB.hyps_grid.rows(), p);
 		VB.run_inference(VB.hyps_grid, false, 2, trackers);
 		SECTION("Ex3. Vbayes_X2 inference correct"){
 			CHECK(trackers[0].count == 10);
-			CHECK(trackers[0].logw == Approx(-86.6238460468));
+			CHECK(trackers[0].logw == Approx(-86.8089205664));
 		}
 	}
 
@@ -1112,12 +1199,12 @@ TEST_CASE("--dxteex") {
 			CHECK(VB.n_effects == 2);
 			CHECK(VB.vp_init.muw(0) == 0.25);
 			CHECK(VB.p.init_weights_with_snpwise_scan == false);
-			CHECK(VB.dXtEEX(0, 0) == Approx(38.99636));
+			CHECK(VB.dXtEEX(0, 0) == Approx(38.9610805993));
 			CHECK(VB.dXtEEX(1, 0) == Approx(38.3718));
 			CHECK(VB.dXtEEX(2, 0) == Approx(33.81659));
 			CHECK(VB.dXtEEX(3, 0) == Approx(35.8492));
 
-			CHECK(VB.dXtEEX(0, 4) == Approx(-2.63218));
+			CHECK(VB.dXtEEX(0, 4) == Approx(-2.6239467101));
 			CHECK(VB.dXtEEX(1, 4) == Approx(-12.96763));
 			CHECK(VB.dXtEEX(2, 4) == Approx(-11.66501));
 			CHECK(VB.dXtEEX(3, 4) == Approx(-7.20105));
@@ -1127,7 +1214,7 @@ TEST_CASE("--dxteex") {
 		VB.run_inference(VB.hyps_grid, false, 2, trackers);
 		SECTION("Ex3. Vbayes_X2 inference correct"){
 			CHECK(trackers[0].count == 10);
-			CHECK(trackers[0].logw == Approx(-86.6238460468));
+			CHECK(trackers[0].logw == Approx(-86.8089149565));
 		}
 	}
 }
@@ -1173,9 +1260,9 @@ TEST_CASE("--dxteex case8") {
 			CHECK(data.dXtEEX(3, 0) == Approx(0));
 
 			CHECK(data.dXtEEX(0, 7) == Approx(-77.6736297077));
-			CHECK(data.dXtEEX(1, 7) == Approx(-65.5542323344));
+			CHECK(data.dXtEEX(1, 7) == Approx(-65.7610340352));
 			CHECK(data.dXtEEX(2, 7) == Approx(-106.8630307306));
-			CHECK(data.dXtEEX(3, 7) == Approx(-61.8862174056));
+			CHECK(data.dXtEEX(3, 7) == Approx(-61.8754581783));
 		}
 
 		data.calc_snpstats();
@@ -1189,7 +1276,7 @@ TEST_CASE("--dxteex case8") {
 		VB.run_inference(VB.hyps_grid, false, 2, trackers);
 		SECTION("Ex3. Vbayes_X2 inference correct"){
 			CHECK(trackers[0].count == 30);
-			CHECK(trackers[0].logw == Approx(-1158.983815245));
+			CHECK(trackers[0].logw == Approx(-1158.9633597738));
 		}
 	}
 
@@ -1228,7 +1315,7 @@ TEST_CASE("--dxteex case8") {
 		VB.run_inference(VB.hyps_grid, false, 2, trackers);
 		SECTION("Ex3. Vbayes_X2 inference correct"){
 			CHECK(trackers[0].count == 30);
-			CHECK(trackers[0].logw == Approx(-1158.983815245));
+			CHECK(trackers[0].logw == Approx(-1158.9630661443));
 		}
 	}
 }
@@ -1243,6 +1330,7 @@ TEST_CASE( "Edge case 1: error in alpha" ){
 
 	SECTION("Ex1. No filters applied, low mem mode"){
 		char* argv[] = { (char*) "bin/bgen_prog", (char*) "--mode_vb", (char*) "--low_mem",
+						 (char*) "--mode_spike_slab",
 						 (char*) "--bgen", (char*) "data/io_test/n50_p100.bgen",
 						 (char*) "--out", (char*) "data/io_test/fake_age.out",
 						 (char*) "--pheno", (char*) "data/io_test/pheno.txt",
