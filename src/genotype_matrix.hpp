@@ -294,13 +294,11 @@ public:
 			Eigen::VectorXd colsums = lhs.colwise().sum().matrix().cast<double>();
 
 			// Diagnostic messages as worried about RAM
-			std::cout << "About to compute Mt_lhs" << std::endl;
 			Eigen::MatrixXd Mt_lhs(pp, lhs.cols());
 			for (int ll = 0; ll < lhs.cols(); ll++){
 				EigenRefDataVector tmp = lhs.col(ll);
 				Mt_lhs.col(ll) = tmp.cast<double>().transpose() * M.cast<double>();
 			}
-			std::cout << "Computed Mt_lhs" << std::endl;
 
 			res = intervalWidth * (compressed_dosage_inv_sds.asDiagonal() * Mt_lhs);
 			res += 0.5 * intervalWidth * compressed_dosage_inv_sds * colsums.transpose();

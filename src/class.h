@@ -14,6 +14,7 @@ class parameters {
 		std::string env_weights_file, hyps_probs_file, vb_init_file;
 		std::string dxteex_file, snpstats_file;
 		std::vector< std::string > rsid;
+		unsigned int random_seed;
 		long int chunk_size, vb_iter_max;
 		int missing_code, burnin_maxhyps, env_update_repeats, n_gconf, n_bgen_thread;
 		unsigned int n_thread, main_chunk_size, gxe_chunk_size;
@@ -23,7 +24,7 @@ class parameters {
 		bool select_rsid, interaction_analysis, verbose, low_mem;
 		bool elbo_tol_set_by_user, alpha_tol_set_by_user, mode_empirical_bayes;
 		bool keep_constant_variants, user_requests_round1, scale_pheno;
-		bool mode_alternating_updates;
+		bool mode_alternating_updates, mode_pve_est;
 		bool restrict_gamma_updates, mode_no_gxe, mode_debug;
 		bool init_weights_with_snpwise_scan, flip_high_maf_variants, min_spike_diff_set;
 		bool mode_mog_prior_beta, mode_mog_prior_gam, mode_random_start;
@@ -54,6 +55,7 @@ class parameters {
 		restrict_gamma_updates = false;
 		n_thread = 1;
 		n_bgen_thread = 1;
+		random_seed = -1;
 		burnin_maxhyps = 0;
 		env_update_repeats = 1;
 		interaction_analysis = false;
@@ -74,12 +76,13 @@ class parameters {
 		mode_empirical_bayes = false;
 		mode_alternating_updates = false;
 		low_mem = true;
-		mode_vb = true;
+		mode_vb = false;
 		mode_no_gxe = false;
 		mode_mog_prior_beta = true;
 		mode_mog_prior_gam = true;
 		mode_debug = false;
 		mode_random_start = false;
+		mode_pve_est = false;
 		select_snps = false;
 		select_rsid = false;
 		geno_check = true; // check allele probs sum to 1 by default

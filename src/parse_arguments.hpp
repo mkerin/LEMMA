@@ -132,8 +132,10 @@ void parse_arguments(parameters &p, int argc, char *argv[]) {
 		"--dxteex",
 		"--mode_mog_beta",
 		"--mode_mog_gamma",
+		"--mode_pve_est",
 		"--gxe_chunk_size",
 		"--main_chunk_size",
+		"--random_seed",
 		"--mode_debug",
 		"--spike_diff_factor",
 		"--min_spike_diff_factor"
@@ -311,6 +313,11 @@ void parse_arguments(parameters &p, int argc, char *argv[]) {
 				i += 0;
 			}
 
+			if(strcmp(in_str, "--random_seed") == 0) {
+				p.random_seed = std::stoul(argv[i + 1]);
+				i += 1;
+			}
+
 			if(strcmp(in_str, "--effects_prior_mog") == 0) {
 				p.mode_mog_prior_beta = true;
 				p.mode_mog_prior_gam = true;
@@ -325,6 +332,11 @@ void parse_arguments(parameters &p, int argc, char *argv[]) {
 
 			if(strcmp(in_str, "--mode_mog_beta") == 0) {
 				p.mode_mog_prior_beta = true;
+				i += 0;
+			}
+
+			if(strcmp(in_str, "--mode_pve_est") == 0) {
+				p.mode_pve_est = true;
 				i += 0;
 			}
 
@@ -629,7 +641,7 @@ void parse_arguments(parameters &p, int argc, char *argv[]) {
 		std::exit(EXIT_FAILURE);
 	}
 	bool has_hyps = p.hyps_grid_file != "NULL";
-	if(!has_hyps){
+	if(p.mode_vb && p.hyps_grid_file == "NULL"){
 		std::cout << "ERROR: search grids for hyperparameter values";
 		std::cout << "should be provided in conjunction with --mode_vb." << std::endl;
 		std::exit(EXIT_FAILURE);
