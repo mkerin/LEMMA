@@ -7,7 +7,12 @@
 
 #include "genotype_matrix.hpp"
 #include "utils.hpp"
+#include "file_streaming.hpp"
 #include "class.h"
+
+#include <boost/iostreams/filtering_stream.hpp>
+
+namespace boost_io = boost::iostreams;
 
 class PVE {
 public:
@@ -21,6 +26,8 @@ public:
 	GenotypeMatrix& X;
 	Eigen::VectorXd eta;
 	Eigen::VectorXd& Y;
+
+	Eigen::VectorXd sigmas, h2;
 
 	// variance estimates
 	double sigma, sigma_g, sigma_gxe;
@@ -79,13 +86,30 @@ public:
 		A << mtrK1K1, mtrK1,
 			 mtrK1,   N;
 
-		Eigen::Vector2d sigmas = A.colPivHouseholderQr().solve(bb);
+		sigmas = A.colPivHouseholderQr().solve(bb);
 		std::cout << "HE Regression estimates" << std::endl;
 		std::cout << sigmas << std::endl;
 
-		Eigen::VectorXd xx = sigmas / sigmas.sum();
+		h2 = sigmas / sigmas.sum();
 		std::cout << "PVE estimates" << std::endl;
-		std::cout << xx << std::endl;
+		std::cout << h2 << std::endl;
+	}
+
+	void to_file(const std::string& file){
+		boost_io::filtering_ostream outf;
+		auto filename = fstream_init(outf, file, "", "");
+
+		std::cout << "Writing PVE results to " << filename << std::endl;
+		std::vector<std::string> components = {"G", "noise"};
+		outf << "component sigmas h2" << std::endl;
+
+		for (int ii = 0; ii < 2; ii++){
+			std::cout << components[ii] << std::endl;
+			outf << components[ii] << " ";
+			outf << sigmas[ii] << " ";
+			outf << h2[ii] << std::endl;
+		}
+		boost_io::close(outf);
 	}
 };
 

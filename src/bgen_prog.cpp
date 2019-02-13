@@ -111,6 +111,9 @@ int main( int argc, char** argv ) {
 
 			PVE pve(p, data.G, Y);
 			pve.run();
+
+			// Write output
+			pve.to_file(p.out_file);
 		}
 	}
 	catch( genfile::bgen::BGenError const& e ) {
