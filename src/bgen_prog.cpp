@@ -108,12 +108,17 @@ int main( int argc, char** argv ) {
 
 			// Eigen::VectorXd eta = data.E.col(0).cast<double>();
 			Eigen::VectorXd Y = data.Y.cast<double>();
-
-			PVE pve(p, data.G, Y);
-			pve.run();
-
-			// Write output
-			pve.to_file(p.out_file);
+			Eigen::MatrixXd C = data.W.cast<double>();
+			if(p.env_file != "NULL"){
+				Eigen::VectorXd eta = data.E.col(0);
+				PVE pve(p, data.G, Y, C, eta);
+				pve.run(p.out_file);
+				pve.to_file(p.out_file);
+			} else {
+				PVE pve(p, data.G, Y, C);
+				pve.run(p.out_file);
+				pve.to_file(p.out_file);
+			}
 		}
 	}
 	catch( genfile::bgen::BGenError const& e ) {

@@ -36,6 +36,12 @@ std::string fstream_init(boost_io::filtering_ostream& my_outf,
 
 	std::string ofile      = dir + file_prefix + stem + file_suffix + ext;
 
+	// Allows prefix to contain subfolders
+	boost::filesystem::path bfilepath(ofile);
+ 	if(!boost::filesystem::exists(bfilepath.parent_path())){
+		boost::filesystem::create_directories(bfilepath.parent_path());
+	}
+
 	my_outf.reset();
 	std::string gz_str = ".gz";
 	if (file.find(gz_str) != std::string::npos) {

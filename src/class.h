@@ -16,7 +16,7 @@ class parameters {
 		std::vector< std::string > rsid;
 		unsigned int random_seed;
 		long int chunk_size, vb_iter_max;
-		int missing_code, burnin_maxhyps, env_update_repeats, n_gconf, n_bgen_thread;
+		int missing_code, burnin_maxhyps, env_update_repeats, n_gconf, n_bgen_thread, n_pve_samples;
 		unsigned int n_thread, main_chunk_size, gxe_chunk_size;
 		std::uint32_t range_start, range_end;
 		bool range, maf_lim, info_lim, select_snps, xtra_verbose;
@@ -68,6 +68,7 @@ class parameters {
 #endif
 		missing_code = -999;
 		vb_iter_max = 10000;
+		n_pve_samples = 100;
 		spike_diff_factor = 1000000.0; // Initial diff in variance of spike & slab
 		range = false;
 		min_spike_diff_set = false;

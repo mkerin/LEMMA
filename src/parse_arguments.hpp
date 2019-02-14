@@ -138,7 +138,8 @@ void parse_arguments(parameters &p, int argc, char *argv[]) {
 		"--random_seed",
 		"--mode_debug",
 		"--spike_diff_factor",
-		"--min_spike_diff_factor"
+		"--min_spike_diff_factor",
+		"--n_pve_samples"
 	};
 
 	std::set<std::string>::iterator set_it;
@@ -292,6 +293,11 @@ void parse_arguments(parameters &p, int argc, char *argv[]) {
 
 			if(strcmp(in_str, "--vb_iter_max") == 0) {
 				p.vb_iter_max = std::stol(argv[i + 1]);
+				i += 1;
+			}
+
+            if(strcmp(in_str, "--n_pve_samples") == 0) {
+				p.n_pve_samples = std::stoi(argv[i + 1]);
 				i += 1;
 			}
 

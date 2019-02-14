@@ -302,7 +302,7 @@ public:
 
 			res = intervalWidth * (compressed_dosage_inv_sds.asDiagonal() * Mt_lhs);
 			res += 0.5 * intervalWidth * compressed_dosage_inv_sds * colsums.transpose();
-			res += compressed_dosage_inv_sds.cwiseProduct(compressed_dosage_means) * colsums.transpose();
+			res -= compressed_dosage_inv_sds.cwiseProduct(compressed_dosage_means) * colsums.transpose();
 			return res;
 		} else {
 			return (G.transpose() * lhs.matrix()).cast<double>();
