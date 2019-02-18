@@ -240,7 +240,7 @@ class Data
 			read_external_dxteex();
 		}
 
-		if(params.snpstats_file != "NULL" && params.init_weights_with_snpwise_scan){
+		if(params.snpstats_file != "NULL"){
 			read_external_snpstats();
 		}
 	}
@@ -599,6 +599,9 @@ class Data
 			n_grid++;
 		}
 		fg.reset();
+		if (filename.find(gz_str) != std::string::npos) {
+			fg.push(boost_io::gzip_decompressor());
+		}
 		fg.push(boost_io::file_source(filename));
 
 		// Reading column names
@@ -678,6 +681,9 @@ class Data
 			n_grid++;
 		}
 		fg.reset();
+		if (filename.find(gz_str) != std::string::npos) {
+			fg.push(boost_io::gzip_decompressor());
+		}
 		fg.push(boost_io::file_source(filename));
 
 		// Reading column names
@@ -1087,6 +1093,9 @@ class Data
 			n_lines++;
 		}
 		fg.reset();
+		if (filename.find(gz_str) != std::string::npos) {
+			fg.push(boost_io::gzip_decompressor());
+		}
 		fg.push(boost_io::file_source(filename));
 
 		// Reading column names

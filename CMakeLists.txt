@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.7.2)
-project(LEMMA VERSION 0.10.5)
+project(LEMMA VERSION 0.10.6)
 
 set(CMAKE_CXX_STANDARD 11)
 

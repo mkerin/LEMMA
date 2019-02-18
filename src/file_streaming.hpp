@@ -12,11 +12,44 @@
 #include "genotype_matrix.hpp"
 #include "variational_parameters.hpp"
 #include <boost/iostreams/filtering_stream.hpp>
+#include <boost/iostreams/device/file.hpp>
+#include <boost/math/distributions/fisher_f.hpp>
+#include <boost/iostreams/filter/gzip.hpp>
+#include <boost/filesystem.hpp>
+
+namespace boost_io = boost::iostreams;
 
 namespace boost_io = boost::iostreams;
 
 /***************** File writing *****************/
 
+std::string fstream_init(boost_io::filtering_ostream& my_outf,
+						 const std::string& file,
+						 const std::string& file_prefix,
+						 const std::string& file_suffix){
+
+	std::string filepath   = file;
+	std::string dir        = filepath.substr(0, filepath.rfind('/')+1);
+	std::string stem_w_dir = filepath.substr(0, filepath.find('.'));
+	std::string stem       = stem_w_dir.substr(stem_w_dir.rfind('/')+1, stem_w_dir.size());
+	std::string ext        = filepath.substr(filepath.find('.'), filepath.size());
+
+	std::string ofile      = dir + file_prefix + stem + file_suffix + ext;
+
+	// Allows prefix to contain subfolders
+	boost::filesystem::path bfilepath(ofile);
+ 	if(!boost::filesystem::exists(bfilepath.parent_path())){
+		boost::filesystem::create_directories(bfilepath.parent_path());
+	}
+
+	my_outf.reset();
+	std::string gz_str = ".gz";
+	if (file.find(gz_str) != std::string::npos) {
+		my_outf.push(boost_io::gzip_compressor());
+	}
+	my_outf.push(boost_io::file_sink(ofile));
+	return ofile;
+}
 
 void write_snp_stats_to_file(boost_io::filtering_ostream& ofile,
 							 const int& n_effects,
