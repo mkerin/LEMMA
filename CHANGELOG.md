@@ -1,6 +1,12 @@
 # Version 0.10.5
 
 Changes:
+- bugfix in GenotypeMatrix::transpose_multiply
+- Added PVE estimation with HE reg method
+
+# Version 0.10.5
+
+Changes:
 - Multithreaded read from bgen
 - bugfix in GenotypeMatrix::mult_vector_by_chr
 - VbTracker::dump_state
