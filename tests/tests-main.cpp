@@ -778,6 +778,7 @@ TEST_CASE( "Example 4: multi-env + mog + covars + emp_bayes" ){
 			CHECK(data.Y2(0,0) == Approx(-1.5567970303));
 //			CHECK(data.W(0,0) == Approx(0.8957059881));
 			CHECK(data.E(0,0) == Approx(0.8957059881));
+			CHECK(data.E.row(0).array().sum() == Approx(2.9708148667));
 		}
 		data.read_full_bgen();
 
@@ -792,18 +793,15 @@ TEST_CASE( "Example 4: multi-env + mog + covars + emp_bayes" ){
 			CHECK(VB.n_samples == 50);
 			CHECK(VB.N == 50.0);
 			CHECK(VB.n_env == 4);
+			CHECK(VB.n_var == 67);
 			CHECK(VB.n_effects == 2);
 			CHECK(VB.vp_init.muw(0) == 0.25);
 			CHECK(VB.p.init_weights_with_snpwise_scan == false);
-			CHECK(VB.dXtEEX(0, 0) == Approx(38.99636));
-			CHECK(VB.dXtEEX(1, 0) == Approx(38.3718));
-			CHECK(VB.dXtEEX(2, 0) == Approx(33.81659));
-			CHECK(VB.dXtEEX(3, 0) == Approx(35.8492));
+			CHECK(VB.dXtEEX(0, 0) == Approx(38.9610805993));
+			CHECK(VB.dXtEEX(1, 0) == Approx(38.2995451744));
 
-			CHECK(VB.dXtEEX(0, 4) == Approx(-2.63218));
-			CHECK(VB.dXtEEX(1, 4) == Approx(-12.96763));
-			CHECK(VB.dXtEEX(2, 4) == Approx(-11.66501));
-			CHECK(VB.dXtEEX(3, 4) == Approx(-7.20105));
+			CHECK(VB.dXtEEX(0, 4) == Approx(-2.6239467101));
+			CHECK(VB.dXtEEX(1, 4) == Approx(-13.0001255314));
 		}
 
 		std::vector< VbTracker > trackers(VB.hyps_grid.rows(), p);
@@ -828,16 +826,16 @@ TEST_CASE( "Example 4: multi-env + mog + covars + emp_bayes" ){
 
 			VB.updateAllParams(0, round_index, all_vp, all_hyps, logw_prev, trackers, logw_updates);
 
-			CHECK(vp.alpha_beta(0)            == Approx(0.1339032153));
-			CHECK(vp.alpha_beta(1)            == Approx(0.1413799597));
-			CHECK(vp.alpha_beta(63)           == Approx(0.1722999226));
-			CHECK(vp.muw(0, 0)              == Approx(0.1129510095));
+			CHECK(vp.alpha_beta(0)            == Approx(0.1331830674));
+			CHECK(vp.alpha_beta(1)            == Approx(0.1395213065));
+			CHECK(vp.alpha_beta(63)           == Approx(0.1457841418));
+			CHECK(vp.muw(0, 0)              == Approx(0.1151626822));
 
-			CHECK(hyps.sigma                == Approx(0.6956395607));
-			CHECK(hyps.lambda[0]            == Approx(0.1697910485));
-			CHECK(hyps.lambda[1]            == Approx(0.1350333198));
-			CHECK(hyps.slab_relative_var[0] == Approx(0.0081833922));
-			CHECK(hyps.slab_relative_var[1] == Approx(0.0051150827));
+			CHECK(hyps.sigma                == Approx(0.7035358966));
+			CHECK(hyps.lambda[0]            == Approx(0.1666006426));
+			CHECK(hyps.lambda[1]            == Approx(0.1350873122));
+			CHECK(hyps.slab_relative_var[0] == Approx(0.0078059267));
+			CHECK(hyps.slab_relative_var[1] == Approx(0.0050623453));
 
 			Eq_beta = vp.alpha_beta * vp.mu1_beta;
 			if(p.mode_mog_prior_beta) Eq_beta.array() += (1 - vp.alpha_beta) * vp.mu2_beta;
@@ -847,21 +845,21 @@ TEST_CASE( "Example 4: multi-env + mog + covars + emp_bayes" ){
 
 			VB.updateAllParams(1, round_index, all_vp, all_hyps, logw_prev, trackers, logw_updates);
 
-			CHECK(vp.alpha_beta(0)            == Approx(0.1475445081));
-			CHECK(vp.muw(0, 0)              == Approx(0.0627874101));
-			CHECK(vp.alpha_gam(63)           == Approx(0.1183555819));
-			CHECK(vp.mu1_gam(63)              == Approx(0.0013071544));
-			CHECK(vp.s1_gam_sq(63)            == Approx(0.0026294351));
+			CHECK(vp.alpha_beta(0)            == Approx(0.1455501422));
+			CHECK(vp.muw(0, 0)              == Approx(0.0675565259));
+			CHECK(vp.alpha_gam(63)           == Approx(0.1181212684));
+			CHECK(vp.mu1_gam(63)              == Approx(0.0019344274));
+			CHECK(vp.s1_gam_sq(63)            == Approx(0.0026155945));
 
-			CHECK(hyps.sigma                == Approx(0.6031329457));
-			CHECK(hyps.lambda[0]            == Approx(0.1994253645));
-			CHECK(hyps.lambda[1]            == Approx(0.1169875913));
-			CHECK(hyps.slab_relative_var[0] == Approx(0.0125648575));
-			CHECK(hyps.slab_relative_var[1] == Approx(0.0042537538));
-			CHECK(hyps.s_x[0]               == Approx(64.0));
-			CHECK(hyps.s_x[1]               == Approx(0.259499063));
-			CHECK(hyps.pve[1]               == Approx(0.000111278));
-			CHECK(hyps.pve_large[1]         == Approx(0.0001112768));
+			CHECK(hyps.sigma                == Approx(0.6078333334));
+			CHECK(hyps.lambda[0]            == Approx(0.1951731005));
+			CHECK(hyps.lambda[1]            == Approx(0.1175616803));
+			CHECK(hyps.slab_relative_var[0] == Approx(0.0120434663));
+			CHECK(hyps.slab_relative_var[1] == Approx(0.0042684077));
+			CHECK(hyps.s_x[0]               == Approx(67.0));
+			CHECK(hyps.s_x[1]               == Approx(0.3089901675));
+			CHECK(hyps.pve[1]               == Approx(0.0001339388));
+			CHECK(hyps.pve_large[1]         == Approx(0.0001339374));
 
 			Eq_beta = vp.alpha_beta * vp.mu1_beta;
 			if(p.mode_mog_prior_beta) Eq_beta.array() += (1 - vp.alpha_beta) * vp.mu2_beta;
@@ -887,7 +885,7 @@ TEST_CASE( "Example 4: multi-env + mog + covars + emp_bayes" ){
 			CHECK(hyps.pve[1]               == Approx(0.0000288603));
 			CHECK(hyps.pve_large[1]         == Approx(0.0000288598));
 
-			CHECK(VB.calc_logw(hyps, vp) == Approx(-88.2465631083));
+			CHECK(VB.calc_logw(hyps, vp) == Approx(-88.4935443832));
 			VbTracker tracker(p);
 			tracker.init_interim_output(0,2, VB.n_effects, VB.n_env, VB.env_names, vp);
 			tracker.dump_state(2, VB.n_covar, VB.n_var, VB.n_env, VB.n_effects, vp, hyps, VB.X, VB.covar_names, VB.env_names);
@@ -895,11 +893,11 @@ TEST_CASE( "Example 4: multi-env + mog + covars + emp_bayes" ){
 			// Checking logw
 			double int_linear = -1.0 * VB.calcExpLinear(hyps, vp) / 2.0 / hyps.sigma;
 			int_linear -= VB.N * std::log(2.0 * VB.PI * hyps.sigma) / 2.0;
-			CHECK(int_linear  == Approx(-58.4732270913045));
+			CHECK(int_linear  == Approx(-58.682272353));
 
-			CHECK(VB.calcExpLinear(hyps, vp)  == Approx(30.26634));
-			CHECK(VB.calcKLBeta(hyps, vp)  == Approx(-5.339218));
-			CHECK(VB.calcKLGamma(hyps, vp)  == Approx(-0.004956151));
+			CHECK(VB.calcExpLinear(hyps, vp)  == Approx(30.5204787945));
+			CHECK(VB.calcKLBeta(hyps, vp)  == Approx(-5.3386584503));
+			CHECK(VB.calcKLGamma(hyps, vp)  == Approx(-0.0059122266));
 
 			// check int_linear
 
@@ -907,31 +905,55 @@ TEST_CASE( "Example 4: multi-env + mog + covars + emp_bayes" ){
 			int_linear  = (VB.Y - vp.ym).squaredNorm();
 			int_linear -= 2.0 * (VB.Y - vp.ym).cwiseProduct(vp.eta).dot(vp.yx);
 			int_linear += vp.yx.cwiseProduct(vp.eta_sq).dot(vp.yx);
-			CHECK(int_linear == Approx(21.57235));
+			CHECK(int_linear == Approx(21.7708079744));
 
 			double int_linear2  = (VB.Y - vp.ym - vp.yx.cwiseProduct(vp.eta)).squaredNorm();
 			int_linear2 -= vp.yx.cwiseProduct(vp.eta).squaredNorm();
 			int_linear2 += vp.yx.cwiseProduct(vp.eta_sq).dot(vp.yx);
-			CHECK(int_linear2 == Approx(21.57235));
+			CHECK(int_linear2 == Approx(21.7708079744));
+
+			double kl_covar = 0.0;
+			kl_covar += (double) VB.n_covar * (1.0 - std::log(hyps.sigma * VB.sigma_c)) / 2.0;
+			kl_covar += vp.sc_sq.log().sum() / 2.0;
+			kl_covar -= vp.sc_sq.sum() / 2.0 / hyps.sigma / VB.sigma_c;
+			kl_covar -= vp.muc.square().sum() / 2.0 / hyps.sigma / VB.sigma_c;
+			CHECK(kl_covar == Approx(-24.0588694492));
+
+			// weights
+			double kl_weights = 0.0;
+			kl_weights += (double) VB.n_env / 2.0;
+			kl_weights += vp.sw_sq.log().sum() / 2.0;
+			kl_weights -= vp.sw_sq.sum() / 2.0;
+			kl_weights -= vp.muw.square().sum() / 2.0;
+			CHECK(kl_weights == Approx(-0.407831904));
+
 
 
 			// variances
-			CHECK(vp.sc_sq.sum() == Approx(0.04923524));
-			CHECK(vp.var_beta().sum() == Approx(0.1040104));
-			CHECK((vp.EdZtZ * vp.var_gam()).sum() == Approx(1.184956));
+			CHECK(vp.sc_sq.sum() == Approx(0.0496189464));
+			CHECK(vp.var_beta().sum() == Approx(0.1037151527));
+			CHECK(vp.var_gam().sum() == Approx(0.0134028501));
+			CHECK(vp.mean_beta().sum() == Approx(0.1211422468));
+			CHECK(vp.mean_gam().sum() == Approx(0.0024171785));
+			CHECK(vp.muw.sum() == Approx(0.0258090141));
+			CHECK(vp.sw_sq.sum() == Approx(1.9661205603));
+			CHECK((vp.EdZtZ * vp.var_gam()).sum() == Approx(1.2362999683));
 
-			CHECK(vp.EdZtZ.sum() == Approx(6114.099));
-			CHECK(vp.eta_sq.sum() == Approx(99.8159));
+			CHECK(vp.EdZtZ.sum() == Approx(6231.0737696025));
+			CHECK(vp.eta_sq.sum() == Approx(96.4428364816));
+			CHECK(vp.eta.squaredNorm() == Approx(0.1029290247));
+			CHECK(vp.ym.squaredNorm() == Approx(14.3819142131));
+			CHECK(vp.yx.squaredNorm() == Approx(0.0006402607));
 
 			double dztz0 = (VB.X.col(0).array().square() * vp.eta_sq.array()).sum();
-			CHECK(dztz0 == Approx(95.82891));
-			CHECK(vp.EdZtZ(0) == Approx(95.82891));
+			CHECK(dztz0 == Approx(92.2298410065));
+			CHECK(vp.EdZtZ(0) == Approx(92.2298410065));
 		}
 
 		VB.run_inference(VB.hyps_grid, false, 2, trackers);
 		SECTION("Ex3. Vbayes_X2 inference correct"){
 			CHECK(trackers[0].count == 10);
-			CHECK(trackers[0].logw == Approx(-86.6238460468));
+			CHECK(trackers[0].logw == Approx(-86.8089205664));
 		}
 	}
 }
@@ -1312,6 +1334,32 @@ TEST_CASE("--dxteex case8") {
 		VBayesX2 VB(data);
 		VB.check_inputs();
 		std::vector< VbTracker > trackers(VB.hyps_grid.rows(), p);
+		SECTION("Dump params state") {
+			// Set up for RunInnerLoop
+			long n_grid = VB.hyps_grid.rows();
+			std::vector<Hyps> all_hyps;
+			VB.unpack_hyps(VB.hyps_grid, all_hyps);
+
+			// Set up for updateAllParams
+			std::vector<VariationalParameters> all_vp;
+			VB.setup_variational_params(all_hyps, all_vp);
+
+			int round_index = 2;
+			std::vector<double> logw_prev(n_grid, -std::numeric_limits<double>::max());
+			std::vector<std::vector<double >> logw_updates(n_grid);
+			VariationalParameters &vp = all_vp[0];
+			Hyps &hyps = all_hyps[0];
+
+			VB.updateAllParams(0, round_index, all_vp, all_hyps, logw_prev, trackers, logw_updates);
+			VB.updateAllParams(1, round_index, all_vp, all_hyps, logw_prev, trackers, logw_updates);
+			VB.updateAllParams(2, round_index, all_vp, all_hyps, logw_prev, trackers, logw_updates);
+
+			VbTracker tracker(p);
+			tracker.init_interim_output(0, 2, VB.n_effects, VB.n_env, VB.env_names, vp);
+			tracker.dump_state(2, VB.n_covar, VB.n_var, VB.n_env, VB.n_effects, vp, hyps, VB.X, VB.covar_names,
+							   VB.env_names);
+		}
+		
 		VB.run_inference(VB.hyps_grid, false, 2, trackers);
 		SECTION("Ex3. Vbayes_X2 inference correct"){
 			CHECK(trackers[0].count == 30);

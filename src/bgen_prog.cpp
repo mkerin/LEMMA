@@ -38,20 +38,15 @@ int main( int argc, char** argv ) {
 		std::cout << "Starting analysis at " << std::ctime(&start_time) << std::endl;
 
 		Data data( p );
-
 		data.apply_filters();
-
-		// Simple approach for the moment; don't bother about covariates etc
-
 		data.read_non_genetic_data();
 
 		// Also regresses out covariables if necessary
 		data.standardise_non_genetic_data();
-
 		data.read_full_bgen();
 
-		// Variance components
-		// Eigen::VectorXd eta = data.E.col(0).cast<double>();
+		// For the HE-reg method
+		Eigen::VectorXd eta = data.E.col(0);
 
 		if(p.mode_vb){
 			if (data.n_effects > 1) {
@@ -63,25 +58,19 @@ int main( int argc, char** argv ) {
 			if (p.vb_init_file != "NULL") {
 				data.read_alpha_mu();
 			}
-
 			auto data_end = std::chrono::system_clock::now();
 			std::chrono::duration<double> elapsed_reading_data = data_end - data_start;
 
-
 			// Pass data to VBayes object
 			VBayesX2 VB(data);
-
 			VB.check_inputs();
-			// VB.output_init();
 
 			// Run inference
 			auto vb_start = std::chrono::system_clock::now();
 			VB.run();
 			auto vb_end = std::chrono::system_clock::now();
 			std::chrono::duration<double> elapsed_vb = vb_end - vb_start;
-			// VB.output_results();
-
-			// eta = vp.eta.cast<double>();
+			eta = VB.GLOBAL_map_vp.eta.cast<double>();
 
 			std::cout << std::endl << "Time expenditure:" << std::endl;
 			std::cout << "Reading data: " << elapsed_reading_data.count() << " secs" << std::endl;
@@ -97,8 +86,7 @@ int main( int argc, char** argv ) {
 			outf_time << "vb_outer_loop " << VB.elapsed_innerLoop.count() << std::endl;
 		}
 
-		if(p.mode_pve_est){
-
+		if(p.mode_pve_est || p.mode_vb){
 			// Random seed
 			if(p.random_seed == -1){
 				std::random_device rd;
@@ -110,7 +98,7 @@ int main( int argc, char** argv ) {
 			Eigen::VectorXd Y = data.Y.cast<double>();
 			Eigen::MatrixXd C = data.W.cast<double>();
 			if(p.env_file != "NULL"){
-				Eigen::VectorXd eta = data.E.col(0);
+				assert(dat.n_env == 1 || p.mode_vb); // If multi env; use VB to collapse to single
 				PVE pve(p, data.G, Y, C, eta);
 				pve.run(p.out_file);
 				pve.to_file(p.out_file);

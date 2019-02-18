@@ -192,7 +192,7 @@ public:
 
 	void to_file(const std::string& file){
 		boost_io::filtering_ostream outf;
-		auto filename = fstream_init(outf, file, "", "");
+		auto filename = fstream_init(outf, file, "", "_pve");
 
 		std::cout << "Writing PVE results to " << filename << std::endl;
 		outf << "component sigmas h2" << std::endl;

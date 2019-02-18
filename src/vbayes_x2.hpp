@@ -116,6 +116,7 @@ public:
 	// Monitoring
 	std::chrono::system_clock::time_point time_check;
 	std::chrono::duration<double> elapsed_innerLoop;
+	VariationalParametersLite GLOBAL_map_vp;
 
 	explicit VBayesX2( Data& dat ) : X( dat.G ),
                             Y(Eigen::Map<EigenDataVector>(dat.Y.data(), dat.Y.rows())),
@@ -123,6 +124,7 @@ public:
                             dXtEEX( dat.dXtEEX ),
                             snpstats( dat.snpstats ),
                             p( dat.params ),
+                            GLOBAL_map_vp( dat.params ),
                             vp_init( dat.params ){
 		assert(std::includes(dat.hyps_names.begin(), dat.hyps_names.end(), hyps_names.begin(), hyps_names.end()));
 		std::cout << "Initialising vbayes object" << std::endl;
@@ -400,7 +402,6 @@ public:
 		run_inference(hyps_grid, false, 2, trackers);
 
 		write_trackers_to_file("", trackers, hyps_grid);
-
 		std::cout << "Variational inference finished" << std::endl;
 	}
 
@@ -1750,6 +1751,7 @@ public:
 		std::vector<Eigen::VectorXd> map_residuals_by_chr(n_chrs), pred_main(n_chrs), pred_int(n_chrs);
 		long int ii_map = std::distance(weights.begin(), std::max_element(weights.begin(), weights.end()));
 		VariationalParametersLite vp_map = trackers[ii_map].vp;
+		GLOBAL_map_vp = trackers[ii_map].vp;
 
 		// Predicted effects to file
 		calcPredEffects(vp_map);
