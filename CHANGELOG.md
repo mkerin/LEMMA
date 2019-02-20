@@ -3,6 +3,7 @@
 Changes:
 - bugfix in GenotypeMatrix::transpose_multiply
 - Added PVE estimation with HE reg method
+- bugfix in computing chromosome-residuals
 
 # Version 0.10.5
 

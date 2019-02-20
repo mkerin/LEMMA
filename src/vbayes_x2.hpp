@@ -1528,7 +1528,7 @@ public:
 		// casts used if DATA_AS_FLOAT
 		Eigen::VectorXd map_residuals;
 		if (n_effects > 1) {
-			map_residuals = (Y - vp.ym - vp.ym.cwiseProduct(vp.eta)).cast<double>();
+			map_residuals = (Y - vp.ym - vp.yx.cwiseProduct(vp.eta)).cast<double>();
 		} else {
 			map_residuals = (Y - vp.ym).cast<double>();
 		}
