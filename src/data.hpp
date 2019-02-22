@@ -23,6 +23,7 @@
 #include "tools/eigen3.3/Eigenvalues"
 
 #include "genotype_matrix.hpp"
+#include "stats_tests.hpp"
 
 #include "bgen_parser.hpp"
 #include "genfile/bgen/bgen.hpp"
@@ -261,6 +262,16 @@ class Data
 			scale_matrix( E, n_env, env_names );
 		}
 
+		/* Regression rules
+		1 - if use_VB_on_covars then:
+ 			- E main effects kept in model
+			- W regressed from Y
+		2 - if !use_VB_on_covars then:
+			- [W, E] regressed from Y
+
+		if any of E have squared dependance on Y then remove
+		*/
+
 		// Project C from Y and E when C is present
 		if(n_covar > 0) {
 			regress_first_mat_from_second(W, "covars", covar_names, Y, "pheno");
@@ -276,6 +287,40 @@ class Data
 			} else {
 				regress_first_mat_from_second(E, "envs", env_names, Y, "pheno");
 				Y2 = Y;
+			}
+		}
+
+		// Removing squared dependance
+		std::vector<int> cols_to_remove;
+		Eigen::MatrixXd H(n_samples, 2);
+		for (int ee = 0; ee < n_env; ee++){
+			H.col(0) = E.col(ee);
+			H.col(1) = E.col(ee).array().square();
+
+			Eigen::MatrixXd HtH_inv = (H.transpose() * H).inverse();
+			Eigen::MatrixXd Hty = H.transpose() * Y;
+			double rss = (Y - H * HtH_inv * Hty).squaredNorm();
+			double pval = student_t_test(n_samples, 1, HtH_inv, Hty, rss);
+			if (pval < 0.01 / (double) n_env ){
+				cols_to_remove.push_back(ee);
+			}
+		}
+		if(cols_to_remove.size() > 0) {
+			std::cout << "Squared dependance detected in: " << std::endl;
+			for (int ee : cols_to_remove) {
+				std::cout << env_names[ee] << std::endl;
+			}
+			if (params.mode_remove_squared_envs) {
+				std::cout << "(Removing)" << std::endl;
+				Eigen::MatrixXd H(n_samples, cols_to_remove.size());
+				for (int nn = 0; nn < cols_to_remove.size(); nn++) {
+					H.col(nn) = E.col(cols_to_remove[nn]).array().square();
+				}
+				Eigen::MatrixXd HtH = H.transpose() * H;
+				Eigen::MatrixXd Hty = H.transpose() * Y;
+				Y -= H * HtH.colPivHouseholderQr().solve(Hty);
+			} else {
+				std::cout << "Warning: Projection of significant square envs suppressed" << std::endl;
 			}
 		}
 	}
