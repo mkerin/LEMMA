@@ -129,6 +129,7 @@ void parse_arguments(parameters &p, int argc, char *argv[]) {
 		"--env_update_repeats",
 		"--gamma_updates_thresh",
 		"--init_weights_with_snpwise_scan",
+		"--suppress_squared_env_removal",
 		"--dxteex",
 		"--mode_mog_beta",
 		"--mode_mog_gamma",
@@ -338,6 +339,11 @@ void parse_arguments(parameters &p, int argc, char *argv[]) {
 
 			if(strcmp(in_str, "--mode_mog_beta") == 0) {
 				p.mode_mog_prior_beta = true;
+				i += 0;
+			}
+
+			if(strcmp(in_str, "--suppress_squared_env_removal") == 0) {
+				p.mode_remove_squared_envs = false;
 				i += 0;
 			}
 
