@@ -8,7 +8,7 @@
 #include "genotype_matrix.hpp"
 #include "utils.hpp"
 #include "file_streaming.hpp"
-#include "class.h"
+#include "parameters.hpp"
 
 #include <boost/iostreams/filtering_stream.hpp>
 

@@ -31,6 +31,10 @@ Questions:
 #ifndef GENOTYPE_MATRIX
 #define GENOTYPE_MATRIX
 
+#include "my_timer.hpp"
+#include "utils.hpp"
+#include "parameters.hpp"
+#include "tools/eigen3.3/Dense"
 #include <algorithm>
 #include <iostream>
 #include <limits>
@@ -40,10 +44,6 @@ Questions:
 #include <thread>
 #include <vector>
 #include <map>
-#include "my_timer.hpp"
-#include "utils.hpp"
-#include "class.h"
-#include "tools/eigen3.3/Dense"
 
 // Memory efficient class for storing dosage data
 // - Use uint instead of double to store dosage probabilities

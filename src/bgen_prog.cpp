@@ -15,7 +15,7 @@
 #include <stdexcept>
 #include <memory>
 #include "parse_arguments.hpp"
-#include "class.h"
+#include "parameters.hpp"
 #include "data.hpp"
 #include "vbayes_x2.hpp"
 #include "pve.hpp"
@@ -97,9 +97,16 @@ int main( int argc, char** argv ) {
 			// Eigen::VectorXd eta = data.E.col(0).cast<double>();
 			Eigen::VectorXd Y = data.Y.cast<double>();
 			Eigen::MatrixXd C = data.W.cast<double>();
-			if(p.env_file != "NULL"){
+			if(p.env_file != "NULL") {
 				assert(data.n_env == 1 || p.mode_vb); // If multi env; use VB to collapse to single
 				PVE pve(p, data.G, Y, C, eta);
+				pve.run(p.out_file);
+				pve.to_file(p.out_file);
+			} else if(p.mog_weights_file != "NULL"){
+				Eigen::VectorXd alpha_beta, alpha_gam;
+				data.read_mog_weights(p.mog_weights_file, alpha_beta, alpha_gam);
+				PVE pve(p, data.G, Y, C);
+				pve.set_mog_weights(alpha_beta, alpha_gam);
 				pve.run(p.out_file);
 				pve.to_file(p.out_file);
 			} else {

@@ -7,7 +7,7 @@
 
 #include <iostream>
 #include "tools/eigen3.3/Dense"
-#include "class.h"
+#include "parameters.hpp"
 
 #include <boost/iostreams/filtering_stream.hpp>
 
