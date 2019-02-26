@@ -5,19 +5,18 @@
 #ifndef BGEN_PROG_MISC_UTILS_HPP
 #define BGEN_PROG_MISC_UTILS_HPP
 
-#include <iomanip>
-#include <string>
-#include <vector>
-#include "class.h"
+#include "parameters.hpp"
 #include "genotype_matrix.hpp"
 #include "variational_parameters.hpp"
+
 #include <boost/iostreams/filtering_stream.hpp>
 #include <boost/iostreams/device/file.hpp>
-#include <boost/math/distributions/fisher_f.hpp>
 #include <boost/iostreams/filter/gzip.hpp>
 #include <boost/filesystem.hpp>
 
-namespace boost_io = boost::iostreams;
+#include <iomanip>
+#include <string>
+#include <vector>
 
 namespace boost_io = boost::iostreams;
 

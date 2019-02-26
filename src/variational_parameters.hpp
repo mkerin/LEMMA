@@ -5,7 +5,7 @@
 #include <limits>
 #include "hyps.hpp"
 #include "utils.hpp"
-#include "class.h"
+#include "parameters.hpp"
 #include "tools/eigen3.3/Dense"
 
 class VariationalParamsBase {

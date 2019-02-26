@@ -17,7 +17,7 @@
 #include <vector>
 
 
-#include "class.h"
+#include "parameters.hpp"
 #include "genotype_matrix.hpp"
 #include "hyps.hpp"
 #include "utils.hpp"

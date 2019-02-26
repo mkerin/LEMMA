@@ -2,17 +2,19 @@
 #ifndef PARSE_ARGUMENTS_HPP
 #define PARSE_ARGUMENTS_HPP
 
+#include "parameters.hpp"
+#include "version.h"
+#include "my_timer.hpp"
+
+#include "tools/eigen3.3/Dense" // For vectorise profiling
+
 #include <iostream>
 #include <iomanip>
 #include <set>
 #include <cstring>
 #include <boost/filesystem.hpp>
-#include "class.h"
-#include "version.h"
-#include "my_timer.hpp"
 #include <regex>
 #include <stdexcept>
-#include "tools/eigen3.3/Dense" // For vectorise profiling
 
 void check_counts(const std::string& in_str, int i, int num, int argc);
 void parse_arguments(parameters &p, int argc, char *argv[]);
@@ -138,6 +140,7 @@ void parse_arguments(parameters &p, int argc, char *argv[]) {
 		"--main_chunk_size",
 		"--random_seed",
 		"--mode_debug",
+		"--pve_mog_weights",
 		"--spike_diff_factor",
 		"--min_spike_diff_factor",
 		"--n_pve_samples"
@@ -365,6 +368,12 @@ void parse_arguments(parameters &p, int argc, char *argv[]) {
 			if(strcmp(in_str, "--use_vb_on_covars") == 0) {
 				p.use_vb_on_covars = true;
 				i += 0;
+			}
+
+			if(strcmp(in_str, "--pve_mog_weights") == 0) {
+				p.mog_weights_file = argv[i + 1];
+				check_file_exists(p.mog_weights_file);
+				i += 1;
 			}
 
             if(strcmp(in_str, "--mode_regress_out_covars") == 0) {

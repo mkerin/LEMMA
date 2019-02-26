@@ -21,7 +21,7 @@ https://stackoverflow.com/questions/3283021/compile-a-standalone-static-executab
 #include <thread>
 #include <set>
 #include "sys/types.h"
-#include "class.h"
+#include "parameters.hpp"
 #include "data.hpp"
 #include "my_timer.hpp"
 #include "utils.hpp"
