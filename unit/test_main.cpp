@@ -1,5 +1,4 @@
 // tests-main.cpp
-#define CATCH_CONFIG_MAIN
 #define EIGEN_USE_MKL_ALL
 #include "catch.hpp"
 
@@ -1359,7 +1358,7 @@ TEST_CASE("--dxteex case8") {
 			tracker.dump_state(2, VB.n_covar, VB.n_var, VB.n_env, VB.n_effects, vp, hyps, VB.X, VB.covar_names,
 							   VB.env_names);
 		}
-		
+
 		VB.run_inference(VB.hyps_grid, false, 2, trackers);
 		SECTION("Ex3. Vbayes_X2 inference correct"){
 			CHECK(trackers[0].count == 30);

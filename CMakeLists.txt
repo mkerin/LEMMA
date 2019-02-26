@@ -64,8 +64,8 @@ list(APPEND LOC_COMPILE_OPTS -DVERSION_MAJOR=${PROJECT_VERSION_MAJOR})
 list(APPEND LOC_COMPILE_OPTS -DVERSION_MINOR=${PROJECT_VERSION_MINOR})
 list(APPEND LOC_COMPILE_OPTS -DVERSION_PATCH=${PROJECT_VERSION_PATCH})
 
-set(SOURCES src/bgen_prog.cpp)
-
+#set(SOURCES src/data.cpp)
+set(BGEN_INCL_DIRS ${BGEN}/genfile/include ${BGEN}/3rd_party/zstd-1.1.0/lib ${BGEN}/db/include ${BGEN}/3rd_party/sqlite3 ${BGEN}/3rd_party/boost_1_55_0)
 
 
 ##Platform invariant variables
@@ -80,31 +80,31 @@ set(LIBS boost dl pthread boost_iostreams z ${LIBS})
 #set(TARGET bgen_prog)
 set(TARGET bgen_prog_${PROJECT_VERSION_MAJOR}_${PROJECT_VERSION_MINOR}_${PROJECT_VERSION_PATCH})
 
-add_executable(${TARGET} ${SOURCES})
+add_executable(${TARGET} src/bgen_prog.cpp ${SOURCES})
 target_compile_options(${TARGET} PRIVATE -msse2 ${LOC_COMPILE_OPTS})
-target_include_directories(${TARGET} PRIVATE ${BGEN}/genfile/include ${BGEN}/3rd_party/zstd-1.1.0/lib ${BGEN}/db/include ${BGEN}/3rd_party/sqlite3 ${BGEN}/3rd_party/boost_1_55_0)
+target_include_directories(${TARGET} PRIVATE ${BGEN_INCL_DIRS})
 set_target_properties(${TARGET} PROPERTIES LINK_FLAGS "${LIB-DIRS}")
 target_link_libraries(${TARGET} ${BGEN_LIB} ${DB_LIB} ${SQLITE_LIB} ${ZSTD_LIB} ${LIBS} ${LINKER_OPTS})
 
-add_executable(${TARGET}_Xf ${SOURCES})
+add_executable(${TARGET}_Xf src/bgen_prog.cpp ${SOURCES})
 target_compile_options(${TARGET}_Xf PRIVATE -DDATA_AS_FLOAT -msse2 ${LOC_COMPILE_OPTS})
-target_include_directories(${TARGET}_Xf PRIVATE ${BGEN}/genfile/include ${BGEN}/3rd_party/zstd-1.1.0/lib ${BGEN}/db/include ${BGEN}/3rd_party/sqlite3 ${BGEN}/3rd_party/boost_1_55_0)
+target_include_directories(${TARGET}_Xf PRIVATE ${BGEN_INCL_DIRS})
 set_target_properties(${TARGET}_Xf PROPERTIES LINK_FLAGS "${LIB-DIRS}")
 target_link_libraries(${TARGET}_Xf ${BGEN_LIB} ${DB_LIB} ${SQLITE_LIB} ${ZSTD_LIB} ${LIBS} ${LINKER_OPTS})
 
 
 ## Catch Unit Tests
-add_executable(catch_tests tests/tests-main.cpp)
-target_link_libraries(catch_tests ${BGEN_LIB} ${DB_LIB} ${SQLITE_LIB} ${ZSTD_LIB} ${LIBS} ${LINKER_OPTS})
-target_compile_options(catch_tests PRIVATE -msse2 ${LOC_COMPILE_OPTS})
-target_include_directories(catch_tests PRIVATE ${BGEN}/genfile/include ${BGEN}/3rd_party/zstd-1.1.0/lib ${BGEN}/db/include ${BGEN}/3rd_party/sqlite3 ${BGEN}/3rd_party/boost_1_55_0)
-set_target_properties(catch_tests PROPERTIES LINK_FLAGS "${LIB-DIRS}")
+add_executable(tests unit/main.cpp unit/test_pve.cpp ${SOURCES})
+target_link_libraries(tests ${BGEN_LIB} ${DB_LIB} ${SQLITE_LIB} ${ZSTD_LIB} ${LIBS} ${LINKER_OPTS})
+target_compile_options(tests PRIVATE -msse2 ${LOC_COMPILE_OPTS})
+target_include_directories(tests PRIVATE ${BGEN_INCL_DIRS})
+set_target_properties(tests PROPERTIES LINK_FLAGS "${LIB-DIRS}")
 
-add_executable(catch_tests_Xf tests/tests-main.cpp)
-target_link_libraries(catch_tests_Xf ${BGEN_LIB} ${DB_LIB} ${SQLITE_LIB} ${ZSTD_LIB} ${LIBS} ${LINKER_OPTS})
-target_compile_options(catch_tests_Xf PRIVATE -DDATA_AS_FLOAT -msse2 ${LOC_COMPILE_OPTS})
-target_include_directories(catch_tests_Xf PRIVATE ${BGEN}/genfile/include ${BGEN}/3rd_party/zstd-1.1.0/lib ${BGEN}/db/include ${BGEN}/3rd_party/sqlite3 ${BGEN}/3rd_party/boost_1_55_0)
-set_target_properties(catch_tests_Xf PROPERTIES LINK_FLAGS "${LIB-DIRS}")
+add_executable(tests_Xf unit/main.cpp unit/test_pve.cpp)
+target_link_libraries(tests_Xf ${BGEN_LIB} ${DB_LIB} ${SQLITE_LIB} ${ZSTD_LIB} ${LIBS} ${LINKER_OPTS})
+target_compile_options(tests_Xf PRIVATE -DDATA_AS_FLOAT -msse2 ${LOC_COMPILE_OPTS})
+target_include_directories(tests_Xf PRIVATE ${BGEN_INCL_DIRS})
+set_target_properties(tests_Xf PROPERTIES LINK_FLAGS "${LIB-DIRS}")
 #
 ### Profiling by hand
 #add_executable(profile_read_cols examples/profile_read_cols.cpp examples/genotype_matrix_multithread.cpp)
