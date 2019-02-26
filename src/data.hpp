@@ -253,7 +253,7 @@ class Data
 			std::cout << "Scaling phenotype" << std::endl;
 			scale_matrix( Y, n_pheno, pheno_names );
 		}
-		if(params.covar_file != "NULL"){
+		if(n_covar > 0){
 			center_matrix( W, n_covar );
 			scale_matrix( W, n_covar, covar_names );
 		}
@@ -293,20 +293,27 @@ class Data
 		// Removing squared dependance
 		std::vector<int> cols_to_remove;
 		Eigen::MatrixXd H(n_samples, 2);
+		std::cout << "Checking for squared dependance: " << std::endl;
+		std::cout << "Name\t-log10(p-val)" << std::endl;
 		for (int ee = 0; ee < n_env; ee++){
 			H.col(0) = E.col(ee);
-			H.col(1) = E.col(ee).array().square();
+			H.col(1) = E.col(ee).array().square().matrix();
 
 			Eigen::MatrixXd HtH_inv = (H.transpose() * H).inverse();
 			Eigen::MatrixXd Hty = H.transpose() * Y;
 			double rss = (Y - H * HtH_inv * Hty).squaredNorm();
+
 			double pval = student_t_test(n_samples, 1, HtH_inv, Hty, rss);
+
+			std::cout << env_names[ee] << "\t";
+ 			std::cout << -1*std::log10(pval) << std::endl;
+
 			if (pval < 0.01 / (double) n_env ){
 				cols_to_remove.push_back(ee);
 			}
 		}
 		if(cols_to_remove.size() > 0) {
-			std::cout << "Squared dependance detected in: " << std::endl;
+			std::cout << "Projecting out squared dependance from: " << std::endl;
 			for (int ee : cols_to_remove) {
 				std::cout << env_names[ee] << std::endl;
 			}
@@ -1018,8 +1025,8 @@ class Data
 
 		if (keep.size() != n_cols) {
 			std::cout << " Removing " << (n_cols - keep.size())  << " column(s) with zero variance:" << std::endl;
-			for(int kk = 0; kk < (n_cols - keep.size()); kk++){
-				std::cout << reject_names[kk] << std::endl;
+			for(auto name : reject_names){
+				std::cout << name << std::endl;
 			}
 			// subset cols
 			for (std::size_t i = 0; i < keep.size(); i++) {

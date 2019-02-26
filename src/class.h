@@ -70,7 +70,7 @@ class parameters {
 		missing_code = -999;
 		vb_iter_max = 10000;
 		n_pve_samples = 100;
-		spike_diff_factor = 1000000.0; // Initial diff in variance of spike & slab
+		spike_diff_factor = 10000.0; // Initial diff in variance of spike & slab
 		range = false;
 		min_spike_diff_set = false;
 		mode_remove_squared_envs = true;
