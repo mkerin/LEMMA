@@ -25,6 +25,14 @@ char* argv_main1[] = { (char*) "--mode_pve_est",
 				 (char*) "--pheno", (char*) "data/io_test/case8/pheno.txt",
 				 (char*) "--out", (char*) "data/io_test/case8/test_pve_est.out.gz"};
 
+char* argv_main2[] = { (char*) "--mode_pve_est",
+					   (char*) "--random_seed", (char*) "1",
+					   (char*) "--n_pve_samples", (char*) "3",
+					   (char*) "--bgen", (char*) "data/io_test/n1000_p2000.bgen",
+					   (char*) "--pheno", (char*) "data/io_test/case8/pheno.txt",
+					   (char*) "--pve_mog_weights", (char*) "data/io_test/case8/test_mog_weights.txt",
+					   (char*) "--out", (char*) "data/io_test/case8/test_pve_est.out.gz"};
+
 
 TEST_CASE("HE-reg"){
 	SECTION("GxE effects fit"){
@@ -52,8 +60,8 @@ TEST_CASE("HE-reg"){
 
 	SECTION("Main effects fit (gaussian prior)"){
 		parameters p;
-		int argc = sizeof(argv_pve1)/sizeof(argv_pve1[0]);
-		parse_arguments(p, argc, argv_pve1);
+		int argc = sizeof(argv_main1)/sizeof(argv_main1[0]);
+		parse_arguments(p, argc, argv_main1);
 		Data data( p );
 		data.read_non_genetic_data();
 		data.standardise_non_genetic_data();
@@ -101,24 +109,36 @@ TEST_CASE("HE-reg"){
 			CHECK(pve.h2(1)  == Approx(0.5124108594));
 			CHECK(pve.h2(2)  == Approx(0.4875891406));
 		}
+	}
 
-		SECTION("MoG prior v3"){
-			long pp = data.n_var;
-			Eigen::VectorXd zeros = Eigen::VectorXd::Zero((pp + pp % 2) / 2);
-			Eigen::VectorXd ones = Eigen::VectorXd::Constant(pp/2, 1.0);
-			Eigen::VectorXd alpha_beta(pp), alpha_gam(pp);
-			alpha_beta << zeros, ones;
-			alpha_gam << zeros, ones;
-			PVE pve(p, data.G, Y, C);
-			pve.set_mog_weights(alpha_beta, alpha_gam);
-			pve.run(p.out_file);
+	SECTION("Main effects fit (MoG prior)") {
+		/* R
+		 * eps = 0.0000001
+		 * aa = data.frame(alpha_beta = c(rep(eps, 905), rep(1-eps, 905)), alpha_gam = c(rep(eps, 905), rep(1-eps, 905)))
+		 * write.table(aa, "data/io_test/case8/test_mog_weights.txt", col.names=T, row.names=F, quote=F)
+		 */
+		parameters p;
+		int argc = sizeof(argv_main2) / sizeof(argv_main2[0]);
+		parse_arguments(p, argc, argv_main2);
+		Data data(p);
+		data.read_non_genetic_data();
+		data.standardise_non_genetic_data();
+		data.read_full_bgen();
 
-			CHECK(pve.sigmas(0)  == Approx(0.4321062545));
-			CHECK(pve.sigmas(1)  == Approx(0.1218897171));
-			CHECK(pve.sigmas(2)  == Approx(0.4714699134));
-			CHECK(pve.h2(0)  == Approx(0.4213755531));
-			CHECK(pve.h2(1)  == Approx(0.1188627714));
-			CHECK(pve.h2(2)  == Approx(0.4597616755));
-		}
+		Eigen::VectorXd Y = data.Y.cast<double>();
+		Eigen::MatrixXd C = data.W.cast<double>();
+		PVE pve(p, data.G, Y, C);
+
+		Eigen::VectorXd alpha_beta, alpha_gam;
+		data.read_mog_weights(p.mog_weights_file, alpha_beta, alpha_gam);
+		pve.set_mog_weights(alpha_beta, alpha_gam);
+		pve.run(p.out_file);
+
+		CHECK(pve.sigmas(0) == Approx(0.4321062545));
+		CHECK(pve.sigmas(1) == Approx(0.1218897171));
+		CHECK(pve.sigmas(2) == Approx(0.4714699134));
+		CHECK(pve.h2(0) == Approx(0.4213755531));
+		CHECK(pve.h2(1) == Approx(0.1188627714));
+		CHECK(pve.h2(2) == Approx(0.4597616755));
 	}
 }

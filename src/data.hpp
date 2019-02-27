@@ -1145,8 +1145,8 @@ class Data
 	}
 
 	void read_mog_weights(const std::string& filename,
-                          Eigen::Ref<Eigen::VectorXd> alpha_beta,
-                          Eigen::Ref<Eigen::VectorXd> alpha_gam){
+                          Eigen::VectorXd& alpha_beta,
+                          Eigen::VectorXd& alpha_gam){
 		Eigen::MatrixXd tmp;
 		std::vector<std::string> colnames;
 		read_matrix(filename, tmp, colnames);
