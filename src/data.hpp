@@ -43,10 +43,10 @@ namespace boost_m = boost::math;
 void read_matrix(const std::string& filename,
 					 Eigen::MatrixXd& M,
 					 std::vector< std::string >& col_names);
-template <typename Derived>
+template <typename EigenMat>
 void read_matrix(const std::string& filename,
 					const long& n_rows,
-					Eigen::MatrixBase<Derived>& M,
+					EigenMat& M,
 					std::vector< std::string >& col_names,
 					std::map< int, bool >& incomplete_row);
 
@@ -1269,10 +1269,10 @@ class Data
 };
 
 /***************** Read files *****************/
-template <typename Derived>
+template <typename EigenMat>
 void read_matrix( const std::string& filename,
 					const long& n_rows,
-					Eigen::MatrixBase<Derived>& M,
+					EigenMat& M,
 					std::vector< std::string >& col_names,
 					std::map< int, bool >& incomplete_row ){
 	/* Assumptions:
