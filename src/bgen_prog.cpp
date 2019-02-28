@@ -46,7 +46,10 @@ int main( int argc, char** argv ) {
 		data.read_full_bgen();
 
 		// For the HE-reg method
-		Eigen::VectorXd eta = data.E.col(0);
+		Eigen::VectorXd eta;
+		if (data.n_env > 0){
+			eta = data.E.col(0);
+		}
 
 		if(p.mode_vb){
 			if (data.n_effects > 1) {
@@ -97,7 +100,7 @@ int main( int argc, char** argv ) {
 			// Eigen::VectorXd eta = data.E.col(0).cast<double>();
 			Eigen::VectorXd Y = data.Y.cast<double>();
 			Eigen::MatrixXd C = data.W.cast<double>();
-			if(p.env_file != "NULL") {
+			if(data.n_env > 0) {
 				assert(data.n_env == 1 || p.mode_vb); // If multi env; use VB to collapse to single
 				PVE pve(p, data.G, Y, C, eta);
 				pve.run(p.out_file);
