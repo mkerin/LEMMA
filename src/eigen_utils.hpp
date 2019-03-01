@@ -1,0 +1,41 @@
+//
+// Created by kerin on 2019-02-28.
+//
+
+#ifndef LEMMA_EIGEN_UTILS_HPP
+#define LEMMA_EIGEN_UTILS_HPP
+
+#include "tools/eigen3.3/Dense"
+
+#include <iostream>
+#include <cmath>
+#include <map>
+#include <vector>
+#include <string>
+#include <set>
+
+#include <boost/iostreams/filtering_stream.hpp>
+#include <boost/iostreams/device/file.hpp>
+#include <boost/iostreams/filter/gzip.hpp>
+
+namespace EigenUtils {
+
+	Eigen::MatrixXf solve(const Eigen::MatrixXf &A, const Eigen::MatrixXf &b);
+
+	Eigen::MatrixXd solve(const Eigen::MatrixXd &A, const Eigen::MatrixXd &b);
+
+	Eigen::MatrixXd subset_matrix(const Eigen::MatrixXd &orig, const std::vector<int> &valid_points);
+
+	template <typename EigenMat>
+	void read_matrix( const std::string& filename,
+					  const long& n_rows,
+					  EigenMat& M,
+					  std::vector< std::string >& col_names,
+					  std::map< int, bool >& incomplete_row );
+
+
+	void read_matrix( const std::string& filename,
+					  Eigen::MatrixXd& M,
+					  std::vector< std::string >& col_names);
+}
+#endif //LEMMA_EIGEN_UTILS_HPP

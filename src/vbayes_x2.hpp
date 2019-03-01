@@ -9,6 +9,16 @@ https://stackoverflow.com/questions/3283021/compile-a-standalone-static-executab
 #ifndef VBAYES_X2_HPP
 #define VBAYES_X2_HPP
 
+#include "parameters.hpp"
+#include "data.hpp"
+#include "eigen_utils.hpp"
+#include "my_timer.hpp"
+#include "typedefs.hpp"
+#include "file_streaming.hpp"
+#include "variational_parameters.hpp"
+#include "vbayes_tracker.hpp"
+#include "hyps.hpp"
+
 #include <algorithm>
 #include <chrono>     // start/end time info
 #include <cmath>      // isnan
@@ -21,14 +31,6 @@ https://stackoverflow.com/questions/3283021/compile-a-standalone-static-executab
 #include <thread>
 #include <set>
 #include "sys/types.h"
-#include "parameters.hpp"
-#include "data.hpp"
-#include "my_timer.hpp"
-#include "utils.hpp"
-#include "file_streaming.hpp"
-#include "variational_parameters.hpp"
-#include "vbayes_tracker.hpp"
-#include "hyps.hpp"
 #include "tools/eigen3.3/Dense"
 #include <boost/iostreams/filtering_stream.hpp>
 #include <boost/iostreams/device/file.hpp>
@@ -41,7 +43,10 @@ namespace boost_io = boost::iostreams;
 
 template <typename T>
 inline std::vector<int> validate_grid(const Eigen::MatrixXd &grid, T n_var);
-inline Eigen::MatrixXd subset_matrix(const Eigen::MatrixXd &orig, const std::vector<int> &valid_points);
+inline double sigmoid(double x){
+	return 1.0 / (1.0 + std::exp(-x));
+}
+
 
 class VBayesX2 {
 public:
@@ -1890,7 +1895,7 @@ public:
 
 		std::vector<int> valid_points, r1_valid_points;
 		valid_points        = validate_grid(hyps_grid, n_var);
-		hyps_grid           = subset_matrix(hyps_grid, valid_points);
+		hyps_grid           = EigenUtils::subset_matrix(hyps_grid, valid_points);
 
 		if(valid_points.empty()){
 			throw std::runtime_error("No valid grid points in hyps_grid.");
@@ -1902,7 +1907,7 @@ public:
 		// r1_hyps_grid assigned during constructor (ie before this function call)
 		long r1_n_grid   = r1_hyps_grid.rows();
 		r1_valid_points = validate_grid(r1_hyps_grid, n_var);
-		r1_hyps_grid    = subset_matrix(r1_hyps_grid, r1_valid_points);
+		r1_hyps_grid    = EigenUtils::subset_matrix(r1_hyps_grid, r1_valid_points);
 
 		if(r1_valid_points.empty()){
 			throw std::runtime_error("No valid grid points in r1_hyps_grid.");
@@ -1968,15 +1973,4 @@ inline std::vector<int> validate_grid(const Eigen::MatrixXd &grid, const T n_var
 	return valid_points;
 }
 
-inline Eigen::MatrixXd subset_matrix(const Eigen::MatrixXd &orig, const std::vector<int> &valid_points){
-	long n_cols = orig.cols(), n_rows = valid_points.size();
-	Eigen::MatrixXd subset(n_rows, n_cols);
-
-	for(int kk = 0; kk < n_rows; kk++){
-		for(int jj = 0; jj < n_cols; jj++){
-			subset(kk, jj) = orig(valid_points[kk], jj);
-		}
-	}
-	return subset;
-}
 #endif

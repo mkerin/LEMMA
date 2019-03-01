@@ -20,7 +20,6 @@
 #include "parameters.hpp"
 #include "genotype_matrix.hpp"
 #include "hyps.hpp"
-#include "utils.hpp"
 #include "file_streaming.hpp"
 #include "variational_parameters.hpp"
 #include "tools/eigen3.3/Dense"

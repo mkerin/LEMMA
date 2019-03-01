@@ -7,10 +7,9 @@
 #include "my_timer.hpp"
 #include "parameters.hpp"
 #include "stats_tests.hpp"
-#include "utils.hpp"
+#include "eigen_utils.hpp"
 
 #include "tools/eigen3.3/Dense"
-#include "tools/eigen3.3/Sparse"
 #include "tools/eigen3.3/Eigenvalues"
 #include "genfile/bgen/bgen.hpp"
 #include "genfile/bgen/View.hpp"
@@ -25,7 +24,7 @@
 #include <mutex>
 #include <vector>
 #include <string>
-#include <string>
+#include <set>
 #include <stdexcept>
 #include <thread>
 
@@ -39,16 +38,6 @@
 
 namespace boost_io = boost::iostreams;
 namespace boost_m = boost::math;
-
-void read_matrix(const std::string& filename,
-					 Eigen::MatrixXd& M,
-					 std::vector< std::string >& col_names);
-template <typename EigenMat>
-void read_matrix(const std::string& filename,
-					const long& n_rows,
-					EigenMat& M,
-					std::vector< std::string >& col_names,
-					std::map< int, bool >& incomplete_row);
 
 class Data
 {
@@ -299,6 +288,8 @@ class Data
 				Y2 = Y;
 			}
 		}
+
+		// TODO: Check columns for zero variance
 
 		// Removing squared dependance
 		std::vector<int> cols_to_remove;
@@ -775,7 +766,7 @@ class Data
 
 	void read_pheno( ){
 		// Read phenotypes to Eigen matrix Y
-		read_matrix(params.pheno_file, n_samples, Y, pheno_names, missing_phenos);
+		EigenUtils::read_matrix(params.pheno_file, n_samples, Y, pheno_names, missing_phenos);
 		n_pheno = Y.cols();
 		if(n_pheno != 1){
 			std::cout << "ERROR: Only expecting one phenotype at a time." << std::endl;
@@ -785,14 +776,14 @@ class Data
 
 	void read_covar( ){
 		// Read covariates to Eigen matrix W
-		read_matrix(params.covar_file, n_samples, W, covar_names, missing_covars);
+		EigenUtils::read_matrix(params.covar_file, n_samples, W, covar_names, missing_covars);
 		n_covar = W.cols();
 		W_reduced = false;
 	}
 
 	void read_environment( ){
 		// Read covariates to Eigen matrix W
-		read_matrix(params.env_file, n_samples, E, env_names, missing_envs);
+		EigenUtils::read_matrix(params.env_file, n_samples, E, env_names, missing_envs);
 		n_env = E.cols();
 		E_reduced = false;
 	}
@@ -801,7 +792,7 @@ class Data
 		unsigned long n_cols;
 		std::vector< std::string > col_names;
 		std::map<int, bool> missing_rows;
-		read_matrix(params.env_weights_file, E_weights, col_names);
+		EigenUtils::read_matrix(params.env_weights_file, E_weights, col_names);
 
 		assert(E_weights.rows() == n_env);
 		assert(missing_rows.empty());
@@ -936,7 +927,7 @@ class Data
 
 				// Fitting regression models
 				EigenDataMatrix tau1_j = X_kk.transpose() * Y2 / (N-1.0);
-				Eigen::MatrixXd tau2_j = solve(HtH, Hty);
+				Eigen::MatrixXd tau2_j = EigenUtils::solve(HtH, Hty);
 				double rss_null = (Y2 - X_kk * tau1_j).squaredNorm();
 #ifdef DATA_AS_FLOAT
 				double rss_alt  = (Y2 - H * tau2_j.cast<float>()).squaredNorm();
@@ -1050,7 +1041,7 @@ class Data
 		std::vector< std::string > true_gxage_names = {"sigma", "sigma_b", "sigma_g", "lambda_b", "lambda_g"};
 
 
-		read_matrix( params.hyps_grid_file, hyps_grid, hyps_names );
+		EigenUtils::read_matrix( params.hyps_grid_file, hyps_grid, hyps_names );
 
 		// Verify header of grid file as expected
 		if(params.interaction_analysis){
@@ -1076,7 +1067,7 @@ class Data
 		// Option to provide separate grid to evaluate in round 1
 		std::vector< std::string > r1_hyps_names, r1_probs_names;
 		if ( params.r1_hyps_grid_file != "NULL" ) {
-			read_matrix(params.r1_hyps_grid_file, r1_hyps_grid, r1_hyps_names);
+			EigenUtils::read_matrix(params.r1_hyps_grid_file, r1_hyps_grid, r1_hyps_names);
 			if(hyps_names != r1_hyps_names){
 				throw std::invalid_argument( "Header of --r1_hyps_grid must match --hyps_grid." );
 			}
@@ -1149,7 +1140,7 @@ class Data
                           Eigen::VectorXd& alpha_gam){
 		Eigen::MatrixXd tmp;
 		std::vector<std::string> colnames;
-		read_matrix(filename, tmp, colnames);
+		EigenUtils::read_matrix(filename, tmp, colnames);
 		alpha_beta = tmp.col(0);
 		alpha_gam = tmp.col(1);
 
@@ -1196,7 +1187,7 @@ class Data
 		Eigen::MatrixXd AtA = (A.transpose() * A).cast<double>();
 		Eigen::MatrixXd Aty = (A.transpose() * yy).cast<double>();
 
-		Eigen::MatrixXd bb = solve(AtA, Aty);
+		Eigen::MatrixXd bb = EigenUtils::solve(AtA, Aty);
 		yy -= A * bb.cast<scalarData>();
 	}
 
@@ -1219,7 +1210,7 @@ class Data
 		Eigen::MatrixXd AtA = (A.transpose() * A).cast<double>();
 		Eigen::MatrixXd Aty = (A.transpose() * yy).cast<double>();
 
-		Eigen::MatrixXd bb = solve(AtA, Aty);
+		Eigen::MatrixXd bb = EigenUtils::solve(AtA, Aty);
 		yy -= A * bb.cast<scalarData>();
 	}
 
@@ -1274,157 +1265,5 @@ class Data
 		return ofile;
 	}
 };
-
-/***************** Read files *****************/
-template <typename EigenMat>
-void read_matrix( const std::string& filename,
-					const long& n_rows,
-					EigenMat& M,
-					std::vector< std::string >& col_names,
-					std::map< int, bool >& incomplete_row ){
-	/* Assumptions:
-	- n_rows constant (number of samples constant across files)
-	*/
-
-	boost_io::filtering_istream fg;
-	std::string gz_str = ".gz";
-	if (filename.find(gz_str) != std::string::npos) {
-		fg.push(boost_io::gzip_decompressor());
-	}
-	fg.push(boost_io::file_source(filename));
-	if (!fg) {
-		std::cout << "ERROR: " << filename << " not opened." << std::endl;
-		std::exit(EXIT_FAILURE);
-	}
-
-	// Reading column names
-	std::string line;
-	if (!getline(fg, line)) {
-		std::cout << "ERROR: " << filename << " contains zero lines." << std::endl;
-		std::exit(EXIT_FAILURE);
-	}
-	std::stringstream ss;
-	std::string s;
-	int n_cols = 0;
-	ss.clear();
-	ss.str(line);
-	while (ss >> s) {
-		++n_cols;
-		col_names.push_back(s);
-	}
-	std::cout << " Reading matrix of size " << n_rows << " x " << n_cols << " from " << filename << std::endl;
-
-	// Write remainder of file to Eigen matrix M
-	incomplete_row.clear();
-	M.resize(n_rows, n_cols);
-	int i = 0;
-	double tmp_d;
-	while (getline(fg, line)) {
-		if (i >= n_rows) {
-			throw std::runtime_error("ERROR: could not convert txt file (too many lines).");
-		}
-		ss.clear();
-		ss.str(line);
-		for (int k = 0; k < n_cols; k++) {
-			std::string sss;
-			ss >> sss;
-			/// NA
-			if (sss == "NA" || sss == "NAN" || sss == "NaN" || sss == "nan") {
-				tmp_d = 0; // Will skip over this value in future
-				incomplete_row[i] = true;
-			} else {
-				try{
-					tmp_d = stod(sss);
-				} catch (const std::invalid_argument &exc){
-					std::cout << sss << " on line " << i << std::endl;
-					throw;
-				}
-			}
-			M(i, k) = tmp_d;
-		}
-		i++; // loop should end at i == n_samples
-	}
-	if (i < n_rows) {
-		throw std::runtime_error("ERROR: could not convert txt file (too few lines).");
-	}
-}
-
-
-void read_matrix( const std::string& filename,
-					 Eigen::MatrixXd& M,
-					 std::vector< std::string >& col_names){
-	/* Assumptions:
-	- dimensions unknown
-	- assume no missing values
-	*/
-
-	boost_io::filtering_istream fg;
-	std::string gz_str = ".gz";
-	if (filename.find(gz_str) != std::string::npos) {
-		fg.push(boost_io::gzip_decompressor());
-	}
-	fg.push(boost_io::file_source(filename));
-	if (!fg) {
-		std::cout << "ERROR: " << filename << " not opened." << std::endl;
-		std::exit(EXIT_FAILURE);
-	}
-
-	// Read file twice to acertain number of lines
-	std::string line;
-	int n_rows = 0;
-	getline(fg, line);
-	while (getline(fg, line)) {
-		n_rows++;
-	}
-	fg.reset();
-	if (filename.find(gz_str) != std::string::npos) {
-		fg.push(boost_io::gzip_decompressor());
-	}
-	fg.push(boost_io::file_source(filename));
-
-	// Reading column names
-	if (!getline(fg, line)) {
-		std::cout << "ERROR: " << filename << " contains zero lines." << std::endl;
-		std::exit(EXIT_FAILURE);
-	}
-	std::stringstream ss;
-	std::string s1;
-	int n_cols = 0;
-	ss.clear();
-	ss.str(line);
-	while (ss >> s1) {
-		++n_cols;
-		col_names.push_back(s1);
-	}
-	std::cout << " Reading matrix of size " << n_rows << " x " << n_cols << " from " << filename << std::endl;
-
-	// Write remainder of file to Eigen matrix M
-	M.resize(n_rows, n_cols);
-	int i = 0;
-	double tmp_d;
-	while (getline(fg, line)){
-		if (i >= n_rows) {
-			throw std::runtime_error("ERROR: could not convert txt file (too many lines).");
-		}
-		ss.clear();
-		ss.str(line);
-		for (int k = 0; k < n_cols; k++) {
-			std::string s;
-			ss >> s;
-			try{
-				tmp_d = stod(s);
-			} catch (const std::invalid_argument &exc){
-				std::cout << s << " on line " << i << std::endl;
-				throw;
-			}
-
-			M(i, k) = tmp_d;
-		}
-		i++; // loop should end at i == n_rows
-	}
-	if (i < n_rows) {
-		throw std::runtime_error("ERROR: could not convert txt file (too few lines).");
-	}
-}
 
 #endif

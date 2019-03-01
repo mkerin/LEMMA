@@ -8,11 +8,9 @@ if(CMAKE_CURRENT_SOURCE_DIR MATCHES /Users/kerin)
     message("Laptop build (OSX)")
     set(BGEN /Users/kerin/software/bgen)
     if(CMAKE_BUILD_TYPE STREQUAL Release)
-        message("Release build")
         set(LOC_COMPILE_OPTS -DOSX -Wno-deprecated -Wno-parentheses -O3 -g)
         set(LINKER_OPTS -O3 -g)
     else()
-        message("Debug build")
         set(LOC_COMPILE_OPTS -DOSX -Wno-deprecated -Wno-parentheses -DDEBUG -g)
         set(LINKER_OPTS -g)
     endif()
@@ -64,7 +62,7 @@ list(APPEND LOC_COMPILE_OPTS -DVERSION_MAJOR=${PROJECT_VERSION_MAJOR})
 list(APPEND LOC_COMPILE_OPTS -DVERSION_MINOR=${PROJECT_VERSION_MINOR})
 list(APPEND LOC_COMPILE_OPTS -DVERSION_PATCH=${PROJECT_VERSION_PATCH})
 
-#set(SOURCES src/data.cpp)
+set(SOURCES src/eigen_utils.cpp src/hyps.cpp src/variational_parameters.cpp src/genotype_matrix.cpp src/parse_arguments.cpp src/file_streaming.cpp)
 set(BGEN_INCL_DIRS ${BGEN}/genfile/include ${BGEN}/3rd_party/zstd-1.1.0/lib ${BGEN}/db/include ${BGEN}/3rd_party/sqlite3 ${BGEN}/3rd_party/boost_1_55_0)
 
 
@@ -80,9 +78,10 @@ set(LIBS boost dl pthread boost_iostreams z ${LIBS})
 #set(TARGET bgen_prog)
 set(TARGET bgen_prog_${PROJECT_VERSION_MAJOR}_${PROJECT_VERSION_MINOR}_${PROJECT_VERSION_PATCH})
 
+include_directories(${PROJECT_SOURCE_DIR})
 add_executable(${TARGET} src/bgen_prog.cpp ${SOURCES})
 target_compile_options(${TARGET} PRIVATE -msse2 ${LOC_COMPILE_OPTS})
-target_include_directories(${TARGET} PRIVATE ${BGEN_INCL_DIRS})
+include_directories(${TARGET} PRIVATE ${BGEN_INCL_DIRS})
 set_target_properties(${TARGET} PROPERTIES LINK_FLAGS "${LIB-DIRS}")
 target_link_libraries(${TARGET} ${BGEN_LIB} ${DB_LIB} ${SQLITE_LIB} ${ZSTD_LIB} ${LIBS} ${LINKER_OPTS})
 
@@ -94,7 +93,7 @@ target_link_libraries(${TARGET}_Xf ${BGEN_LIB} ${DB_LIB} ${SQLITE_LIB} ${ZSTD_LI
 
 
 ## Catch Unit Tests
-add_executable(tests unit/main.cpp unit/test_pve.cpp ${SOURCES})
+add_executable(tests unit/main.cpp unit/test_pve.cpp unit/test_main.cpp ${SOURCES})
 target_link_libraries(tests ${BGEN_LIB} ${DB_LIB} ${SQLITE_LIB} ${ZSTD_LIB} ${LIBS} ${LINKER_OPTS})
 target_compile_options(tests PRIVATE -msse2 ${LOC_COMPILE_OPTS})
 target_include_directories(tests PRIVATE ${BGEN_INCL_DIRS})

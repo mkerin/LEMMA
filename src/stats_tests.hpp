@@ -31,6 +31,12 @@ double student_t_test(long nn,
 	double tstat = beta(jj, 0);
 	tstat /= std::sqrt(rss * HtH_inv(jj, jj) / (double) (nn - pp));
 
+//	if(!std::isfinite(tstat)){
+//		std::cout << "Warning: rss = " << rss << std::endl;
+//		std::cout << "Warning: beta = "  << beta << std::endl;
+//		std::cout << "Warning: tstat = "   << tstat << std::endl;
+//	}
+
 	boost_m::students_t t_dist(nn - pp);
 	double pval  = 2 * boost_m::cdf(boost_m::complement(t_dist, fabs(tstat)));
 	return pval;
