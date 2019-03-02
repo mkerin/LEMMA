@@ -198,11 +198,89 @@ Eigen::MatrixXd EigenUtils::solve(const Eigen::MatrixXd &A, const Eigen::MatrixX
 	return x;
 }
 
+template <typename EigenMat>
+void EigenUtils::scale_matrix_and_remove_constant_cols(EigenMat& M,
+					unsigned long& n_cols,
+					std::vector< std::string >& col_names){
+	// Scale eigen matrix passed by reference.
+	// Removes columns with zero variance + updates col_names.
+	// Only call on matrixes which have been reduced to complete cases,
+	// as no check for incomplete rows.
+	long n_rows = M.rows();
+
+	std::vector<std::size_t> keep;
+	std::vector<std::string> keep_names;
+	std::vector<std::string> reject_names;
+	for (std::size_t k = 0; k < n_cols; k++) {
+		double sigma = 0.0;
+		double count = 0;
+		for (int i = 0; i < n_rows; i++) {
+			double val = M(i, k);
+			sigma += val * val;
+			count += 1;
+		}
+
+		sigma = sqrt(sigma/(count - 1));
+		if (sigma > 1e-12) {
+			for (int i = 0; i < n_rows; i++) {
+				M(i, k) /= sigma;
+			}
+			keep.push_back(k);
+			keep_names.push_back(col_names[k]);
+		} else {
+			reject_names.push_back(col_names[k]);
+		}
+	}
+
+	if (keep.size() != n_cols) {
+		std::cout << " Removing " << (n_cols - keep.size())  << " column(s) with zero variance:" << std::endl;
+		for(auto name : reject_names){
+			std::cout << name << std::endl;
+		}
+		// subset cols
+		for (std::size_t i = 0; i < keep.size(); i++) {
+			M.col(i) = M.col(keep[i]);
+		}
+		M.conservativeResize(M.rows(), keep.size());
+
+		n_cols = keep.size();
+		col_names = keep_names;
+	}
+
+	if (n_cols == 0) {
+		throw std::runtime_error("ERROR: No columns left with nonzero variance after scale_matrix()");
+	}
+}
+
+template <typename Derived>
+void EigenUtils::center_matrix(Eigen::MatrixBase<Derived>& M){
+	// Center eigen matrix passed by reference.
+	// Only call on matrixes which have been reduced to complete cases,
+	// as no check for incomplete rows.
+	long n_cols = M.cols();
+	long n_rows = M.rows();
+
+	for (int k = 0; k < n_cols; k++) {
+		double mu = 0.0;
+		double count = 0;
+		for (int i = 0; i < n_rows; i++) {
+			mu += M(i, k);
+			count += 1;
+		}
+
+		mu = mu / count;
+		for (int i = 0; i < n_rows; i++) {
+			M(i, k) -= mu;
+		}
+	}
+}
+
 // No need to call this TemporaryFunction() function,
 // it's just to avoid link error.
 void TemporaryFunctionEigenUtils (){
 	std::string filename;
 	long rows;
+	unsigned long urows;
 	std::vector<std::string> names;
 	std::map<int, bool> incomplete;
 	Eigen::MatrixXd matXd;
@@ -210,4 +288,8 @@ void TemporaryFunctionEigenUtils (){
 
 	EigenUtils::read_matrix(filename, rows, matXd, names, incomplete);
 	EigenUtils::read_matrix(filename, rows, matXf, names, incomplete);
+	EigenUtils::center_matrix(matXd);
+	EigenUtils::center_matrix(matXf);
+	EigenUtils::scale_matrix_and_remove_constant_cols(matXd, urows, names);
+	EigenUtils::scale_matrix_and_remove_constant_cols(matXf, urows, names);
 }

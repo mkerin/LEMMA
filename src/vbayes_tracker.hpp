@@ -8,15 +8,6 @@
 #ifndef VBAYES_TRACKER_HPP
 #define VBAYES_TRACKER_HPP
 
-#include <chrono>
-#include <iostream>
-#include <iomanip>
-#include <stdexcept>
-#include <string>
-#include <limits>
-#include <vector>
-
-
 #include "parameters.hpp"
 #include "genotype_matrix.hpp"
 #include "hyps.hpp"
@@ -29,6 +20,14 @@
 #include <boost/iostreams/device/file.hpp>
 #include <boost/iostreams/filter/gzip.hpp>
 #include <boost/filesystem.hpp>
+
+#include <chrono>
+#include <iostream>
+#include <iomanip>
+#include <stdexcept>
+#include <string>
+#include <limits>
+#include <vector>
 
 
 namespace boost_io = boost::iostreams;
@@ -134,7 +133,7 @@ public:
 		std::chrono::duration<double> lapsecs = std::chrono::system_clock::now() - time_check;
 
 		outf_iter << cnt << "\t";
-		outf_iter << std::setprecision(3) << std::fixed;
+		outf_iter << std::setprecision(6) << std::fixed;
 		outf_iter << i_hyps.sigma << "\t";
 
 		for (int ee = 0; ee < n_effects; ee++) {
@@ -156,7 +155,7 @@ public:
 			outf_iter << i_hyps.lambda(ee) << "\t";
 		}
 
-		outf_iter << std::setprecision(3) << std::fixed;
+		outf_iter << std::setprecision(6) << std::fixed;
 		for( int ee = 0; ee < n_effects; ee++) {
 			outf_iter << i_hyps.s_x(ee) << "\t";
 		}

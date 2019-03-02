@@ -20,6 +20,14 @@
 
 namespace EigenUtils {
 
+	template <typename Derived>
+	void center_matrix(Eigen::MatrixBase<Derived>& M);
+
+	template <typename EigenMat>
+	void scale_matrix_and_remove_constant_cols(EigenMat& M,
+						unsigned long& n_cols,
+						std::vector< std::string >& col_names);
+
 	Eigen::MatrixXf solve(const Eigen::MatrixXf &A, const Eigen::MatrixXf &b);
 
 	Eigen::MatrixXd solve(const Eigen::MatrixXd &A, const Eigen::MatrixXd &b);

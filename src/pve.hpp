@@ -34,7 +34,6 @@ public:
 	Eigen::VectorXd& Y;
 	Eigen::MatrixXd& C;
 	Eigen::VectorXd sigmas, h2;
-	Eigen::DiagonalMatrix<double, Eigen::Dynamic> U, V;
 	Eigen::VectorXd uu, vv;
 	double usum, vsum;
 
@@ -135,12 +134,18 @@ void PVE::set_mog_weights(Eigen::VectorXd weights_beta, Eigen::VectorXd weights_
 	assert(weights_gam.rows() == n_var);
 	mog_beta = true;
 	mog_gam = true;
-	U.diagonal() = weights_beta;
-	V.diagonal() = weights_gam;
 	uu = weights_beta;
 	vv = weights_gam;
 	usum = weights_beta.sum();
 	vsum = weights_gam.sum();
+
+	if(mode_gxe){
+		std::vector<std::string> my_components = {"G1", "G2", "GxE1", "GxE2", "noise"};
+		components = my_components;
+	} else {
+		std::vector<std::string> my_components = {"G1", "G2", "noise"};
+		components = my_components;
+	}
 }
 
 void PVE::fill_gaussian_noise(unsigned int seed, Eigen::Ref<Eigen::MatrixXd> zz, long nn, long pp) {
@@ -160,14 +165,12 @@ void PVE::fill_gaussian_noise(unsigned int seed, Eigen::Ref<Eigen::MatrixXd> zz,
 void PVE::he_reg_single_component_mog() {
 	// Compute matrix-vector calculations to store
 	double P = n_var, N = n_samples;
-	// Eigen::DiagonalMatrix<double, Eigen::Dynamic> Uinv;
-	// Uinv = Eigen::MatrixXd::Identity(n_samples, n_samples) - U;
 	Eigen::VectorXd uuinv = (1 - uu.array()).matrix();
 	EigenDataMatrix zz(n_samples, B);
 
 	// Compute trace computations
 	Eigen::Vector3d bb;
-	double ytK1y = (U * X.transpose_multiply(Y)).squaredNorm() / usum;
+	double ytK1y = (uu.asDiagonal() * X.transpose_multiply(Y)).squaredNorm() / usum;
 	double ytK2y = (uuinv.asDiagonal() * X.transpose_multiply(Y)).squaredNorm() / (P - usum);
 	double yty = Y.squaredNorm();
 	bb << ytK1y, ytK2y, yty;
@@ -184,7 +187,7 @@ void PVE::he_reg_single_component_mog() {
 	// mean of traces
 	Eigen::ArrayXd atrK1(B), atrK1K1(B), atrK2(B), atrK2K2(B), atrK1K2(B);
 	for (int bb = 0; bb < B; bb++){
-		atrK1(bb) = (U * Xtz.col(bb)).squaredNorm() / usum;
+		atrK1(bb) = (uu.asDiagonal() * Xtz.col(bb)).squaredNorm() / usum;
 		atrK1K1(bb) = XuXtz.col(bb).squaredNorm() / usum / usum;
 		atrK2(bb) = (uuinv.asDiagonal() * Xtz.col(bb)).squaredNorm() / (P - usum);
 		atrK2K2(bb) = XuinvXtz.col(bb).squaredNorm() / (P - usum) / (P - usum);
