@@ -446,7 +446,7 @@ TEST_CASE( "Example 1: single-env" ){
 			CHECK(vp.yx(0) == Approx(0.0081544079));
 			CHECK(vp.eta(0) == Approx(-0.5894793969));
 
-			VB.updateAllParams(0, round_index, all_vp, all_hyps, logw_prev, trackers, logw_updates);
+			VB.updateAllParams(0, round_index, all_vp, all_hyps, logw_prev);
 
 			CHECK(VB.X.col(0)(0) == Approx(1.8570984229));
 			CHECK(vp.s1_beta_sq(0) == Approx(0.0031087381));
@@ -457,7 +457,7 @@ TEST_CASE( "Example 1: single-env" ){
 			CHECK(vp.alpha_beta(63) == Approx(0.1784518373));
 			CHECK(VB.calc_logw(hyps, vp) == Approx(-60.983398393));
 
-			VB.updateAllParams(1, round_index, all_vp, all_hyps, logw_prev, trackers, logw_updates);
+			VB.updateAllParams(1, round_index, all_vp, all_hyps, logw_prev);
 
 			CHECK(vp.alpha_beta(0) == Approx(0.1350711123));
 			CHECK(vp.mu1_beta(0) == Approx(-0.0205395866));
@@ -535,7 +535,7 @@ TEST_CASE( "Example 2a: multi-env + bgen over 2chr" ){
 			std::vector<double> logw_prev(n_grid, -std::numeric_limits<double>::max());
 			std::vector<std::vector< double >> logw_updates(n_grid);
 
-			VB.updateAllParams(0, round_index, all_vp, all_hyps, logw_prev, trackers, logw_updates);
+			VB.updateAllParams(0, round_index, all_vp, all_hyps, logw_prev);
 
 			CHECK(vp.alpha_beta(0) == Approx(0.0103168718));
 			CHECK(vp.alpha_beta(1) == Approx(0.0101560491));
@@ -544,7 +544,7 @@ TEST_CASE( "Example 2a: multi-env + bgen over 2chr" ){
 			CHECK(vp.muw(0) == Approx(0.1593944543));
 			CHECK(VB.calc_logw(hyps, vp) == Approx(-71.1292851018));
 
-			VB.updateAllParams(1, round_index, all_vp, all_hyps, logw_prev, trackers, logw_updates);
+			VB.updateAllParams(1, round_index, all_vp, all_hyps, logw_prev);
 
 			CHECK(vp.alpha_beta(0) == Approx(0.0101823562));
 			CHECK(vp.alpha_beta(1) == Approx(0.0100615294));
@@ -672,7 +672,7 @@ TEST_CASE( "Example 3: multi-env w/ covars" ){
 			std::vector<double> logw_prev(n_grid, -std::numeric_limits<double>::max());
 			std::vector<std::vector< double >> logw_updates(n_grid);
 
-			VB.updateAllParams(0, round_index, all_vp, all_hyps, logw_prev, trackers, logw_updates);
+			VB.updateAllParams(0, round_index, all_vp, all_hyps, logw_prev);
 			VariationalParameters& vp = all_vp[0];
 			Hyps& hyps = all_hyps[0];
 
@@ -697,7 +697,7 @@ TEST_CASE( "Example 3: multi-env w/ covars" ){
 			CHECK(vp.s1_gam_sq(1) == Approx(0.0035489038));
 			CHECK(vp.s1_gam_sq(63) == Approx(0.0035479273));
 
-			VB.updateAllParams(1, round_index, all_vp, all_hyps, logw_prev, trackers, logw_updates);
+			VB.updateAllParams(1, round_index, all_vp, all_hyps, logw_prev);
 
 			CHECK(vp.muc(0) == Approx(0.1463805515));
 			CHECK(vp.muc(3) == Approx(-0.1128544804));
@@ -718,7 +718,7 @@ TEST_CASE( "Example 3: multi-env w/ covars" ){
 			CHECK(vp.s1_gam_sq(1) == Approx(0.0029466955));
 			CHECK(vp.s1_gam_sq(63) == Approx(0.0029262235));
 
-			VB.updateAllParams(2, round_index, all_vp, all_hyps, logw_prev, trackers, logw_updates);
+			VB.updateAllParams(2, round_index, all_vp, all_hyps, logw_prev);
 
 			CHECK(vp.alpha_beta(0) == Approx(0.1291159583));
 			CHECK(vp.alpha_beta(1) == Approx(0.1337078986));
@@ -823,7 +823,7 @@ TEST_CASE( "Example 4: multi-env + mog + covars + emp_bayes" ){
 			EigenDataVector check_ym;
 			Eigen::VectorXd Eq_beta;
 
-			VB.updateAllParams(0, round_index, all_vp, all_hyps, logw_prev, trackers, logw_updates);
+			VB.updateAllParams(0, round_index, all_vp, all_hyps, logw_prev);
 
 			CHECK(vp.alpha_beta(0)            == Approx(0.1331830674));
 			CHECK(vp.alpha_beta(1)            == Approx(0.1395213065));
@@ -842,7 +842,7 @@ TEST_CASE( "Example 4: multi-env + mog + covars + emp_bayes" ){
 			check_ym += VB.C * vp.muc.cast<scalarData>().matrix();
 			CHECK(vp.ym(0)            == Approx(check_ym(0)));
 
-			VB.updateAllParams(1, round_index, all_vp, all_hyps, logw_prev, trackers, logw_updates);
+			VB.updateAllParams(1, round_index, all_vp, all_hyps, logw_prev);
 
 			CHECK(vp.alpha_beta(0)            == Approx(0.1455501422));
 			CHECK(vp.muw(0, 0)              == Approx(0.0675565259));
@@ -866,7 +866,7 @@ TEST_CASE( "Example 4: multi-env + mog + covars + emp_bayes" ){
 			check_ym += VB.C * vp.muc.cast<scalarData>().matrix();
 			CHECK(vp.ym(0)            == Approx(check_ym(0)));
 
-			VB.updateAllParams(2, round_index, all_vp, all_hyps, logw_prev, trackers, logw_updates);
+			VB.updateAllParams(2, round_index, all_vp, all_hyps, logw_prev);
 
 			CHECK(vp.alpha_beta(63)           == Approx(0.2849674292));
 			CHECK(vp.muw(0, 0)              == Approx(0.0385493631));
@@ -1038,7 +1038,7 @@ TEST_CASE( "Example 6: single-env w MoG + hyps max" ){
 			std::vector<double> logw_prev(n_grid, -std::numeric_limits<double>::max());
 			std::vector<std::vector< double >> logw_updates(n_grid);
 
-			VB.updateAllParams(0, round_index, all_vp, all_hyps, logw_prev, trackers, logw_updates);
+			VB.updateAllParams(0, round_index, all_vp, all_hyps, logw_prev);
 			VariationalParameters& vp = all_vp[0];
 			Hyps& hyps = all_hyps[0];
 
@@ -1055,7 +1055,7 @@ TEST_CASE( "Example 6: single-env w MoG + hyps max" ){
 			CHECK(hyps.spike_var(0) == Approx(0.0000368515));
 			CHECK(VB.calc_logw(hyps, vp) == Approx(-52.129381445));
 
-			VB.updateAllParams(1, round_index, all_vp, all_hyps, logw_prev, trackers, logw_updates);
+			VB.updateAllParams(1, round_index, all_vp, all_hyps, logw_prev);
 
 			CHECK(vp.alpha_beta(0) == Approx(0.1428104733));
 			CHECK(vp.mu1_beta(0) == Approx(-0.01972825));
@@ -1349,9 +1349,9 @@ TEST_CASE("--dxteex case8") {
 			VariationalParameters &vp = all_vp[0];
 			Hyps &hyps = all_hyps[0];
 
-			VB.updateAllParams(0, round_index, all_vp, all_hyps, logw_prev, trackers, logw_updates);
-			VB.updateAllParams(1, round_index, all_vp, all_hyps, logw_prev, trackers, logw_updates);
-			VB.updateAllParams(2, round_index, all_vp, all_hyps, logw_prev, trackers, logw_updates);
+			VB.updateAllParams(0, round_index, all_vp, all_hyps, logw_prev);
+			VB.updateAllParams(1, round_index, all_vp, all_hyps, logw_prev);
+			VB.updateAllParams(2, round_index, all_vp, all_hyps, logw_prev);
 
 			VbTracker tracker(p);
 			tracker.init_interim_output(0, 2, VB.n_effects, VB.n_env, VB.env_names, vp);
@@ -1428,7 +1428,7 @@ TEST_CASE( "Edge case 1: error in alpha" ){
 
 			vp.alpha_beta(0) = std::nan("1");
 
-			CHECK_THROWS(VB.updateAllParams(0, round_index, all_vp, all_hyps, logw_prev, trackers, logw_updates));
+			CHECK_THROWS(VB.updateAllParams(0, round_index, all_vp, all_hyps, logw_prev));
 		}
 	}
 }

@@ -36,6 +36,7 @@ public:
 	Eigen::ArrayXd pve_large;
 
 	parameters p;
+	int n_effects;
 
 	Hyps(parameters my_params) : p(my_params) {};
 
@@ -49,9 +50,16 @@ public:
 						int ii,
 						int n_var,
 						const Eigen::Ref<const Eigen::MatrixXd>& hyps_grid);
+	void update_pve();
+	double l2_norm() const;
+	bool check_valid_domain() const;
 
 	friend std::ostream& operator<< (std::ostream &os, const Hyps& hyps);
 	friend boost_io::filtering_ostream& operator<< (boost_io::filtering_ostream &os, const Hyps& hyps);
 };
+
+Hyps operator+(const Hyps &h1, const Hyps &h2);
+Hyps operator-(const Hyps &h1, const Hyps &h2);
+Hyps operator*(const double &scalar, const Hyps &h1);
 
 #endif //BGEN_PROG_HYPS_HPP

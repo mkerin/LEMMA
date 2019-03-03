@@ -16,7 +16,7 @@ class parameters {
 		std::vector< std::string > rsid;
 		unsigned int random_seed;
 		long int chunk_size, vb_iter_max;
-		int missing_code, burnin_maxhyps, env_update_repeats, n_gconf, n_bgen_thread, n_pve_samples;
+		int missing_code, env_update_repeats, n_gconf, n_bgen_thread, n_pve_samples;
 		unsigned int n_thread, main_chunk_size, gxe_chunk_size;
 		std::uint32_t range_start, range_end;
 		bool range, maf_lim, info_lim, select_snps, xtra_verbose;
@@ -58,7 +58,6 @@ class parameters {
 		n_thread = 1;
 		n_bgen_thread = 1;
 		random_seed = -1;
-		burnin_maxhyps = 0;
 		env_update_repeats = 1;
 		interaction_analysis = false;
 		chunk_size = 256;

@@ -109,7 +109,6 @@ void parse_arguments(parameters &p, int argc, char **argv) {
 			"--mode_alternating_updates",
 			"--mode_no_gxe",
 			"--vb_iter_max",
-			"--burnin_maxhyps",
 			"--env_update_repeats",
 			"--gamma_updates_thresh",
 			"--init_weights_with_snpwise_scan",
@@ -252,11 +251,6 @@ void parse_arguments(parameters &p, int argc, char **argv) {
 
 			if(strcmp(in_str, "--main_chunk_size") == 0) {
 				p.main_chunk_size = std::stoi(argv[i + 1]);
-				i += 1;
-			}
-
-			if(strcmp(in_str, "--burnin_maxhyps") == 0) {
-				p.burnin_maxhyps = std::stoi(argv[i + 1]);
 				i += 1;
 			}
 

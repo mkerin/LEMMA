@@ -3,6 +3,48 @@
 //
 #include "hyps.hpp"
 
+double Hyps::l2_norm() const {
+	double res = sigma * sigma;
+	res += slab_relative_var.square().sum();
+	res += spike_relative_var.square().sum();
+	res += lambda.square().sum();
+	return res;
+}
+
+// Note: Should this return class hyps!? s_x not defined?
+Hyps operator+(const Hyps &h1, const Hyps &h2){
+	Hyps hyps(h1.p);
+	hyps.sigma = h1.sigma + h2.sigma;
+	hyps.slab_var = h1.slab_var + h2.slab_var;
+	hyps.spike_var = h1.spike_var + h2.spike_var;
+	hyps.slab_relative_var = h1.slab_relative_var + h2.slab_relative_var;
+	hyps.spike_relative_var = h1.spike_relative_var + h2.spike_relative_var;
+	hyps.lambda = h1.lambda + h2.lambda;
+	return hyps;
+}
+
+Hyps operator-(const Hyps &h1, const Hyps &h2){
+	Hyps hyps(h1.p);
+	hyps.sigma = h1.sigma - h2.sigma;
+	hyps.slab_var = h1.slab_var - h2.slab_var;
+	hyps.spike_var = h1.spike_var - h2.spike_var;
+	hyps.slab_relative_var = h1.slab_relative_var - h2.slab_relative_var;
+	hyps.spike_relative_var = h1.spike_relative_var - h2.spike_relative_var;
+	hyps.lambda = h1.lambda - h2.lambda;
+	return hyps;
+}
+
+Hyps operator*(const double &scalar, const Hyps &h1){
+	Hyps hyps(h1.p);
+	hyps.sigma = scalar * h1.sigma;
+	hyps.slab_var = scalar * h1.slab_var;
+	hyps.spike_var = scalar * h1.spike_var;
+	hyps.slab_relative_var = scalar * h1.slab_relative_var;
+	hyps.spike_relative_var = scalar * h1.spike_relative_var;
+	hyps.lambda = scalar * h1.lambda;
+	return hyps;
+}
+
 void Hyps::init_from_grid(int n_effects, int ii, int n_var, const Eigen::Ref<const Eigen::MatrixXd> &hyps_grid) {
 	/*** Implicit that n_effects == 1 ***/
 
@@ -31,9 +73,9 @@ void Hyps::init_from_grid(int n_effects, int ii, int n_var, const Eigen::Ref<con
 	s_x << n_var;
 }
 
-void Hyps::init_from_grid(int n_effects, int ii, int n_var, const Eigen::Ref<const Eigen::MatrixXd> &hyps_grid,
+void Hyps::init_from_grid(int my_n_effects, int ii, int n_var, const Eigen::Ref<const Eigen::MatrixXd> &hyps_grid,
 						  const double &my_s_z) {
-	// Implicit that n_effects > 1
+	n_effects = my_n_effects;
 
 	// Unpack
 	double my_sigma = hyps_grid(ii, sigma_ind);
@@ -50,6 +92,9 @@ void Hyps::init_from_grid(int n_effects, int ii, int n_var, const Eigen::Ref<con
 	lambda.resize(n_effects);
 	s_x.resize(n_effects);
 
+	pve.resize(n_effects);
+	pve_large.resize(n_effects);
+
 	// Assign initial hyps
 	sigma = my_sigma;
 	slab_var << my_sigma * my_sigma_b, my_sigma * my_sigma_g;
@@ -58,6 +103,26 @@ void Hyps::init_from_grid(int n_effects, int ii, int n_var, const Eigen::Ref<con
 	spike_relative_var << my_sigma_b / p.spike_diff_factor, my_sigma_g / p.spike_diff_factor;
 	lambda << my_lam_b, my_lam_g;
 	s_x << n_var, my_s_z;
+}
+
+void Hyps::update_pve(){
+	// Compute heritability
+
+	pve = lambda * slab_relative_var * s_x;
+	if(p.mode_mog_prior_beta){
+		int ee = 0;
+		pve_large[ee] = pve[ee];
+		pve[ee] += (1 - lambda[ee]) * spike_relative_var[ee] * s_x[ee];
+
+		if (p.mode_mog_prior_gam && n_effects > 1){
+			int ee = 1;
+			pve_large[ee] = pve[ee];
+			pve[ee] += (1 - lambda[ee]) * spike_relative_var[ee] * s_x[ee];
+		}
+
+		pve_large /= (pve.sum() + 1.0);
+	}
+	pve /= (pve.sum() + 1.0);
 }
 
 std::ostream& operator<<(std::ostream& os, const Hyps& hyps){

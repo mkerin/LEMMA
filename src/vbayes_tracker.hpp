@@ -35,8 +35,6 @@ namespace boost_io = boost::iostreams;
 class VbTracker {
 public:
 	int           count;              // Number of iterations to convergence at each step
-	std::vector< double > logw_updates;  // elbo updates at each ii
-	std::vector< double > alpha_diffs;  // elbo updates at each ii
 	VariationalParametersLite vp;         // best mu at each ii
 	double          logw;                // best logw at each ii
 	Hyps           hyps;                // hyps values at end of VB inference.
