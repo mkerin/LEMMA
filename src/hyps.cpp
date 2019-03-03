@@ -11,15 +11,31 @@ double Hyps::l2_norm() const {
 	return res;
 }
 
+bool Hyps::check_valid_domain() const {
+	bool res = true;
+	if (sigma <= 0) res = false;
+	if (slab_relative_var.minCoeff() <= 0) res = false;
+	if (slab_var.minCoeff() <= 0) res = false;
+	if (lambda.minCoeff() <= 0) res = false;
+	if (lambda.maxCoeff() >= 1) res = false;
+	if(p.mode_mog_prior_beta || p.mode_mog_prior_gam){
+		if (spike_var.minCoeff() <= 0) res = false;
+		if (spike_relative_var.minCoeff() <= 0) res = false;
+	}
+	return res;
+}
+
 // Note: Should this return class hyps!? s_x not defined?
 Hyps operator+(const Hyps &h1, const Hyps &h2){
 	Hyps hyps(h1.p);
 	hyps.sigma = h1.sigma + h2.sigma;
 	hyps.slab_var = h1.slab_var + h2.slab_var;
-	hyps.spike_var = h1.spike_var + h2.spike_var;
 	hyps.slab_relative_var = h1.slab_relative_var + h2.slab_relative_var;
-	hyps.spike_relative_var = h1.spike_relative_var + h2.spike_relative_var;
 	hyps.lambda = h1.lambda + h2.lambda;
+	if(h1.p.mode_mog_prior_beta || h1.p.mode_mog_prior_gam){
+		hyps.spike_var = h1.spike_var + h2.spike_var;
+		hyps.spike_relative_var = h1.spike_relative_var + h2.spike_relative_var;
+	}
 	return hyps;
 }
 

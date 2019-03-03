@@ -519,33 +519,35 @@ public:
 			std::vector<double> alpha_diff(n_grid);
 
 			updateAllParams(count, round_index, all_vp, all_hyps, logw_prev);
+
+			// SQUAREM
+			if (p.mode_squarem){
+				if(count % 3 == 0){
+					theta0 = all_hyps;
+				} else if (count % 3 == 1){
+					theta1 = all_hyps;
+				} else {
+					theta2 = all_hyps;
+					for (int nn = 0; nn < n_grid; nn++){
+						Hyps rr = theta1[nn] - theta0[nn];
+						Hyps vv = (theta2[nn] - theta1[nn]) - rr;
+						double step = std::min(- rr.l2_norm() / vv.l2_norm(), -1.0);
+						Hyps theta = theta0[nn] - 2 * step * rr + step * step * vv;
+
+						// check all hyps in theta remain in valid domain
+						while(!theta.check_valid_domain()){
+							step = std::min(step * 0.5, -1.0);
+							theta = theta0[nn] - 2 * step * rr + step * step * vv;
+						}
+						all_hyps[nn] = theta;
+					}
+				}
+			}
+
+			// update elbo
 			for (int nn = 0; nn < n_grid; nn++){
 				i_logw[nn]     = calc_logw(all_hyps[nn], all_vp[nn]);
 				alpha_diff[nn] = (alpha_prev[nn] - all_vp[nn].alpha_beta).abs().maxCoeff();
-			}
-
-			// SQUAREM
-			if(count % 3 == 0){
-				theta0 = all_hyps;
-			} else if (count % 3 == 1){
-				theta1 = all_hyps;
-			} else {
-				theta2 = all_hyps;
-				for (int nn = 0; nn < n_grid; nn++){
-					Hyps rr = theta1[nn] - theta0[nn];
-					Hyps vv = (theta2[nn] - theta1[nn]) - rr;
-					double step = std::min(- rr.l2_norm() / vv.l2_norm(), -1.0);
-					Hyps theta = theta0[nn] - 2 * step * rr + step * step * vv;
-
-					// check all hyps in theta remain in valid domain
-					while(!theta.check_valid_domain()){
-						step = std::min(step * 0.5, -1.0);
-						theta = theta0[nn] - 2 * step * rr + step * step * vv;
-					}
-
-					// Maybe need to recompute s_z?
-					
-				}
 			}
 
 			// Interim output
@@ -563,7 +565,7 @@ public:
 
 			// Diagnose convergence
 			for (int nn = 0; nn < n_grid; nn++) {
-				double logw_diff = i_logw[nn] - logw_prev[nn];
+				double logw_diff = std::abs(i_logw[nn] - logw_prev[nn]);
 				if (p.alpha_tol_set_by_user && p.elbo_tol_set_by_user) {
 					if (alpha_diff[nn] < p.alpha_tol && logw_diff < p.elbo_tol) {
 						converged[nn] = 1;

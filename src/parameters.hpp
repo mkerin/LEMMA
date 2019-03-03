@@ -28,7 +28,7 @@ class parameters {
 		bool restrict_gamma_updates, mode_no_gxe, mode_debug;
 		bool init_weights_with_snpwise_scan, flip_high_maf_variants, min_spike_diff_set;
 		bool mode_mog_prior_beta, mode_mog_prior_gam, mode_random_start;
-		bool mode_remove_squared_envs;
+		bool mode_remove_squared_envs, mode_squarem;
 		double min_maf, min_info, elbo_tol, alpha_tol, gamma_updates_thresh;
 		double spike_diff_factor, min_spike_diff_factor;
 		std::vector < std::string > incl_sample_ids, gconf;
@@ -55,6 +55,7 @@ class parameters {
 		flip_high_maf_variants = false;
 		init_weights_with_snpwise_scan = false;
 		restrict_gamma_updates = false;
+		mode_squarem = false;
 		n_thread = 1;
 		n_bgen_thread = 1;
 		random_seed = -1;

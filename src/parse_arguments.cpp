@@ -82,6 +82,7 @@ void parse_arguments(parameters &p, int argc, char **argv) {
 			"--out",
 			"--mode_vb",
 			"--mode_empirical_bayes",
+			"--mode_squarem",
 			"--effects_prior_mog",
 			"--mode_spike_slab",
 			"--use_vb_on_covars",
@@ -378,6 +379,12 @@ void parse_arguments(parameters &p, int argc, char **argv) {
 			}
 
 			if(strcmp(in_str, "--mode_empirical_bayes") == 0) {
+				p.mode_empirical_bayes = true;
+				i += 0;
+			}
+
+			if(strcmp(in_str, "--mode_squarem") == 0) {
+				p.mode_squarem = true;
 				p.mode_empirical_bayes = true;
 				i += 0;
 			}
