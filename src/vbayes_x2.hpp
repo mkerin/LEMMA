@@ -539,6 +539,12 @@ public:
 							step = std::min(step * 0.5, -1.0);
 							theta = theta0[nn] - 2 * step * rr + step * step * vv;
 						}
+
+						// Copy s_x and pve from theta2
+						theta.s_x = theta2[nn].s_x;
+						theta.pve = theta2[nn].pve;
+						theta.pve_large = theta2[nn].pve_large;
+
 						all_hyps[nn] = theta;
 					}
 				}
