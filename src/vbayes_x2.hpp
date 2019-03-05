@@ -531,7 +531,7 @@ public:
 					for (int nn = 0; nn < n_grid; nn++){
 						Hyps rr = theta1[nn] - theta0[nn];
 						Hyps vv = (theta2[nn] - theta1[nn]) - rr;
-						double step = std::min(- rr.l2_norm() / vv.l2_norm(), -1.0);
+						double step = std::min(- rr.normL2() / vv.normL2(), -1.0);
 						Hyps theta = theta0[nn] - 2 * step * rr + step * step * vv;
 
 						// check all hyps in theta remain in valid domain

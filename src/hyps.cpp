@@ -3,12 +3,14 @@
 //
 #include "hyps.hpp"
 
-double Hyps::l2_norm() const {
+#include <cmath>
+
+double Hyps::normL2() const {
 	double res = sigma * sigma;
 	res += slab_relative_var.square().sum();
 	res += spike_relative_var.square().sum();
 	res += lambda.square().sum();
-	return res;
+	return std::sqrt(res);
 }
 
 bool Hyps::check_valid_domain() const {

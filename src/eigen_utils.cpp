@@ -252,8 +252,8 @@ void EigenUtils::scale_matrix_and_remove_constant_cols(EigenMat& M,
 	}
 }
 
-template <typename Derived>
-void EigenUtils::center_matrix(Eigen::MatrixBase<Derived>& M){
+template <typename EigenMat>
+void EigenUtils::center_matrix(EigenMat& M){
 	// Center eigen matrix passed by reference.
 	// Only call on matrixes which have been reduced to complete cases,
 	// as no check for incomplete rows.
@@ -275,21 +275,16 @@ void EigenUtils::center_matrix(Eigen::MatrixBase<Derived>& M){
 	}
 }
 
-// No need to call this TemporaryFunction() function,
-// it's just to avoid link error.
-void TemporaryFunctionEigenUtils (){
-	std::string filename;
-	long rows;
-	unsigned long urows;
-	std::vector<std::string> names;
-	std::map<int, bool> incomplete;
-	Eigen::MatrixXd matXd;
-	Eigen::MatrixXf matXf;
+// Explicit instantiation
+// https://stackoverflow.com/questions/2152002/how-do-i-force-a-particular-instance-of-a-c-template-to-instantiate
 
-	EigenUtils::read_matrix(filename, rows, matXd, names, incomplete);
-	EigenUtils::read_matrix(filename, rows, matXf, names, incomplete);
-	EigenUtils::center_matrix(matXd);
-	EigenUtils::center_matrix(matXf);
-	EigenUtils::scale_matrix_and_remove_constant_cols(matXd, urows, names);
-	EigenUtils::scale_matrix_and_remove_constant_cols(matXf, urows, names);
-}
+template void EigenUtils::read_matrix(const std::string&, const long&,
+Eigen::MatrixXf&, std::vector<std::string>&, std::map<int, bool>&);
+template void EigenUtils::read_matrix(const std::string&, const long&,
+Eigen::MatrixXd&, std::vector<std::string>&, std::map<int, bool>&);
+template void EigenUtils::center_matrix(Eigen::MatrixXd&);
+template void EigenUtils::center_matrix(Eigen::MatrixXf&);
+template void EigenUtils::scale_matrix_and_remove_constant_cols(Eigen::MatrixXf&,
+unsigned long&, std::vector<std::string>&);
+template void EigenUtils::scale_matrix_and_remove_constant_cols(Eigen::MatrixXd&,
+unsigned long&, std::vector<std::string>&);

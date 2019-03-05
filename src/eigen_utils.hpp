@@ -20,8 +20,8 @@
 
 namespace EigenUtils {
 
-	template <typename Derived>
-	void center_matrix(Eigen::MatrixBase<Derived>& M);
+	template <typename EigenMat>
+	void center_matrix(EigenMat& M);
 
 	template <typename EigenMat>
 	void scale_matrix_and_remove_constant_cols(EigenMat& M,
@@ -46,4 +46,5 @@ namespace EigenUtils {
 					  Eigen::MatrixXd& M,
 					  std::vector< std::string >& col_names);
 }
+
 #endif //LEMMA_EIGEN_UTILS_HPP

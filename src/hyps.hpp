@@ -51,7 +51,7 @@ public:
 						int n_var,
 						const Eigen::Ref<const Eigen::MatrixXd>& hyps_grid);
 	void update_pve();
-	double l2_norm() const;
+	double normL2() const;
 	bool check_valid_domain() const;
 
 	friend std::ostream& operator<< (std::ostream &os, const Hyps& hyps);
