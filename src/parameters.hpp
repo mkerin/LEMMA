@@ -30,7 +30,7 @@ class parameters {
 		bool mode_mog_prior_beta, mode_mog_prior_gam, mode_random_start;
 		bool mode_remove_squared_envs, mode_squarem;
 		double min_maf, min_info, elbo_tol, alpha_tol, gamma_updates_thresh;
-		double spike_diff_factor, min_spike_diff_factor;
+		double beta_spike_diff_factor, gam_spike_diff_factor, min_spike_diff_factor;
 		std::vector < std::string > incl_sample_ids, gconf;
 
 	// constructors/destructors
@@ -71,7 +71,8 @@ class parameters {
 		missing_code = -999;
 		vb_iter_max = 10000;
 		n_pve_samples = 100;
-		spike_diff_factor = 10000.0; // Initial diff in variance of spike & slab
+		beta_spike_diff_factor = 10000.0; // Initial diff in variance of spike & slab
+		gam_spike_diff_factor = 10000.0; // Initial diff in variance of spike & slab
 		range = false;
 		min_spike_diff_set = false;
 		mode_remove_squared_envs = true;

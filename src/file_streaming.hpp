@@ -52,9 +52,11 @@ void write_snp_stats_to_file(boost_io::filtering_ostream& ofile,
 							 const bool& write_mog,
 							 const Eigen::Ref<const Eigen::VectorXd>& neglogp_beta,
 							 const Eigen::Ref<const Eigen::VectorXd>& neglogp_gam,
+							 const Eigen::Ref<const Eigen::VectorXd>& neglogp_rgam,
 							 const Eigen::Ref<const Eigen::VectorXd>& neglogp_joint,
 							 const Eigen::Ref<const Eigen::VectorXd>& test_stat_beta,
 							 const Eigen::Ref<const Eigen::VectorXd>& test_stat_gam,
+							 const Eigen::Ref<const Eigen::VectorXd>& test_stat_rgam,
 							 const Eigen::Ref<const Eigen::VectorXd>& test_stat_joint);
 
 

@@ -84,9 +84,9 @@ void Hyps::init_from_grid(int n_effects, int ii, int n_var, const Eigen::Ref<con
 	// Assign initial hyps
 	sigma = my_sigma;
 	slab_var << my_sigma * my_sigma_b;
-	spike_var << my_sigma * my_sigma_b / p.spike_diff_factor;
+	spike_var << my_sigma * my_sigma_b / p.beta_spike_diff_factor;
 	slab_relative_var << my_sigma_b;
-	spike_relative_var << my_sigma_b / p.spike_diff_factor;
+	spike_relative_var << my_sigma_b / p.beta_spike_diff_factor;
 	lambda << my_lam_b;
 	s_x << n_var;
 }
@@ -116,9 +116,9 @@ void Hyps::init_from_grid(int my_n_effects, int ii, int n_var, const Eigen::Ref<
 	// Assign initial hyps
 	sigma = my_sigma;
 	slab_var << my_sigma * my_sigma_b, my_sigma * my_sigma_g;
-	spike_var << my_sigma * my_sigma_b / p.spike_diff_factor, my_sigma * my_sigma_g / p.spike_diff_factor;
+	spike_var << my_sigma * my_sigma_b / p.beta_spike_diff_factor, my_sigma * my_sigma_g / p.gam_spike_diff_factor;
 	slab_relative_var << my_sigma_b, my_sigma_g;
-	spike_relative_var << my_sigma_b / p.spike_diff_factor, my_sigma_g / p.spike_diff_factor;
+	spike_relative_var << my_sigma_b / p.beta_spike_diff_factor, my_sigma_g / p.gam_spike_diff_factor;
 	lambda << my_lam_b, my_lam_g;
 	s_x << n_var, my_s_z;
 }

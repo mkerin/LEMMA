@@ -152,9 +152,11 @@ void write_snp_stats_to_file(boost_io::filtering_ostream &ofile, const int &n_ef
 							 const VariationalParametersLite &vp, const GenotypeMatrix &X, const parameters &p,
 							 const bool &write_mog, const Eigen::Ref<const Eigen::VectorXd> &neglogp_beta,
 							 const Eigen::Ref<const Eigen::VectorXd> &neglogp_gam,
+							 const Eigen::Ref<const Eigen::VectorXd> &neglogp_rgam,
 							 const Eigen::Ref<const Eigen::VectorXd> &neglogp_joint,
 							 const Eigen::Ref<const Eigen::VectorXd> &test_stat_beta,
 							 const Eigen::Ref<const Eigen::VectorXd> &test_stat_gam,
+							 const Eigen::Ref<const Eigen::VectorXd> &test_stat_rgam,
 							 const Eigen::Ref<const Eigen::VectorXd> &test_stat_joint) {
 	// Function to write parameter values from genetic effects to file
 	// Assumes ofile has been initialised
@@ -167,7 +169,7 @@ void write_snp_stats_to_file(boost_io::filtering_ostream &ofile, const int &n_ef
 		}
 		ofile  << " loco_t_stat" << ee << " loco_t_neglogp" << ee;
 	}
-	if(n_effects > 1) ofile << " loco_f_stat" << " loco_f_neglogp";
+	if(n_effects > 1) ofile << " loco_chi_stat" << " loco_robust_neglogp" << " loco_f_stat" << " loco_f_neglogp";
 	ofile << std::endl;
 
 	Eigen::ArrayXXd      mean_beta  = vp.alpha_beta * vp.mu1_beta;
@@ -205,6 +207,8 @@ void write_snp_stats_to_file(boost_io::filtering_ostream &ofile, const int &n_ef
 			}
 			ofile << " " << test_stat_gam(kk);
 			ofile << " " << neglogp_gam(kk);
+			ofile << " " << test_stat_rgam(kk);
+			ofile << " " << neglogp_rgam(kk);
 			ofile << " " << test_stat_joint(kk);
 			ofile << " " << neglogp_joint(kk);
 		}

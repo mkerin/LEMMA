@@ -1555,9 +1555,11 @@ public:
 					const std::vector<Eigen::VectorXd>& chr_residuals,
 					Eigen::Ref<Eigen::VectorXd> neglogp_beta,
 					Eigen::Ref<Eigen::VectorXd> neglogp_gam,
+					Eigen::Ref<Eigen::VectorXd> neglogp_gam_robust,
 					Eigen::Ref<Eigen::VectorXd> neglogp_joint,
 					Eigen::Ref<Eigen::VectorXd> test_stat_beta,
 					Eigen::Ref<Eigen::VectorXd> test_stat_gam,
+					Eigen::Ref<Eigen::VectorXd> test_stat_gam_robust,
 					Eigen::Ref<Eigen::VectorXd> test_stat_joint){
 		assert(neglogp_beta.rows()  == n_var);
 		assert(neglogp_gam.rows()   == n_var);
@@ -1571,18 +1573,18 @@ public:
 		assert(chr_residuals.size() == n_chrs);
 
 		// Compute p-vals per variant (p=3 as residuals mean centered)
-		Eigen::MatrixXd H_kk(n_samples, n_effects);
+		Eigen::MatrixXd H(n_samples, n_effects);
 		boost_m::students_t t_dist(n_samples - n_effects - 1);
 		boost_m::fisher_f f_dist(n_effects, n_samples - n_effects - 1);
 		for(std::uint32_t jj = 0; jj < n_var; jj++ ){
 			int chr1 = X.chromosome[jj];
 			int cc = std::find(chrs_present.begin(), chrs_present.end(), chr1) - chrs_present.begin();
-			H_kk.col(0) = X.col(jj).cast<double>();
+			H.col(0) = X.col(jj).cast<double>();
 
 			if(n_effects == 1){
-				double ztz_inv = 1.0 / H_kk.squaredNorm();
-				double tau = (H_kk.transpose() * chr_residuals[cc])(0,0) * ztz_inv;
-				double rss_null = (chr_residuals[cc] - H_kk * tau).squaredNorm();
+				double ztz_inv = 1.0 / H.squaredNorm();
+				double tau = (H.transpose() * chr_residuals[cc])(0,0) * ztz_inv;
+				double rss_null = (chr_residuals[cc] - H * tau).squaredNorm();
 				// T-test of variant j
 				double main_se_j    = std::sqrt(rss_null / (N - 1.0) * ztz_inv);
 				double main_tstat_j = tau / main_se_j;
@@ -1591,23 +1593,32 @@ public:
 				neglogp_beta(jj) = -1 * std::log10(main_pval_j);
 				test_stat_beta(jj) = main_tstat_j;
 			} else if (n_effects > 1){
-				H_kk.col(1) = H_kk.col(0).cwiseProduct(vp.eta.cast<double>());
+				H.col(1) = H.col(0).cwiseProduct(vp.eta.cast<double>());
 
-				// Model Fitting - p=3 as residuals mean centered
-				Eigen::Matrix2d HtH     = H_kk.transpose() * H_kk;
+				// Model Fitting
+				Eigen::Matrix2d HtH     = H.transpose() * H;
 				Eigen::Matrix2d HtH_inv = HtH.inverse(); // should be efficient for 2x2 matrix
-				Eigen::Vector2d tau     = HtH_inv * H_kk.transpose() * chr_residuals[cc];
+				Eigen::Vector2d Hty     = H.transpose() * chr_residuals[cc];
+				Eigen::Vector2d tau     = HtH_inv * Hty;
 
+				Eigen::VectorXd resid_alt = chr_residuals[cc] - H * tau;
+				double rss_alt  = resid_alt.squaredNorm();
 				double rss_null = chr_residuals[cc].squaredNorm();
-				double rss_alt  = (chr_residuals[cc] - H_kk * tau).squaredNorm();
 
-				// T-test on beta
-				double beta_tstat = tau[0] / sqrt(rss_alt * HtH_inv(0, 0) / (N - 3.0));
-				double beta_pval  = 2 * boost_m::cdf(boost_m::complement(t_dist, fabs(beta_tstat)));
+				// Single-var tests
+				double beta_tstat, gam_tstat, rgam_stat, beta_pval, gam_pval, rgam_pval;
+				Eigen::Matrix2d HtVH = H.transpose() * resid_alt.cwiseProduct(resid_alt).asDiagonal() * H;
+				hetero_chi_sq(HtH_inv, Hty, HtVH, 1, rgam_stat, rgam_pval);
+				student_t_test(n_samples, HtH_inv, Hty, rss_alt, 1, gam_tstat, gam_pval);
+				student_t_test(n_samples, HtH_inv, Hty, rss_alt, 0, beta_tstat, beta_pval);
 
-				// T-test on gamma
-				double gam_tstat  = tau[1] / sqrt(rss_alt * HtH_inv(1, 1) / (N - 3.0));
-				double gam_pval   = 2 * boost_m::cdf(boost_m::complement(t_dist, fabs(gam_tstat)));
+				// // T-test on beta
+				// double beta_tstat = tau[0] / sqrt(rss_alt * HtH_inv(0, 0) / (N - 3.0));
+				// double beta_pval  = 2 * boost_m::cdf(boost_m::complement(t_dist, fabs(beta_tstat)));
+				//
+				// // T-test on gamma
+				// double gam_tstat  = tau[1] / sqrt(rss_alt * HtH_inv(1, 1) / (N - 3.0));
+				// double gam_pval   = 2 * boost_m::cdf(boost_m::complement(t_dist, fabs(gam_tstat)));
 
 				// F-test over main+int effects of snp_j
 				double joint_fstat, joint_pval;
@@ -1617,9 +1628,11 @@ public:
 
 				neglogp_beta[jj]  = -1 * std::log10(beta_pval);
 				neglogp_gam[jj]   = -1 * std::log10(gam_pval);
+				neglogp_gam_robust[jj]   = -1 * std::log10(rgam_pval);
 				neglogp_joint[jj] = -1 * std::log10(joint_pval);
 				test_stat_beta[jj]  = beta_tstat;
 				test_stat_gam[jj]   = gam_tstat;
+				test_stat_gam_robust[jj]   = rgam_stat;
 				test_stat_joint[jj] = joint_fstat;
 			}
 		}
@@ -1797,12 +1810,12 @@ public:
 		}
 
 		// Compute LOCO p-values
-		Eigen::VectorXd neglogp_beta(n_var), neglogp_gam(n_var), neglogp_joint(n_var);
-		Eigen::VectorXd test_stat_beta(n_var), test_stat_gam(n_var), test_stat_joint(n_var);
-		LOCO_pvals(vp_map, map_residuals_by_chr, neglogp_beta, neglogp_gam, neglogp_joint, test_stat_beta, test_stat_gam, test_stat_joint);
+		Eigen::VectorXd neglogp_beta(n_var), neglogp_gam(n_var), neglogp_rgam(n_var), neglogp_joint(n_var);
+		Eigen::VectorXd test_stat_beta(n_var), test_stat_gam(n_var), test_stat_rgam(n_var), test_stat_joint(n_var);
+		LOCO_pvals(vp_map, map_residuals_by_chr, neglogp_beta, neglogp_gam, neglogp_rgam, neglogp_joint, test_stat_beta, test_stat_gam, test_stat_rgam, test_stat_joint);
 
 		// MAP snp-stats to file
-		write_snp_stats_to_file(outf_map, n_effects, n_var, vp_map, X, p, true, neglogp_beta, neglogp_gam, neglogp_joint, test_stat_beta, test_stat_gam, test_stat_joint);
+		write_snp_stats_to_file(outf_map, n_effects, n_var, vp_map, X, p, true, neglogp_beta, neglogp_gam, neglogp_rgam, neglogp_joint, test_stat_beta, test_stat_gam, test_stat_rgam, test_stat_joint);
 		if(p.use_vb_on_covars) {
 			write_covars_to_file(outf_map_covar, vp_map);
 		}

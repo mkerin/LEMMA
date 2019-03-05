@@ -305,7 +305,7 @@ class Data
 			Eigen::MatrixXd Hty = H.transpose() * Y;
 			double rss = (Y - H * HtH_inv * Hty).squaredNorm();
 
-			double pval = student_t_test(n_samples, 1, HtH_inv, Hty, rss);
+			double pval = student_t_test(n_samples, HtH_inv, Hty, rss, 1);
 
 			std::cout << env_names[ee] << "\t";
  			std::cout << -1*std::log10(pval) << std::endl;

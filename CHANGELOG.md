@@ -1,3 +1,9 @@
+# Version 0.10.6
+
+Changes:
+- Support for SQUAREM accelerator
+- GxE tests done with 'robust' standard errors (to heteroskedacity)
+
 # Version 0.10.5
 
 Changes:
@@ -97,7 +103,7 @@ Changes:
 - removed mode_approximate_updates and hty_counter.
 - E[beta] and s_sq included in parameter dumps.
 - Expansion of Catch2 tests to include param updates in Mog mode.
-- Flag to set spike_diff_factor from commandline.
+- Flag to set beta_spike_diff_factor from commandline.
 
 # Version 0.9.1
 Minor bugfix in hyps maxizing hyps.

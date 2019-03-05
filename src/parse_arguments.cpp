@@ -124,6 +124,8 @@ void parse_arguments(parameters &p, int argc, char **argv) {
 			"--mode_debug",
 			"--pve_mog_weights",
 			"--spike_diff_factor",
+			"--beta_spike_diff_factor",
+			"--gam_spike_diff_factor",
 			"--min_spike_diff_factor",
 			"--n_pve_samples"
 	};
@@ -282,8 +284,21 @@ void parse_arguments(parameters &p, int argc, char **argv) {
 			}
 
 			if(strcmp(in_str, "--spike_diff_factor") == 0) {
-				p.spike_diff_factor = std::stod(argv[i + 1]);
-				std::cout << "Initial slab variance " << p.spike_diff_factor << "x spike variance" << std::endl;
+				p.beta_spike_diff_factor = std::stod(argv[i + 1]);
+				p.gam_spike_diff_factor = std::stod(argv[i + 1]);
+				std::cout << "Initial slab variance " << p.beta_spike_diff_factor << "x spike variance" << std::endl;
+				i += 1;
+			}
+
+			if(strcmp(in_str, "--beta_spike_diff_factor") == 0) {
+				p.beta_spike_diff_factor = std::stod(argv[i + 1]);
+				std::cout << "Initial slab variance " << p.beta_spike_diff_factor << "x spike variance (beta params only)" << std::endl;
+				i += 1;
+			}
+
+			if(strcmp(in_str, "--gam_spike_diff_factor") == 0) {
+				p.gam_spike_diff_factor = std::stod(argv[i + 1]);
+				std::cout << "Initial slab variance " << p.beta_spike_diff_factor << "x spike variance (gamma params only)" << std::endl;
 				i += 1;
 			}
 
