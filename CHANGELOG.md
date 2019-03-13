@@ -3,6 +3,13 @@
 Changes:
 - Support for SQUAREM accelerator
 - GxE tests done with 'robust' standard errors (to heteroskedacity)
+- Don't allow convergence on SQUAREM iteration
+
+Commandline:
+- SQUAREM on by default
+-- --empirical_bayes turns on niave hyp maximisation
+-- --constant_hyps reduces to just variational inference
+
 
 # Version 0.10.5
 

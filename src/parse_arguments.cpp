@@ -18,35 +18,35 @@
 
 // For vectorise profiling
 void foo(const Eigen::VectorXi& aa1,
-		 const Eigen::VectorXi& aa2,
-		 Eigen::VectorXi& aa){
-	asm("#it begins here!");
+         const Eigen::VectorXi& aa2,
+         Eigen::VectorXi& aa){
+	asm ("#it begins here!");
 	aa = aa1 + aa2;
-	asm("#it ends here!");
+	asm ("#it ends here!");
 }
 
 void foo(const Eigen::VectorXf& aa1,
-		 const Eigen::VectorXf& aa2,
-		 Eigen::VectorXf& aa){
-	asm("#it begins here!");
+         const Eigen::VectorXf& aa2,
+         Eigen::VectorXf& aa){
+	asm ("#it begins here!");
 	aa = aa1 + aa2;
-	asm("#it ends here!");
+	asm ("#it ends here!");
 }
 
 void foo(const Eigen::VectorXf& aa1,
-		 const Eigen::VectorXd& aa2,
-		 Eigen::VectorXf& aa){
-	asm("#it begins here!");
+         const Eigen::VectorXd& aa2,
+         Eigen::VectorXf& aa){
+	asm ("#it begins here!");
 	aa = aa1 + aa2.cast<float>();
-	asm("#it ends here!");
+	asm ("#it ends here!");
 }
 
 void foo(const Eigen::VectorXd& aa1,
-		 const Eigen::VectorXd& aa2,
-		 Eigen::VectorXd& aa){
-	asm("#it begins here!");
+         const Eigen::VectorXd& aa2,
+         Eigen::VectorXd& aa){
+	asm ("#it begins here!");
 	aa = aa1 + aa2;
-	asm("#it ends here!");
+	asm ("#it ends here!");
 }
 
 void check_counts(const std::string &in_str, int i, int num, int argc) {
@@ -68,66 +68,67 @@ void parse_arguments(parameters &p, int argc, char **argv) {
 	char *in_str;
 	int i;
 	std::set<std::string> option_list {
-			"--bgen",
-			"--pheno",
-			"--covar",
-			"--recombination_map",
-			"--environment",
-			"--environment_weights",
-			"--snpwise_scan",
-			"--chunk",
-			"--range",
-			"--maf",
-			"--info",
-			"--out",
-			"--mode_vb",
-			"--mode_empirical_bayes",
-			"--mode_squarem",
-			"--effects_prior_mog",
-			"--mode_spike_slab",
-			"--use_vb_on_covars",
-			"--mode_regress_out_covars",
-			"--threads",
-			"--low_mem",
-			"--high_mem",
-			"--incl_sample_ids",
-			"--incl_rsids",
-			"--rsid",
-			"--no_geno_check",
-			"--genetic_confounders",
-			"--r1_hyps_grid",
-			"--r1_probs_grid",
-			"--min_elbo_diff",
-			"--min_alpha_diff",
-			"--hyps_grid",
-			"--hyps_probs",
-			"--vb_init",
-			"--verbose",
-			"--xtra_verbose",
-			"--keep_constant_variants",
-			"--force_round1",
-			"--raw_phenotypes",
-			"--mode_alternating_updates",
-			"--mode_no_gxe",
-			"--vb_iter_max",
-			"--env_update_repeats",
-			"--gamma_updates_thresh",
-			"--init_weights_with_snpwise_scan",
-			"--suppress_squared_env_removal",
-			"--dxteex",
-			"--mode_mog_beta",
-			"--mode_mog_gamma",
-			"--mode_pve_est",
-			"--gxe_chunk_size",
-			"--main_chunk_size",
-			"--random_seed",
-			"--mode_debug",
-			"--pve_mog_weights",
-			"--spike_diff_factor",
-			"--beta_spike_diff_factor",
-			"--gam_spike_diff_factor",
-			"--min_spike_diff_factor",
-			"--n_pve_samples"
+		"--bgen",
+		"--pheno",
+		"--covar",
+		"--recombination_map",
+		"--environment",
+		"--environment_weights",
+		"--snpwise_scan",
+		"--chunk",
+		"--range",
+		"--maf",
+		"--info",
+		"--out",
+		"--mode_vb",
+		"--mode_empirical_bayes",
+		"--mode_squarem",
+		"--mode_constant_hyps",
+		"--effects_prior_mog",
+		"--mode_spike_slab",
+		"--use_vb_on_covars",
+		"--mode_regress_out_covars",
+		"--threads",
+		"--low_mem",
+		"--high_mem",
+		"--incl_sample_ids",
+		"--incl_rsids",
+		"--rsid",
+		"--no_geno_check",
+		"--genetic_confounders",
+		"--r1_hyps_grid",
+		"--r1_probs_grid",
+		"--min_elbo_diff",
+		"--min_alpha_diff",
+		"--hyps_grid",
+		"--hyps_probs",
+		"--vb_init",
+		"--verbose",
+		"--xtra_verbose",
+		"--keep_constant_variants",
+		"--force_round1",
+		"--raw_phenotypes",
+		"--mode_alternating_updates",
+		"--mode_no_gxe",
+		"--vb_iter_max",
+		"--env_update_repeats",
+		"--gamma_updates_thresh",
+		"--init_weights_with_snpwise_scan",
+		"--suppress_squared_env_removal",
+		"--dxteex",
+		"--mode_mog_beta",
+		"--mode_mog_gamma",
+		"--mode_pve_est",
+		"--gxe_chunk_size",
+		"--main_chunk_size",
+		"--random_seed",
+		"--mode_debug",
+		"--pve_mog_weights",
+		"--spike_diff_factor",
+		"--beta_spike_diff_factor",
+		"--gam_spike_diff_factor",
+		"--min_spike_diff_factor",
+		"--n_pve_samples"
 	};
 
 	std::set<std::string>::iterator set_it;
@@ -184,7 +185,7 @@ void parse_arguments(parameters &p, int argc, char **argv) {
 
 		MyTimer t_testi("500 foo() calls in %ts (int)\n");
 		t_testi.resume();
-		for (int jj = 0; jj < 500; jj++){
+		for (int jj = 0; jj < 500; jj++) {
 			foo(aa1, aa2, aa);
 		}
 		t_testi.stop();
@@ -192,7 +193,7 @@ void parse_arguments(parameters &p, int argc, char **argv) {
 
 		MyTimer t_testf("500 foo() calls in %ts (float)\n");
 		t_testf.resume();
-		for (int jj = 0; jj < 500; jj++){
+		for (int jj = 0; jj < 500; jj++) {
 			foo(bb1, bb2, bb);
 		}
 		t_testf.stop();
@@ -200,7 +201,7 @@ void parse_arguments(parameters &p, int argc, char **argv) {
 
 		MyTimer t_testf_cast("500 foo() calls in %ts (float via cast)\n");
 		t_testf_cast.resume();
-		for (int jj = 0; jj < 500; jj++){
+		for (int jj = 0; jj < 500; jj++) {
 			foo(bb1, cc2, bb);
 		}
 		t_testf_cast.stop();
@@ -209,7 +210,7 @@ void parse_arguments(parameters &p, int argc, char **argv) {
 
 		MyTimer t_testd("500 foo() calls in %ts (double)\n");
 		t_testd.resume();
-		for (int jj = 0; jj < 500; jj++){
+		for (int jj = 0; jj < 500; jj++) {
 			foo(cc1, cc2, cc);
 		}
 		t_testd.stop();
@@ -230,15 +231,15 @@ void parse_arguments(parameters &p, int argc, char **argv) {
 	// Ensure some arguments only appear once
 	bool check_out = 0;
 
-	for(i = 0; i < argc; i++){
-		if(*argv[i] == '-'){
+	for(i = 0; i < argc; i++) {
+		if(*argv[i] == '-') {
 			in_str = argv[i];
 			set_it = option_list.find(in_str);
 
 			if(set_it == option_list.end()) {
 				std::cout << "ERROR: flag '" << in_str <<
-						  "' not valid. Please refer to the manual for usage instructions." <<
-						  std::endl;
+				    "' not valid. Please refer to the manual for usage instructions." <<
+				    std::endl;
 
 				exit(EXIT_FAILURE);
 			}
@@ -395,6 +396,13 @@ void parse_arguments(parameters &p, int argc, char **argv) {
 
 			if(strcmp(in_str, "--mode_empirical_bayes") == 0) {
 				p.mode_empirical_bayes = true;
+				p.mode_squarem = false;
+				i += 0;
+			}
+
+			if(strcmp(in_str, "--mode_constant_hyps") == 0) {
+				p.mode_empirical_bayes = false;
+				p.mode_squarem = false;
 				i += 0;
 			}
 
@@ -433,7 +441,7 @@ void parse_arguments(parameters &p, int argc, char **argv) {
 			// Data inputs
 			if(strcmp(in_str, "--bgen") == 0) {
 				check_counts(in_str, i, 1, argc);
-				p.bgen_file = argv[i + 1]; // bgen file
+				p.bgen_file = argv[i + 1];                                                 // bgen file
 				p.bgi_file = p.bgen_file + ".bgi";
 
 				check_file_exists(p.bgen_file);
@@ -443,14 +451,14 @@ void parse_arguments(parameters &p, int argc, char **argv) {
 
 			if(strcmp(in_str, "--pheno") == 0) {
 				check_counts(in_str, i, 1, argc);
-				p.pheno_file = argv[i + 1]; // pheno file
+				p.pheno_file = argv[i + 1];                                                 // pheno file
 				check_file_exists(p.pheno_file);
 				i += 1;
 			}
 
 			if(strcmp(in_str, "--recombination_map") == 0) {
 				check_counts(in_str, i, 1, argc);
-				p.recombination_file = argv[i + 1]; // pheno file
+				p.recombination_file = argv[i + 1];                                                 // pheno file
 				check_file_exists(p.recombination_file);
 				i += 1;
 			}
@@ -458,28 +466,28 @@ void parse_arguments(parameters &p, int argc, char **argv) {
 			if(strcmp(in_str, "--environment") == 0) {
 				check_counts(in_str, i, 1, argc);
 				p.interaction_analysis = true;
-				p.env_file = argv[i + 1]; // pheno file
+				p.env_file = argv[i + 1];                                                 // pheno file
 				check_file_exists(p.env_file);
 				i += 1;
 			}
 
 			if(strcmp(in_str, "--environment_weights") == 0) {
 				check_counts(in_str, i, 1, argc);
-				p.env_weights_file = argv[i + 1]; // pheno file
+				p.env_weights_file = argv[i + 1];                                                 // pheno file
 				check_file_exists(p.env_weights_file);
 				i += 1;
 			}
 
 			if(strcmp(in_str, "--covar") == 0) {
 				check_counts(in_str, i, 1, argc);
-				p.covar_file = argv[i + 1]; // covar file
+				p.covar_file = argv[i + 1];                                                 // covar file
 				check_file_exists(p.covar_file);
 				i += 1;
 			}
 
 			if(strcmp(in_str, "--snpwise_scan") == 0) {
 				check_counts(in_str, i, 1, argc);
-				p.snpstats_file = argv[i + 1]; // covar file
+				p.snpstats_file = argv[i + 1];                                                 // covar file
 				check_file_exists(p.snpstats_file);
 				i += 1;
 			}
@@ -497,42 +505,42 @@ void parse_arguments(parameters &p, int argc, char **argv) {
 
 			if(strcmp(in_str, "--hyps_grid") == 0) {
 				check_counts(in_str, i, 1, argc);
-				p.hyps_grid_file = argv[i + 1]; // covar file
+				p.hyps_grid_file = argv[i + 1];                                                 // covar file
 				check_file_exists(p.hyps_grid_file);
 				i += 1;
 			}
 
 			if(strcmp(in_str, "--r1_hyps_grid") == 0) {
 				check_counts(in_str, i, 1, argc);
-				p.r1_hyps_grid_file = argv[i + 1]; // covar file
+				p.r1_hyps_grid_file = argv[i + 1];                                                 // covar file
 				check_file_exists(p.r1_hyps_grid_file);
 				i += 1;
 			}
 
 			if(strcmp(in_str, "--r1_probs_grid") == 0) {
 				check_counts(in_str, i, 1, argc);
-				p.r1_probs_grid_file = argv[i + 1]; // covar file
+				p.r1_probs_grid_file = argv[i + 1];                                                 // covar file
 				check_file_exists(p.r1_probs_grid_file);
 				i += 1;
 			}
 
 			if(strcmp(in_str, "--hyps_probs") == 0) {
 				check_counts(in_str, i, 1, argc);
-				p.hyps_probs_file = argv[i + 1]; // covar file
+				p.hyps_probs_file = argv[i + 1];                                                 // covar file
 				check_file_exists(p.hyps_probs_file);
 				i += 1;
 			}
 
 			if(strcmp(in_str, "--vb_init") == 0) {
 				check_counts(in_str, i, 1, argc);
-				p.vb_init_file = argv[i + 1]; // covar file
+				p.vb_init_file = argv[i + 1];                                                 // covar file
 				check_file_exists(p.vb_init_file);
 				i += 1;
 			}
 
 			if(strcmp(in_str, "--dxteex") == 0) {
 				check_counts(in_str, i, 1, argc);
-				p.dxteex_file = argv[i + 1]; // covar file
+				p.dxteex_file = argv[i + 1];                                                 // covar file
 				check_file_exists(p.dxteex_file);
 				i += 1;
 			}
@@ -541,14 +549,14 @@ void parse_arguments(parameters &p, int argc, char **argv) {
 			if(strcmp(in_str, "--maf") == 0) {
 				check_counts(in_str, i, 1, argc);
 				p.maf_lim = true;
-				p.min_maf = std::stod(argv[i + 1]); // bgen file
+				p.min_maf = std::stod(argv[i + 1]);                                                 // bgen file
 				i += 1;
 			}
 
 			if(strcmp(in_str, "--info") == 0) {
 				check_counts(in_str, i, 1, argc);
 				p.info_lim = true;
-				p.min_info = std::stod(argv[i + 1]); // bgen file
+				p.min_info = std::stod(argv[i + 1]);                                                 // bgen file
 				i += 1;
 			}
 
@@ -595,7 +603,7 @@ void parse_arguments(parameters &p, int argc, char **argv) {
 
 			if(strcmp(in_str, "--incl_sample_ids") == 0) {
 				check_counts(in_str, i, 1, argc);
-				p.incl_sids_file = argv[i + 1]; // include sample ids file
+				p.incl_sids_file = argv[i + 1];                                                 // include sample ids file
 				check_file_exists(p.incl_sids_file);
 				i += 1;
 			}
@@ -603,7 +611,7 @@ void parse_arguments(parameters &p, int argc, char **argv) {
 			if(strcmp(in_str, "--incl_rsids") == 0) {
 				check_counts(in_str, i, 1, argc);
 				p.select_snps = true;
-				p.incl_rsids_file = argv[i + 1]; // include variant ids file
+				p.incl_rsids_file = argv[i + 1];                                                 // include variant ids file
 				check_file_exists(p.incl_rsids_file);
 				i += 1;
 			}
@@ -612,7 +620,7 @@ void parse_arguments(parameters &p, int argc, char **argv) {
 				check_counts(in_str, i, 1, argc);
 				p.select_rsid = true;
 				int jj = i+1;
-				while(jj < argc){
+				while(jj < argc) {
 					std::string arg_str(argv[jj]);
 					if (arg_str.find("--") != std::string::npos) break;
 					p.rsid.push_back(argv[jj]);
@@ -629,14 +637,14 @@ void parse_arguments(parameters &p, int argc, char **argv) {
 
 			if(strcmp(in_str, "--chunk") == 0) {
 				check_counts(in_str, i, 1, argc);
-				p.chunk_size = std::stoi(argv[i + 1]); // bgen file
+				p.chunk_size = std::stoi(argv[i + 1]);                                                 // bgen file
 				i += 1;
 			}
 
 			if(strcmp(in_str, "--genetic_confounders") == 0) {
 				check_counts(in_str, i, 1, argc);
 				int jj = i+1;
-				while(jj < argc){
+				while(jj < argc) {
 					std::string arg_str(argv[jj]);
 					if (arg_str.find("--") != std::string::npos) break;
 					p.gconf.push_back(argv[jj]);
@@ -653,19 +661,19 @@ void parse_arguments(parameters &p, int argc, char **argv) {
 	bool has_out = p.out_file != "NULL";
 	bool has_pheno = p.pheno_file != "NULL";
 	bool has_all = (has_pheno && has_out && has_bgen);
-	if(!has_all){
+	if(!has_all) {
 		std::cout << "ERROR: bgen, pheno and out filepaths should all be ";
 		std::cout << "provided in conjunction with --mode_vb." << std::endl;
 		std::exit(EXIT_FAILURE);
 	}
 	bool has_hyps = p.hyps_grid_file != "NULL";
-	if(p.mode_vb && p.hyps_grid_file == "NULL"){
+	if(p.mode_vb && p.hyps_grid_file == "NULL") {
 		std::cout << "ERROR: search grids for hyperparameter values";
 		std::cout << "should be provided in conjunction with --mode_vb." << std::endl;
 		std::exit(EXIT_FAILURE);
 	}
 
-	if(p.env_file == "NULL" && p.env_weights_file != "NULL"){
+	if(p.env_file == "NULL" && p.env_weights_file != "NULL") {
 		std::cout << "WARNING: --environment_weights will be ignored as no --environment provided" << std::endl;
 	}
 }
@@ -678,7 +686,7 @@ void check_file_exists(const std::string &filename) {
 //		std::cout << "File " << filename << " does not exist" << std::endl;
 //		throw std::runtime_error("ERROR: file does not exist");
 //	}
-	if(!boost::filesystem::exists( filename )){
+	if(!boost::filesystem::exists( filename )) {
 		std::cout << "File " << filename << " does not exist" << std::endl;
 		throw std::runtime_error("ERROR: file does not exist");
 	}
