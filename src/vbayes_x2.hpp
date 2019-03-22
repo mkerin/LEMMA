@@ -753,6 +753,11 @@ void updateAllParams(const int& count,
 			check_monotonic_elbo(all_hyps[nn], all_vp[nn], count, logw_prev[nn], "maxHyps");
 		}
 	}
+
+	// Update PVE
+	for (int nn = 0; nn < n_grid; nn++) {
+		all_hyps[nn].update_pve();
+	}
 }
 
 void updateCovarEffects(VariationalParameters& vp,
