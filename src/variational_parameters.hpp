@@ -1,6 +1,7 @@
 #ifndef VARIATIONAL_PARAMETERS_HPP
 #define VARIATIONAL_PARAMETERS_HPP
 
+#include "genotype_matrix.hpp"
 #include "parameters.hpp"
 #include "typedefs.hpp"
 
@@ -42,6 +43,8 @@ public:
 
 	/*** utility functions ***/
 	void resize(std::int32_t n_samples, std::int32_t n_var, long n_covar, long n_env);
+
+	void dump_snps_to_file(boost_io::filtering_ostream& my_outf, const GenotypeMatrix& X, long n_env) const;
 
 	/*** mean of latent variables ***/
 	Eigen::VectorXd mean_beta() const;

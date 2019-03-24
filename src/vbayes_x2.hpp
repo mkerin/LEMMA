@@ -198,8 +198,8 @@ explicit VBayesX2( Data& dat ) : X( dat.G ),
 	}
 
 	unsigned long n_main_segs, n_gxe_segs, n_chunks;
-	n_main_segs = (n_var + p.main_chunk_size - 1) / p.main_chunk_size;                     // ceiling of n_var / chunk size
-	n_gxe_segs = (n_var + p.gxe_chunk_size - 1) / p.gxe_chunk_size;                     // ceiling of n_var / chunk size
+	n_main_segs = (n_var + p.main_chunk_size - 1) / p.main_chunk_size;                                 // ceiling of n_var / chunk size
+	n_gxe_segs = (n_var + p.gxe_chunk_size - 1) / p.gxe_chunk_size;                                 // ceiling of n_var / chunk size
 	n_chunks = n_main_segs;
 	if(n_effects > 1) {
 		n_chunks += n_gxe_segs;
@@ -329,7 +329,7 @@ explicit VBayesX2( Data& dat ) : X( dat.G ),
 	if(p.use_vb_on_covars) {
 		vp_init.muc   = Eigen::ArrayXd::Zero(n_covar);
 	}
-	calcPredEffects(vp_init);                     // ym, yx
+	calcPredEffects(vp_init);                                 // ym, yx
 
 	// Assign data - hyperparameters
 	hyps_grid           = dat.hyps_grid;
@@ -361,7 +361,7 @@ explicit VBayesX2( Data& dat ) : X( dat.G ),
 void run(){
 	std::cout << "Starting variational inference" << std::endl;
 	time_check = std::chrono::system_clock::now();
-	int n_thread = 1;                     // Parrallel starts swapped for multithreaded inference
+	int n_thread = 1;                                 // Parrallel starts swapped for multithreaded inference
 
 	// Round 1; looking for best start point
 	if(run_round1) {
@@ -417,7 +417,7 @@ void run_inference(const Eigen::Ref<const Eigen::MatrixXd>& hyps_grid,
 	// Writes results from inference to trackers
 
 	long n_grid = hyps_grid.rows();
-	int n_thread = 1;                     // Parrallel starts swapped for multithreaded inference
+	int n_thread = 1;                                 // Parrallel starts swapped for multithreaded inference
 
 	// Divide grid of hyperparameters into chunks for multithreading
 	std::vector< std::vector< int > > chunks(n_thread);
@@ -567,10 +567,16 @@ void runInnerLoop(const bool random_init,
 			all_hyps[nn].update_pve();
 			all_tracker[nn].push_interim_hyps(count, all_hyps[nn], i_logw[nn], alpha_diff[nn], n_effects,
 			                                  n_var, n_env, all_vp[nn]);
+			if (p.xtra_verbose && count % 50 == 0) {
+				all_tracker[nn].dump_state(count, n_samples, n_covar, n_var,
+				                           n_env, n_effects,
+				                           all_vp[nn], all_hyps[nn], Y, C,
+				                           X, covar_names, env_names);
+			}
 		}
 
 		// Diagnose convergence
-		if(!p.mode_squarem || count % 3 != 2) {         // Disallow convergence on squarem iter
+		if(!p.mode_squarem || count % 3 != 2) {                                 // Disallow convergence on squarem iter
 			for (int nn = 0; nn < n_grid; nn++) {
 				double logw_diff = std::abs(i_logw[nn] - logw_prev[nn]);
 				if (p.alpha_tol_set_by_user && p.elbo_tol_set_by_user) {
@@ -789,8 +795,8 @@ void updateAlphaMu(const std::vector< std::vector< std::uint32_t > >& iter_chunk
 	// Partition chunks amongst available threads
 	unsigned long n_grid = all_hyps.size();
 	EigenDataMatrix D;
-	Eigen::MatrixXd AA;                         // snp_batch x n_grid
-	Eigen::MatrixXd rr_diff;                                       // snp_batch x n_grid
+	Eigen::MatrixXd AA;                                     // snp_batch x n_grid
+	Eigen::MatrixXd rr_diff;                                                   // snp_batch x n_grid
 
 	for (std::uint32_t ch = 0; ch < iter_chunks.size(); ch++) {
 		std::vector< std::uint32_t > chunk = iter_chunks[ch];
@@ -903,7 +909,7 @@ Eigen::MatrixXd computeGeneResidualCorrelation(const EigenMat& D,
 		res.noalias() = D.transpose() * ((YY - YM).cwiseProduct(ETA) - YX.cwiseProduct(ETA_SQ));
 	}
 	// cast only used if DATA_AS_FLOAT
-	return(res.template cast<double>());                     // n_grid x snp_batch
+	return(res.template cast<double>());                                 // n_grid x snp_batch
 }
 
 void _internal_updateAlphaMu_beta(const std::vector< std::uint32_t >& iter_chunk,
@@ -1012,7 +1018,7 @@ void _internal_updateAlphaMu_gam(const std::vector< std::uint32_t >& iter_chunk,
 	Eigen::VectorXd rr_k(ch_len);
 	assert(rr_k_diff.rows() == ch_len);
 	for (int ii = 0; ii < ch_len; ii++) {
-		std::uint32_t jj = (iter_chunk[ii] % n_var);                                 // variant index
+		std::uint32_t jj = (iter_chunk[ii] % n_var);                                                         // variant index
 
 		// Log prev value
 		rr_k(ii) = vp.mean_gam(jj);
@@ -1403,11 +1409,11 @@ double calcExpLinear(const Hyps& hyps,
 
 	// variances
 	if(p.use_vb_on_covars) {
-		int_linear += (N - 1.0) * vp.sc_sq.sum();                                 // covar main
+		int_linear += (N - 1.0) * vp.sc_sq.sum();                                                         // covar main
 	}
-	int_linear += (N - 1.0) * vp.var_beta().sum();                      // beta
+	int_linear += (N - 1.0) * vp.var_beta().sum();                                  // beta
 	if(n_effects > 1) {
-		int_linear += (vp.EdZtZ * vp.var_gam()).sum();                                 // gamma
+		int_linear += (vp.EdZtZ * vp.var_gam()).sum();                                                         // gamma
 	}
 
 	return int_linear;
@@ -1608,7 +1614,7 @@ void LOCO_pvals(const VariationalParametersLite& vp,
 
 			// Model Fitting
 			Eigen::Matrix2d HtH     = H.transpose() * H;
-			Eigen::Matrix2d HtH_inv = HtH.inverse();                                             // should be efficient for 2x2 matrix
+			Eigen::Matrix2d HtH_inv = HtH.inverse();                                                                                 // should be efficient for 2x2 matrix
 			Eigen::Vector2d Hty     = H.transpose() * chr_residuals[cc];
 			Eigen::Vector2d tau     = HtH_inv * Hty;
 
@@ -1654,7 +1660,7 @@ void write_trackers_to_file(const std::string& file_prefix,
                             const std::vector< VbTracker >& trackers,
                             const Eigen::Ref<const Eigen::MatrixXd>& hyps_grid){
 	// Stitch trackers back together if using multithreading
-	int n_thread = 1;                     // Parrallel starts swapped for multithreaded inference
+	int n_thread = 1;                                 // Parrallel starts swapped for multithreaded inference
 	unsigned long my_n_grid = hyps_grid.rows();
 	output_init(file_prefix);
 	output_results(trackers, my_n_grid);

@@ -32,6 +32,39 @@ void VariationalParamsBase::resize(std::int32_t n_samples, std::int32_t n_var, l
 	}
 }
 
+void VariationalParamsBase::dump_snps_to_file(boost_io::filtering_ostream& outf,
+		const GenotypeMatrix& X, long n_env) const {
+	outf << "SNPID alpha_beta mu1_beta s1_beta";
+	if(p.mode_mog_prior_beta) outf << " mu2_beta s2_beta";
+	if(n_env > 0) {
+		outf << " alpha_gam mu1_gam s1_gam";
+		if (p.mode_mog_prior_gam) outf << " mu2_gam s2_gam";
+	}
+	outf << std::endl;
+	outf << std::scientific << std::setprecision(8);
+	long n_var = alpha_beta.rows();
+	for (long ii = 0; ii < n_var; ii++) {
+		outf << X.SNPID[ii];
+		outf << " " << alpha_beta(ii);
+		outf << " " << mu1_beta(ii);
+		outf << " " << s1_beta_sq(ii);
+		if(p.mode_mog_prior_beta) {
+			outf << " " << mu2_beta(ii);
+			outf << " " << s2_beta_sq(ii);
+		}
+		if(n_env > 0) {
+			outf << " " << alpha_gam(ii);
+			outf << " " << mu1_gam(ii);
+			outf << " " << s1_gam_sq(ii);
+			if (p.mode_mog_prior_gam) {
+				outf << " " << mu2_gam(ii);
+				outf << " " << s2_gam_sq(ii);
+			}
+		}
+		outf << std::endl;
+	}
+}
+
 Eigen::VectorXd VariationalParamsBase::mean_beta() const {
 	Eigen::VectorXd rr_beta;
 	if(p.mode_mog_prior_beta){

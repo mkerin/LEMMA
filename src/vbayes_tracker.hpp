@@ -199,19 +199,37 @@ public:
 	}
 
 	void dump_state(const int& cnt,
+					const long& n_samples,
 					const long& n_covar,
 					const long& n_var,
 					const int& n_env,
 					const int& n_effects,
 					const VariationalParameters& vp,
 					const Hyps& hyps,
+					const EigenDataVector& Y,
+					const EigenDataArrayXX& C,
 					const GenotypeMatrix& X,
 					const std::vector< std::string >& covar_names,
 					const std::vector< std::string >& env_names){
 
-		// Snp effects
+		// Aggregate effects
+		fstream_init(outf_inits, dir, "_dump_it" + std::to_string(cnt) + "_aggregate", true);
+		Eigen::VectorXd Ealpha = Eigen::VectorXd::Zero(n_samples);
+		if(p.use_vb_on_covars) {
+			Ealpha += (C.matrix() * vp.muc.matrix().cast<scalarData>()).cast<double>();
+		}
+		outf_inits << "Y Ealpha Xbeta eta Xgamma";
+		outf_inits << std::endl;
+		for (std::uint32_t ii = 0; ii < n_samples; ii++) {
+			outf_inits << Y(ii) << " " << Ealpha(ii) << " " << vp.ym(ii) - Ealpha(ii);
+			outf_inits << " " << vp.eta(ii) << " " << vp.yx(ii);
+			outf_inits << std::endl;
+		}
+		boost_io::close(outf_inits);
+
+		// Snp-stats
 		fstream_init(outf_inits, dir, "_dump_it" + std::to_string(cnt) + "_snps", true);
-		write_snp_stats_to_file(outf_inits, n_effects, n_var, vp, X, p, true);
+		vp.dump_snps_to_file(outf_inits, X, n_env);
 		boost_io::close(outf_inits);
 
 		// Covars

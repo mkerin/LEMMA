@@ -275,7 +275,7 @@ class Data
 		// Project C from Y and E when C is present
 		if(n_covar > 0) {
 			regress_first_mat_from_second(W, "covars", covar_names, Y, "pheno");
-			regress_first_mat_from_second(W, "covars", covar_names, E, "env");
+//			regress_first_mat_from_second(W, "covars", covar_names, E, "env");
 		}
 
 		// If not 'use_Vb_on_covars' then also project E from Y
