@@ -17,7 +17,6 @@ Changes:
 - bugfix in GenotypeMatrix::transpose_multiply
 - Added PVE estimation with HE reg method
 - bugfix in computing chromosome-residuals
-- stopped regressing covars from envs
 - Change to dump state; should be possible to fully recover now
 
 
