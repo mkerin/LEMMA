@@ -234,7 +234,7 @@ TEST_CASE("Data") {
 		}
 
 		SECTION("Ex1. Confirm calc_dxteex() reorders properly") {
-			data.params.dxteex_file = "data/io_test/case8/dxteex_low_mem.txt";
+			data.params.dxteex_file = "data/io_test/n50_p100_dxteex_low_mem.txt";
 			data.read_external_dxteex();
 			data.calc_dxteex();
 			CHECK(data.dXtEEX(0, 0) == Approx(38.9610805993));
@@ -246,7 +246,7 @@ TEST_CASE("Data") {
 			CHECK(data.dXtEEX(1, 4) == Approx(-13.0001255314));
 			CHECK(data.dXtEEX(2, 4) == Approx(-11.6635557299));
 			CHECK(data.dXtEEX(3, 4) == Approx(-7.2154836264));
-			CHECK(data.n_dxteex_computed == 75);
+			CHECK(data.n_dxteex_computed == 1);
 		}
 	}
 
@@ -291,20 +291,20 @@ TEST_CASE("Data") {
 		SECTION("Ex1. bgen read in & standardised correctly") {
 			CHECK(data.G.low_mem);
 			CHECK(data.params.low_mem);
-			CHECK(data.params.flip_high_maf_variants);
-			CHECK(data.G(0, 0) == Approx(-0.7105269065));
-			CHECK(data.G(0, 1) == Approx(-0.6480740698));
-			CHECK(data.G(0, 2) == Approx(-0.7105104917));
+			CHECK(!data.params.flip_high_maf_variants);
+			CHECK(data.G(0, 0) == Approx(0.7105269065));
+			CHECK(data.G(0, 1) == Approx(0.6480740698));
+			CHECK(data.G(0, 2) == Approx(0.7105195023));
 			CHECK(data.G(0, 3) == Approx(-0.586791551));
-			CHECK(data.G(0, 60) == Approx(1.4862052498));
-			CHECK(data.G(0, 61) == Approx(-0.3299831646));
-			CHECK(data.G(0, 62) == Approx(-1.0968694989));
-			CHECK(data.G(0, 63) == Approx(-0.5227553607));
-			CHECK(data.G.compressed_dosage_means(60) == Approx(0.9821875));
-			CHECK(data.G.compressed_dosage_means(61) == Approx(0.10390625));
-			CHECK(data.G.compressed_dosage_means(62) == Approx(0.68328125));
-			CHECK(data.G.compressed_dosage_means(63) == Approx(0.28359375));
-			CHECK(data.n_var == 73);
+			CHECK(data.G(0, 60) == Approx(-1.4317770638));
+			CHECK(data.G(0, 61) == Approx(1.4862052498));
+			CHECK(data.G(0, 62) == Approx(-0.3299831646));
+			CHECK(data.G(0, 63) == Approx(-1.0968694989));
+			CHECK(data.G.compressed_dosage_means(60) == Approx(1.00203125));
+			CHECK(data.G.compressed_dosage_means(61) == Approx(0.9821875));
+			CHECK(data.G.compressed_dosage_means(62) == Approx(0.10390625));
+			CHECK(data.G.compressed_dosage_means(63) == Approx(0.68328125));
+			CHECK(data.n_var == 75);
 		}
 	}
 
@@ -320,15 +320,15 @@ TEST_CASE("Data") {
 		Eigen::VectorXd v1 = data.G.mult_vector_by_chr(1, vv);
 		Eigen::VectorXd v2 = data.G.mult_vector_by_chr(22, vv);
 
-		CHECK(v1(0) == Approx(-9.6711528276));
-		CHECK(v1(1) == Approx(-0.4207388213));
-		CHECK(v1(2) == Approx(-3.0495872499));
-		CHECK(v1(3) == Approx(-9.1478619829));
+		CHECK(v1(0) == Approx(-0.8981400368));
+		CHECK(v1(1) == Approx(-4.9936547948));
+		CHECK(v1(2) == Approx(-1.7085924856));
+		CHECK(v1(3) == Approx(0.8894016653));
 
-		CHECK(v2(0) == Approx(-15.6533077013));
-		CHECK(v2(1) == Approx(6.8078348334));
-		CHECK(v2(2) == Approx(-4.4887853578));
-		CHECK(v2(3) == Approx(8.9980192447));
+		CHECK(v2(0) == Approx(-10.8022318897));
+		CHECK(v2(1) == Approx(11.658910645));
+		CHECK(v2(2) == Approx(-16.742754449));
+		CHECK(v2(3) == Approx(0.9656298668));
 	}
 }
 
@@ -359,7 +359,7 @@ TEST_CASE( "Example 4: multi-env + mog + covars + emp_bayes" ){
 			CHECK(data.params.use_vb_on_covars);
 			CHECK(data.params.covar_file == "NULL");
 //			CHECK(data.Y(0,0) == Approx(-3.6676363273605137)); Centered
-			CHECK(data.Y(0,0) == Approx(-1.5800573524786081));             // Scaled
+			CHECK(data.Y(0,0) == Approx(-1.5800573524786081));                                                 // Scaled
 			CHECK(data.Y2(0,0) == Approx(-1.5567970303));
 //			CHECK(data.W(0,0) == Approx(0.8957059881));
 			CHECK(data.E(0,0) == Approx(0.8957059881));
@@ -473,7 +473,9 @@ TEST_CASE( "Example 4: multi-env + mog + covars + emp_bayes" ){
 			CHECK(VB.calc_logw(hyps, vp) == Approx(-88.4955694238));
 			VbTracker tracker(p);
 			tracker.init_interim_output(0,2, VB.n_effects, VB.n_env, VB.env_names, vp);
-			tracker.dump_state(2, VB.n_covar, VB.n_var, VB.n_env, VB.n_effects, vp, hyps, VB.X, VB.covar_names, VB.env_names);
+			tracker.dump_state(2, VB.n_samples, VB.n_covar, VB.n_var, VB.n_env,
+			                   VB.n_effects, vp, hyps, VB.Y, VB.C, VB.X,
+			                   VB.covar_names, VB.env_names);
 
 			// Checking logw
 			double int_linear = -1.0 * VB.calcExpLinear(hyps, vp) / 2.0 / hyps.sigma;
@@ -761,10 +763,10 @@ TEST_CASE("--dxteex") {
 //
 //			VbTracker tracker(p);
 //			tracker.init_interim_output(0, 2, VB.n_effects, VB.n_env, VB.env_names, vp);
-//			tracker.dump_state(2, VB.n_covar, VB.n_var, VB.n_env, VB.n_effects, vp, hyps, VB.X, VB.covar_names,
-//			                   VB.env_names);
-//		}
-//
+//  tracker.dump_state(2, VB.n_samples, VB.n_covar, VB.n_var, VB.n_env,
+//                     VB.n_effects, vp, hyps, VB.Y, VB.C, VB.X,
+//                     VB.covar_names, VB.env_names);
+// }
 //		VB.run_inference(VB.hyps_grid, false, 2, trackers);
 //		SECTION("Ex3. Vbayes_X2 inference correct"){
 //			CHECK(trackers[0].count == 30);
