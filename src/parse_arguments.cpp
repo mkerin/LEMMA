@@ -473,8 +473,8 @@ void parse_arguments(parameters &p, int argc, char **argv) {
 
 			if(strcmp(in_str, "--environment_weights") == 0) {
 				check_counts(in_str, i, 1, argc);
-				p.env_weights_file = argv[i + 1];                                                 // pheno file
-				check_file_exists(p.env_weights_file);
+				p.env_coeffs_file = argv[i + 1];                                                 // pheno file
+				check_file_exists(p.env_coeffs_file);
 				i += 1;
 			}
 
@@ -673,7 +673,7 @@ void parse_arguments(parameters &p, int argc, char **argv) {
 		std::exit(EXIT_FAILURE);
 	}
 
-	if(p.env_file == "NULL" && p.env_weights_file != "NULL") {
+	if(p.env_file == "NULL" && p.env_coeffs_file != "NULL") {
 		std::cout << "WARNING: --environment_weights will be ignored as no --environment provided" << std::endl;
 	}
 }

@@ -11,7 +11,7 @@ public:
 std::string bgen_file, chr, out_file, pheno_file, env_file, covar_file, bgi_file;
 std::string incl_sids_file, incl_rsids_file, recombination_file;
 std::string r1_hyps_grid_file, r1_probs_grid_file, hyps_grid_file;
-std::string env_weights_file, hyps_probs_file, vb_init_file;
+std::string env_coeffs_file, covar_coeffs_file, hyps_probs_file, vb_init_file;
 std::string dxteex_file, snpstats_file, mog_weights_file;
 std::vector< std::string > rsid;
 unsigned int random_seed;
@@ -51,7 +51,8 @@ parameters() : bgen_file("NULL"),
 	incl_rsids_file("NULL"),
 	dxteex_file("NULL"),
 	mog_weights_file("NULL"),
-	env_weights_file("NULL") {
+	covar_coeffs_file("NULL"),
+	env_coeffs_file("NULL") {
 	flip_high_maf_variants = false;
 	init_weights_with_snpwise_scan = false;
 	restrict_gamma_updates = false;

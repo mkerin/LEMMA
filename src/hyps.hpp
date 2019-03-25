@@ -15,47 +15,43 @@
 
 namespace boost_io = boost::iostreams;
 
-class Hyps{
-	int sigma_ind   = 0;
-	int sigma_b_ind = 1;
-	int sigma_g_ind = 2;
-	int lam_b_ind   = 3;
-	int lam_g_ind   = 4;
+class Hyps {
+int sigma_ind   = 0;
+int sigma_b_ind = 1;
+int sigma_g_ind = 2;
+int lam_b_ind   = 3;
+int lam_g_ind   = 4;
 
 public:
-	double sigma;
-	Eigen::ArrayXd slab_var;
-	Eigen::ArrayXd spike_var;
-	Eigen::ArrayXd slab_relative_var;
-	Eigen::ArrayXd spike_relative_var;
-	Eigen::ArrayXd lambda;
+double sigma;
+Eigen::ArrayXd slab_var;
+Eigen::ArrayXd spike_var;
+Eigen::ArrayXd slab_relative_var;
+Eigen::ArrayXd spike_relative_var;
+Eigen::ArrayXd lambda;
 
-	// Not hyperparameters, but things that depend on them
-	Eigen::ArrayXd s_x;
-	Eigen::ArrayXd pve;
-	Eigen::ArrayXd pve_large;
+// Not hyperparameters, but things that depend on them
+Eigen::ArrayXd s_x;
+Eigen::ArrayXd pve;
+Eigen::ArrayXd pve_large;
 
-	parameters p;
-	int n_effects;
+parameters p;
+int n_effects;
 
-	Hyps(parameters my_params) : p(my_params) {};
+Hyps(parameters my_params) : p(my_params) {
+};
 
-	void init_from_grid(int n_effects,
-						int ii,
-						int n_var,
-						const Eigen::Ref<const Eigen::MatrixXd>& hyps_grid,
-						const double& my_s_z);
+void init_from_grid(int n_effects,
+                    int ii,
+                    int n_var,
+                    const Eigen::Ref<const Eigen::MatrixXd>& hyps_grid);
+void update_pve();
+void read_from_dump(const std::string& filename);
+double normL2() const;
+bool domain_is_valid() const;
 
-	void init_from_grid(int n_effects,
-						int ii,
-						int n_var,
-						const Eigen::Ref<const Eigen::MatrixXd>& hyps_grid);
-	void update_pve();
-	double normL2() const;
-	bool check_valid_domain() const;
-
-	friend std::ostream& operator<< (std::ostream &os, const Hyps& hyps);
-	friend boost_io::filtering_ostream& operator<< (boost_io::filtering_ostream &os, const Hyps& hyps);
+friend std::ostream& operator<< (std::ostream &os, const Hyps& hyps);
+friend boost_io::filtering_ostream& operator<< (boost_io::filtering_ostream &os, const Hyps& hyps);
 };
 
 Hyps operator+(const Hyps &h1, const Hyps &h2);

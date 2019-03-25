@@ -332,7 +332,6 @@ TEST_CASE("Data") {
 	}
 }
 
-
 TEST_CASE( "Example 4: multi-env + mog + covars + emp_bayes" ){
 	parameters p;
 
@@ -346,8 +345,7 @@ TEST_CASE( "Example 4: multi-env + mog + covars + emp_bayes" ){
 			             (char*) "--out", (char*) "data/io_test/config4.out",
 			             (char*) "--pheno", (char*) "data/io_test/pheno.txt",
 			             (char*) "--hyps_grid", (char*) "data/io_test/single_hyps_gxage.txt",
-			             (char*) "--hyps_probs", (char*) "data/io_test/single_hyps_gxage_probs.txt",
-			             (char*) "--vb_init", (char*) "data/io_test/answer_init.txt"};
+			             (char*) "--hyps_probs", (char*) "data/io_test/single_hyps_gxage_probs.txt"};
 		int argc = sizeof(argv)/sizeof(argv[0]);
 		parse_arguments(p, argc, argv);
 		Data data( p );
@@ -359,9 +357,9 @@ TEST_CASE( "Example 4: multi-env + mog + covars + emp_bayes" ){
 			CHECK(data.params.use_vb_on_covars);
 			CHECK(data.params.covar_file == "NULL");
 //			CHECK(data.Y(0,0) == Approx(-3.6676363273605137)); Centered
-			CHECK(data.Y(0,0) == Approx(-1.5800573524786081));                                                 // Scaled
+			CHECK(data.Y(0,0) == Approx(-1.5800573524786081));
 			CHECK(data.Y2(0,0) == Approx(-1.5567970303));
-//			CHECK(data.W(0,0) == Approx(0.8957059881));
+//			CHECK(data.C(0,0) == Approx(0.8957059881));
 			CHECK(data.E(0,0) == Approx(0.8957059881));
 			CHECK(data.E.row(0).array().sum() == Approx(2.9708148667));
 		}
@@ -369,9 +367,7 @@ TEST_CASE( "Example 4: multi-env + mog + covars + emp_bayes" ){
 
 		data.calc_dxteex();
 		data.calc_snpstats();
-		if(p.vb_init_file != "NULL") {
-			data.read_alpha_mu();
-		}
+		data.set_vb_init();
 		VBayesX2 VB(data);
 		VB.check_inputs();
 		SECTION("Ex4. Vbayes_X2 initialised correctly"){
@@ -545,110 +541,104 @@ TEST_CASE( "Example 4: multi-env + mog + covars + emp_bayes" ){
 	}
 }
 
-TEST_CASE("--dxteex") {
-	parameters p;
-	char *argv[] = {(char *) "bin/bgen_prog", (char *) "--mode_vb", (char *) "--low_mem",
-		            (char *) "--use_vb_on_covars", (char *) "--mode_empirical_bayes",
-		            (char *) "--effects_prior_mog",
-		            (char *) "--vb_iter_max", (char *) "10",
-		            (char *) "--environment", (char *) "data/io_test/n50_p100_env.txt",
-		            (char *) "--bgen", (char *) "data/io_test/n50_p100.bgen",
-		            (char *) "--out", (char *) "data/io_test/config4.out",
-		            (char *) "--pheno", (char *) "data/io_test/pheno.txt",
-		            (char *) "--hyps_grid", (char *) "data/io_test/single_hyps_gxage.txt",
-		            (char *) "--vb_init", (char *) "data/io_test/answer_init.txt"};
-	int argc = sizeof(argv) / sizeof(argv[0]);
-	parse_arguments(p, argc, argv);
-
-	SECTION("Compute dxteex internally"){
-		Data data(p);
-
-		data.read_non_genetic_data();
-		data.standardise_non_genetic_data();
-		SECTION("Ex4. Non genetic data standardised + covars regressed") {
-			CHECK(data.E(0, 0) == Approx(0.8957059881));
-		}
-		data.read_full_bgen();
-
-		data.calc_dxteex();
-		data.calc_snpstats();
-		if (p.vb_init_file != "NULL") {
-			data.read_alpha_mu();
-		}
-		VBayesX2 VB(data);
-		VB.check_inputs();
-		SECTION("Ex4. Vbayes_X2 initialised correctly") {
-			CHECK(VB.n_samples == 50);
-			CHECK(VB.N == 50.0);
-			CHECK(VB.n_env == 4);
-			CHECK(VB.n_effects == 2);
-			CHECK(VB.vp_init.muw(0) == 0.25);
-			CHECK(VB.p.init_weights_with_snpwise_scan == false);
-			CHECK(VB.dXtEEX(0, 0) == Approx(38.9610805993));
-			CHECK(VB.dXtEEX(1, 0) == Approx(38.2995451744));
-			CHECK(VB.dXtEEX(2, 0) == Approx(33.7077899144));
-			CHECK(VB.dXtEEX(3, 0) == Approx(35.7391671158));
-
-			CHECK(VB.dXtEEX(0, 4) == Approx(-2.6239467101));
-			CHECK(VB.dXtEEX(1, 4) == Approx(-13.0001255314));
-			CHECK(VB.dXtEEX(2, 4) == Approx(-11.6635557299));
-			CHECK(VB.dXtEEX(3, 4) == Approx(-7.2154836264));
-		}
-
-		std::vector< VbTracker > trackers(VB.hyps_grid.rows(), p);
-		VB.run_inference(VB.hyps_grid, false, 2, trackers);
-		SECTION("Ex3. Vbayes_X2 inference correct"){
-			CHECK(trackers[0].count == 10);
-			CHECK(trackers[0].logw == Approx(-86.8131699164));
-		}
-	}
-
-	SECTION("Compute dxteex external") {
-		p.dxteex_file = "data/io_test/n50_p100_dxteex.txt";
-		Data data(p);
-
-		data.read_non_genetic_data();
-		data.standardise_non_genetic_data();
-		SECTION("Ex4. Non genetic data standardised + covars regressed") {
-			CHECK(data.E(0, 0) == Approx(0.8957059881));
-		}
-		data.read_full_bgen();
-
-		data.read_external_dxteex();
-		data.calc_dxteex();
-		data.calc_snpstats();
-		if (p.vb_init_file != "NULL") {
-			data.read_alpha_mu();
-		}
-		VBayesX2 VB(data);
-		VB.check_inputs();
-		SECTION("Ex4. Vbayes_X2 initialised correctly") {
-			CHECK(VB.n_samples == 50);
-			CHECK(VB.N == 50.0);
-			CHECK(VB.n_env == 4);
-			CHECK(VB.n_effects == 2);
-			CHECK(VB.vp_init.muw(0) == 0.25);
-			CHECK(VB.p.init_weights_with_snpwise_scan == false);
-			CHECK(VB.dXtEEX(0, 0) == Approx(38.9610805993));
-			CHECK(VB.dXtEEX(1, 0) == Approx(38.3718));
-			CHECK(VB.dXtEEX(2, 0) == Approx(33.81659));
-			CHECK(VB.dXtEEX(3, 0) == Approx(35.8492));
-
-			CHECK(VB.dXtEEX(0, 4) == Approx(-2.6239467101));
-			CHECK(VB.dXtEEX(1, 4) == Approx(-12.96763));
-			CHECK(VB.dXtEEX(2, 4) == Approx(-11.66501));
-			CHECK(VB.dXtEEX(3, 4) == Approx(-7.20105));
-		}
-
-		std::vector< VbTracker > trackers(VB.hyps_grid.rows(), p);
-		VB.run_inference(VB.hyps_grid, false, 2, trackers);
-		SECTION("Ex3. Vbayes_X2 inference correct"){
-			CHECK(trackers[0].count == 10);
-			CHECK(trackers[0].logw == Approx(-86.8131699164));
-		}
-	}
-}
-
+// Garbage test; testing dxteex should be way lower level
+//TEST_CASE("--dxteex") {
+//	parameters p;
+//	char *argv[] = {(char *) "bin/bgen_prog", (char *) "--mode_vb", (char *) "--low_mem",
+//		            (char *) "--use_vb_on_covars", (char *) "--mode_empirical_bayes",
+//		            (char *) "--effects_prior_mog",
+//		            (char *) "--vb_iter_max", (char *) "10",
+//		            (char *) "--environment", (char *) "data/io_test/n50_p100_env.txt",
+//		            (char *) "--bgen", (char *) "data/io_test/n50_p100.bgen",
+//		            (char *) "--out", (char *) "data/io_test/config4.out",
+//		            (char *) "--pheno", (char *) "data/io_test/pheno.txt",
+//		            (char *) "--hyps_grid", (char *) "data/io_test/single_hyps_gxage.txt"};
+//	int argc = sizeof(argv) / sizeof(argv[0]);
+//	parse_arguments(p, argc, argv);
+//
+//	SECTION("Compute dxteex internally"){
+//		Data data(p);
+//
+//		data.read_non_genetic_data();
+//		data.standardise_non_genetic_data();
+//		SECTION("Ex4. Non genetic data standardised + covars regressed") {
+//			CHECK(data.E(0, 0) == Approx(0.8957059881));
+//		}
+//		data.read_full_bgen();
+//
+//		data.calc_dxteex();
+//		data.set_vb_init();
+//		VBayesX2 VB(data);
+//		VB.check_inputs();
+//		SECTION("Ex4. Vbayes_X2 initialised correctly") {
+//			CHECK(VB.n_samples == 50);
+//			CHECK(VB.N == 50.0);
+//			CHECK(VB.n_env == 4);
+//			CHECK(VB.n_effects == 2);
+//			CHECK(VB.vp_init.muw(0) == 0.25);
+//			CHECK(VB.p.init_weights_with_snpwise_scan == false);
+//			CHECK(VB.dXtEEX(0, 0) == Approx(38.9610805993));
+//			CHECK(VB.dXtEEX(1, 0) == Approx(38.2995451744));
+//			CHECK(VB.dXtEEX(2, 0) == Approx(33.7077899144));
+//			CHECK(VB.dXtEEX(3, 0) == Approx(35.7391671158));
+//
+//			CHECK(VB.dXtEEX(0, 4) == Approx(-2.6239467101));
+//			CHECK(VB.dXtEEX(1, 4) == Approx(-13.0001255314));
+//			CHECK(VB.dXtEEX(2, 4) == Approx(-11.6635557299));
+//			CHECK(VB.dXtEEX(3, 4) == Approx(-7.2154836264));
+//		}
+//
+//		std::vector< VbTracker > trackers(VB.hyps_grid.rows(), p);
+//		VB.run_inference(VB.hyps_grid, false, 2, trackers);
+//		SECTION("Ex3. Vbayes_X2 inference correct"){
+//			CHECK(trackers[0].count == 10);
+//			CHECK(trackers[0].logw == Approx(-86.8131699164));
+//		}
+//	}
+//
+//	SECTION("Compute dxteex external") {
+//		p.dxteex_file = "data/io_test/n50_p100_dxteex.txt";
+//		Data data(p);
+//
+//		data.read_non_genetic_data();
+//		data.standardise_non_genetic_data();
+//		SECTION("Ex4. Non genetic data standardised + covars regressed") {
+//			CHECK(data.E(0, 0) == Approx(0.8957059881));
+//		}
+//		data.read_full_bgen();
+//
+//		data.read_external_dxteex();
+//		data.calc_dxteex();
+//		data.set_vb_init();
+//		VBayesX2 VB(data);
+//		VB.check_inputs();
+//		SECTION("Ex4. Vbayes_X2 initialised correctly") {
+//			CHECK(VB.n_samples == 50);
+//			CHECK(VB.N == 50.0);
+//			CHECK(VB.n_env == 4);
+//			CHECK(VB.n_effects == 2);
+//			CHECK(VB.vp_init.muw(0) == 0.25);
+//			CHECK(VB.p.init_weights_with_snpwise_scan == false);
+//			CHECK(VB.dXtEEX(0, 0) == Approx(38.9610805993));
+//			CHECK(VB.dXtEEX(1, 0) == Approx(38.3718));
+//			CHECK(VB.dXtEEX(2, 0) == Approx(33.81659));
+//			CHECK(VB.dXtEEX(3, 0) == Approx(35.8492));
+//
+//			CHECK(VB.dXtEEX(0, 4) == Approx(-2.6239467101));
+//			CHECK(VB.dXtEEX(1, 4) == Approx(-12.96763));
+//			CHECK(VB.dXtEEX(2, 4) == Approx(-11.66501));
+//			CHECK(VB.dXtEEX(3, 4) == Approx(-7.20105));
+//		}
+//
+//		std::vector< VbTracker > trackers(VB.hyps_grid.rows(), p);
+//		VB.run_inference(VB.hyps_grid, false, 2, trackers);
+//		SECTION("Ex3. Vbayes_X2 inference correct"){
+//			CHECK(trackers[0].count == 10);
+//			CHECK(trackers[0].logw == Approx(-86.8131699164));
+//		}
+//	}
+//}
+//
 
 // This whole section needs redoing
 //TEST_CASE("--dxteex case8") {
@@ -786,7 +776,6 @@ TEST_CASE( "Edge case 1: error in alpha" ){
 			             (char*) "--pheno", (char*) "data/io_test/pheno.txt",
 			             (char*) "--hyps_grid", (char*) "data/io_test/hyperpriors_gxage.txt",
 			             (char*) "--hyps_probs", (char*) "data/io_test/hyperpriors_gxage_probs.txt",
-			             (char*) "--vb_init", (char*) "data/io_test/answer_init.txt",
 			             (char*) "--environment", (char*) "data/io_test/age.txt"};
 		int argc = sizeof(argv)/sizeof(argv[0]);
 		parse_arguments(p, argc, argv);
@@ -796,9 +785,7 @@ TEST_CASE( "Edge case 1: error in alpha" ){
 		data.read_full_bgen();
 
 		data.calc_dxteex();
-		if(p.vb_init_file != "NULL") {
-			data.read_alpha_mu();
-		}
+		data.set_vb_init();
 		VBayesX2 VB(data);
 		VB.check_inputs();
 
