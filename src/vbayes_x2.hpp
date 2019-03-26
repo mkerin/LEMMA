@@ -41,12 +41,9 @@
 namespace boost_m = boost::math;
 namespace boost_io = boost::iostreams;
 
-template <typename T>
-inline std::vector<int> validate_grid(const Eigen::MatrixXd &grid, T n_var);
 inline double sigmoid(double x){
 	return 1.0 / (1.0 + std::exp(-x));
 }
-
 
 class VBayesX2 {
 public:
@@ -101,8 +98,6 @@ EigenDataMatrix& C;                  // matrix of covariates (superset of GxE va
 Eigen::MatrixXd XtE;                  // matrix of covariates (superset of GxE variables)
 
 Eigen::ArrayXXd& dXtEEX;             // P x n_env^2; col (l * n_env + m) is the diagonal of X^T * diag(E_l * E_m) * X
-Eigen::MatrixXd r1_hyps_grid;
-Eigen::MatrixXd hyps_grid;
 
 // Global location of y_m = E[X beta] and y_x = E[X gamma]
 EigenDataMatrix YY, YX, YM, ETA, ETA_SQ;
@@ -126,13 +121,13 @@ VariationalParametersLite GLOBAL_map_vp;
 
 explicit VBayesX2(Data& dat) : X(dat.G),
 	Y(Eigen::Map<EigenDataVector>(dat.Y.data(), dat.Y.rows())),
-	C(dat.E),
+	C(dat.C),
 	dXtEEX(dat.dXtEEX),
 	snpstats(dat.snpstats),
 	p(dat.params),
 	GLOBAL_map_vp(dat.params),
+	hyps_inits(dat.hyps_inits),
 	vp_init(dat.vp_init){
-	assert(std::includes(dat.hyps_names.begin(), dat.hyps_names.end(), hyps_names.begin(), hyps_names.end()));
 	std::cout << "Initialising vbayes object" << std::endl;
 	mkl_set_num_threads_local(p.n_thread);
 
@@ -142,7 +137,7 @@ explicit VBayesX2(Data& dat) : X(dat.G),
 	n_env          = dat.n_env;
 	n_var2         = n_effects * dat.n_var;
 	n_samples      = dat.n_samples;
-	n_covar        = dat.n_env;
+	n_covar        = dat.n_covar;
 	covar_names    = dat.env_names;
 	env_names      = dat.env_names;
 	N              = (double) n_samples;
@@ -182,12 +177,12 @@ explicit VBayesX2(Data& dat) : X(dat.G),
 	p.gxe_chunk_size = (unsigned int) std::min((long int) p.gxe_chunk_size, (long int) n_var);
 
 	// Read environmental variables
-	std::cout << "Computing XtE" << std::endl;
 	E = dat.E;
 	if(n_env > 0) {
+		std::cout << "Computing XtE" << std::endl;
 		XtE = X.transpose_multiply(E);
+		std::cout << "XtE computed" << std::endl;
 	}
-	std::cout << "XtE computed" << std::endl;
 
 	// Allocate memory - fwd/back pass vectors
 	for(std::uint32_t kk = 0; kk < n_var * n_effects; kk++) {
@@ -289,15 +284,6 @@ explicit VBayesX2(Data& dat) : X(dat.G),
 	}
 	calcPredEffects(vp_init);
 
-	// Assign data - hyperparameters
-	hyps_grid           = dat.hyps_grid;
-
-	if(p.r1_hyps_grid_file == "NULL") {
-		r1_hyps_grid    = hyps_grid;
-	} else {
-		r1_hyps_grid    = dat.r1_hyps_grid;
-	}
-
 	if(n_covar > 0) {
 		Cty = C.transpose() * Y;
 	}
@@ -326,17 +312,17 @@ void run(){
 	if(run_round1) {
 
 		std::vector< VbTracker > trackers(n_thread, p);
-		long r1_n_grid = r1_hyps_grid.rows();
-		run_inference(r1_hyps_grid, true, 1, trackers);
+		long n_grid = hyps_inits.size();
+		run_inference(hyps_inits, true, 1, trackers);
 
 		if(p.verbose) {
-			write_trackers_to_file("round1_", trackers, r1_hyps_grid);
+			write_trackers_to_file("round1_", trackers, n_grid);
 		}
 
 		// Find best init
 		double logw_best = -std::numeric_limits<double>::max();
 		bool init_not_set = true;
-		for (int ii = 0; ii < r1_n_grid; ii++) {
+		for (int ii = 0; ii < n_grid; ii++) {
 			double logw      = trackers[ii].logw;
 			if(std::isfinite(logw) && logw > logw_best) {
 				vp_init      = trackers[ii].vp;
@@ -361,21 +347,21 @@ void run(){
 	write_snp_stats_to_file(outf_inits, n_effects, n_var, vp_init, X, p, false);
 	boost_io::close(outf_inits);
 
-	long n_grid = r1_hyps_grid.rows();
+	long n_grid = hyps_inits.size();
 	std::vector< VbTracker > trackers(n_grid, p);
-	run_inference(hyps_grid, false, 2, trackers);
+	run_inference(hyps_inits, false, 2, trackers);
 
-	write_trackers_to_file("", trackers, hyps_grid);
+	write_trackers_to_file("", trackers, n_grid);
 	std::cout << "Variational inference finished" << std::endl;
 }
 
-void run_inference(const Eigen::Ref<const Eigen::MatrixXd>& hyps_grid,
+void run_inference(const std::vector<Hyps>& hyps_inits,
                    const bool random_init,
                    const int round_index,
                    std::vector<VbTracker>& trackers){
 	// Writes results from inference to trackers
 
-	long n_grid = hyps_grid.rows();
+	long n_grid = hyps_inits.size();
 	// Parrallel starts swapped for multithreaded inference
 	int n_thread = 1;
 
@@ -386,18 +372,15 @@ void run_inference(const Eigen::Ref<const Eigen::MatrixXd>& hyps_grid,
 		chunks[ch_index].push_back(ii);
 	}
 
-	runOuterLoop(round_index, hyps_grid, n_grid, chunks[0], random_init, trackers);
+	runOuterLoop(round_index, hyps_inits, n_grid, chunks[0], random_init, trackers);
 }
 
 void runOuterLoop(const int round_index,
-                  const Eigen::Ref<const Eigen::MatrixXd>& outer_hyps_grid,
+                  std::vector<Hyps> all_hyps,
                   const unsigned long n_grid,
                   const std::vector<int>& grid_index_list,
                   const bool random_init,
                   std::vector<VbTracker>& all_tracker){
-
-	std::vector<Hyps> all_hyps;
-	unpack_hyps(outer_hyps_grid, all_hyps);
 
 	// Run outer loop - don't update trackers
 	auto innerLoop_start = std::chrono::system_clock::now();
@@ -412,17 +395,6 @@ void runOuterLoop(const int round_index,
 			rescanGWAS(all_tracker[nn].vp, gam_neglogp);
 			all_tracker[nn].push_rescan_gwas(X, n_var, gam_neglogp);
 		}
-	}
-}
-
-void unpack_hyps(const Eigen::Ref<const Eigen::MatrixXd>& outer_hyps_grid,
-                 std::vector<Hyps>& all_hyps){
-
-	long n_grid = outer_hyps_grid.rows();
-	for (int ii = 0; ii < n_grid; ii++) {
-		Hyps i_hyps(p);
-		i_hyps.init_from_grid(n_effects, ii, n_var, outer_hyps_grid);
-		all_hyps.push_back(i_hyps);
 	}
 }
 
@@ -514,7 +486,7 @@ void runInnerLoop(const bool random_init,
 			all_hyps[nn].update_pve();
 			all_tracker[nn].push_interim_hyps(count, all_hyps[nn], i_logw[nn], alpha_diff[nn], n_effects,
 			                                  n_var, n_env, all_vp[nn]);
-			if (p.xtra_verbose && count % 50 == 0) {
+			if (p.param_dump_interval > 0 && count % p.param_dump_interval == 0) {
 				all_tracker[nn].dump_state(count, n_samples, n_covar, n_var,
 				                           n_env, n_effects,
 				                           all_vp[nn], all_hyps[nn], Y, C,
@@ -1613,11 +1585,9 @@ void LOCO_pvals(const VariationalParametersLite& vp,
 /********** Output functions ************/
 void write_trackers_to_file(const std::string& file_prefix,
                             const std::vector< VbTracker >& trackers,
-                            const Eigen::Ref<const Eigen::MatrixXd>& hyps_grid){
+                            const long& my_n_grid){
 	// Stitch trackers back together if using multithreading
 	// Parrallel starts swapped for multithreaded inference
-	int n_thread = 1;
-	unsigned long my_n_grid = hyps_grid.rows();
 	output_init(file_prefix);
 	output_results(trackers, my_n_grid);
 }
@@ -1651,7 +1621,7 @@ void output_init(const std::string& file_prefix){
 	}
 }
 
-void output_results(const std::vector<VbTracker>& trackers, const int my_n_grid){
+void output_results(const std::vector<VbTracker>& trackers, const long& my_n_grid){
 	// Write;
 	// main output; weights logw converged_hyps counts time (currently no prior)
 	// snps;
@@ -1842,36 +1812,6 @@ std::string fstream_init(boost_io::filtering_ostream& my_outf,
 	return ofile;
 }
 
-void check_inputs(){
-	// If grid contains hyperparameter values that aren't sensible then we exclude
-	assert(Y.rows() == n_samples);
-	assert(X.rows() == n_samples);
-	long n_grid = hyps_grid.rows();
-
-	std::vector<int> valid_points, r1_valid_points;
-	valid_points        = validate_grid(hyps_grid, n_var);
-	hyps_grid           = EigenUtils::subset_matrix(hyps_grid, valid_points);
-
-	if(valid_points.empty()) {
-		throw std::runtime_error("No valid grid points in hyps_grid.");
-	} else if(n_grid > valid_points.size()) {
-		std::cout << "WARNING: " << n_grid - valid_points.size();
-		std::cout << " invalid grid points removed from hyps_grid." << std::endl;
-	}
-
-	// r1_hyps_grid assigned during constructor (ie before this function call)
-	long r1_n_grid   = r1_hyps_grid.rows();
-	r1_valid_points = validate_grid(r1_hyps_grid, n_var);
-	r1_hyps_grid    = EigenUtils::subset_matrix(r1_hyps_grid, r1_valid_points);
-
-	if(r1_valid_points.empty()) {
-		throw std::runtime_error("No valid grid points in r1_hyps_grid.");
-	} else if(r1_n_grid > r1_valid_points.size()) {
-		std::cout << "WARNING: " << r1_n_grid - r1_valid_points.size();
-		std::cout << " invalid grid points removed from r1_hyps_grid." << std::endl;
-	}
-}
-
 int parseLineRAM(char* line){
 	// This assumes that a digit will be found and the line ends in " Kb".
 	std::size_t i = strlen(line);
@@ -1902,30 +1842,5 @@ int getValueRAM(){         //Note: this value is in KB!
 #endif
 }
 };
-
-template <typename T>
-inline std::vector<int> validate_grid(const Eigen::MatrixXd &grid, const T n_var){
-	const int sigma_ind   = 0;
-	const int sigma_b_ind = 1;
-	const int sigma_g_ind = 2;
-	const int lam_b_ind   = 3;
-	const int lam_g_ind   = 4;
-
-	std::vector<int> valid_points;
-	for (int ii = 0; ii < grid.rows(); ii++) {
-		double lam_b = grid(ii, lam_b_ind);
-		double lam_g = grid(ii, lam_g_ind);
-
-		bool chck_sigma   = (grid(ii, sigma_ind)   >  0.0 && std::isfinite(grid(ii, sigma_ind)));
-		bool chck_sigma_b = (grid(ii, sigma_b_ind) >  0.0 && std::isfinite(grid(ii, sigma_b_ind)));
-		bool chck_sigma_g = (grid(ii, sigma_g_ind) >= 0.0 && std::isfinite(grid(ii, sigma_g_ind)));
-		bool chck_lam_b   = (lam_b >= 1.0 / (double) n_var) && (lam_b < 1.0) && std::isfinite(lam_b);
-		bool chck_lam_g   = (lam_g >= 0) && (lam_g < 1.0) && std::isfinite(lam_g);
-		if(chck_lam_b && chck_lam_g && chck_sigma && chck_sigma_g && chck_sigma_b) {
-			valid_points.push_back(ii);
-		}
-	}
-	return valid_points;
-}
 
 #endif

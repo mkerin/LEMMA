@@ -15,7 +15,7 @@ std::string env_coeffs_file, covar_coeffs_file, hyps_probs_file, vb_init_file;
 std::string dxteex_file, snpstats_file, mog_weights_file;
 std::vector< std::string > rsid;
 unsigned int random_seed;
-long int chunk_size, vb_iter_max;
+long int chunk_size, vb_iter_max, param_dump_interval;
 int missing_code, env_update_repeats, n_gconf, n_bgen_thread, n_pve_samples;
 unsigned int n_thread, main_chunk_size, gxe_chunk_size;
 std::uint32_t range_start, range_end;
@@ -73,6 +73,7 @@ parameters() : bgen_file("NULL"),
 	n_pve_samples = 100;
 	beta_spike_diff_factor = 10000.0;             // Initial diff in variance of spike & slab
 	gam_spike_diff_factor = 10000.0;             // Initial diff in variance of spike & slab
+	param_dump_interval = -1;
 	range = false;
 	min_spike_diff_set = false;
 	mode_remove_squared_envs = true;

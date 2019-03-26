@@ -369,7 +369,6 @@ TEST_CASE( "Example 4: multi-env + mog + covars + emp_bayes" ){
 		data.calc_snpstats();
 		data.set_vb_init();
 		VBayesX2 VB(data);
-		VB.check_inputs();
 		SECTION("Ex4. Vbayes_X2 initialised correctly"){
 			CHECK(VB.n_samples == 50);
 			CHECK(VB.N == 50.0);
@@ -385,12 +384,11 @@ TEST_CASE( "Example 4: multi-env + mog + covars + emp_bayes" ){
 			CHECK(VB.dXtEEX(1, 4) == Approx(-13.0001255314));
 		}
 
-		std::vector< VbTracker > trackers(VB.hyps_grid.rows(), p);
+		std::vector< VbTracker > trackers(VB.hyps_inits.size(), p);
 		SECTION("Ex4. Explicitly checking hyps") {
 			// Set up for RunInnerLoop
-			long n_grid = VB.hyps_grid.rows();
-			std::vector<Hyps> all_hyps;
-			VB.unpack_hyps(VB.hyps_grid, all_hyps);
+			long n_grid = VB.hyps_inits.size();
+			std::vector<Hyps> all_hyps = VB.hyps_inits;
 
 			// Set up for updateAllParams
 			std::vector<VariationalParameters> all_vp;
@@ -407,16 +405,16 @@ TEST_CASE( "Example 4: multi-env + mog + covars + emp_bayes" ){
 
 			VB.updateAllParams(0, round_index, all_vp, all_hyps, logw_prev);
 
-			CHECK(vp.alpha_beta(0)            == Approx(0.1331830674));
-			CHECK(vp.alpha_beta(1)            == Approx(0.1395213065));
-			CHECK(vp.alpha_beta(63)           == Approx(0.1457756043));
-			CHECK(vp.muw(0, 0)              == Approx(0.1151822334));
+			CHECK(vp.alpha_beta(0)            == Approx(0.1346498807));
+			CHECK(vp.alpha_beta(1)            == Approx(0.1425321334));
+			CHECK(vp.alpha_beta(63)           == Approx(0.1441883227));
+			CHECK(vp.muw(0, 0)              == Approx(0.1086775151));
 
-			CHECK(hyps.sigma                == Approx(0.7035012479));
-			CHECK(hyps.lambda[0]            == Approx(0.1665905143));
-			CHECK(hyps.lambda[1]            == Approx(0.1350873122));
-			CHECK(hyps.slab_relative_var[0] == Approx(0.0078057485));
-			CHECK(hyps.slab_relative_var[1] == Approx(0.0050625855));
+			CHECK(hyps.sigma                == Approx(0.6931321693));
+			CHECK(hyps.lambda[0]            == Approx(0.1692408164));
+			CHECK(hyps.lambda[1]            == Approx(0.1350525422));
+			CHECK(hyps.slab_relative_var[0] == Approx(0.0081975047));
+			CHECK(hyps.slab_relative_var[1] == Approx(0.0051352774));
 
 			Eq_beta = vp.alpha_beta * vp.mu1_beta;
 			if(p.mode_mog_prior_beta) Eq_beta.array() += (1 - vp.alpha_beta) * vp.mu2_beta;
@@ -426,21 +424,19 @@ TEST_CASE( "Example 4: multi-env + mog + covars + emp_bayes" ){
 
 			VB.updateAllParams(1, round_index, all_vp, all_hyps, logw_prev);
 
-			CHECK(vp.alpha_beta(0)            == Approx(0.1455431449));
-			CHECK(vp.muw(0, 0)              == Approx(0.0675892528));
-			CHECK(vp.alpha_gam(63)           == Approx(0.1181281224));
-			CHECK(vp.mu1_gam(63)              == Approx(0.0019354328));
-			CHECK(vp.s1_gam_sq(63)            == Approx(0.0026158316));
+			CHECK(vp.alpha_beta(0)            == Approx(0.1471068707));
+			CHECK(vp.muw(0, 0)              == Approx(0.0599707291));
+			CHECK(vp.alpha_gam(63)           == Approx(0.1179146538));
+			CHECK(vp.mu1_gam(63)              == Approx(0.0020865384));
+			CHECK(vp.s1_gam_sq(63)            == Approx(0.0026045097));
 
-			CHECK(hyps.sigma                == Approx(0.6078333334));
-			CHECK(hyps.lambda[0]            == Approx(0.1951515205));
-			CHECK(hyps.lambda[1]            == Approx(0.1175686496));
-			CHECK(hyps.slab_relative_var[0] == Approx(0.0120417653));
-			CHECK(hyps.slab_relative_var[1] == Approx(0.0042687998));
+			CHECK(hyps.sigma                == Approx(0.6057303668));
+			CHECK(hyps.lambda[0]            == Approx(0.1963620558));
+			CHECK(hyps.lambda[1]            == Approx(0.1173158496));
+			CHECK(hyps.slab_relative_var[0] == Approx(0.0122601162));
+			CHECK(hyps.slab_relative_var[1] == Approx(0.0042629165));
 			CHECK(hyps.s_x[0]               == Approx(67.0));
-			CHECK(hyps.s_x[1]               == Approx(0.3092740356));
-			CHECK(hyps.pve[1]               == Approx(0.0001342237));
-			CHECK(hyps.pve_large[1]         == Approx(0.0001340815));
+			CHECK(hyps.s_x[1]               == Approx(0.2414523363));
 
 			Eq_beta = vp.alpha_beta * vp.mu1_beta;
 			if(p.mode_mog_prior_beta) Eq_beta.array() += (1 - vp.alpha_beta) * vp.mu2_beta;
@@ -450,23 +446,13 @@ TEST_CASE( "Example 4: multi-env + mog + covars + emp_bayes" ){
 
 			VB.updateAllParams(2, round_index, all_vp, all_hyps, logw_prev);
 
-			CHECK(vp.alpha_beta(63)           == Approx(0.1858817399));
-			CHECK(vp.muw(0, 0)              == Approx(0.0419539867));
-			CHECK(vp.alpha_gam(63)           == Approx(0.1036835901));
-			CHECK(vp.mu1_gam(63)              == Approx(0.0000724454));
-			CHECK(vp.s1_gam_sq(63)            == Approx(0.0019558949));
+			CHECK(vp.alpha_beta(63)           == Approx(0.1858268415));
+			CHECK(vp.muw(0, 0)              == Approx(0.037360623));
+			CHECK(vp.alpha_gam(63)           == Approx(0.1035297292));
+			CHECK(vp.mu1_gam(63)              == Approx(0.0000756903));
+			CHECK(vp.s1_gam_sq(63)            == Approx(0.0019494878));
 
-			CHECK(hyps.sigma                == Approx(0.5652108593));
-			CHECK(hyps.lambda[0]            == Approx(0.213751744));
-			CHECK(hyps.lambda[1]            == Approx(0.1032266612));
-			CHECK(hyps.slab_relative_var[0] == Approx(0.0151665945));
-			CHECK(hyps.slab_relative_var[1] == Approx(0.0034302028));
-			CHECK(hyps.s_x[0]               == Approx(67.0));
-			CHECK(hyps.s_x[1]               == Approx(0.1225701767));
-			CHECK(hyps.pve[1]               == Approx(0.0000357123));
-			CHECK(hyps.pve_large[1]         == Approx(0.0000356537));
-
-			CHECK(VB.calc_logw(hyps, vp) == Approx(-88.4955694238));
+			CHECK(VB.calc_logw(hyps, vp) == Approx(-88.4669513868));
 			VbTracker tracker(p);
 			tracker.init_interim_output(0,2, VB.n_effects, VB.n_env, VB.env_names, vp);
 			tracker.dump_state(2, VB.n_samples, VB.n_covar, VB.n_var, VB.n_env,
@@ -476,11 +462,11 @@ TEST_CASE( "Example 4: multi-env + mog + covars + emp_bayes" ){
 			// Checking logw
 			double int_linear = -1.0 * VB.calcExpLinear(hyps, vp) / 2.0 / hyps.sigma;
 			int_linear -= VB.N * std::log(2.0 * VB.PI * hyps.sigma) / 2.0;
-			CHECK(int_linear  == Approx(-58.6830095598));
+			CHECK(int_linear  == Approx(-58.5936502834));
 
-			CHECK(VB.calcExpLinear(hyps, vp)  == Approx(30.5213788039));
-			CHECK(VB.calcKLBeta(hyps, vp)  == Approx(-5.3388177133));
-			CHECK(VB.calcKLGamma(hyps, vp)  == Approx(-0.0059150945));
+			CHECK(VB.calcExpLinear(hyps, vp)  == Approx(30.4124788103));
+			CHECK(VB.calcKLBeta(hyps, vp)  == Approx(-5.4013615932));
+			CHECK(VB.calcKLGamma(hyps, vp)  == Approx(-0.0053957728));
 
 			// check int_linear
 
@@ -488,12 +474,12 @@ TEST_CASE( "Example 4: multi-env + mog + covars + emp_bayes" ){
 			int_linear  = (VB.Y - vp.ym).squaredNorm();
 			int_linear -= 2.0 * (VB.Y - vp.ym).cwiseProduct(vp.eta).dot(vp.yx);
 			int_linear += vp.yx.cwiseProduct(vp.eta_sq).dot(vp.yx);
-			CHECK(int_linear == Approx(21.7708079744));
+			CHECK(int_linear == Approx(21.6133648827));
 
 			double int_linear2  = (VB.Y - vp.ym - vp.yx.cwiseProduct(vp.eta)).squaredNorm();
 			int_linear2 -= vp.yx.cwiseProduct(vp.eta).squaredNorm();
 			int_linear2 += vp.yx.cwiseProduct(vp.eta_sq).dot(vp.yx);
-			CHECK(int_linear2 == Approx(21.7708079744));
+			CHECK(int_linear2 == Approx(21.6133648827));
 
 			double kl_covar = 0.0;
 			kl_covar += (double) VB.n_covar * (1.0 - std::log(hyps.sigma * VB.sigma_c)) / 2.0;
@@ -508,32 +494,16 @@ TEST_CASE( "Example 4: multi-env + mog + covars + emp_bayes" ){
 			kl_weights += vp.sw_sq.log().sum() / 2.0;
 			kl_weights -= vp.sw_sq.sum() / 2.0;
 			kl_weights -= vp.muw.square().sum() / 2.0;
-			CHECK(kl_weights == Approx(-0.4088998601));
-
+			CHECK(kl_weights == Approx(-0.4078325179));
 
 
 			// variances
-			CHECK(vp.sc_sq.sum() == Approx(0.0496189464));
-			CHECK(vp.var_beta().sum() == Approx(0.1037083336));
-			CHECK(vp.var_gam().sum() == Approx(0.01343011));
-			CHECK(vp.mean_beta().sum() == Approx(0.1211143488));
-			CHECK(vp.mean_gam().sum() == Approx(0.0024228301));
-			CHECK(vp.muw.sum() == Approx(0.025847795));
-			CHECK(vp.sw_sq.sum() == Approx(1.9640756682));
-			CHECK((vp.EdZtZ * vp.var_gam()).sum() == Approx(1.2375451411));
-
-			CHECK(vp.EdZtZ.sum() == Approx(6224.5757519367));
-			CHECK(vp.eta_sq.sum() == Approx(96.3429032915));
-			CHECK(vp.eta.squaredNorm() == Approx(0.1031955508));
-			CHECK(vp.ym.squaredNorm() == Approx(14.3819142131));
-			CHECK(vp.yx.squaredNorm() == Approx(0.0006432176));
-
-			double dztz0 = (VB.X.col(0).array().square() * vp.eta_sq.array()).sum();
-			CHECK(dztz0 == Approx(92.1333438413));
-			CHECK(vp.EdZtZ(0) == Approx(92.1333438413));
+			CHECK(vp.EdZtZ.sum() == Approx(6228.4516082717));
+			CHECK(vp.ym.squaredNorm() == Approx(14.6703611205));
+			CHECK(vp.yx.squaredNorm() == Approx(0.000514606));
 		}
 
-		VB.run_inference(VB.hyps_grid, false, 2, trackers);
+		VB.run_inference(VB.hyps_inits, false, 2, trackers);
 		SECTION("Ex3. Vbayes_X2 inference correct"){
 			CHECK(trackers[0].count == 10);
 			CHECK(trackers[0].logw == Approx(-86.8131749627));
@@ -569,7 +539,6 @@ TEST_CASE( "Example 4: multi-env + mog + covars + emp_bayes" ){
 //		data.calc_dxteex();
 //		data.set_vb_init();
 //		VBayesX2 VB(data);
-//		VB.check_inputs();
 //		SECTION("Ex4. Vbayes_X2 initialised correctly") {
 //			CHECK(VB.n_samples == 50);
 //			CHECK(VB.N == 50.0);
@@ -588,8 +557,8 @@ TEST_CASE( "Example 4: multi-env + mog + covars + emp_bayes" ){
 //			CHECK(VB.dXtEEX(3, 4) == Approx(-7.2154836264));
 //		}
 //
-//		std::vector< VbTracker > trackers(VB.hyps_grid.rows(), p);
-//		VB.run_inference(VB.hyps_grid, false, 2, trackers);
+//		std::vector< VbTracker > trackers(VB.hyps_inits.size(), p);
+//		VB.run_inference(VB.hyps_inits, false, 2, trackers);
 //		SECTION("Ex3. Vbayes_X2 inference correct"){
 //			CHECK(trackers[0].count == 10);
 //			CHECK(trackers[0].logw == Approx(-86.8131699164));
@@ -611,7 +580,6 @@ TEST_CASE( "Example 4: multi-env + mog + covars + emp_bayes" ){
 //		data.calc_dxteex();
 //		data.set_vb_init();
 //		VBayesX2 VB(data);
-//		VB.check_inputs();
 //		SECTION("Ex4. Vbayes_X2 initialised correctly") {
 //			CHECK(VB.n_samples == 50);
 //			CHECK(VB.N == 50.0);
@@ -630,8 +598,8 @@ TEST_CASE( "Example 4: multi-env + mog + covars + emp_bayes" ){
 //			CHECK(VB.dXtEEX(3, 4) == Approx(-7.20105));
 //		}
 //
-//		std::vector< VbTracker > trackers(VB.hyps_grid.rows(), p);
-//		VB.run_inference(VB.hyps_grid, false, 2, trackers);
+//		std::vector< VbTracker > trackers(VB.hyps_inits.size(), p);
+//		VB.run_inference(VB.hyps_inits, false, 2, trackers);
 //		SECTION("Ex3. Vbayes_X2 inference correct"){
 //			CHECK(trackers[0].count == 10);
 //			CHECK(trackers[0].logw == Approx(-86.8131699164));
@@ -690,9 +658,8 @@ TEST_CASE( "Example 4: multi-env + mog + covars + emp_bayes" ){
 //		}
 //
 //		VBayesX2 VB(data);
-//		VB.check_inputs();
-//		std::vector< VbTracker > trackers(VB.hyps_grid.rows(), p);
-//		VB.run_inference(VB.hyps_grid, false, 2, trackers);
+//		std::vector< VbTracker > trackers(VB.hyps_inits.size(), p);
+//		VB.run_inference(VB.hyps_inits, false, 2, trackers);
 //		SECTION("Ex3. Vbayes_X2 inference correct"){
 //			CHECK(trackers[0].count == 30);
 //			CHECK(trackers[0].logw == Approx(-1158.9633597738));
@@ -729,13 +696,11 @@ TEST_CASE( "Example 4: multi-env + mog + covars + emp_bayes" ){
 //			data.read_alpha_mu();
 //		}
 //		VBayesX2 VB(data);
-//		VB.check_inputs();
-//		std::vector< VbTracker > trackers(VB.hyps_grid.rows(), p);
+//		std::vector< VbTracker > trackers(VB.hyps_inits.size(), p);
 //		SECTION("Dump params state") {
 //			// Set up for RunInnerLoop
-//			long n_grid = VB.hyps_grid.rows();
-//			std::vector<Hyps> all_hyps;
-//			VB.unpack_hyps(VB.hyps_grid, all_hyps);
+//			long n_grid = VB.hyps_inits.size();
+//			std::vector<Hyps> all_hyps = VB.hyps_inits;
 //
 //			// Set up for updateAllParams
 //			std::vector<VariationalParameters> all_vp;
@@ -757,7 +722,7 @@ TEST_CASE( "Example 4: multi-env + mog + covars + emp_bayes" ){
 //                     VB.n_effects, vp, hyps, VB.Y, VB.C, VB.X,
 //                     VB.covar_names, VB.env_names);
 // }
-//		VB.run_inference(VB.hyps_grid, false, 2, trackers);
+//		VB.run_inference(VB.hyps_inits, false, 2, trackers);
 //		SECTION("Ex3. Vbayes_X2 inference correct"){
 //			CHECK(trackers[0].count == 30);
 //			CHECK(trackers[0].logw == Approx(-1158.9630661443));
@@ -787,24 +752,14 @@ TEST_CASE( "Edge case 1: error in alpha" ){
 		data.calc_dxteex();
 		data.set_vb_init();
 		VBayesX2 VB(data);
-		VB.check_inputs();
 
-		std::vector< VbTracker > trackers(VB.hyps_grid.rows(), p);
+		std::vector< VbTracker > trackers(VB.hyps_inits.size(), p);
 		SECTION("Ex1. Explicitly checking updates"){
-			// Initialisation
-#ifdef DATA_AS_FLOAT
-			CHECK( (double)  VB.vp_init.ym(0) == Approx(0.0003200434));
-#else
-			CHECK(VB.vp_init.ym(0) == Approx(-0.0506835772));
-#endif
-			CHECK(VB.vp_init.yx(0) == Approx(0.0732037568));
-			CHECK(VB.vp_init.eta(0) == Approx(-0.5894793969));
 
 			// Set up for RunInnerLoop
-			long n_grid = VB.hyps_grid.rows();
+			long n_grid = VB.hyps_inits.size();
 			long n_samples = VB.n_samples;
-			std::vector<Hyps> all_hyps;
-			VB.unpack_hyps(VB.hyps_grid, all_hyps);
+			std::vector<Hyps> all_hyps = VB.hyps_inits;
 
 			// Set up for updateAllParams
 			std::vector<VariationalParameters> all_vp;

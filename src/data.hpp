@@ -275,79 +275,82 @@ void standardise_non_genetic_data(){
 	   if any of E have squared dependance on Y then remove
 	 */
 
-	// Project C from Y and E when C is present
-	if (params.use_vb_on_covars) {
-		if(n_covar > 0) {
-			regress_first_mat_from_second(C, "covars", covar_names, Y, "pheno");
-			regress_first_mat_from_second(C, "covars", covar_names, E, "env");
-		}
-
-		C = E;
-		covar_names = env_names;
-		n_covar = n_env;
-	} else if (n_covar > 0) {
-		EigenDataMatrix tmp(C.rows(), C.cols() + E.cols());
-		tmp << C, E;
-		C = tmp;
-		covar_names.insert(covar_names.end(), env_names.begin(), env_names.end());
-		n_covar += n_env;
-	} else {
-		C = E;
-		covar_names = env_names;
-		n_covar = n_env;
-	}
-
-	// Removing squared dependance
-	std::vector<int> cols_to_remove;
-	Eigen::MatrixXd H(n_samples, n_covar + 1);
-	Eigen::VectorXd tmp = Eigen::VectorXd::Zero(n_samples);
-
-	H << tmp, C;
-	std::cout << "Checking for squared dependance: " << std::endl;
-	std::cout << "Name\t-log10(p-val)" << std::endl;
-	for (int ee = 0; ee < n_env; ee++) {
-		// H.col(0) = E.col(ee);
-		H.col(0) = E.col(ee).array().square().matrix();
-
-		Eigen::MatrixXd HtH_inv = (H.transpose() * H).inverse();
-		Eigen::MatrixXd Hty = H.transpose() * Y;
-		double rss = (Y - H * HtH_inv * Hty).squaredNorm();
-
-		double pval = student_t_test(n_samples, HtH_inv, Hty, rss, 0);
-
-		std::cout << env_names[ee] << "\t";
-		std::cout << -1*std::log10(pval) << std::endl;
-
-		if (pval < 0.01 / (double) n_env ) {
-			cols_to_remove.push_back(ee);
-		}
-	}
-	if(cols_to_remove.size() > 0) {
-		std::cout << "Projecting out squared dependance from: " << std::endl;
-		for (int ee : cols_to_remove) {
-			std::cout << env_names[ee] << std::endl;
-		}
-		if (params.mode_remove_squared_envs) {
-			Eigen::MatrixXd E_sq(n_samples, cols_to_remove.size());
-			for (int nn = 0; nn < cols_to_remove.size(); nn++) {
-				E_sq.col(nn) = E_sq.col(cols_to_remove[nn]).array().square();
+	if (n_env > 0) {
+		if (params.use_vb_on_covars) {
+			if (n_covar > 0) {
+				regress_first_mat_from_second(C, "covars", covar_names, Y, "pheno");
+				regress_first_mat_from_second(C, "covars", covar_names, E, "env");
 			}
-			Eigen::MatrixXd H(n_samples, n_covar + cols_to_remove.size());
-			H << E_sq, C;
 
-			Eigen::MatrixXd HtH = H.transpose() * H;
-			Eigen::MatrixXd Hty = H.transpose() * Y;
-			Eigen::MatrixXd beta = HtH.colPivHouseholderQr().solve(Hty);
-
-			Y -= E_sq * beta.block(0, 0, cols_to_remove.size(), 1);
+			C = E;
+			covar_names = env_names;
+			n_covar = n_env;
+		} else if (n_covar > 0) {
+			EigenDataMatrix tmp(C.rows(), C.cols() + E.cols());
+			tmp << C, E;
+			C = tmp;
+			covar_names.insert(covar_names.end(), env_names.begin(), env_names.end());
+			n_covar += n_env;
 		} else {
-			std::cout << "Warning: Projection of significant square envs suppressed" << std::endl;
+			C = E;
+			covar_names = env_names;
+			n_covar = n_env;
 		}
-	}
 
-	// For internal use
-	Y2 = Y;
-	regress_first_mat_from_second(C, Y2);
+		// Removing squared dependance
+		std::vector<int> cols_to_remove;
+		Eigen::MatrixXd H(n_samples, n_covar + 1);
+		Eigen::VectorXd tmp = Eigen::VectorXd::Zero(n_samples);
+
+		H << tmp, C;
+		std::cout << "Checking for squared dependance: " << std::endl;
+		std::cout << "Name\t-log10(p-val)" << std::endl;
+		for (int ee = 0; ee < n_env; ee++) {
+			// H.col(0) = E.col(ee);
+			H.col(0) = E.col(ee).array().square().matrix();
+
+			Eigen::MatrixXd HtH_inv = (H.transpose() * H).inverse();
+			Eigen::MatrixXd Hty = H.transpose() * Y;
+			double rss = (Y - H * HtH_inv * Hty).squaredNorm();
+
+			double pval = student_t_test(n_samples, HtH_inv, Hty, rss, 0);
+
+			std::cout << env_names[ee] << "\t";
+			std::cout << -1 * std::log10(pval) << std::endl;
+
+			if (pval < 0.01 / (double) n_env) {
+				cols_to_remove.push_back(ee);
+			}
+		}
+		if (cols_to_remove.size() > 0) {
+			std::cout << "Projecting out squared dependance from: " << std::endl;
+			for (int ee : cols_to_remove) {
+				std::cout << env_names[ee] << std::endl;
+			}
+			if (params.mode_remove_squared_envs) {
+				Eigen::MatrixXd E_sq(n_samples, cols_to_remove.size());
+				for (int nn = 0; nn < cols_to_remove.size(); nn++) {
+					E_sq.col(nn) = E_sq.col(cols_to_remove[nn]).array().square();
+				}
+				Eigen::MatrixXd H(n_samples, n_covar + cols_to_remove.size());
+				H << E_sq, C;
+
+				Eigen::MatrixXd HtH = H.transpose() * H;
+				Eigen::MatrixXd Hty = H.transpose() * Y;
+				Eigen::MatrixXd beta = HtH.colPivHouseholderQr().solve(Hty);
+
+				Y -= E_sq * beta.block(0, 0, cols_to_remove.size(), 1);
+			} else {
+				std::cout << "Warning: Projection of significant square envs suppressed" << std::endl;
+			}
+		}
+
+		// For internal use
+		Y2 = Y;
+		regress_first_mat_from_second(C, Y2);
+	} else {
+		Y2 = Y;
+	}
 }
 
 void read_full_bgen(){

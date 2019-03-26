@@ -163,52 +163,6 @@ void push_interim_hyps(const int& cnt,
 	outf_iter << lapsecs.count() << std::endl;
 }
 
-void dump_state(const int& cnt,
-                const long& n_samples,
-                const long& n_covar,
-                const long& n_var,
-                const int& n_env,
-                const int& n_effects,
-                const VariationalParameters& vp,
-                const Hyps& hyps,
-                const EigenDataVector& Y,
-                const EigenDataArrayXX& C,
-                const GenotypeMatrix& X,
-                const std::vector< std::string >& covar_names,
-                const std::vector< std::string >& env_names){
-
-	// Aggregate effects
-	fstream_init(outf_inits, dir, "_dump_it" + std::to_string(cnt) + "_aggregate", true);
-	Eigen::VectorXd Ealpha = Eigen::VectorXd::Zero(n_samples);
-	if(n_covar > 0) {
-		Ealpha += (C.matrix() * vp.muc.matrix().cast<scalarData>()).cast<double>();
-	}
-	outf_inits << "Y Ealpha Xbeta eta Xgamma";
-	outf_inits << std::endl;
-	for (std::uint32_t ii = 0; ii < n_samples; ii++) {
-		outf_inits << Y(ii) << " " << Ealpha(ii) << " " << vp.ym(ii) - Ealpha(ii);
-		outf_inits << " " << vp.eta(ii) << " " << vp.yx(ii);
-		outf_inits << std::endl;
-	}
-	boost_io::close(outf_inits);
-
-	// Snp-stats
-	fstream_init(outf_inits, dir, "_dump_it" + std::to_string(cnt) + "_snps", true);
-	vp.dump_snps_to_file(outf_inits, X, n_env);
-	boost_io::close(outf_inits);
-
-	// Weights
-	if(n_effects > 1) {
-		for (int ll = 0; ll < n_env; ll++) {
-			outf_weights << vp.muw(ll);
-			if (ll < n_env - 1) outf_weights << "\t";
-		}
-		outf_weights << std::endl;
-	}
-
-	time_check = std::chrono::system_clock::now();
-}
-
 void push_vp_converged(const GenotypeMatrix& X,
                        const std::uint32_t n_var,
                        const int& n_effects){
@@ -232,20 +186,33 @@ void push_interim_param_values(const int& cnt,
 	boost_io::close(outf_inits);
 }
 
-void dump_state(const int& cnt,
-                const long& n_covar,
-                const long& n_var,
-                const int& n_env,
-                const int& n_effects,
-                const VariationalParameters& vp,
-                const Hyps& hyps,
-                const GenotypeMatrix& X,
-                const std::vector< std::string >& covar_names,
-                const std::vector< std::string >& env_names){
+	void dump_state(const int& cnt,
+					const long& n_samples,
+					const long& n_covar,
+					const long& n_var,
+					const int& n_env,
+					const int& n_effects,
+					const VariationalParameters& vp,
+					const Hyps& hyps,
+					const EigenDataVector& Y,
+					const EigenDataArrayXX& C,
+					const GenotypeMatrix& X,
+					const std::vector< std::string >& covar_names,
+					const std::vector< std::string >& env_names){
 
-	// Snp effects
-	fstream_init(outf_inits, dir, "_dump_it" + std::to_string(cnt) + "_snps", true);
-	write_snp_stats_to_file(outf_inits, n_effects, n_var, vp, X, p, true);
+	// Aggregate effects
+	fstream_init(outf_inits, dir, "_dump_it" + std::to_string(cnt) + "_aggregate", true);
+	Eigen::VectorXd Ealpha = Eigen::VectorXd::Zero(n_samples);
+	if(n_covar > 0) {
+		Ealpha += (C.matrix() * vp.muc.matrix().cast<scalarData>()).cast<double>();
+	}
+	outf_inits << "Y Ealpha Xbeta eta Xgamma";
+	outf_inits << std::endl;
+	for (std::uint32_t ii = 0; ii < n_samples; ii++) {
+		outf_inits << Y(ii) << " " << Ealpha(ii) << " " << vp.ym(ii) - Ealpha(ii);
+		outf_inits << " " << vp.eta(ii) << " " << vp.yx(ii);
+		outf_inits << std::endl;
+	}
 	boost_io::close(outf_inits);
 
 	// Snp-stats

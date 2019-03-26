@@ -190,9 +190,10 @@ void Hyps::read_from_dump(const std::string& filename){
 		values.push_back(stod(s));
 	}
 
-	lambda.resize(2);
-	slab_relative_var.resize(2);
-	spike_relative_var.resize(2);
+	int n_effects = 2;
+	lambda.resize(n_effects);
+	slab_relative_var.resize(n_effects);
+	spike_relative_var.resize(n_effects);
 	sigma = values[0];
 	lambda[0] = values[1];
 	lambda[1] = values[2];
@@ -200,4 +201,8 @@ void Hyps::read_from_dump(const std::string& filename){
 	slab_relative_var[1] = values[4];
 	spike_relative_var[0] = values[5];
 	spike_relative_var[1] = values[6];
+
+	slab_var = sigma * slab_relative_var;
+	spike_var = sigma * spike_relative_var;
+	s_x.resize(n_effects);
 }
