@@ -2,7 +2,6 @@
 #define EIGEN_USE_MKL_ALL
 #include "catch.hpp"
 
-
 #include <algorithm>
 #include <cmath>
 #include <limits>

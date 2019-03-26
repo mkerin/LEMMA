@@ -54,11 +54,14 @@ void VariationalParamsBase::run_default_init(long n_var, long n_covar, long n_en
 			mu2_gam   = Eigen::ArrayXd::Zero(n_var);
 			s2_gam_sq = Eigen::ArrayXd::Zero(n_var);
 		}
+		double eps = std::numeric_limits<double>::min();
 		muw = Eigen::ArrayXd::Constant(n_env, 1.0 / n_env);
+		sw_sq = Eigen::ArrayXd::Constant(n_env, eps);
 	}
 
 	if(n_covar > 0) {
 		muc   = Eigen::ArrayXd::Zero(n_covar);
+		sc_sq = Eigen::ArrayXd::Zero(n_covar);
 	}
 }
 
@@ -184,9 +187,15 @@ void VariationalParameters::init_from_lite(const VariationalParametersLite &init
 	alpha_gam  = init.alpha_gam;
 	mu1_gam    = init.mu1_gam;
 	mu2_gam    = init.mu2_gam;
+	s1_beta_sq = init.s1_beta_sq;
+	s2_beta_sq = init.s2_beta_sq;
+	s1_gam_sq = init.s1_gam_sq;
+	s2_gam_sq = init.s2_gam_sq;
 
 	muc   = init.muc;
 	muw   = init.muw;
+	sc_sq   = init.sc_sq;
+	sw_sq   = init.sw_sq;
 }
 
 VariationalParametersLite VariationalParameters::convert_to_lite() {

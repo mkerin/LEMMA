@@ -579,7 +579,7 @@ void setup_variational_params(const std::vector<Hyps>& all_hyps,
 	for (int nn = 0; nn < n_grid; nn++) {
 		VariationalParameters vp(p, YM.col(nn), YX.col(nn), ETA.col(nn), ETA_SQ.col(nn));
 		vp.init_from_lite(vp_init);
-		vp.resize(n_samples, n_var, n_covar, n_env);
+//		vp.resize(n_samples, n_var, n_covar, n_env);
 		if(n_effects > 1) {
 			vp.calcEdZtZ(dXtEEX, n_env);
 		}

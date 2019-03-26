@@ -1158,11 +1158,11 @@ void set_vb_init(){
 		Eigen::MatrixXd coeffs;
 		if(col_names == case1) {
 			EigenUtils::read_matrix_and_skip_cols(params.covar_coeffs_file, 1, coeffs, col_names);
-			vp_init.muw = coeffs.col(0);
-			vp_init.sw_sq = coeffs.col(1);
+			vp_init.muc = coeffs.col(0);
+			vp_init.sc_sq = coeffs.col(1);
 		} else if(col_names.size() == 1) {
 			EigenUtils::read_matrix(params.covar_coeffs_file, coeffs, col_names);
-			vp_init.muw = coeffs.col(0);
+			vp_init.muc = coeffs.col(0);
 		} else {
 			throw std::runtime_error("Unexpected file to --environment_weights");
 		}
