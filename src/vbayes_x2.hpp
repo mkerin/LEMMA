@@ -504,18 +504,34 @@ void runInnerLoop(const bool random_init,
 				if (p.alpha_tol_set_by_user && p.elbo_tol_set_by_user) {
 					if (alpha_diff[nn] < p.alpha_tol && logw_diff < p.elbo_tol) {
 						converged[nn] = 1;
+						all_tracker[nn].dump_state(count, n_samples, n_covar, n_var,
+												   n_env, n_effects,
+												   all_vp[nn], all_hyps[nn], Y, C,
+												   X, covar_names, env_names);
 					}
 				} else if (p.alpha_tol_set_by_user) {
 					if (alpha_diff[nn] < p.alpha_tol) {
 						converged[nn] = 1;
+						all_tracker[nn].dump_state(count, n_samples, n_covar, n_var,
+												   n_env, n_effects,
+												   all_vp[nn], all_hyps[nn], Y, C,
+												   X, covar_names, env_names);
 					}
 				} else if (p.elbo_tol_set_by_user) {
 					if (logw_diff < p.elbo_tol) {
 						converged[nn] = 1;
+						all_tracker[nn].dump_state(count, n_samples, n_covar, n_var,
+												   n_env, n_effects,
+												   all_vp[nn], all_hyps[nn], Y, C,
+												   X, covar_names, env_names);
 					}
 				} else {
 					if (alpha_diff[nn] < alpha_tol && logw_diff < logw_tol) {
 						converged[nn] = 1;
+						all_tracker[nn].dump_state(count, n_samples, n_covar, n_var,
+												   n_env, n_effects,
+												   all_vp[nn], all_hyps[nn], Y, C,
+												   X, covar_names, env_names);
 					}
 				}
 			}

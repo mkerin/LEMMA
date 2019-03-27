@@ -277,6 +277,7 @@ TEST_CASE("Resume from multi-env + mog + squarem"){
 		VB.run_inference(VB.hyps_inits, false, 2, trackers);
 		SECTION("Ex3. Vbayes_X2 inference correct"){
 			CHECK(trackers[0].count == 10);
+			// Slight discrepancy here; not sure where it's coming from
 			CHECK(trackers[0].logw == Approx(-86.6456071112));
 		}
 	}
