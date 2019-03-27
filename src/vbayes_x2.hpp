@@ -280,7 +280,8 @@ explicit VBayesX2(Data& dat) : X(dat.G),
 	if(n_env > 0) {
 		// cast used if DATA_AS_FLOAT
 		vp_init.eta     = E.matrix() * vp_init.muw.matrix().cast<scalarData>();
-		vp_init.eta_sq  = vp_init.eta.cwiseProduct(vp_init.eta);
+		vp_init.eta_sq  = vp_init.eta.array().square().matrix();
+		vp_init.eta_sq += E.square().matrix() * vp_init.sw_sq.matrix().template cast<scalarData>();
 	}
 	calcPredEffects(vp_init);
 
@@ -429,7 +430,8 @@ void runInnerLoop(const bool random_init,
 	std::vector<Hyps> theta1 = all_hyps;
 	std::vector<Hyps> theta2 = all_hyps;
 
-	int count = 0;
+	// Allow more flexible start point so that we can resume previous inference run
+	int count = p.vb_iter_start;
 	while(!all_converged && count < p.vb_iter_max) {
 		for (int nn = 0; nn < n_grid; nn++) {
 			alpha_prev[nn] = all_vp[nn].alpha_beta;
@@ -579,11 +581,9 @@ void setup_variational_params(const std::vector<Hyps>& all_hyps,
 	for (int nn = 0; nn < n_grid; nn++) {
 		VariationalParameters vp(p, YM.col(nn), YX.col(nn), ETA.col(nn), ETA_SQ.col(nn));
 		vp.init_from_lite(vp_init);
-//		vp.resize(n_samples, n_var, n_covar, n_env);
 		if(n_effects > 1) {
 			vp.calcEdZtZ(dXtEEX, n_env);
 		}
-
 		all_vp.push_back(vp);
 	}
 }

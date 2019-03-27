@@ -111,6 +111,7 @@ void parse_arguments(parameters &p, int argc, char **argv) {
 		"--mode_alternating_updates",
 		"--mode_no_gxe",
 		"--vb_iter_max",
+		"--vb_iter_start",
 		"--env_update_repeats",
 		"--gamma_updates_thresh",
 		"--init_weights_with_snpwise_scan",
@@ -278,6 +279,11 @@ void parse_arguments(parameters &p, int argc, char **argv) {
 
 			if(strcmp(in_str, "--vb_iter_max") == 0) {
 				p.vb_iter_max = std::stol(argv[i + 1]);
+				i += 1;
+			}
+
+			if(strcmp(in_str, "--vb_iter_start") == 0) {
+				p.vb_iter_start = std::stol(argv[i + 1]);
 				i += 1;
 			}
 
