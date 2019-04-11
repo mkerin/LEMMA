@@ -2,7 +2,6 @@
 #define EIGEN_USE_MKL_ALL
 #include "catch.hpp"
 
-
 #include <algorithm>
 #include <cmath>
 #include <limits>
@@ -332,7 +331,6 @@ TEST_CASE("Data") {
 	}
 }
 
-
 TEST_CASE( "Example 4: multi-env + mog + covars + emp_bayes" ){
 	parameters p;
 
@@ -358,9 +356,9 @@ TEST_CASE( "Example 4: multi-env + mog + covars + emp_bayes" ){
 			CHECK(data.params.use_vb_on_covars);
 			CHECK(data.params.covar_file == "NULL");
 //			CHECK(data.Y(0,0) == Approx(-3.6676363273605137)); Centered
-			CHECK(data.Y(0,0) == Approx(-1.5800573524786081));                                                 // Scaled
+			CHECK(data.Y(0,0) == Approx(-1.5800573524786081));
 			CHECK(data.Y2(0,0) == Approx(-1.5567970303));
-//			CHECK(data.W(0,0) == Approx(0.8957059881));
+//			CHECK(data.C(0,0) == Approx(0.8957059881));
 			CHECK(data.E(0,0) == Approx(0.8957059881));
 			CHECK(data.E.row(0).array().sum() == Approx(2.9708148667));
 		}
@@ -368,11 +366,8 @@ TEST_CASE( "Example 4: multi-env + mog + covars + emp_bayes" ){
 
 		data.calc_dxteex();
 		data.calc_snpstats();
-		if(p.vb_init_file != "NULL") {
-			data.read_alpha_mu();
-		}
+		data.set_vb_init();
 		VBayesX2 VB(data);
-		VB.check_inputs();
 		SECTION("Ex4. Vbayes_X2 initialised correctly"){
 			CHECK(VB.n_samples == 50);
 			CHECK(VB.N == 50.0);
@@ -388,12 +383,11 @@ TEST_CASE( "Example 4: multi-env + mog + covars + emp_bayes" ){
 			CHECK(VB.dXtEEX(1, 4) == Approx(-13.0001255314));
 		}
 
-		std::vector< VbTracker > trackers(VB.hyps_grid.rows(), p);
+		std::vector< VbTracker > trackers(VB.hyps_inits.size(), p);
 		SECTION("Ex4. Explicitly checking hyps") {
 			// Set up for RunInnerLoop
-			long n_grid = VB.hyps_grid.rows();
-			std::vector<Hyps> all_hyps;
-			VB.unpack_hyps(VB.hyps_grid, all_hyps);
+			long n_grid = VB.hyps_inits.size();
+			std::vector<Hyps> all_hyps = VB.hyps_inits;
 
 			// Set up for updateAllParams
 			std::vector<VariationalParameters> all_vp;
@@ -508,7 +502,7 @@ TEST_CASE( "Example 4: multi-env + mog + covars + emp_bayes" ){
 			CHECK(vp.yx.squaredNorm() == Approx(0.000514606));
 		}
 
-		VB.run_inference(VB.hyps_grid, false, 2, trackers);
+		VB.run_inference(VB.hyps_inits, false, 2, trackers);
 		SECTION("Ex3. Vbayes_X2 inference correct"){
 			CHECK(trackers[0].count == 10);
 			CHECK(trackers[0].logw == Approx(-86.8131749627));
@@ -516,6 +510,7 @@ TEST_CASE( "Example 4: multi-env + mog + covars + emp_bayes" ){
 	}
 }
 
+// Garbage test; testing dxteex should be way lower level
 //TEST_CASE("--dxteex") {
 //	parameters p;
 //	char *argv[] = {(char *) "bin/bgen_prog", (char *) "--mode_vb", (char *) "--low_mem",
@@ -526,8 +521,7 @@ TEST_CASE( "Example 4: multi-env + mog + covars + emp_bayes" ){
 //		            (char *) "--bgen", (char *) "data/io_test/n50_p100.bgen",
 //		            (char *) "--out", (char *) "data/io_test/config4.out",
 //		            (char *) "--pheno", (char *) "data/io_test/pheno.txt",
-//		            (char *) "--hyps_grid", (char *) "data/io_test/single_hyps_gxage.txt",
-//		            (char *) "--vb_init", (char *) "data/io_test/answer_init.txt"};
+//		            (char *) "--hyps_grid", (char *) "data/io_test/single_hyps_gxage.txt"};
 //	int argc = sizeof(argv) / sizeof(argv[0]);
 //	parse_arguments(p, argc, argv);
 //
@@ -542,12 +536,8 @@ TEST_CASE( "Example 4: multi-env + mog + covars + emp_bayes" ){
 //		data.read_full_bgen();
 //
 //		data.calc_dxteex();
-//		data.calc_snpstats();
-//		if (p.vb_init_file != "NULL") {
-//			data.read_alpha_mu();
-//		}
+//		data.set_vb_init();
 //		VBayesX2 VB(data);
-//		VB.check_inputs();
 //		SECTION("Ex4. Vbayes_X2 initialised correctly") {
 //			CHECK(VB.n_samples == 50);
 //			CHECK(VB.N == 50.0);
@@ -566,8 +556,8 @@ TEST_CASE( "Example 4: multi-env + mog + covars + emp_bayes" ){
 //			CHECK(VB.dXtEEX(3, 4) == Approx(-7.2154836264));
 //		}
 //
-//		std::vector< VbTracker > trackers(VB.hyps_grid.rows(), p);
-//		VB.run_inference(VB.hyps_grid, false, 2, trackers);
+//		std::vector< VbTracker > trackers(VB.hyps_inits.size(), p);
+//		VB.run_inference(VB.hyps_inits, false, 2, trackers);
 //		SECTION("Ex3. Vbayes_X2 inference correct"){
 //			CHECK(trackers[0].count == 10);
 //			CHECK(trackers[0].logw == Approx(-86.8131699164));
@@ -587,12 +577,8 @@ TEST_CASE( "Example 4: multi-env + mog + covars + emp_bayes" ){
 //
 //		data.read_external_dxteex();
 //		data.calc_dxteex();
-//		data.calc_snpstats();
-//		if (p.vb_init_file != "NULL") {
-//			data.read_alpha_mu();
-//		}
+//		data.set_vb_init();
 //		VBayesX2 VB(data);
-//		VB.check_inputs();
 //		SECTION("Ex4. Vbayes_X2 initialised correctly") {
 //			CHECK(VB.n_samples == 50);
 //			CHECK(VB.N == 50.0);
@@ -611,15 +597,15 @@ TEST_CASE( "Example 4: multi-env + mog + covars + emp_bayes" ){
 //			CHECK(VB.dXtEEX(3, 4) == Approx(-7.20105));
 //		}
 //
-//		std::vector< VbTracker > trackers(VB.hyps_grid.rows(), p);
-//		VB.run_inference(VB.hyps_grid, false, 2, trackers);
+//		std::vector< VbTracker > trackers(VB.hyps_inits.size(), p);
+//		VB.run_inference(VB.hyps_inits, false, 2, trackers);
 //		SECTION("Ex3. Vbayes_X2 inference correct"){
 //			CHECK(trackers[0].count == 10);
 //			CHECK(trackers[0].logw == Approx(-86.8131699164));
 //		}
 //	}
 //}
-
+//
 
 // This whole section needs redoing
 //TEST_CASE("--dxteex case8") {
@@ -671,9 +657,8 @@ TEST_CASE( "Example 4: multi-env + mog + covars + emp_bayes" ){
 //		}
 //
 //		VBayesX2 VB(data);
-//		VB.check_inputs();
-//		std::vector< VbTracker > trackers(VB.hyps_grid.rows(), p);
-//		VB.run_inference(VB.hyps_grid, false, 2, trackers);
+//		std::vector< VbTracker > trackers(VB.hyps_inits.size(), p);
+//		VB.run_inference(VB.hyps_inits, false, 2, trackers);
 //		SECTION("Ex3. Vbayes_X2 inference correct"){
 //			CHECK(trackers[0].count == 30);
 //			CHECK(trackers[0].logw == Approx(-1158.9633597738));
@@ -710,13 +695,11 @@ TEST_CASE( "Example 4: multi-env + mog + covars + emp_bayes" ){
 //			data.read_alpha_mu();
 //		}
 //		VBayesX2 VB(data);
-//		VB.check_inputs();
-//		std::vector< VbTracker > trackers(VB.hyps_grid.rows(), p);
+//		std::vector< VbTracker > trackers(VB.hyps_inits.size(), p);
 //		SECTION("Dump params state") {
 //			// Set up for RunInnerLoop
-//			long n_grid = VB.hyps_grid.rows();
-//			std::vector<Hyps> all_hyps;
-//			VB.unpack_hyps(VB.hyps_grid, all_hyps);
+//			long n_grid = VB.hyps_inits.size();
+//			std::vector<Hyps> all_hyps = VB.hyps_inits;
 //
 //			// Set up for updateAllParams
 //			std::vector<VariationalParameters> all_vp;
@@ -738,7 +721,7 @@ TEST_CASE( "Example 4: multi-env + mog + covars + emp_bayes" ){
 //                     VB.n_effects, vp, hyps, VB.Y, VB.C, VB.X,
 //                     VB.covar_names, VB.env_names);
 // }
-//		VB.run_inference(VB.hyps_grid, false, 2, trackers);
+//		VB.run_inference(VB.hyps_inits, false, 2, trackers);
 //		SECTION("Ex3. Vbayes_X2 inference correct"){
 //			CHECK(trackers[0].count == 30);
 //			CHECK(trackers[0].logw == Approx(-1158.9630661443));
@@ -766,20 +749,16 @@ TEST_CASE( "Edge case 1: error in alpha" ){
 		data.read_full_bgen();
 
 		data.calc_dxteex();
-		if(p.vb_init_file != "NULL") {
-			data.read_alpha_mu();
-		}
+		data.set_vb_init();
 		VBayesX2 VB(data);
-		VB.check_inputs();
 
-		std::vector< VbTracker > trackers(VB.hyps_grid.rows(), p);
+		std::vector< VbTracker > trackers(VB.hyps_inits.size(), p);
 		SECTION("Ex1. Explicitly checking updates"){
 
 			// Set up for RunInnerLoop
-			long n_grid = VB.hyps_grid.rows();
+			long n_grid = VB.hyps_inits.size();
 			long n_samples = VB.n_samples;
-			std::vector<Hyps> all_hyps;
-			VB.unpack_hyps(VB.hyps_grid, all_hyps);
+			std::vector<Hyps> all_hyps = VB.hyps_inits;
 
 			// Set up for updateAllParams
 			std::vector<VariationalParameters> all_vp;

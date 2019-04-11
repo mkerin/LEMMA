@@ -41,12 +41,9 @@
 namespace boost_m = boost::math;
 namespace boost_io = boost::iostreams;
 
-template <typename T>
-inline std::vector<int> validate_grid(const Eigen::MatrixXd &grid, T n_var);
 inline double sigmoid(double x){
 	return 1.0 / (1.0 + std::exp(-x));
 }
-
 
 class VBayesX2 {
 public:
@@ -64,7 +61,7 @@ const std::vector< std::string > hyps_names = {"sigma", "sigma_b", "sigma_g",
 	                                           "lambda_b", "lambda_g"};
 
 // sizes
-int n_effects;                               // no. interaction variables + 1
+int n_effects;        // no. interaction variables + 1
 std::uint32_t n_samples;
 unsigned long n_covar;
 unsigned long n_env;
@@ -95,14 +92,12 @@ std::map<unsigned long, Eigen::MatrixXd> D_correlations;         //We can keep D
 // Data
 GenotypeMatrix&  X;
 EigenDataVector Y;                   // residual phenotype matrix
-EigenDataArrayX Cty;                  // vector of W^T x y where C the matrix of covariates
+EigenDataArrayX Cty;                  // vector of C^T x y where C the matrix of covariates
 EigenDataArrayXX E;                  // matrix of variables used for GxE interactions
 EigenDataMatrix& C;                  // matrix of covariates (superset of GxE variables)
 Eigen::MatrixXd XtE;                  // matrix of covariates (superset of GxE variables)
 
 Eigen::ArrayXXd& dXtEEX;             // P x n_env^2; col (l * n_env + m) is the diagonal of X^T * diag(E_l * E_m) * X
-Eigen::MatrixXd r1_hyps_grid;
-Eigen::MatrixXd hyps_grid;
 
 // Global location of y_m = E[X beta] and y_x = E[X gamma]
 EigenDataMatrix YY, YX, YM, ETA, ETA_SQ;
@@ -112,6 +107,7 @@ Eigen::ArrayXXd& snpstats;
 
 // Init points
 VariationalParametersLite vp_init;
+std::vector<Hyps> hyps_inits;
 
 // boost fstreams
 boost_io::filtering_ostream outf, outf_map, outf_wmean, outf_nmean, outf_inits;
@@ -123,15 +119,15 @@ std::chrono::system_clock::time_point time_check;
 std::chrono::duration<double> elapsed_innerLoop;
 VariationalParametersLite GLOBAL_map_vp;
 
-explicit VBayesX2( Data& dat ) : X( dat.G ),
+explicit VBayesX2(Data& dat) : X(dat.G),
 	Y(Eigen::Map<EigenDataVector>(dat.Y.data(), dat.Y.rows())),
-	C( dat.E ),
-	dXtEEX( dat.dXtEEX ),
-	snpstats( dat.snpstats ),
-	p( dat.params ),
-	GLOBAL_map_vp( dat.params ),
-	vp_init( dat.params ){
-	assert(std::includes(dat.hyps_names.begin(), dat.hyps_names.end(), hyps_names.begin(), hyps_names.end()));
+	C(dat.C),
+	dXtEEX(dat.dXtEEX),
+	snpstats(dat.snpstats),
+	p(dat.params),
+	GLOBAL_map_vp(dat.params),
+	hyps_inits(dat.hyps_inits),
+	vp_init(dat.vp_init){
 	std::cout << "Initialising vbayes object" << std::endl;
 	mkl_set_num_threads_local(p.n_thread);
 
@@ -141,10 +137,13 @@ explicit VBayesX2( Data& dat ) : X( dat.G ),
 	n_env          = dat.n_env;
 	n_var2         = n_effects * dat.n_var;
 	n_samples      = dat.n_samples;
-	n_covar        = dat.n_env;
+	n_covar        = dat.n_covar;
 	covar_names    = dat.env_names;
 	env_names      = dat.env_names;
 	N              = (double) n_samples;
+
+	assert(Y.rows() == n_samples);
+	assert(X.rows() == n_samples);
 
 
 	random_params_init = false;
@@ -155,12 +154,12 @@ explicit VBayesX2( Data& dat ) : X( dat.G ),
 	}
 
 //		// env-main effects
-//		if(p.use_vb_on_covars) {
+//		if(n_covar > 0) {
 //			n_covar = dat.n_env + dat.n_covar;
 //			covar_names = dat.env_names;
 //			covar_names.insert(covar_names.end(), dat.covar_names.begin(), dat.covar_names.end());
 //			C.resize(n_samples, n_covar);
-//			C << dat.E, dat.W;
+//			C << dat.E, dat.C;
 //		} else {
 //			n_covar = dat.n_env;
 //			covar_names = dat.env_names;
@@ -174,17 +173,16 @@ explicit VBayesX2( Data& dat ) : X( dat.G ),
 		chrs_index.push_back(cc);
 	}
 
-
 	p.main_chunk_size = (unsigned int) std::min((long int) p.main_chunk_size, (long int) n_var);
 	p.gxe_chunk_size = (unsigned int) std::min((long int) p.gxe_chunk_size, (long int) n_var);
 
 	// Read environmental variables
-	std::cout << "Computing XtE" << std::endl;
 	E = dat.E;
 	if(n_env > 0) {
+		std::cout << "Computing XtE" << std::endl;
 		XtE = X.transpose_multiply(E);
+		std::cout << "XtE computed" << std::endl;
 	}
-	std::cout << "XtE computed" << std::endl;
 
 	// Allocate memory - fwd/back pass vectors
 	for(std::uint32_t kk = 0; kk < n_var * n_effects; kk++) {
@@ -198,8 +196,10 @@ explicit VBayesX2( Data& dat ) : X( dat.G ),
 	}
 
 	unsigned long n_main_segs, n_gxe_segs, n_chunks;
-	n_main_segs = (n_var + p.main_chunk_size - 1) / p.main_chunk_size;                                 // ceiling of n_var / chunk size
-	n_gxe_segs = (n_var + p.gxe_chunk_size - 1) / p.gxe_chunk_size;                                 // ceiling of n_var / chunk size
+	// ceiling of n_var / chunk size
+	n_main_segs = (n_var + p.main_chunk_size - 1) / p.main_chunk_size;
+	// ceiling of n_var / chunk size
+	n_gxe_segs = (n_var + p.gxe_chunk_size - 1) / p.gxe_chunk_size;
 	n_chunks = n_main_segs;
 	if(n_effects > 1) {
 		n_chunks += n_gxe_segs;
@@ -271,76 +271,21 @@ explicit VBayesX2( Data& dat ) : X( dat.G ),
 	}
 
 	// Generate initial values for each run
-	if(p.vb_init_file != "NULL") {
-		std::cout << "Beta and gamma initialised from file" << std::endl;
-
-		vp_init.alpha_beta     = dat.alpha_init.col(0);
-		vp_init.mu1_beta       = dat.mu_init.col(0);
-		// Interaction effects
-		if(n_effects > 1) {
-			assert(dat.alpha_init.cols() > 1);
-			vp_init.alpha_gam     = dat.alpha_init.col(1);
-			vp_init.mu1_gam       = dat.mu_init.col(1);
-		}
-
-		random_params_init = false;
-	} else if (p.mode_random_start) {
+	random_params_init = false;
+	if(p.mode_random_start) {
 		std::cout << "Beta and gamma initialised with random draws" << std::endl;
 		random_params_init = true;
-	} else {
-		std::cout << "Beta and gamma initialised at zero" << std::endl;
-		// zero initialisation
-		vp_init.alpha_beta    = Eigen::ArrayXd::Zero(n_var);
-		vp_init.mu1_beta       = Eigen::ArrayXd::Zero(n_var);
-
-		if(n_effects > 1) {
-			vp_init.alpha_gam = Eigen::ArrayXd::Zero(n_var);
-			vp_init.mu1_gam   = Eigen::ArrayXd::Zero(n_var);
-		}
 	}
 
-	vp_init.s1_beta_sq     = Eigen::ArrayXd::Zero(n_var);
-	if(p.mode_mog_prior_beta) {
-		vp_init.mu2_beta   = Eigen::ArrayXd::Zero(n_var);
-		vp_init.s2_beta_sq = Eigen::ArrayXd::Zero(n_var);
-	}
-
-	if(n_effects > 1) {
-		vp_init.s1_gam_sq     = Eigen::ArrayXd::Zero(n_var);
-		if (p.mode_mog_prior_gam) {
-			vp_init.mu2_gam   = Eigen::ArrayXd::Zero(n_var);
-			vp_init.s2_gam_sq = Eigen::ArrayXd::Zero(n_var);
-		}
-
-		// Env Weights
-		if(p.env_weights_file != "NULL") {
-			vp_init.muw     = dat.E_weights.col(0);
-		} else if (n_env > 1 && p.init_weights_with_snpwise_scan) {
-			calc_snpwise_regression(vp_init);
-		} else {
-			vp_init.muw.resize(n_env);
-			vp_init.muw     = 1.0 / (double) n_env;
-		}
-
+	if(n_env > 0) {
 		// cast used if DATA_AS_FLOAT
 		vp_init.eta     = E.matrix() * vp_init.muw.matrix().cast<scalarData>();
-		vp_init.eta_sq  = vp_init.eta.cwiseProduct(vp_init.eta);
+		vp_init.eta_sq  = vp_init.eta.array().square().matrix();
+		vp_init.eta_sq += E.square().matrix() * vp_init.sw_sq.matrix().template cast<scalarData>();
 	}
-	if(p.use_vb_on_covars) {
-		vp_init.muc   = Eigen::ArrayXd::Zero(n_covar);
-	}
-	calcPredEffects(vp_init);                                 // ym, yx
+	calcPredEffects(vp_init);
 
-	// Assign data - hyperparameters
-	hyps_grid           = dat.hyps_grid;
-
-	if(p.r1_hyps_grid_file == "NULL") {
-		r1_hyps_grid    = hyps_grid;
-	} else {
-		r1_hyps_grid    = dat.r1_hyps_grid;
-	}
-
-	if(p.use_vb_on_covars) {
+	if(n_covar > 0) {
 		Cty = C.transpose() * Y;
 	}
 }
@@ -361,23 +306,24 @@ explicit VBayesX2( Data& dat ) : X( dat.G ),
 void run(){
 	std::cout << "Starting variational inference" << std::endl;
 	time_check = std::chrono::system_clock::now();
-	int n_thread = 1;                                 // Parrallel starts swapped for multithreaded inference
+	// Parrallel starts swapped for multithreaded inference
+	int n_thread = 1;
 
 	// Round 1; looking for best start point
 	if(run_round1) {
 
 		std::vector< VbTracker > trackers(n_thread, p);
-		long r1_n_grid = r1_hyps_grid.rows();
-		run_inference(r1_hyps_grid, true, 1, trackers);
+		long n_grid = hyps_inits.size();
+		run_inference(hyps_inits, true, 1, trackers);
 
 		if(p.verbose) {
-			write_trackers_to_file("round1_", trackers, r1_hyps_grid);
+			write_trackers_to_file("round1_", trackers, n_grid);
 		}
 
 		// Find best init
 		double logw_best = -std::numeric_limits<double>::max();
 		bool init_not_set = true;
-		for (int ii = 0; ii < r1_n_grid; ii++) {
+		for (int ii = 0; ii < n_grid; ii++) {
 			double logw      = trackers[ii].logw;
 			if(std::isfinite(logw) && logw > logw_best) {
 				vp_init      = trackers[ii].vp;
@@ -402,22 +348,23 @@ void run(){
 	write_snp_stats_to_file(outf_inits, n_effects, n_var, vp_init, X, p, false);
 	boost_io::close(outf_inits);
 
-	long n_grid = r1_hyps_grid.rows();
+	long n_grid = hyps_inits.size();
 	std::vector< VbTracker > trackers(n_grid, p);
-	run_inference(hyps_grid, false, 2, trackers);
+	run_inference(hyps_inits, false, 2, trackers);
 
-	write_trackers_to_file("", trackers, hyps_grid);
+	write_trackers_to_file("", trackers, n_grid);
 	std::cout << "Variational inference finished" << std::endl;
 }
 
-void run_inference(const Eigen::Ref<const Eigen::MatrixXd>& hyps_grid,
+void run_inference(const std::vector<Hyps>& hyps_inits,
                    const bool random_init,
                    const int round_index,
                    std::vector<VbTracker>& trackers){
 	// Writes results from inference to trackers
 
-	long n_grid = hyps_grid.rows();
-	int n_thread = 1;                                 // Parrallel starts swapped for multithreaded inference
+	long n_grid = hyps_inits.size();
+	// Parrallel starts swapped for multithreaded inference
+	int n_thread = 1;
 
 	// Divide grid of hyperparameters into chunks for multithreading
 	std::vector< std::vector< int > > chunks(n_thread);
@@ -426,18 +373,15 @@ void run_inference(const Eigen::Ref<const Eigen::MatrixXd>& hyps_grid,
 		chunks[ch_index].push_back(ii);
 	}
 
-	runOuterLoop(round_index, hyps_grid, n_grid, chunks[0], random_init, trackers);
+	runOuterLoop(round_index, hyps_inits, n_grid, chunks[0], random_init, trackers);
 }
 
 void runOuterLoop(const int round_index,
-                  const Eigen::Ref<const Eigen::MatrixXd>& outer_hyps_grid,
+                  std::vector<Hyps> all_hyps,
                   const unsigned long n_grid,
                   const std::vector<int>& grid_index_list,
                   const bool random_init,
                   std::vector<VbTracker>& all_tracker){
-
-	std::vector<Hyps> all_hyps;
-	unpack_hyps(outer_hyps_grid, all_hyps);
 
 	// Run outer loop - don't update trackers
 	auto innerLoop_start = std::chrono::system_clock::now();
@@ -452,30 +396,6 @@ void runOuterLoop(const int round_index,
 			rescanGWAS(all_tracker[nn].vp, gam_neglogp);
 			all_tracker[nn].push_rescan_gwas(X, n_var, gam_neglogp);
 		}
-	}
-}
-
-void unpack_hyps(const Eigen::Ref<const Eigen::MatrixXd>& outer_hyps_grid,
-                 std::vector<Hyps>& all_hyps){
-
-	long n_grid = outer_hyps_grid.rows();
-	for (int ii = 0; ii < n_grid; ii++) {
-		Hyps i_hyps(p);
-		if (n_effects == 2) {
-			Eigen::ArrayXd muw_sq(n_env * n_env);
-			for (int ll = 0; ll < n_env; ll++) {
-				for (int mm = 0; mm < n_env; mm++) {
-					muw_sq(mm * n_env + ll) = vp_init.muw(mm) * vp_init.muw(ll);
-				}
-			}
-			double my_s_z = (dXtEEX.rowwise() * muw_sq.transpose()).sum() / (N - 1.0);
-
-			i_hyps.init_from_grid(n_effects, ii, n_var, outer_hyps_grid, my_s_z);
-		} else if (n_effects == 1) {
-			i_hyps.init_from_grid(n_effects, ii, n_var, outer_hyps_grid);
-		}
-
-		all_hyps.push_back(i_hyps);
 	}
 }
 
@@ -510,7 +430,8 @@ void runInnerLoop(const bool random_init,
 	std::vector<Hyps> theta1 = all_hyps;
 	std::vector<Hyps> theta2 = all_hyps;
 
-	int count = 0;
+	// Allow more flexible start point so that we can resume previous inference run
+	int count = p.vb_iter_start;
 	while(!all_converged && count < p.vb_iter_max) {
 		for (int nn = 0; nn < n_grid; nn++) {
 			alpha_prev[nn] = all_vp[nn].alpha_beta;
@@ -526,7 +447,7 @@ void runInnerLoop(const bool random_init,
 				theta0 = all_hyps;
 			} else if (count % 3 == 1) {
 				theta1 = all_hyps;
-			} else {
+			} else if (count >= p.vb_iter_start + 2){
 				theta2 = all_hyps;
 				for (int nn = 0; nn < n_grid; nn++) {
 					Hyps rr = theta1[nn] - theta0[nn];
@@ -535,7 +456,7 @@ void runInnerLoop(const bool random_init,
 					Hyps theta = theta0[nn] - 2 * step * rr + step * step * vv;
 
 					// check all hyps in theta remain in valid domain
-					while(!theta.check_valid_domain()) {
+					while(!theta.domain_is_valid()) {
 						step = std::min(step * 0.5, -1.0);
 						theta = theta0[nn] - 2 * step * rr + step * step * vv;
 					}
@@ -558,16 +479,10 @@ void runInnerLoop(const bool random_init,
 
 		// Interim output
 		for (int nn = 0; nn < n_grid; nn++) {
-			// if (p.use_vb_on_covars && count % 10 == 0) {
-			//  all_tracker[nn].push_interim_covar_values(count, n_covar, all_vp[nn], covar_names);
-			// }
-			// if (p.xtra_verbose && count % 20 == 0) {
-			//  all_tracker[nn].push_interim_param_values(count, n_effects, n_var, all_vp[nn], X);
-			// }
 			all_hyps[nn].update_pve();
 			all_tracker[nn].push_interim_hyps(count, all_hyps[nn], i_logw[nn], alpha_diff[nn], n_effects,
 			                                  n_var, n_env, all_vp[nn]);
-			if (p.xtra_verbose && count % 50 == 0) {
+			if (p.param_dump_interval > 0 && count % p.param_dump_interval == 0) {
 				all_tracker[nn].dump_state(count, n_samples, n_covar, n_var,
 				                           n_env, n_effects,
 				                           all_vp[nn], all_hyps[nn], Y, C,
@@ -576,24 +491,41 @@ void runInnerLoop(const bool random_init,
 		}
 
 		// Diagnose convergence
-		if(!p.mode_squarem || count % 3 != 2) {                                 // Disallow convergence on squarem iter
+		// Disallow convergence on squarem iter
+		if(!p.mode_squarem || count % 3 != 2) {
 			for (int nn = 0; nn < n_grid; nn++) {
 				double logw_diff = std::abs(i_logw[nn] - logw_prev[nn]);
 				if (p.alpha_tol_set_by_user && p.elbo_tol_set_by_user) {
 					if (alpha_diff[nn] < p.alpha_tol && logw_diff < p.elbo_tol) {
 						converged[nn] = 1;
+						all_tracker[nn].dump_state(count, n_samples, n_covar, n_var,
+												   n_env, n_effects,
+												   all_vp[nn], all_hyps[nn], Y, C,
+												   X, covar_names, env_names);
 					}
 				} else if (p.alpha_tol_set_by_user) {
 					if (alpha_diff[nn] < p.alpha_tol) {
 						converged[nn] = 1;
+						all_tracker[nn].dump_state(count, n_samples, n_covar, n_var,
+												   n_env, n_effects,
+												   all_vp[nn], all_hyps[nn], Y, C,
+												   X, covar_names, env_names);
 					}
 				} else if (p.elbo_tol_set_by_user) {
 					if (logw_diff < p.elbo_tol) {
 						converged[nn] = 1;
+						all_tracker[nn].dump_state(count, n_samples, n_covar, n_var,
+												   n_env, n_effects,
+												   all_vp[nn], all_hyps[nn], Y, C,
+												   X, covar_names, env_names);
 					}
 				} else {
 					if (alpha_diff[nn] < alpha_tol && logw_diff < logw_tol) {
 						converged[nn] = 1;
+						all_tracker[nn].dump_state(count, n_samples, n_covar, n_var,
+												   n_env, n_effects,
+												   all_vp[nn], all_hyps[nn], Y, C,
+												   X, covar_names, env_names);
 					}
 				}
 			}
@@ -659,11 +591,9 @@ void setup_variational_params(const std::vector<Hyps>& all_hyps,
 	for (int nn = 0; nn < n_grid; nn++) {
 		VariationalParameters vp(p, YM.col(nn), YX.col(nn), ETA.col(nn), ETA_SQ.col(nn));
 		vp.init_from_lite(vp_init);
-		vp.resize(n_samples, n_var, n_covar, n_env);
 		if(n_effects > 1) {
 			vp.calcEdZtZ(dXtEEX, n_env);
 		}
-
 		all_vp.push_back(vp);
 	}
 }
@@ -681,7 +611,7 @@ void updateAllParams(const int& count,
 
 	// Update covar main effects
 	for (int nn = 0; nn < n_grid; nn++) {
-		if (p.use_vb_on_covars) {
+		if (n_covar > 0) {
 			updateCovarEffects(all_vp[nn], all_hyps[nn]);
 			check_monotonic_elbo(all_hyps[nn], all_vp[nn], count, logw_prev[nn], "updateCovarEffects");
 		}
@@ -714,7 +644,7 @@ void updateAllParams(const int& count,
 			EigenDataVector aa, bb;
 			Eigen::VectorXd rr_beta = all_vp[nn].mean_beta();
 			EigenDataVector ym = (X * rr_beta).template cast<scalarData>();
-			if(p.use_vb_on_covars) {
+			if(n_covar > 0) {
 				ym += C * all_vp[nn].muc.matrix().cast<scalarData>();
 			}
 			aa = (ym.array() - ym.array().sum() / (double) n_samples);
@@ -760,6 +690,8 @@ void updateAllParams(const int& count,
 		}
 	}
 
+
+
 	// Update PVE
 	for (int nn = 0; nn < n_grid; nn++) {
 		all_hyps[nn].update_pve();
@@ -795,8 +727,10 @@ void updateAlphaMu(const std::vector< std::vector< std::uint32_t > >& iter_chunk
 	// Partition chunks amongst available threads
 	unsigned long n_grid = all_hyps.size();
 	EigenDataMatrix D;
-	Eigen::MatrixXd AA;                                     // snp_batch x n_grid
-	Eigen::MatrixXd rr_diff;                                                   // snp_batch x n_grid
+	// snp_batch x n_grid
+	Eigen::MatrixXd AA;
+	// snp_batch x n_grid
+	Eigen::MatrixXd rr_diff;
 
 	for (std::uint32_t ch = 0; ch < iter_chunks.size(); ch++) {
 		std::vector< std::uint32_t > chunk = iter_chunks[ch];
@@ -909,7 +843,8 @@ Eigen::MatrixXd computeGeneResidualCorrelation(const EigenMat& D,
 		res.noalias() = D.transpose() * ((YY - YM).cwiseProduct(ETA) - YX.cwiseProduct(ETA_SQ));
 	}
 	// cast only used if DATA_AS_FLOAT
-	return(res.template cast<double>());                                 // n_grid x snp_batch
+	// n_grid x snp_batch
+	return(res.template cast<double>());
 }
 
 void _internal_updateAlphaMu_beta(const std::vector< std::uint32_t >& iter_chunk,
@@ -1018,7 +953,8 @@ void _internal_updateAlphaMu_gam(const std::vector< std::uint32_t >& iter_chunk,
 	Eigen::VectorXd rr_k(ch_len);
 	assert(rr_k_diff.rows() == ch_len);
 	for (int ii = 0; ii < ch_len; ii++) {
-		std::uint32_t jj = (iter_chunk[ii] % n_var);                                                         // variant index
+		// variant index
+		std::uint32_t jj = (iter_chunk[ii] % n_var);
 
 		// Log prev value
 		rr_k(ii) = vp.mean_gam(jj);
@@ -1058,7 +994,7 @@ void maximiseHyps(Hyps& hyps,
 
 	// max sigma
 	hyps.sigma  = calcExpLinear(hyps, vp);
-	if (p.use_vb_on_covars) {
+	if (n_covar > 0) {
 		hyps.sigma += (vp.sc_sq + vp.muc.square()).sum() / sigma_c;
 		hyps.sigma /= (N + (double) n_covar);
 	} else {
@@ -1213,7 +1149,7 @@ double calc_logw(const Hyps& hyps,
 
 	// covariates
 	double kl_covar = 0.0;
-	if(p.use_vb_on_covars) {
+	if(n_covar > 0) {
 		kl_covar += (double) n_covar * (1.0 - std::log(hyps.sigma * sigma_c)) / 2.0;
 		kl_covar += vp.sc_sq.log().sum() / 2.0;
 		kl_covar -= vp.sc_sq.sum() / 2.0 / hyps.sigma / sigma_c;
@@ -1302,7 +1238,7 @@ void initRandomAlphaMu(VariationalParameters& vp){
 		vp.alpha_gam /= vp.alpha_gam.sum();
 	}
 
-	if(p.use_vb_on_covars) {
+	if(n_covar > 0) {
 		vp.muc = Eigen::ArrayXd::Zero(n_covar);
 	}
 
@@ -1320,7 +1256,7 @@ void calcPredEffects(VariationalParameters& vp){
 	Eigen::VectorXd rr_beta = vp.mean_beta();
 
 	vp.ym = X * rr_beta;
-	if(p.use_vb_on_covars) {
+	if(n_covar > 0) {
 		vp.ym += C * vp.muc.matrix().cast<scalarData>();
 	}
 
@@ -1334,7 +1270,7 @@ void calcPredEffects(VariationalParametersLite& vp) {
 	Eigen::VectorXd rr_beta = vp.mean_beta();
 
 	vp.ym = X * rr_beta;
-	if(p.use_vb_on_covars) {
+	if(n_covar > 0) {
 		vp.ym += C * vp.muc.matrix().cast<scalarData>();
 	}
 
@@ -1408,12 +1344,15 @@ double calcExpLinear(const Hyps& hyps,
 	}
 
 	// variances
-	if(p.use_vb_on_covars) {
-		int_linear += (N - 1.0) * vp.sc_sq.sum();                                                         // covar main
+	if(n_covar > 0) {
+		// covar main
+		int_linear += (N - 1.0) * vp.sc_sq.sum();
 	}
-	int_linear += (N - 1.0) * vp.var_beta().sum();                                  // beta
+	// beta
+	int_linear += (N - 1.0) * vp.var_beta().sum();
 	if(n_effects > 1) {
-		int_linear += (vp.EdZtZ * vp.var_gam()).sum();                                                         // gamma
+		// gamma
+		int_linear += (vp.EdZtZ * vp.var_gam()).sum();
 	}
 
 	return int_linear;
@@ -1614,7 +1553,7 @@ void LOCO_pvals(const VariationalParametersLite& vp,
 
 			// Model Fitting
 			Eigen::Matrix2d HtH     = H.transpose() * H;
-			Eigen::Matrix2d HtH_inv = HtH.inverse();                                                                                 // should be efficient for 2x2 matrix
+			Eigen::Matrix2d HtH_inv = HtH.inverse();
 			Eigen::Vector2d Hty     = H.transpose() * chr_residuals[cc];
 			Eigen::Vector2d tau     = HtH_inv * Hty;
 
@@ -1658,10 +1597,9 @@ void LOCO_pvals(const VariationalParametersLite& vp,
 /********** Output functions ************/
 void write_trackers_to_file(const std::string& file_prefix,
                             const std::vector< VbTracker >& trackers,
-                            const Eigen::Ref<const Eigen::MatrixXd>& hyps_grid){
+                            const long& my_n_grid){
 	// Stitch trackers back together if using multithreading
-	int n_thread = 1;                                 // Parrallel starts swapped for multithreaded inference
-	unsigned long my_n_grid = hyps_grid.rows();
+	// Parrallel starts swapped for multithreaded inference
 	output_init(file_prefix);
 	output_results(trackers, my_n_grid);
 }
@@ -1695,7 +1633,7 @@ void output_init(const std::string& file_prefix){
 	}
 }
 
-void output_results(const std::vector<VbTracker>& trackers, const int my_n_grid){
+void output_results(const std::vector<VbTracker>& trackers, const long& my_n_grid){
 	// Write;
 	// main output; weights logw converged_hyps counts time (currently no prior)
 	// snps;
@@ -1780,7 +1718,7 @@ void output_results(const std::vector<VbTracker>& trackers, const int my_n_grid)
 	calcPredEffects(vp_map);
 	compute_residuals_per_chr(vp_map, pred_main, pred_int, map_residuals_by_chr);
 	Eigen::VectorXd Ealpha = Eigen::VectorXd::Zero(n_samples);
-	if(p.use_vb_on_covars) {
+	if(n_covar > 0) {
 		Ealpha += (C * vp_map.muc.matrix().cast<scalarData>()).cast<double>();
 	}
 	if(n_effects == 1) {
@@ -1834,7 +1772,7 @@ void output_results(const std::vector<VbTracker>& trackers, const int my_n_grid)
 
 	// MAP snp-stats to file
 	write_snp_stats_to_file(outf_map, n_effects, n_var, vp_map, X, p, true, neglogp_beta, neglogp_gam, neglogp_rgam, neglogp_joint, test_stat_beta, test_stat_gam, test_stat_rgam, test_stat_joint);
-	if(p.use_vb_on_covars) {
+	if(n_covar > 0) {
 		write_covars_to_file(outf_map_covar, vp_map);
 	}
 
@@ -1886,36 +1824,6 @@ std::string fstream_init(boost_io::filtering_ostream& my_outf,
 	return ofile;
 }
 
-void check_inputs(){
-	// If grid contains hyperparameter values that aren't sensible then we exclude
-	assert(Y.rows() == n_samples);
-	assert(X.rows() == n_samples);
-	long n_grid = hyps_grid.rows();
-
-	std::vector<int> valid_points, r1_valid_points;
-	valid_points        = validate_grid(hyps_grid, n_var);
-	hyps_grid           = EigenUtils::subset_matrix(hyps_grid, valid_points);
-
-	if(valid_points.empty()) {
-		throw std::runtime_error("No valid grid points in hyps_grid.");
-	} else if(n_grid > valid_points.size()) {
-		std::cout << "WARNING: " << n_grid - valid_points.size();
-		std::cout << " invalid grid points removed from hyps_grid." << std::endl;
-	}
-
-	// r1_hyps_grid assigned during constructor (ie before this function call)
-	long r1_n_grid   = r1_hyps_grid.rows();
-	r1_valid_points = validate_grid(r1_hyps_grid, n_var);
-	r1_hyps_grid    = EigenUtils::subset_matrix(r1_hyps_grid, r1_valid_points);
-
-	if(r1_valid_points.empty()) {
-		throw std::runtime_error("No valid grid points in r1_hyps_grid.");
-	} else if(r1_n_grid > r1_valid_points.size()) {
-		std::cout << "WARNING: " << r1_n_grid - r1_valid_points.size();
-		std::cout << " invalid grid points removed from r1_hyps_grid." << std::endl;
-	}
-}
-
 int parseLineRAM(char* line){
 	// This assumes that a digit will be found and the line ends in " Kb".
 	std::size_t i = strlen(line);
@@ -1946,30 +1854,5 @@ int getValueRAM(){         //Note: this value is in KB!
 #endif
 }
 };
-
-template <typename T>
-inline std::vector<int> validate_grid(const Eigen::MatrixXd &grid, const T n_var){
-	const int sigma_ind   = 0;
-	const int sigma_b_ind = 1;
-	const int sigma_g_ind = 2;
-	const int lam_b_ind   = 3;
-	const int lam_g_ind   = 4;
-
-	std::vector<int> valid_points;
-	for (int ii = 0; ii < grid.rows(); ii++) {
-		double lam_b = grid(ii, lam_b_ind);
-		double lam_g = grid(ii, lam_g_ind);
-
-		bool chck_sigma   = (grid(ii, sigma_ind)   >  0.0 && std::isfinite(grid(ii, sigma_ind)));
-		bool chck_sigma_b = (grid(ii, sigma_b_ind) >  0.0 && std::isfinite(grid(ii, sigma_b_ind)));
-		bool chck_sigma_g = (grid(ii, sigma_g_ind) >= 0.0 && std::isfinite(grid(ii, sigma_g_ind)));
-		bool chck_lam_b   = (lam_b >= 1.0 / (double) n_var) && (lam_b < 1.0) && std::isfinite(lam_b);
-		bool chck_lam_g   = (lam_g >= 0) && (lam_g < 1.0) && std::isfinite(lam_g);
-		if(chck_lam_b && chck_lam_g && chck_sigma && chck_sigma_g && chck_sigma_b) {
-			valid_points.push_back(ii);
-		}
-	}
-	return valid_points;
-}
 
 #endif

@@ -111,16 +111,19 @@ void parse_arguments(parameters &p, int argc, char **argv) {
 		"--mode_alternating_updates",
 		"--mode_no_gxe",
 		"--vb_iter_max",
+		"--vb_iter_start",
 		"--env_update_repeats",
 		"--gamma_updates_thresh",
 		"--init_weights_with_snpwise_scan",
 		"--suppress_squared_env_removal",
+		"--resume_from_param_dump",
 		"--dxteex",
 		"--mode_mog_beta",
 		"--mode_mog_gamma",
 		"--mode_pve_est",
 		"--gxe_chunk_size",
 		"--main_chunk_size",
+		"--param_dump_interval",
 		"--random_seed",
 		"--mode_debug",
 		"--pve_mog_weights",
@@ -279,6 +282,11 @@ void parse_arguments(parameters &p, int argc, char **argv) {
 				i += 1;
 			}
 
+			if(strcmp(in_str, "--vb_iter_start") == 0) {
+				p.vb_iter_start = std::stol(argv[i + 1]);
+				i += 1;
+			}
+
 			if(strcmp(in_str, "--n_pve_samples") == 0) {
 				p.n_pve_samples = std::stoi(argv[i + 1]);
 				i += 1;
@@ -312,6 +320,7 @@ void parse_arguments(parameters &p, int argc, char **argv) {
 
 			if(strcmp(in_str, "--mode_vb") == 0) {
 				p.mode_vb = true;
+				p.mode_pve_est = false;
 				i += 0;
 			}
 
@@ -420,6 +429,7 @@ void parse_arguments(parameters &p, int argc, char **argv) {
 			if(strcmp(in_str, "--xtra_verbose") == 0) {
 				p.verbose = true;
 				p.xtra_verbose = true;
+				p.param_dump_interval = 50;
 				i += 0;
 			}
 
@@ -466,28 +476,48 @@ void parse_arguments(parameters &p, int argc, char **argv) {
 			if(strcmp(in_str, "--environment") == 0) {
 				check_counts(in_str, i, 1, argc);
 				p.interaction_analysis = true;
-				p.env_file = argv[i + 1];                                                 // pheno file
+				p.env_file = argv[i + 1];
 				check_file_exists(p.env_file);
 				i += 1;
 			}
 
 			if(strcmp(in_str, "--environment_weights") == 0) {
 				check_counts(in_str, i, 1, argc);
-				p.env_weights_file = argv[i + 1];                                                 // pheno file
-				check_file_exists(p.env_weights_file);
+				p.env_coeffs_file = argv[i + 1];
+				check_file_exists(p.env_coeffs_file);
+				i += 1;
+			}
+
+			if(strcmp(in_str, "--param_dump_interval") == 0) {
+				check_counts(in_str, i, 1, argc);
+				p.param_dump_interval = std::stol(argv[i + 1]);
+				i += 1;
+			}
+
+			if(strcmp(in_str, "--resume_from_param_dump") == 0) {
+				check_counts(in_str, i, 1, argc);
+				std::string prefix(argv[i + 1]);
+				p.env_coeffs_file = prefix + "_env.out.gz";
+				p.covar_coeffs_file = prefix + "_covars.out.gz";
+				p.vb_init_file = prefix + "_latent_snps.out.gz";
+				p.hyps_grid_file = prefix + "_hyps.out.gz";
+				check_file_exists(p.env_coeffs_file);
+				check_file_exists(p.covar_coeffs_file);
+				check_file_exists(p.vb_init_file);
+				check_file_exists(p.hyps_grid_file);
 				i += 1;
 			}
 
 			if(strcmp(in_str, "--covar") == 0) {
 				check_counts(in_str, i, 1, argc);
-				p.covar_file = argv[i + 1];                                                 // covar file
+				p.covar_file = argv[i + 1];
 				check_file_exists(p.covar_file);
 				i += 1;
 			}
 
 			if(strcmp(in_str, "--snpwise_scan") == 0) {
 				check_counts(in_str, i, 1, argc);
-				p.snpstats_file = argv[i + 1];                                                 // covar file
+				p.snpstats_file = argv[i + 1];
 				check_file_exists(p.snpstats_file);
 				i += 1;
 			}
@@ -673,7 +703,7 @@ void parse_arguments(parameters &p, int argc, char **argv) {
 		std::exit(EXIT_FAILURE);
 	}
 
-	if(p.env_file == "NULL" && p.env_weights_file != "NULL") {
+	if(p.env_file == "NULL" && p.env_coeffs_file != "NULL") {
 		std::cout << "WARNING: --environment_weights will be ignored as no --environment provided" << std::endl;
 	}
 }

@@ -11,11 +11,11 @@ public:
 std::string bgen_file, chr, out_file, pheno_file, env_file, covar_file, bgi_file;
 std::string incl_sids_file, incl_rsids_file, recombination_file;
 std::string r1_hyps_grid_file, r1_probs_grid_file, hyps_grid_file;
-std::string env_weights_file, hyps_probs_file, vb_init_file;
+std::string env_coeffs_file, covar_coeffs_file, hyps_probs_file, vb_init_file;
 std::string dxteex_file, snpstats_file, mog_weights_file;
 std::vector< std::string > rsid;
 unsigned int random_seed;
-long int chunk_size, vb_iter_max;
+long int chunk_size, vb_iter_max, vb_iter_start, param_dump_interval;
 int missing_code, env_update_repeats, n_gconf, n_bgen_thread, n_pve_samples;
 unsigned int n_thread, main_chunk_size, gxe_chunk_size;
 std::uint32_t range_start, range_end;
@@ -51,7 +51,8 @@ parameters() : bgen_file("NULL"),
 	incl_rsids_file("NULL"),
 	dxteex_file("NULL"),
 	mog_weights_file("NULL"),
-	env_weights_file("NULL") {
+	covar_coeffs_file("NULL"),
+	env_coeffs_file("NULL") {
 	flip_high_maf_variants = false;
 	init_weights_with_snpwise_scan = false;
 	restrict_gamma_updates = false;
@@ -69,9 +70,11 @@ parameters() : bgen_file("NULL"),
 #endif
 	missing_code = -999;
 	vb_iter_max = 10000;
+	vb_iter_start = 0;
 	n_pve_samples = 100;
 	beta_spike_diff_factor = 10000.0;             // Initial diff in variance of spike & slab
 	gam_spike_diff_factor = 10000.0;             // Initial diff in variance of spike & slab
+	param_dump_interval = -1;
 	range = false;
 	min_spike_diff_set = false;
 	mode_remove_squared_envs = true;

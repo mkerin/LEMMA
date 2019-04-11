@@ -45,7 +45,7 @@ TEST_CASE("HE-reg"){
 		data.read_full_bgen();
 
 		Eigen::VectorXd Y = data.Y.cast<double>();
-		Eigen::MatrixXd C = data.W.cast<double>();
+		Eigen::MatrixXd C = data.C.cast<double>();
 		Eigen::VectorXd eta = data.E.col(0);
 		PVE pve(p, data.G, Y, C, eta);
 		pve.run(p.out_file);
@@ -68,7 +68,7 @@ TEST_CASE("HE-reg"){
 		data.read_full_bgen();
 
 		Eigen::VectorXd Y = data.Y.cast<double>();
-		Eigen::MatrixXd C = data.W.cast<double>();
+		Eigen::MatrixXd C = data.C.cast<double>();
 
 		SECTION("Gaussian prior"){
 			PVE pve(p, data.G, Y, C);
@@ -126,7 +126,7 @@ TEST_CASE("HE-reg"){
 		data.read_full_bgen();
 
 		Eigen::VectorXd Y = data.Y.cast<double>();
-		Eigen::MatrixXd C = data.W.cast<double>();
+		Eigen::MatrixXd C = data.C.cast<double>();
 		PVE pve(p, data.G, Y, C);
 
 		Eigen::VectorXd alpha_beta, alpha_gam;

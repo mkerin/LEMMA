@@ -47,26 +47,24 @@ int main( int argc, char** argv ) {
 
 		// For the HE-reg method
 		Eigen::VectorXd eta;
-		if (data.n_env > 0){
+		if (data.n_env > 0) {
 			eta = data.E.col(0);
 		}
 
-		if(p.mode_vb){
+		if(p.mode_vb) {
 			if (data.n_effects > 1) {
 				data.calc_dxteex();
 			}
-			if (p.env_weights_file == "NULL" && p.init_weights_with_snpwise_scan) {
+			if (p.env_coeffs_file == "NULL" && p.init_weights_with_snpwise_scan) {
 				data.calc_snpstats();
 			}
-			if (p.vb_init_file != "NULL") {
-				data.read_alpha_mu();
-			}
+			data.set_vb_init();
+
 			auto data_end = std::chrono::system_clock::now();
 			std::chrono::duration<double> elapsed_reading_data = data_end - data_start;
 
 			// Pass data to VBayes object
 			VBayesX2 VB(data);
-			VB.check_inputs();
 
 			// Run inference
 			auto vb_start = std::chrono::system_clock::now();
@@ -89,9 +87,9 @@ int main( int argc, char** argv ) {
 			outf_time << "vb_outer_loop " << VB.elapsed_innerLoop.count() << std::endl;
 		}
 
-		if(p.mode_pve_est || p.mode_vb){
+		if(p.mode_pve_est) {
 			// Random seed
-			if(p.random_seed == -1){
+			if(p.random_seed == -1) {
 				std::random_device rd;
 				p.random_seed = rd();
 			}
@@ -99,13 +97,13 @@ int main( int argc, char** argv ) {
 
 			// Eigen::VectorXd eta = data.E.col(0).cast<double>();
 			Eigen::VectorXd Y = data.Y.cast<double>();
-			Eigen::MatrixXd C = data.W.cast<double>();
+			Eigen::MatrixXd C = data.C.cast<double>();
 			if(data.n_env > 0) {
-				assert(data.n_env == 1 || p.mode_vb); // If multi env; use VB to collapse to single
+				assert(data.n_env == 1 || p.mode_vb);                                 // If multi env; use VB to collapse to single
 				PVE pve(p, data.G, Y, C, eta);
 				pve.run(p.out_file);
 				pve.to_file(p.out_file);
-			} else if(p.mog_weights_file != "NULL"){
+			} else if(p.mog_weights_file != "NULL") {
 				Eigen::VectorXd alpha_beta, alpha_gam;
 				data.read_mog_weights(p.mog_weights_file, alpha_beta, alpha_gam);
 				PVE pve(p, data.G, Y, C);
@@ -120,8 +118,8 @@ int main( int argc, char** argv ) {
 		}
 	}
 	catch( genfile::bgen::BGenError const& e ) {
-		std::cerr << "!! Uh-oh, error parsing bgen file.\n" ;
-		return -1 ;
+		std::cerr << "!! Uh-oh, error parsing bgen file.\n";
+		return -1;
 	}
 
 	auto end = std::chrono::system_clock::now();
