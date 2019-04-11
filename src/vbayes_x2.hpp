@@ -447,7 +447,7 @@ void runInnerLoop(const bool random_init,
 				theta0 = all_hyps;
 			} else if (count % 3 == 1) {
 				theta1 = all_hyps;
-			} else {
+			} else if (count >= p.vb_iter_start + 2){
 				theta2 = all_hyps;
 				for (int nn = 0; nn < n_grid; nn++) {
 					Hyps rr = theta1[nn] - theta0[nn];
@@ -479,12 +479,6 @@ void runInnerLoop(const bool random_init,
 
 		// Interim output
 		for (int nn = 0; nn < n_grid; nn++) {
-			// if (n_covar > 0 && count % 10 == 0) {
-			//  all_tracker[nn].push_interim_covar_values(count, n_covar, all_vp[nn], covar_names);
-			// }
-			// if (p.xtra_verbose && count % 20 == 0) {
-			//  all_tracker[nn].push_interim_param_values(count, n_effects, n_var, all_vp[nn], X);
-			// }
 			all_hyps[nn].update_pve();
 			all_tracker[nn].push_interim_hyps(count, all_hyps[nn], i_logw[nn], alpha_diff[nn], n_effects,
 			                                  n_var, n_env, all_vp[nn]);
@@ -695,6 +689,8 @@ void updateAllParams(const int& count,
 			check_monotonic_elbo(all_hyps[nn], all_vp[nn], count, logw_prev[nn], "maxHyps");
 		}
 	}
+
+
 
 	// Update PVE
 	for (int nn = 0; nn < n_grid; nn++) {
