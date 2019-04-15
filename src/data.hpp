@@ -401,7 +401,7 @@ bool read_bgen_chunk() {
 	std::uint32_t pos_j;
 	std::string rsid_j;
 	std::vector< std::string > alleles_j;
-	std::string SNPID_j;                                                                                                      // read but ignored
+	std::string SNPID_j;                                                                                                                  // read but ignored
 	std::vector< std::vector< double > > probs;
 	ProbSetter setter( &probs );
 
@@ -699,7 +699,7 @@ void read_vb_init_file(const std::string& filename,
 					M(i, k) = stod(sss);
 				}
 			}
-			i++;                                                                                                                                                                                                                                                                                                              // loop should end at i == n_grid
+			i++;                                                                                                                                                                                                                                                                                                                                                  // loop should end at i == n_grid
 		}
 		if (i < n_grid) {
 			throw std::runtime_error("ERROR: could not convert txt file (too few lines).");
@@ -784,7 +784,7 @@ void read_txt_file_w_context( const std::string& filename,
 	// Read file twice to ascertain number of lines
 	int n_lines = 0;
 	std::string line;
-	getline(fg, line);                                                                                                      // skip header
+	getline(fg, line);                                                                                                                  // skip header
 	while (getline(fg, line)) {
 		n_lines++;
 	}
@@ -835,7 +835,7 @@ void read_txt_file_w_context( const std::string& filename,
 				}
 			}
 		}
-		i++;                                                                                                                                                                                                          // loop should end at i == n_samples
+		i++;                                                                                                                                                                                                                                  // loop should end at i == n_samples
 	}
 	std::cout << n_lines << " rows found in " << filename << std::endl;
 }
@@ -1184,6 +1184,12 @@ void set_vb_init(){
 		} else {
 			throw std::runtime_error("Unexpected file to --environment_weights");
 		}
+	} else if (n_covar > 0) {
+		// Start covars at least squared solution
+		std::cout << "Starting covars at least squares fit" << std::endl;
+		Eigen::MatrixXd CtC = C.transpose() * C;
+		Eigen::MatrixXd Cty = C.transpose() * Y;
+		vp_init.muc = CtC.colPivHouseholderQr().solve(Cty);
 	}
 
 	// Manually set coeffs for SNP latent variables
