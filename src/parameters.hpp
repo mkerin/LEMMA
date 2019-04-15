@@ -28,7 +28,7 @@ bool mode_alternating_updates, mode_pve_est;
 bool restrict_gamma_updates, mode_no_gxe, mode_debug;
 bool init_weights_with_snpwise_scan, flip_high_maf_variants, min_spike_diff_set;
 bool mode_mog_prior_beta, mode_mog_prior_gam, mode_random_start;
-bool mode_remove_squared_envs, mode_squarem;
+bool mode_remove_squared_envs, mode_squarem, mode_incl_squared_envs;
 double min_maf, min_info, elbo_tol, alpha_tol, gamma_updates_thresh;
 double beta_spike_diff_factor, gam_spike_diff_factor, min_spike_diff_factor;
 std::vector < std::string > incl_sample_ids, gconf;
@@ -72,12 +72,13 @@ parameters() : bgen_file("NULL"),
 	vb_iter_max = 10000;
 	vb_iter_start = 0;
 	n_pve_samples = 100;
-	beta_spike_diff_factor = 10000.0;             // Initial diff in variance of spike & slab
-	gam_spike_diff_factor = 10000.0;             // Initial diff in variance of spike & slab
+	beta_spike_diff_factor = 10000.0;                     // Initial diff in variance of spike & slab
+	gam_spike_diff_factor = 10000.0;                     // Initial diff in variance of spike & slab
 	param_dump_interval = -1;
 	range = false;
 	min_spike_diff_set = false;
 	mode_remove_squared_envs = true;
+	mode_incl_squared_envs = false;
 	maf_lim = false;
 	info_lim = false;
 	mode_empirical_bayes = true;
@@ -93,7 +94,7 @@ parameters() : bgen_file("NULL"),
 	mode_pve_est = false;
 	select_snps = false;
 	select_rsid = false;
-	geno_check = true;             // check allele probs sum to 1 by default
+	geno_check = true;                     // check allele probs sum to 1 by default
 	verbose = false;
 	xtra_verbose = false;
 	use_vb_on_covars = true;

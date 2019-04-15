@@ -305,6 +305,7 @@ void standardise_non_genetic_data(){
 		H << tmp, C;
 		std::cout << "Checking for squared dependance: " << std::endl;
 		std::cout << "Name\t-log10(p-val)" << std::endl;
+		long n_signif_envs_sq = 0;
 		for (int ee = 0; ee < n_env; ee++) {
 			// H.col(0) = E.col(ee);
 			H.col(0) = E.col(ee).array().square().matrix();
@@ -320,30 +321,44 @@ void standardise_non_genetic_data(){
 
 			if (pval < 0.01 / (double) n_env) {
 				cols_to_remove.push_back(ee);
+				n_signif_envs_sq++;
 			}
 		}
-		if (cols_to_remove.size() > 0) {
+		if (n_signif_envs_sq > 0) {
 			std::cout << "Projecting out squared dependance from: " << std::endl;
 			for (int ee : cols_to_remove) {
 				std::cout << env_names[ee] << std::endl;
 			}
-			if (params.mode_remove_squared_envs) {
-				Eigen::MatrixXd E_sq(n_samples, cols_to_remove.size());
-				// std::cout << "forming E_sq" << std::endl;
-				for (int nn = 0; nn < cols_to_remove.size(); nn++) {
-					E_sq.col(nn) = E.col(cols_to_remove[nn]).array().square();
+			if (params.mode_incl_squared_envs) {
+				Eigen::MatrixXd E_sq(n_samples, n_signif_envs_sq);
+				std::vector<std::string> env_sq_names;
+				for (int nn = 0; nn < n_signif_envs_sq; nn++) {
+					E_sq.col(nn) = E_sq.col(cols_to_remove[nn]).array().square();
+					env_sq_names.push_back(env_names[cols_to_remove[nn]] + "_sq");
 				}
-				// std::cout << "formed E_sq" << std::endl;
-				Eigen::MatrixXd H(n_samples, n_covar + cols_to_remove.size());
+
+				EigenDataMatrix tmp(n_samples, n_covar + n_signif_envs_sq);
+				tmp << C, E_sq;
+				C = tmp;
+				covar_names.insert(covar_names.end(), env_sq_names.begin(), env_sq_names.end());
+				n_covar += n_signif_envs_sq;
+
+				assert(n_covar == covar_names.size());
+				assert(n_covar == C.cols());
+			} else if (params.mode_remove_squared_envs) {
+				Eigen::MatrixXd E_sq(n_samples, n_signif_envs_sq);
+				for (int nn = 0; nn < n_signif_envs_sq; nn++) {
+					E_sq.col(nn) = E_sq.col(cols_to_remove[nn]).array().square();
+				}
+				Eigen::MatrixXd H(n_samples, n_covar + n_signif_envs_sq);
 				H << E_sq, C;
 				// std::cout << "formed H" << std::endl;
 
 				Eigen::MatrixXd HtH = H.transpose() * H;
 				Eigen::MatrixXd Hty = H.transpose() * Y;
 				Eigen::MatrixXd beta = HtH.colPivHouseholderQr().solve(Hty);
-				// std::cout << "beta has dim: " << beta.rows() << " x " << beta.cols() << std::endl;
-				Y -= E_sq * beta.block(0, 0, cols_to_remove.size(), 1);
-				// std::cout << " regressed out" << std::endl;
+
+				Y -= E_sq * beta.block(0, 0, n_signif_envs_sq, 1);
 			} else {
 				std::cout << "Warning: Projection of significant square envs suppressed" << std::endl;
 			}
@@ -387,7 +402,8 @@ bool read_bgen_chunk() {
 	std::uint32_t pos_j;
 	std::string rsid_j;
 	std::vector< std::string > alleles_j;
-	std::string SNPID_j;                                                                                                          // read but ignored
+	// read but ignored
+	std::string SNPID_j;
 	std::vector< std::vector< double > > probs;
 	ProbSetter setter( &probs );
 
@@ -685,7 +701,8 @@ void read_vb_init_file(const std::string& filename,
 					M(i, k) = stod(sss);
 				}
 			}
-			i++;                                                                                                                                                                                                                                                                                                                          // loop should end at i == n_grid
+			// loop should end at i == n_grid
+			i++;
 		}
 		if (i < n_grid) {
 			throw std::runtime_error("ERROR: could not convert txt file (too few lines).");
@@ -770,7 +787,8 @@ void read_txt_file_w_context( const std::string& filename,
 	// Read file twice to ascertain number of lines
 	int n_lines = 0;
 	std::string line;
-	getline(fg, line);                                                                                                          // skip header
+	// skip header
+	getline(fg, line);
 	while (getline(fg, line)) {
 		n_lines++;
 	}
@@ -821,7 +839,8 @@ void read_txt_file_w_context( const std::string& filename,
 				}
 			}
 		}
-		i++;                                                                                                                                                                                                                  // loop should end at i == n_samples
+		// loop should end at i == n_samples
+		i++;
 	}
 	std::cout << n_lines << " rows found in " << filename << std::endl;
 }
@@ -1170,6 +1189,12 @@ void set_vb_init(){
 		} else {
 			throw std::runtime_error("Unexpected file to --environment_weights");
 		}
+	} else if (n_covar > 0) {
+		// Start covars at least squared solution
+		std::cout << "Starting covars at least squares fit" << std::endl;
+		Eigen::MatrixXd CtC = C.transpose() * C;
+		Eigen::MatrixXd Cty = C.transpose() * Y;
+		vp_init.muc = CtC.colPivHouseholderQr().solve(Cty);
 	}
 
 	// Manually set coeffs for SNP latent variables
