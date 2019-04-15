@@ -138,12 +138,16 @@ explicit VBayesX2(Data& dat) : X(dat.G),
 	n_var2         = n_effects * dat.n_var;
 	n_samples      = dat.n_samples;
 	n_covar        = dat.n_covar;
-	covar_names    = dat.env_names;
+	covar_names    = dat.covar_names;
 	env_names      = dat.env_names;
 	N              = (double) n_samples;
 
 	assert(Y.rows() == n_samples);
 	assert(X.rows() == n_samples);
+	assert(n_covar == C.cols());
+	assert(n_covar == covar_names.size());
+	assert(n_env == E.cols());
+	assert(n_env == env_names.size());
 
 
 	random_params_init = false;
@@ -152,19 +156,6 @@ explicit VBayesX2(Data& dat) : X(dat.G),
 	} else {
 		run_round1     = false;
 	}
-
-//		// env-main effects
-//		if(n_covar > 0) {
-//			n_covar = dat.n_env + dat.n_covar;
-//			covar_names = dat.env_names;
-//			covar_names.insert(covar_names.end(), dat.covar_names.begin(), dat.covar_names.end());
-//			C.resize(n_samples, n_covar);
-//			C << dat.E, dat.C;
-//		} else {
-//			n_covar = dat.n_env;
-//			covar_names = dat.env_names;
-//			C = dat.E;
-//		}
 
 	std::set<int> tmp(X.chromosome.begin(), X.chromosome.end());
 	chrs_present.assign(tmp.begin(), tmp.end());

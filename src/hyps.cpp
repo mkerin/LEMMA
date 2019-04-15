@@ -71,8 +71,8 @@ Hyps operator*(const double &scalar, const Hyps &h1){
 	return hyps;
 }
 
-void Hyps::init_from_grid(int n_effects, int ii, int n_var, const Eigen::Ref<const Eigen::MatrixXd> &hyps_grid) {
-	/*** Implicit that n_effects == 1 ***/
+void Hyps::init_from_grid(int my_n_effects, int ii, int n_var, const Eigen::Ref<const Eigen::MatrixXd> &hyps_grid) {
+	n_effects = my_n_effects;
 
 	// Unpack
 	double my_sigma = hyps_grid(ii, sigma_ind);
@@ -190,7 +190,7 @@ void Hyps::read_from_dump(const std::string& filename){
 		values.push_back(stod(s));
 	}
 
-	int n_effects = 2;
+	n_effects = 2;
 	lambda.resize(n_effects);
 	slab_relative_var.resize(n_effects);
 	spike_relative_var.resize(n_effects);
