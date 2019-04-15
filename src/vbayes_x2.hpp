@@ -141,6 +141,7 @@ explicit VBayesX2(Data& dat) : X(dat.G),
 	covar_names    = dat.covar_names;
 	env_names      = dat.env_names;
 	N              = (double) n_samples;
+	E = dat.E;
 
 	assert(Y.rows() == n_samples);
 	assert(X.rows() == n_samples);
@@ -168,7 +169,6 @@ explicit VBayesX2(Data& dat) : X(dat.G),
 	p.gxe_chunk_size = (unsigned int) std::min((long int) p.gxe_chunk_size, (long int) n_var);
 
 	// Read environmental variables
-	E = dat.E;
 	if(n_env > 0) {
 		std::cout << "Computing XtE" << std::endl;
 		XtE = X.transpose_multiply(E);
