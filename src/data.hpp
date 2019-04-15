@@ -329,17 +329,21 @@ void standardise_non_genetic_data(){
 			}
 			if (params.mode_remove_squared_envs) {
 				Eigen::MatrixXd E_sq(n_samples, cols_to_remove.size());
+				// std::cout << "forming E_sq" << std::endl;
 				for (int nn = 0; nn < cols_to_remove.size(); nn++) {
-					E_sq.col(nn) = E_sq.col(cols_to_remove[nn]).array().square();
+					E_sq.col(nn) = E.col(cols_to_remove[nn]).array().square();
 				}
+				// std::cout << "formed E_sq" << std::endl;
 				Eigen::MatrixXd H(n_samples, n_covar + cols_to_remove.size());
 				H << E_sq, C;
+				// std::cout << "formed H" << std::endl;
 
 				Eigen::MatrixXd HtH = H.transpose() * H;
 				Eigen::MatrixXd Hty = H.transpose() * Y;
 				Eigen::MatrixXd beta = HtH.colPivHouseholderQr().solve(Hty);
-
+				// std::cout << "beta has dim: " << beta.rows() << " x " << beta.cols() << std::endl;
 				Y -= E_sq * beta.block(0, 0, cols_to_remove.size(), 1);
+				// std::cout << " regressed out" << std::endl;
 			} else {
 				std::cout << "Warning: Projection of significant square envs suppressed" << std::endl;
 			}
@@ -383,7 +387,7 @@ bool read_bgen_chunk() {
 	std::uint32_t pos_j;
 	std::string rsid_j;
 	std::vector< std::string > alleles_j;
-	std::string SNPID_j;                                                                                          // read but ignored
+	std::string SNPID_j;                                                                                                          // read but ignored
 	std::vector< std::vector< double > > probs;
 	ProbSetter setter( &probs );
 
@@ -681,7 +685,7 @@ void read_vb_init_file(const std::string& filename,
 					M(i, k) = stod(sss);
 				}
 			}
-			i++;                                                                                                                                                                                                                                                                          // loop should end at i == n_grid
+			i++;                                                                                                                                                                                                                                                                                                                          // loop should end at i == n_grid
 		}
 		if (i < n_grid) {
 			throw std::runtime_error("ERROR: could not convert txt file (too few lines).");
@@ -766,7 +770,7 @@ void read_txt_file_w_context( const std::string& filename,
 	// Read file twice to ascertain number of lines
 	int n_lines = 0;
 	std::string line;
-	getline(fg, line);                                                                                          // skip header
+	getline(fg, line);                                                                                                          // skip header
 	while (getline(fg, line)) {
 		n_lines++;
 	}
@@ -817,7 +821,7 @@ void read_txt_file_w_context( const std::string& filename,
 				}
 			}
 		}
-		i++;                                                                                                                                                                                  // loop should end at i == n_samples
+		i++;                                                                                                                                                                                                                  // loop should end at i == n_samples
 	}
 	std::cout << n_lines << " rows found in " << filename << std::endl;
 }
