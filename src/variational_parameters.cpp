@@ -8,6 +8,7 @@
 #include "hyps.hpp"
 #include "parameters.hpp"
 #include "tools/eigen3.3/Dense"
+#include "Prior.hpp"
 
 void VariationalParamsBase::resize(std::int32_t n_samples, std::int32_t n_var, long n_covar, long n_env) {
 	s1_beta_sq.resize(n_var);
@@ -118,6 +119,14 @@ Eigen::VectorXd VariationalParamsBase::mean_gam() const {
 	return rr_gam;
 }
 
+Eigen::VectorXd VariationalParamsBase::mean_weights() const {
+	return muw;
+}
+
+double VariationalParamsBase::mean_weights(long ll) const {
+	return muw[ll];
+}
+
 double VariationalParamsBase::mean_beta(std::uint32_t jj) const {
 	double rr_beta = alpha_beta(jj) * mu1_beta(jj);
 	if(p.mode_mog_prior_beta) {
@@ -152,6 +161,10 @@ Eigen::ArrayXd VariationalParamsBase::var_gam() const {
 	return varG;
 }
 
+Eigen::ArrayXd VariationalParamsBase::var_weights() const {
+	return sw_sq;
+}
+
 Eigen::ArrayXd VariationalParamsBase::mean_beta_sq(int u0) const {
 	// if u0 == 1; E[u \beta^2]
 	// if u0 == 0; E[1 - u \beta^2]
@@ -176,6 +189,88 @@ Eigen::ArrayXd VariationalParamsBase::mean_gam_sq(int u0) const {
 		res = (1 - alpha_gam) * (s2_gam_sq + mu2_gam.square());
 	}
 	return res;
+}
+
+void VariationalParamsBase::beta_j_step(long jj, double EXty, double EXtX, Hyps hyps) {
+	double old = mean_beta(jj);
+	double lambda = hyps.lambda[0];
+	double sigma0 = hyps.slab_var[0]; // slab
+	double sigma1 = hyps.spike_var[0];
+
+
+	double m1 = (EXty + old * EXtX) / hyps.sigma;
+	double m2 = - EXtX / 2.0 / hyps.sigma;
+	double nat1 = m1;
+	double nat2_slab = m2 - 1.0 / 2 / sigma0;
+	double nat2_spike = m2 - 1.0 / 2 / sigma1;
+	Gaussian slab_g, spike_g;
+
+	slab_g.nat_params << nat1, nat2_slab;
+	spike_g.nat_params << nat1, nat2_spike;
+
+	MoGaussian gg;
+	gg.gaussians[0] = slab_g;
+	gg.gaussians[1] = spike_g;
+	gg.maximise_mix_coeff(lambda, sigma0, sigma1);
+
+	alpha_beta(jj) = gg.mix;
+	mu1_beta(jj) = slab_g.mean();
+	s1_beta_sq(jj) = slab_g.var();
+	mu2_beta(jj) = spike_g.mean();
+	s2_beta_sq(jj) = spike_g.var();
+}
+
+void VariationalParamsBase::gamma_j_step(long jj, double EXty, double EXtX, Hyps hyps) {
+	double old = mean_gam(jj);
+	double lambda = hyps.lambda[1];
+	double sigma0 = hyps.slab_var[1]; // slab
+	double sigma1 = hyps.spike_var[1];
+
+
+	double m1 = (EXty + old * EXtX) / hyps.sigma;
+	double m2 = - EXtX / 2.0 / hyps.sigma;
+	double nat1 = m1;
+	double nat2_slab = m2 - 1.0 / 2 / sigma0;
+	double nat2_spike = m2 - 1.0 / 2 / sigma1;
+	Gaussian slab_g, spike_g;
+
+	slab_g.nat_params << nat1, nat2_slab;
+	spike_g.nat_params << nat1, nat2_spike;
+
+	MoGaussian gg;
+	gg.gaussians[0] = slab_g;
+	gg.gaussians[1] = spike_g;
+	gg.maximise_mix_coeff(lambda, sigma0, sigma1);
+	check_nan(gg.mix, jj);
+
+	alpha_gam(jj) = gg.mix;
+	mu1_gam(jj) = slab_g.mean();
+	s1_gam_sq(jj) = slab_g.var();
+	mu2_gam(jj) = spike_g.mean();
+	s2_gam_sq(jj) = spike_g.var();
+}
+
+Gaussian VariationalParamsBase::weights_l_step(long ll, double EXty, double EXtX, Hyps hyps) const {
+	double old = mean_weights(ll);
+
+	double m1 = (EXty + old * EXtX) / hyps.sigma;
+	double m2 = - EXtX / 2.0 / hyps.sigma;
+	double nat1 = m1;
+	double nat2 = m2 - 1.0 / 2 / 1;
+	Gaussian w;
+	w.nat_params << nat1, nat2;
+	return w;
+}
+
+void VariationalParamsBase::check_nan(const double& alpha,
+			   const std::uint32_t& ii){
+	// check for NaNs and spit out diagnostics if so.
+	if(std::isnan(alpha)) {
+		// TODO: dump snpstats to file
+		std::cout << "NaN detected at SNP index: ";
+		std::cout << ii << std::endl;
+		throw std::runtime_error("NaN detected");
+	}
 }
 
 void VariationalParameters::init_from_lite(const VariationalParametersLite &init) {

@@ -5,6 +5,7 @@
 #include "parameters.hpp"
 #include "typedefs.hpp"
 #include "hyps.hpp"
+#include "Prior.hpp"
 
 #include "tools/eigen3.3/Dense"
 
@@ -58,21 +59,27 @@ void dump_snps_to_file(boost_io::filtering_ostream& my_outf, const GenotypeMatri
 
 /*** mean of latent variables ***/
 Eigen::VectorXd mean_beta() const;
-
 Eigen::VectorXd mean_gam() const;
+Eigen::VectorXd mean_weights() const;
 
 double mean_beta(std::uint32_t jj) const;
-
 double mean_gam(std::uint32_t jj) const;
+double mean_weights(long ll) const;
 
 /*** variance of latent variables ***/
 Eigen::ArrayXd var_beta() const;
-
 Eigen::ArrayXd var_gam() const;
-
+Eigen::ArrayXd var_weights() const;
 Eigen::ArrayXd mean_beta_sq(int u0) const;
-
 Eigen::ArrayXd mean_gam_sq(int u0) const;
+
+/*** Updates ***/
+Gaussian weights_l_step(long ll, double EXty, double EXtX, Hyps hyps) const;
+void gamma_j_step(long jj, double EXty, double EXtX, Hyps hyps);
+void beta_j_step(long jj, double EXty, double EXtX, Hyps hyps);
+
+/*** Misc ***/
+void check_nan(const double& alpha, const std::uint32_t& ii);
 };
 
 // Store subset of Variational Parameters to be RAM efficient

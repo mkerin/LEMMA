@@ -720,50 +720,50 @@ TEST_CASE( "Example 4: multi-env + mog + covars + emp_bayes" ){
 //	}
 //}
 
-TEST_CASE( "Edge case 1: error in alpha" ){
-	parameters p;
-
-	SECTION("Ex1. No filters applied, low mem mode"){
-		char* argv[] = { (char*) "bin/bgen_prog", (char*) "--mode_vb", (char*) "--low_mem",
-			             (char*) "--mode_spike_slab",
-			             (char*) "--bgen", (char*) "data/io_test/n50_p100.bgen",
-			             (char*) "--out", (char*) "data/io_test/fake_age.out",
-			             (char*) "--pheno", (char*) "data/io_test/pheno.txt",
-			             (char*) "--hyps_grid", (char*) "data/io_test/hyperpriors_gxage.txt",
-			             (char*) "--hyps_probs", (char*) "data/io_test/hyperpriors_gxage_probs.txt",
-			             (char*) "--environment", (char*) "data/io_test/age.txt"};
-		int argc = sizeof(argv)/sizeof(argv[0]);
-		parse_arguments(p, argc, argv);
-		Data data( p );
-		data.read_non_genetic_data();
-		data.standardise_non_genetic_data();
-		data.read_full_bgen();
-
-		data.calc_dxteex();
-		data.set_vb_init();
-		VBayesX2 VB(data);
-
-		std::vector< VbTracker > trackers(VB.hyps_inits.size(), p);
-		SECTION("Ex1. Explicitly checking updates"){
-
-			// Set up for RunInnerLoop
-			long n_grid = VB.hyps_inits.size();
-			long n_samples = VB.n_samples;
-			std::vector<Hyps> all_hyps = VB.hyps_inits;
-
-			// Set up for updateAllParams
-			std::vector<VariationalParameters> all_vp;
-			VB.setup_variational_params(all_hyps, all_vp);
-			VariationalParameters& vp = all_vp[0];
-			Hyps& hyps = all_hyps[0];
-
-			int round_index = 2;
-			std::vector<double> logw_prev(n_grid, -std::numeric_limits<double>::max());
-			std::vector<std::vector< double > > logw_updates(n_grid);
-
-			vp.alpha_beta(0) = std::nan("1");
-
-			CHECK_THROWS(VB.updateAllParams(0, round_index, all_vp, all_hyps, logw_prev));
-		}
-	}
-}
+//TEST_CASE( "Edge case 1: error in alpha" ){
+//	parameters p;
+//
+//	SECTION("Ex1. No filters applied, low mem mode"){
+//		char* argv[] = { (char*) "bin/bgen_prog", (char*) "--mode_vb", (char*) "--low_mem",
+//			             (char*) "--mode_spike_slab",
+//			             (char*) "--bgen", (char*) "data/io_test/n50_p100.bgen",
+//			             (char*) "--out", (char*) "data/io_test/fake_age.out",
+//			             (char*) "--pheno", (char*) "data/io_test/pheno.txt",
+//			             (char*) "--hyps_grid", (char*) "data/io_test/hyperpriors_gxage.txt",
+//			             (char*) "--hyps_probs", (char*) "data/io_test/hyperpriors_gxage_probs.txt",
+//			             (char*) "--environment", (char*) "data/io_test/age.txt"};
+//		int argc = sizeof(argv)/sizeof(argv[0]);
+//		parse_arguments(p, argc, argv);
+//		Data data( p );
+//		data.read_non_genetic_data();
+//		data.standardise_non_genetic_data();
+//		data.read_full_bgen();
+//
+//		data.calc_dxteex();
+//		data.set_vb_init();
+//		VBayesX2 VB(data);
+//
+//		std::vector< VbTracker > trackers(VB.hyps_inits.size(), p);
+//		SECTION("Ex1. Explicitly checking updates"){
+//
+//			// Set up for RunInnerLoop
+//			long n_grid = VB.hyps_inits.size();
+//			long n_samples = VB.n_samples;
+//			std::vector<Hyps> all_hyps = VB.hyps_inits;
+//
+//			// Set up for updateAllParams
+//			std::vector<VariationalParameters> all_vp;
+//			VB.setup_variational_params(all_hyps, all_vp);
+//			VariationalParameters& vp = all_vp[0];
+//			Hyps& hyps = all_hyps[0];
+//
+//			int round_index = 2;
+//			std::vector<double> logw_prev(n_grid, -std::numeric_limits<double>::max());
+//			std::vector<std::vector< double > > logw_updates(n_grid);
+//
+//			vp.alpha_beta(0) = std::nan("1");
+//
+//			CHECK_THROWS(VB.updateAllParams(0, round_index, all_vp, all_hyps, logw_prev));
+//		}
+//	}
+//}

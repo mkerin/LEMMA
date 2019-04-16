@@ -270,7 +270,7 @@ explicit VBayesX2(Data& dat) : X(dat.G),
 
 	if(n_env > 0) {
 		// cast used if DATA_AS_FLOAT
-		vp_init.eta     = E.matrix() * vp_init.muw.matrix().cast<scalarData>();
+		vp_init.eta     = E.matrix() * vp_init.mean_weights().matrix().cast<scalarData>();
 		vp_init.eta_sq  = vp_init.eta.array().square().matrix();
 		vp_init.eta_sq += E.square().matrix() * vp_init.sw_sq.matrix().template cast<scalarData>();
 	}
@@ -438,7 +438,7 @@ void runInnerLoop(const bool random_init,
 				theta0 = all_hyps;
 			} else if (count % 3 == 1) {
 				theta1 = all_hyps;
-			} else if (count >= p.vb_iter_start + 2){
+			} else if (count >= p.vb_iter_start + 2) {
 				theta2 = all_hyps;
 				for (int nn = 0; nn < n_grid; nn++) {
 					Hyps rr = theta1[nn] - theta0[nn];
@@ -490,33 +490,33 @@ void runInnerLoop(const bool random_init,
 					if (alpha_diff[nn] < p.alpha_tol && logw_diff < p.elbo_tol) {
 						converged[nn] = 1;
 						all_tracker[nn].dump_state(count, n_samples, n_covar, n_var,
-												   n_env, n_effects,
-												   all_vp[nn], all_hyps[nn], Y, C,
-												   X, covar_names, env_names);
+						                           n_env, n_effects,
+						                           all_vp[nn], all_hyps[nn], Y, C,
+						                           X, covar_names, env_names);
 					}
 				} else if (p.alpha_tol_set_by_user) {
 					if (alpha_diff[nn] < p.alpha_tol) {
 						converged[nn] = 1;
 						all_tracker[nn].dump_state(count, n_samples, n_covar, n_var,
-												   n_env, n_effects,
-												   all_vp[nn], all_hyps[nn], Y, C,
-												   X, covar_names, env_names);
+						                           n_env, n_effects,
+						                           all_vp[nn], all_hyps[nn], Y, C,
+						                           X, covar_names, env_names);
 					}
 				} else if (p.elbo_tol_set_by_user) {
 					if (logw_diff < p.elbo_tol) {
 						converged[nn] = 1;
 						all_tracker[nn].dump_state(count, n_samples, n_covar, n_var,
-												   n_env, n_effects,
-												   all_vp[nn], all_hyps[nn], Y, C,
-												   X, covar_names, env_names);
+						                           n_env, n_effects,
+						                           all_vp[nn], all_hyps[nn], Y, C,
+						                           X, covar_names, env_names);
 					}
 				} else {
 					if (alpha_diff[nn] < alpha_tol && logw_diff < logw_tol) {
 						converged[nn] = 1;
 						all_tracker[nn].dump_state(count, n_samples, n_covar, n_var,
-												   n_env, n_effects,
-												   all_vp[nn], all_hyps[nn], Y, C,
-												   X, covar_names, env_names);
+						                           n_env, n_effects,
+						                           all_vp[nn], all_hyps[nn], Y, C,
+						                           X, covar_names, env_names);
 					}
 				}
 			}
@@ -666,9 +666,34 @@ void updateAllParams(const int& count,
 	if (n_effects > 1 && n_env > 1) {
 		for (int nn = 0; nn < n_grid; nn++) {
 			for (int uu = 0; uu < p.env_update_repeats; uu++) {
-				updateEnvWeights(env_fwd_pass, all_hyps[nn], all_vp[nn]);
-				updateEnvWeights(env_back_pass, all_hyps[nn], all_vp[nn]);
+				for (auto ll : env_fwd_pass){
+					_updates_weights(ll, all_hyps[nn], all_vp[nn]);
+				}
+				for (auto ll : env_back_pass){
+					_updates_weights(ll, all_hyps[nn], all_vp[nn]);
+				}
 			}
+
+			// Recompute eta_sq
+			all_vp[nn].eta_sq  = all_vp[nn].eta.array().square().matrix();
+			all_vp[nn].eta_sq += E.square().matrix() * all_vp[nn].var_weights().matrix().cast<scalarData>();
+
+			// Recompute expected value of diagonal of ZtZ
+			all_vp[nn].calcEdZtZ(dXtEEX, n_env);
+
+			// Compute s_x; sum of column variances of Z
+			Eigen::ArrayXd muw_sq(n_env * n_env);
+			for (int ll = 0; ll < n_env; ll++) {
+				for (int mm = 0; mm < n_env; mm++) {
+					muw_sq(mm*n_env + ll) = all_vp[nn].mean_weights(mm) * all_vp[nn].mean_weights(ll);
+				}
+			}
+			// WARNING: Hard coded limit!
+			// WARNING: Updates S_x in hyps
+			all_hyps[nn].s_x(0) = (double) n_var;
+			all_hyps[nn].s_x(1) = (dXtEEX.rowwise() * muw_sq.transpose()).sum() / (N - 1.0);
+			all_hyps[nn].s_x(1) -= (XtE * all_vp[nn].mean_weights().matrix()).array().square().sum() / N / (N - 1.0);
+
 			check_monotonic_elbo(all_hyps[nn], all_vp[nn], count, logw_prev[nn], "updateEnvWeights");
 		}
 	}
@@ -680,8 +705,6 @@ void updateAllParams(const int& count,
 			check_monotonic_elbo(all_hyps[nn], all_vp[nn], count, logw_prev[nn], "maxHyps");
 		}
 	}
-
-
 
 	// Update PVE
 	for (int nn = 0; nn < n_grid; nn++) {
@@ -728,50 +751,130 @@ void updateAlphaMu(const std::vector< std::vector< std::uint32_t > >& iter_chunk
 		int ee                 = chunk[0] / n_var;
 		unsigned long ch_len   = chunk.size();
 
-		// D is n_samples x snp_batch
-		if(D.cols() != ch_len) {
-			D.resize(n_samples, ch_len);
-		}
-		if(rr_diff.rows() != ch_len) {
-			rr_diff.resize(ch_len, n_grid);
-		}
-		if(AA.rows() != ch_len) {
-			AA.resize(ch_len, n_grid);
-		}
-		X.col_block3(chunk, D);
-
-		// Most work done here
-		// AA is snp_batch x n_grid
-		AA = computeGeneResidualCorrelation(D, ee);
-
-		// Update parameters based on AA
-		for (int nn = 0; nn < n_grid; nn++) {
-			Eigen::Ref<Eigen::VectorXd> A = AA.col(nn);
-
-			unsigned long memoize_id = ((is_fwd_pass) ? ch : ch + iter_chunks.size());
-			adjustParams(nn, memoize_id, chunk, D, A, all_hyps, all_vp, rr_diff);
-		}
-
-		// Update residuals
 		if(ee == 0) {
-			YM.noalias() += D * rr_diff.cast<scalarData>();
+			_update_beta(chunk, all_vp, all_hyps);
+		} else if (ee == 1){
+			_update_gamma(chunk, all_vp, all_hyps);
 		} else {
-			YX.noalias() += D * rr_diff.cast<scalarData>();
-		}
 
-		if(p.mode_debug) {
-			if(ee == 0) {
-				for (int nn = 0; nn < n_grid; nn++) {
-					check_monotonic_elbo(all_hyps[nn], all_vp[nn], count, logw_prev[nn], "updateAlphaMu_main_internal");
-				}
+			// D is n_samples x snp_batch
+			if (D.cols() != ch_len) {
+				D.resize(n_samples, ch_len);
+			}
+			if (rr_diff.rows() != ch_len) {
+				rr_diff.resize(ch_len, n_grid);
+			}
+			if (AA.rows() != ch_len) {
+				AA.resize(ch_len, n_grid);
+			}
+			X.col_block3(chunk, D);
+
+			// Most work done here
+			// AA is snp_batch x n_grid
+			AA = computeGeneResidualCorrelation(D, ee);
+
+			// Update parameters based on AA
+			for (int nn = 0; nn < n_grid; nn++) {
+				Eigen::Ref<Eigen::VectorXd> A = AA.col(nn);
+
+				unsigned long memoize_id = ((is_fwd_pass) ? ch : ch + iter_chunks.size());
+				adjustParams(nn, memoize_id, chunk, D, A, all_hyps, all_vp, rr_diff);
+			}
+
+			// Update residuals
+			if (ee == 0) {
+				YM.noalias() += D * rr_diff.cast<scalarData>();
 			} else {
-				for (int nn = 0; nn < n_grid; nn++) {
-					check_monotonic_elbo(all_hyps[nn], all_vp[nn], count, logw_prev[nn], "updateAlphaMu_gxe_internal");
+				YX.noalias() += D * rr_diff.cast<scalarData>();
+			}
+
+			if (p.mode_debug) {
+				if (ee == 0) {
+					for (int nn = 0; nn < n_grid; nn++) {
+						check_monotonic_elbo(all_hyps[nn], all_vp[nn], count, logw_prev[nn],
+											 "updateAlphaMu_main_internal");
+					}
+				} else {
+					for (int nn = 0; nn < n_grid; nn++) {
+						check_monotonic_elbo(all_hyps[nn], all_vp[nn], count, logw_prev[nn],
+											 "updateAlphaMu_gxe_internal");
+					}
 				}
 			}
 		}
 	}
 }
+
+void _update_beta(const std::vector<std::uint32_t>& iter,
+				   std::vector<VariationalParameters>& all_vp,
+				   const std::vector<Hyps>& all_hyps){
+	long ch_len   = iter.size();
+
+	EigenDataMatrix D, EXty;
+
+	// D is n_samples x snp_batch
+	if(D.cols() != ch_len) {
+		D.resize(n_samples, ch_len);
+	}
+	X.col_block3(iter, D);
+
+	EXty = D.transpose() * (YY - YM - YX.cwiseProduct(ETA));
+
+	for (int nn = 0; nn < all_hyps.size(); nn++) {
+		EigenDataMatrix D_corr = (D.transpose() * D);
+		EigenDataMatrix EXtX = D_corr.diagonal();
+		EigenDataVector rr_k_old(ch_len), rr_k_new(ch_len);
+
+		for (int ii = 0; ii < ch_len; ii++) {
+			long jj = (iter[ii] % n_var);
+			double old = all_vp[nn].mean_beta(jj);
+			rr_k_old(ii) = old;
+
+			// Get param updates
+			all_vp[nn].beta_j_step(jj, EXty(ii, nn), EXtX(ii), all_hyps[nn]);
+
+
+			rr_k_new(ii) = all_vp[nn].mean_beta(jj);
+			EXty -= (all_vp[nn].mean_beta(jj) - old) * D_corr.col(ii);
+		}
+		all_vp[nn].ym += D * (rr_k_new - rr_k_old);
+	}
+}
+
+	void _update_gamma(const std::vector<std::uint32_t>& iter,
+					   std::vector<VariationalParameters>& all_vp,
+					   const std::vector<Hyps>& all_hyps){
+		long ch_len   = iter.size();
+
+		EigenDataMatrix D, EXty;
+
+		// D is n_samples x snp_batch
+		if(D.cols() != ch_len) {
+			D.resize(n_samples, ch_len);
+		}
+		X.col_block3(iter, D);
+
+		EXty = D.transpose() * ((YY - YM).cwiseProduct(ETA) - YX.cwiseProduct(ETA_SQ));
+
+		for (int nn = 0; nn < all_hyps.size(); nn++) {
+			EigenDataMatrix D_corr = (D.transpose() * all_vp[nn].eta_sq.asDiagonal() * D);
+			EigenDataMatrix EXtX = D_corr.diagonal();
+			EigenDataVector rr_k_old(ch_len), rr_k_new(ch_len);
+
+			for (int ii = 0; ii < ch_len; ii++) {
+				long jj = (iter[ii] % n_var);
+				double old = all_vp[nn].mean_gam(jj);
+				rr_k_old(ii) = old;
+
+				// Get param updates
+				all_vp[nn].gamma_j_step(jj, EXty(ii, nn), EXtX(ii), all_hyps[nn]);
+
+				rr_k_new(ii) = all_vp[nn].mean_gam(jj);
+				EXty -= (all_vp[nn].mean_gam(jj) - old) * D_corr.col(ii);
+			}
+			all_vp[nn].yx += D * (rr_k_new - rr_k_old);
+		}
+	}
 
 void adjustParams(const int& nn, const unsigned long& memoize_id,
                   const std::vector<std::uint32_t>& chunk,
@@ -866,10 +969,10 @@ void _internal_updateAlphaMu_beta(const std::vector< std::uint32_t >& iter_chunk
 		rr_k(ii) = vp.mean_beta(jj);
 
 		// Update s_sq
-		vp.s1_beta_sq(jj)                        = hyps.slab_var(ee);
-		vp.s1_beta_sq(jj)                       /= (hyps.slab_relative_var(ee) * (N-1) + 1);
-		if(p.mode_mog_prior_beta) vp.s2_beta_sq(jj)  = hyps.spike_var(ee);
-		if(p.mode_mog_prior_beta) vp.s2_beta_sq(jj) /= (hyps.spike_relative_var(ee) * (N-1) + 1);
+//		vp.s1_beta_sq(jj)                        = hyps.slab_var(ee);
+//		vp.s1_beta_sq(jj)                       /= (hyps.slab_relative_var(ee) * (N-1) + 1);
+//		if(p.mode_mog_prior_beta) vp.s2_beta_sq(jj)  = hyps.spike_var(ee);
+//		if(p.mode_mog_prior_beta) vp.s2_beta_sq(jj) /= (hyps.spike_relative_var(ee) * (N-1) + 1);
 
 		// Update mu
 		double offset = rr_k(ii) * (N-1.0);
@@ -877,8 +980,8 @@ void _internal_updateAlphaMu_beta(const std::vector< std::uint32_t >& iter_chunk
 			offset -= rr_k_diff(mm, 0) * D_corr(mm, ii);
 		}
 		double AA = A(ii) + offset;
-		vp.mu1_beta(jj)                            = vp.s1_beta_sq(jj) * AA / hyps.sigma;
-		if (p.mode_mog_prior_beta) vp.mu2_beta(jj) = vp.s2_beta_sq(jj) * AA / hyps.sigma;
+//		vp.mu1_beta(jj)                            = vp.s1_beta_sq(jj) * AA / hyps.sigma;
+//		if (p.mode_mog_prior_beta) vp.mu2_beta(jj) = vp.s2_beta_sq(jj) * AA / hyps.sigma;
 
 		// Update alpha
 		double ff_k;
@@ -886,7 +989,12 @@ void _internal_updateAlphaMu_beta(const std::vector< std::uint32_t >& iter_chunk
 		ff_k                       += std::log(vp.s1_beta_sq(jj));
 		if (p.mode_mog_prior_beta) ff_k -= vp.mu2_beta(jj) * vp.mu2_beta(jj) / vp.s2_beta_sq(jj);
 		if (p.mode_mog_prior_beta) ff_k -= std::log(vp.s2_beta_sq(jj));
-		vp.alpha_beta(jj)           = sigmoid(ff_k / 2.0 + alpha_cnst(ee));
+//		vp.alpha_beta(jj)           = sigmoid(ff_k / 2.0 + alpha_cnst(ee));
+
+		double EXty = AA - rr_k(ii) * (N-1.0);
+		double EXtX = (N-1.0);
+
+		vp.beta_j_step(jj, EXty, EXtX, hyps);
 
 		rr_k_diff(ii, 0) = vp.mean_beta(jj) - rr_k(ii);
 
@@ -907,16 +1015,9 @@ void check_nan(const double& alpha,
 	// check for NaNs and spit out diagnostics if so.
 
 	if(std::isnan(alpha)) {
-		// TODO: print diagnostics to cout
-		// TODO: write all snpstats to file
+		// TODO: dump snpstats to file
 		std::cout << "NaN detected at SNP index: (";
 		std::cout << ii % n_var << ", " << ii / n_var << ")" << std::endl;
-		std::cout << "alpha_cnst" << std::endl << alpha_cnst << std::endl << std::endl;
-		std::cout << "offset" << std::endl << offset << std::endl << std::endl;
-		std::cout << "hyps" << std::endl << hyps << std::endl << std::endl;
-		std::cout << "rr_k_diff" << std::endl << rr_k_diff << std::endl << std::endl;
-		std::cout << "A" << std::endl << A << std::endl << std::endl;
-		std::cout << "D_corr" << std::endl << D_corr << std::endl << std::endl;
 		throw std::runtime_error("NaN detected");
 	}
 }
@@ -930,14 +1031,7 @@ void _internal_updateAlphaMu_gam(const std::vector< std::uint32_t >& iter_chunk,
 
 	int ch_len = iter_chunk.size();
 	int ee     = 1;
-
-	Eigen::ArrayXd alpha_cnst;
-	if(p.mode_mog_prior_gam) {
-		alpha_cnst  = (hyps.lambda / (1.0 - hyps.lambda) + eps).log();
-		alpha_cnst -= (hyps.slab_var.log() - hyps.spike_var.log()) / 2.0;
-	} else {
-		alpha_cnst = (hyps.lambda / (1.0 - hyps.lambda) + eps).log() - hyps.slab_var.log() / 2.0;
-	}
+//	Eigen::VectorXd A = myA;
 
 	// adjust updates within chunk
 	// Need to be able to go backwards during a back_pass
@@ -950,12 +1044,6 @@ void _internal_updateAlphaMu_gam(const std::vector< std::uint32_t >& iter_chunk,
 		// Log prev value
 		rr_k(ii) = vp.mean_gam(jj);
 
-		// Update s_sq
-		double tmp = (p.gxe_chunk_size > 1 && p.n_thread == 1) ? vp.EdZtZ(jj) : D_corr(ii, ii);
-		vp.s1_gam_sq(jj)                        = hyps.slab_var(ee);
-		vp.s1_gam_sq(jj)                       /= (hyps.slab_relative_var(ee) * vp.EdZtZ(jj) + 1);
-		if(p.mode_mog_prior_gam) vp.s2_gam_sq(jj)  = hyps.spike_var(ee);
-		if(p.mode_mog_prior_gam) vp.s2_gam_sq(jj) /= (hyps.spike_relative_var(ee) * vp.EdZtZ(jj) + 1);
 
 		// Update mu
 		double offset = rr_k(ii) * vp.EdZtZ(jj);
@@ -963,20 +1051,14 @@ void _internal_updateAlphaMu_gam(const std::vector< std::uint32_t >& iter_chunk,
 			offset -= rr_k_diff(mm, 0) * D_corr(mm, ii);
 		}
 		double AA = A(ii) + offset;
-		vp.mu1_gam(jj)                       = vp.s1_gam_sq(jj) * AA / hyps.sigma;
-		if (p.mode_mog_prior_gam) vp.mu2_gam(jj) = vp.s2_gam_sq(jj) * AA / hyps.sigma;
 
-		// Update alpha
-		double ff_k;
-		ff_k                        = vp.mu1_gam(jj) * vp.mu1_gam(jj) / vp.s1_gam_sq(jj);
-		ff_k                       += std::log(vp.s1_gam_sq(jj));
-		if (p.mode_mog_prior_gam) ff_k -= vp.mu2_gam(jj) * vp.mu2_gam(jj) / vp.s2_gam_sq(jj);
-		if (p.mode_mog_prior_gam) ff_k -= std::log(vp.s2_gam_sq(jj));
-		vp.alpha_gam(jj)           = sigmoid(ff_k / 2.0 + alpha_cnst(ee));
+		double EXty = AA - rr_k(ii) * vp.EdZtZ(jj);
+		double EXtX = vp.EdZtZ(jj);
+
+		vp.gamma_j_step(jj, EXty, EXtX, hyps);
 
 		rr_k_diff(ii, 0) = vp.mean_gam(jj) - rr_k(ii);
-
-		check_nan(vp.alpha_gam(jj), ff_k, offset, hyps, iter_chunk[ii], rr_k_diff, A, D_corr, vp, alpha_cnst);
+//		A -= (vp.mean_gam(jj) - rr_k(ii)) * D_corr.col(ii);
 	}
 }
 
@@ -1063,64 +1145,30 @@ void maximiseHyps(Hyps& hyps,
 	// hyps.sigma_g_spike = hyps.spike_relative_var(1);
 }
 
-void updateEnvWeights(const std::vector< int >& iter,
-                      Hyps& hyps,
-                      VariationalParameters& vp){
+void _updates_weights(long ll, Hyps& hyps,
+					  VariationalParameters& vp){
+	double old = vp.mean_weights(ll);
 
-	Eigen::ArrayXd varG = vp.var_gam();
-	for (int ll : iter) {
-		// Log previous mean weight
-		double r_ll = vp.muw(ll);
+	Eigen::MatrixXd tmp;
+	tmp = vp.var_gam().matrix().transpose() * dXtEEX.block(0, ll * n_env, n_var, n_env).matrix() *  vp.mean_weights();
 
-		// Update s_sq
-		double denom = hyps.sigma;
-		denom       += (vp.yx.array() * E.col(ll)).square().sum();
-		denom       += (varG * dXtEEX.col(ll*n_env + ll)).sum();
-		vp.sw_sq(ll) = hyps.sigma / denom;
+	double EXty, EXtX;
+	EXty       = ((Y - vp.ym).array() * E.col(ll) * vp.yx.array()).sum();
+	EXty       -= (vp.yx.array() * vp.yx.array() * E.col(ll) * vp.eta.array()).sum();
+	EXty       -= tmp(0,0);
 
-		// Remove dependance on current weight
-		vp.eta -= (r_ll * E.col(ll)).matrix();
+	EXtX = (vp.yx.array().square() * E.col(ll).square()).sum();
+	EXtX += (vp.var_gam() * dXtEEX.col(ll*n_env + ll)).sum();
 
-		// Update mu
-		Eigen::ArrayXd env_vars = Eigen::ArrayXd::Zero(n_var);
-		for (int mm = 0; mm < n_env; mm++) {
-			if(mm != ll) {
-				env_vars += vp.muw(mm) * dXtEEX.col(ll*n_env + mm);
-			}
-		}
+//	EXty *= self.N / len(El);
+//	EXtX *= self.N / len(El);
+	Gaussian w = vp.weights_l_step(ll, EXty, EXtX, hyps);
 
-		double eff = ((Y - vp.ym).array() * E.col(ll) * vp.yx.array()).sum();
-		eff       -= (vp.yx.array() * E.col(ll) * vp.eta.array() * vp.yx.array()).sum();
-		eff       -= (varG * env_vars).sum();
-		vp.muw(ll) = vp.sw_sq(ll) * eff / hyps.sigma;
+	vp.muw(ll) = w.mean();
+	vp.sw_sq(ll) = w.var();
 
-		// Update eta
-		vp.eta += (vp.muw(ll) * E.col(ll)).matrix();
-	}
+	vp.eta += (vp.mean_weights(ll) - old) * E.col(ll).matrix();
 
-	// Recompute eta_sq
-	vp.eta_sq  = vp.eta.array().square().matrix();
-#ifdef DATA_AS_FLOAT
-	vp.eta_sq += E.square().matrix() * vp.sw_sq.matrix().cast<float>();
-#else
-	vp.eta_sq += E.square().matrix() * vp.sw_sq.matrix();
-#endif
-
-	// Recompute expected value of diagonal of ZtZ
-	vp.calcEdZtZ(dXtEEX, n_env);
-
-	// Compute s_x; sum of column variances of Z
-	Eigen::ArrayXd muw_sq(n_env * n_env);
-	for (int ll = 0; ll < n_env; ll++) {
-		for (int mm = 0; mm < n_env; mm++) {
-			muw_sq(mm*n_env + ll) = vp.muw(mm) * vp.muw(ll);
-		}
-	}
-	// WARNING: Hard coded limit!
-	// WARNING: Updates S_x in hyps
-	hyps.s_x(0) = (double) n_var;
-	hyps.s_x(1) = (dXtEEX.rowwise() * muw_sq.transpose()).sum() / (N - 1.0);
-	hyps.s_x(1) -= (XtE * vp.muw.matrix()).array().square().sum() / N / (N - 1.0);
 }
 
 double calc_logw(const Hyps& hyps,
@@ -1153,7 +1201,7 @@ double calc_logw(const Hyps& hyps,
 		kl_weights += (double) n_env / 2.0;
 		kl_weights += vp.sw_sq.log().sum() / 2.0;
 		kl_weights -= vp.sw_sq.sum() / 2.0;
-		kl_weights -= vp.muw.square().sum() / 2.0;
+		kl_weights -= vp.mean_weights().array().square().sum() / 2.0;
 	}
 
 	double res = int_linear + kl_beta + kl_gamma + kl_covar + kl_weights;
@@ -1238,7 +1286,7 @@ void initRandomAlphaMu(VariationalParameters& vp){
 
 	// Env weights - cast if DATA_AS_FLOAT
 	vp.muw     = 1.0 / (double) n_env;
-	vp.eta     = E.matrix() * vp.muw.matrix().cast<scalarData>();
+	vp.eta     = E.matrix() * vp.mean_weights().matrix().cast<scalarData>();
 	vp.eta_sq  = vp.eta.array().square().matrix();
 	vp.calcEdZtZ(dXtEEX, n_env);
 }
@@ -1750,7 +1798,7 @@ void output_results(const std::vector<VbTracker>& trackers, const long& my_n_gri
 		}
 		outf_weights << std::endl;
 		for (int ll = 0; ll < n_env; ll++) {
-			outf_weights << vp_map.muw(ll);
+			outf_weights << vp_map.mean_weights(ll);
 			if (ll + 1 < n_env) outf_weights << " ";
 		}
 		outf_weights << std::endl;
