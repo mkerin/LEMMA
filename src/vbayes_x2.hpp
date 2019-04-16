@@ -601,65 +601,35 @@ void updateAllParams(const int& count,
 	std::vector<double> i_logw(n_grid);
 
 	// Update covar main effects
-	for (int nn = 0; nn < n_grid; nn++) {
-		if (n_covar > 0) {
+	if (n_covar > 0) {
+		for (int nn = 0; nn < n_grid; nn++) {
 			updateCovarEffects(all_vp[nn], all_hyps[nn]);
-			check_monotonic_elbo(all_hyps[nn], all_vp[nn], count, logw_prev[nn], "updateCovarEffects");
 		}
+		check_monotonic_elbo(all_hyps, all_vp, count, logw_prev, "updateCovarEffects");
 	}
 
 	// Update main & interaction effects
-	std::string ms;
 	bool is_fwd_pass = (count % 2 == 0);
 	if(is_fwd_pass) {
-		ms = "updateAlphaMu_fwd_main";
-		updateAlphaMu(main_fwd_pass_chunks, all_hyps, all_vp, is_fwd_pass, logw_prev, count);
-	} else {
-		ms = "updateAlphaMu_back_gxe";
-		updateAlphaMu(gxe_back_pass_chunks, all_hyps, all_vp, is_fwd_pass, logw_prev, count);
-	}
-	for (int nn = 0; nn < n_grid; nn++) {
-		check_monotonic_elbo(all_hyps[nn], all_vp[nn], count, logw_prev[nn], ms);
-	}
+		for (auto chunk: main_fwd_pass_chunks){
+			_update_beta(chunk, all_vp, all_hyps);
+		}
+		check_monotonic_elbo(all_hyps, all_vp, count, logw_prev, "updateAlphaMu_fwd_main");
 
-	if(is_fwd_pass) {
-		ms = "updateAlphaMu_fwd_gxe";
-		updateAlphaMu(gxe_fwd_pass_chunks, all_hyps, all_vp, is_fwd_pass, logw_prev, count);
+		for (auto chunk: gxe_fwd_pass_chunks){
+			_update_gamma(chunk, all_vp, all_hyps);
+		}
+		check_monotonic_elbo(all_hyps, all_vp, count, logw_prev, "updateAlphaMu_fwd_gxe");
 	} else {
-		ms = "updateAlphaMu_back_main";
-		updateAlphaMu(main_back_pass_chunks, all_hyps, all_vp, is_fwd_pass, logw_prev, count);
-	}
-	for (int nn = 0; nn < n_grid; nn++) {
-		check_monotonic_elbo(all_hyps[nn], all_vp[nn], count, logw_prev[nn], ms);
-		if(p.mode_debug) {
-			EigenDataVector aa, bb;
-			Eigen::VectorXd rr_beta = all_vp[nn].mean_beta();
-			EigenDataVector ym = (X * rr_beta).template cast<scalarData>();
-			if(n_covar > 0) {
-				ym += C * all_vp[nn].muc.matrix().cast<scalarData>();
-			}
-			aa = (ym.array() - ym.array().sum() / (double) n_samples);
-			bb = all_vp[nn].ym.array() - all_vp[nn].ym.array().sum() / (double) n_samples;
-			double aa_sig = std::sqrt(aa.squaredNorm() / (double) n_samples);
-			double bb_sig = std::sqrt(bb.squaredNorm() / (double) n_samples);
-			double corr = aa.dot(bb) / aa_sig / bb_sig;
-			if(corr < 1 - 1e-6) {
-				std::cout << "Cor(ym, vp.ym) = " << corr << " at " << count << std::endl;
-			}
+		for (auto chunk: gxe_back_pass_chunks){
+			_update_gamma(chunk, all_vp, all_hyps);
 		}
-		if(p.mode_debug && n_effects > 1) {
-			EigenDataVector aa, bb;
-			Eigen::VectorXd rr_gam = all_vp[nn].mean_gam();
-			EigenDataVector yx = (X * rr_gam).template cast<scalarData>();
-			aa = (yx.array() - yx.array().sum() / (double) n_samples);
-			bb = all_vp[nn].yx.array() - all_vp[nn].yx.array().sum() / (double) n_samples;
-			double aa_sig = std::sqrt(aa.squaredNorm() / (double) n_samples);
-			double bb_sig = std::sqrt(bb.squaredNorm() / (double) n_samples);
-			double corr = aa.dot(bb) / aa_sig / bb_sig;
-			if(corr < 1 - 1e-6) {
-				std::cout << "Cor(yx, vp.yx) = " << corr << " at " << count << std::endl;
-			}
+		check_monotonic_elbo(all_hyps, all_vp, count, logw_prev, "updateAlphaMu_back_gxe");
+
+		for (auto chunk: main_back_pass_chunks){
+			_update_beta(chunk, all_vp, all_hyps);
 		}
+		check_monotonic_elbo(all_hyps, all_vp, count, logw_prev, "updateAlphaMu_back_main");
 	}
 
 	// Update env-weights
@@ -728,80 +698,6 @@ void updateCovarEffects(VariationalParameters& vp,
 		// Update predicted effects
 		double rr_k_diff     = vp.muc(cc) - rr_k;
 		vp.ym += rr_k_diff * C.col(cc);
-	}
-}
-
-void updateAlphaMu(const std::vector< std::vector< std::uint32_t > >& iter_chunks,
-                   const std::vector<Hyps>& all_hyps,
-                   std::vector<VariationalParameters>& all_vp,
-                   const bool& is_fwd_pass,
-                   std::vector<double> logw_prev,
-                   int count){
-	// Divide updates into chunks
-	// Partition chunks amongst available threads
-	unsigned long n_grid = all_hyps.size();
-	EigenDataMatrix D;
-	// snp_batch x n_grid
-	Eigen::MatrixXd AA;
-	// snp_batch x n_grid
-	Eigen::MatrixXd rr_diff;
-
-	for (std::uint32_t ch = 0; ch < iter_chunks.size(); ch++) {
-		std::vector< std::uint32_t > chunk = iter_chunks[ch];
-		int ee                 = chunk[0] / n_var;
-		unsigned long ch_len   = chunk.size();
-
-		if(ee == 0) {
-			_update_beta(chunk, all_vp, all_hyps);
-		} else if (ee == 1){
-			_update_gamma(chunk, all_vp, all_hyps);
-		} else {
-
-			// D is n_samples x snp_batch
-			if (D.cols() != ch_len) {
-				D.resize(n_samples, ch_len);
-			}
-			if (rr_diff.rows() != ch_len) {
-				rr_diff.resize(ch_len, n_grid);
-			}
-			if (AA.rows() != ch_len) {
-				AA.resize(ch_len, n_grid);
-			}
-			X.col_block3(chunk, D);
-
-			// Most work done here
-			// AA is snp_batch x n_grid
-			AA = computeGeneResidualCorrelation(D, ee);
-
-			// Update parameters based on AA
-			for (int nn = 0; nn < n_grid; nn++) {
-				Eigen::Ref<Eigen::VectorXd> A = AA.col(nn);
-
-				unsigned long memoize_id = ((is_fwd_pass) ? ch : ch + iter_chunks.size());
-				adjustParams(nn, memoize_id, chunk, D, A, all_hyps, all_vp, rr_diff);
-			}
-
-			// Update residuals
-			if (ee == 0) {
-				YM.noalias() += D * rr_diff.cast<scalarData>();
-			} else {
-				YX.noalias() += D * rr_diff.cast<scalarData>();
-			}
-
-			if (p.mode_debug) {
-				if (ee == 0) {
-					for (int nn = 0; nn < n_grid; nn++) {
-						check_monotonic_elbo(all_hyps[nn], all_vp[nn], count, logw_prev[nn],
-											 "updateAlphaMu_main_internal");
-					}
-				} else {
-					for (int nn = 0; nn < n_grid; nn++) {
-						check_monotonic_elbo(all_hyps[nn], all_vp[nn], count, logw_prev[nn],
-											 "updateAlphaMu_gxe_internal");
-					}
-				}
-			}
-		}
 	}
 }
 
@@ -875,192 +771,6 @@ void _update_beta(const std::vector<std::uint32_t>& iter,
 			all_vp[nn].yx += D * (rr_k_new - rr_k_old);
 		}
 	}
-
-void adjustParams(const int& nn, const unsigned long& memoize_id,
-                  const std::vector<std::uint32_t>& chunk,
-                  const EigenDataMatrix& D,
-                  const Eigen::Ref<const Eigen::VectorXd>& A,
-                  const std::vector<Hyps>& all_hyps,
-                  std::vector<VariationalParameters>& all_vp,
-                  Eigen::Ref<Eigen::MatrixXd> rr_diff){
-
-	int ee                 = chunk[0] / n_var;
-	unsigned long ch_len   = chunk.size();
-	if (ee == 0) {
-
-		// Update main effects
-		if (D_correlations.count(memoize_id) == 0) {
-			if(p.n_thread == 1) {
-				Eigen::MatrixXd D_corr(ch_len, ch_len);
-				// cast only used if DATA_AS_FLOAT
-				D_corr.triangularView<Eigen::StrictlyUpper>() = (D.transpose() * D).template cast<double>();
-				D_correlations[memoize_id] = D_corr;
-			} else {
-				D_correlations[memoize_id] = (D.transpose() * D).template cast<double>();
-			}
-		}
-
-		_internal_updateAlphaMu_beta(chunk, A, D_correlations[memoize_id], all_hyps[nn], all_vp[nn], rr_diff.col(nn));
-	} else {
-
-		// Update interaction effects
-		Eigen::MatrixXd D_corr(ch_len, ch_len);
-		if(p.gxe_chunk_size > 1) {
-			if(p.n_thread == 1) {
-				// cast only used if DATA_AS_FLOAT
-				D_corr.triangularView<Eigen::StrictlyUpper>() = (D.transpose() * all_vp[nn].eta_sq.asDiagonal() * D).template cast<double>();
-			} else {
-				D_corr = (D.transpose() * all_vp[nn].eta_sq.asDiagonal() * D).template cast<double>();
-			}
-		}
-
-		_internal_updateAlphaMu_gam(chunk, A, D_corr, all_hyps[nn], all_vp[nn], rr_diff.col(nn));
-	}
-}
-
-template <typename EigenMat>
-Eigen::MatrixXd computeGeneResidualCorrelation(const EigenMat& D,
-                                               const int& ee){
-	// Most work done here
-	// variant correlations with residuals
-	EigenMat res;
-	if(n_effects == 1) {
-		// Main effects update in main effects only model
-		res.noalias() = (YY - YM).transpose() * D;
-		res.transposeInPlace();
-	} else if (ee == 0) {
-		// Main effects update in interaction model
-		res.noalias() = (YY - YM - YX.cwiseProduct(ETA)).transpose() * D;
-		res.transposeInPlace();
-	} else {
-		// Interaction effects
-		res.noalias() = D.transpose() * ((YY - YM).cwiseProduct(ETA) - YX.cwiseProduct(ETA_SQ));
-	}
-	// cast only used if DATA_AS_FLOAT
-	// n_grid x snp_batch
-	return(res.template cast<double>());
-}
-
-void _internal_updateAlphaMu_beta(const std::vector< std::uint32_t >& iter_chunk,
-                                  const Eigen::Ref<const Eigen::VectorXd>& A,
-                                  const Eigen::Ref<const Eigen::MatrixXd>& D_corr,
-                                  const Hyps& hyps,
-                                  VariationalParameters& vp,
-                                  Eigen::Ref<Eigen::MatrixXd> rr_k_diff){
-
-	unsigned long ch_len = iter_chunk.size();
-	int ee = 0;
-
-	Eigen::ArrayXd alpha_cnst;
-	if(p.mode_mog_prior_beta) {
-		alpha_cnst  = (hyps.lambda / (1.0 - hyps.lambda) + eps).log();
-		alpha_cnst -= (hyps.slab_var.log() - hyps.spike_var.log()) / 2.0;
-	} else {
-		alpha_cnst = (hyps.lambda / (1.0 - hyps.lambda) + eps).log() - hyps.slab_var.log() / 2.0;
-	}
-
-	// adjust updates within chunk
-	Eigen::VectorXd rr_k(ch_len);
-	assert(rr_k_diff.rows() == ch_len);
-	for (int ii = 0; ii < ch_len; ii++) {
-		std::uint32_t jj = iter_chunk[ii];
-
-		// Log prev value
-		rr_k(ii) = vp.mean_beta(jj);
-
-		// Update s_sq
-//		vp.s1_beta_sq(jj)                        = hyps.slab_var(ee);
-//		vp.s1_beta_sq(jj)                       /= (hyps.slab_relative_var(ee) * (N-1) + 1);
-//		if(p.mode_mog_prior_beta) vp.s2_beta_sq(jj)  = hyps.spike_var(ee);
-//		if(p.mode_mog_prior_beta) vp.s2_beta_sq(jj) /= (hyps.spike_relative_var(ee) * (N-1) + 1);
-
-		// Update mu
-		double offset = rr_k(ii) * (N-1.0);
-		for (int mm = 0; mm < ii; mm++) {
-			offset -= rr_k_diff(mm, 0) * D_corr(mm, ii);
-		}
-		double AA = A(ii) + offset;
-//		vp.mu1_beta(jj)                            = vp.s1_beta_sq(jj) * AA / hyps.sigma;
-//		if (p.mode_mog_prior_beta) vp.mu2_beta(jj) = vp.s2_beta_sq(jj) * AA / hyps.sigma;
-
-		// Update alpha
-		double ff_k;
-		ff_k                        = vp.mu1_beta(jj) * vp.mu1_beta(jj) / vp.s1_beta_sq(jj);
-		ff_k                       += std::log(vp.s1_beta_sq(jj));
-		if (p.mode_mog_prior_beta) ff_k -= vp.mu2_beta(jj) * vp.mu2_beta(jj) / vp.s2_beta_sq(jj);
-		if (p.mode_mog_prior_beta) ff_k -= std::log(vp.s2_beta_sq(jj));
-//		vp.alpha_beta(jj)           = sigmoid(ff_k / 2.0 + alpha_cnst(ee));
-
-		double EXty = AA - rr_k(ii) * (N-1.0);
-		double EXtX = (N-1.0);
-
-		vp.beta_j_step(jj, EXty, EXtX, hyps);
-
-		rr_k_diff(ii, 0) = vp.mean_beta(jj) - rr_k(ii);
-
-		check_nan(vp.alpha_beta(jj), ff_k, offset, hyps, iter_chunk[ii], rr_k_diff, A, D_corr, vp, alpha_cnst);
-	}
-}
-
-void check_nan(const double& alpha,
-               const double& ff_k,
-               const double& offset,
-               const Hyps& hyps,
-               const std::uint32_t& ii,
-               const Eigen::Ref<const Eigen::MatrixXd> rr_k_diff,
-               const Eigen::Ref<const Eigen::VectorXd>& A,
-               const Eigen::Ref<const Eigen::MatrixXd>& D_corr,
-               VariationalParameters& vp,
-               const Eigen::Ref<const Eigen::ArrayXd> alpha_cnst){
-	// check for NaNs and spit out diagnostics if so.
-
-	if(std::isnan(alpha)) {
-		// TODO: dump snpstats to file
-		std::cout << "NaN detected at SNP index: (";
-		std::cout << ii % n_var << ", " << ii / n_var << ")" << std::endl;
-		throw std::runtime_error("NaN detected");
-	}
-}
-
-void _internal_updateAlphaMu_gam(const std::vector< std::uint32_t >& iter_chunk,
-                                 const Eigen::Ref<const Eigen::VectorXd>& A,
-                                 const Eigen::Ref<const Eigen::MatrixXd>& D_corr,
-                                 const Hyps& hyps,
-                                 VariationalParameters& vp,
-                                 Eigen::Ref<Eigen::MatrixXd> rr_k_diff){
-
-	int ch_len = iter_chunk.size();
-	int ee     = 1;
-//	Eigen::VectorXd A = myA;
-
-	// adjust updates within chunk
-	// Need to be able to go backwards during a back_pass
-	Eigen::VectorXd rr_k(ch_len);
-	assert(rr_k_diff.rows() == ch_len);
-	for (int ii = 0; ii < ch_len; ii++) {
-		// variant index
-		std::uint32_t jj = (iter_chunk[ii] % n_var);
-
-		// Log prev value
-		rr_k(ii) = vp.mean_gam(jj);
-
-
-		// Update mu
-		double offset = rr_k(ii) * vp.EdZtZ(jj);
-		for (int mm = 0; mm < ii; mm++) {
-			offset -= rr_k_diff(mm, 0) * D_corr(mm, ii);
-		}
-		double AA = A(ii) + offset;
-
-		double EXty = AA - rr_k(ii) * vp.EdZtZ(jj);
-		double EXtX = vp.EdZtZ(jj);
-
-		vp.gamma_j_step(jj, EXty, EXtX, hyps);
-
-		rr_k_diff(ii, 0) = vp.mean_gam(jj) - rr_k(ii);
-//		A -= (vp.mean_gam(jj) - rr_k(ii)) * D_corr.col(ii);
-	}
-}
 
 void maximiseHyps(Hyps& hyps,
                   const VariationalParameters& vp){
@@ -1332,6 +1042,23 @@ void check_monotonic_elbo(const Hyps& hyps,
 	}
 	logw_prev = i_logw;
 }
+
+	void check_monotonic_elbo(const std::vector<Hyps>& all_hyps,
+							  std::vector<VariationalParameters>& all_vp,
+							  const int count,
+							  std::vector<double>& logw_prev,
+							  const std::string& prev_function){
+
+		for (int nn = 0; nn < all_hyps.size(); nn++) {
+			double i_logw = calc_logw(all_hyps[nn], all_vp[nn]);
+			if (i_logw < logw_prev[nn]) {
+				std::cout << count << ": " << prev_function;
+				std::cout << " " << logw_prev[nn] << " -> " << i_logw;
+				std::cout << " (difference of " << i_logw - logw_prev[nn] << ")" << std::endl;
+			}
+			logw_prev[nn] = i_logw;
+		}
+	}
 
 void normaliseLogWeights(std::vector< double >& my_weights){
 	// Safer to normalise log-weights than niavely convert to weights

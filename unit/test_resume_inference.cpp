@@ -228,7 +228,7 @@ TEST_CASE("Resume from multi-env + mog + squarem"){
 		VB.run_inference(VB.hyps_inits, false, 2, trackers);
 		SECTION("Ex3. Vbayes_X2 inference correct"){
 			CHECK(trackers[0].count == 10);
-			CHECK(trackers[0].logw == Approx(-86.650909737));
+			CHECK(trackers[0].logw == Approx(-86.6556683784));
 		}
 	}
 
@@ -281,7 +281,7 @@ TEST_CASE("Resume from multi-env + mog + squarem"){
 			// Think this is because we now need the previous two hyps values to
 			// keep using SQUAREM from the same place
 			// CHECK(trackers[0].logw == Approx(-86.6456071112));
-			CHECK(trackers[0].logw == Approx(-86.533162843));
+			CHECK(trackers[0].logw == Approx(-86.5254441461));
 		}
 	}
 }
