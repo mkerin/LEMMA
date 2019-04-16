@@ -692,6 +692,7 @@ void _update_covar(long cc, const Hyps& hyps, VariationalParameters& vp){
 	EXtX = (N-1.0);
 
 	Gaussian w = vp.covar_c_step(cc, EXty, EXtX, hyps);
+	vp.covars[cc] = w;
 
 	vp.muc(cc) = w.mean();
 	vp.sc_sq(cc) = w.var();
@@ -715,6 +716,9 @@ void _update_covar(long cc, const Hyps& hyps, VariationalParameters& vp){
 		EXtX += (vp.var_gam() * dXtEEX.col(ll*n_env + ll)).sum();
 
 		Gaussian w = vp.weights_l_step(ll, EXty, EXtX, hyps);
+
+//		vp.weights(ll) = (1 - stepsize) * vp.weights(ll) + stepsize * w;
+		vp.weights[ll] = w;
 
 		vp.muw(ll) = w.mean();
 		vp.sw_sq(ll) = w.var();
@@ -748,7 +752,10 @@ void _update_beta(const std::vector<std::uint32_t>& iter,
 			rr_k_old(ii) = old;
 
 			// Get param updates
-			all_vp[nn].beta_j_step(jj, EXty(ii, nn), EXtX(ii), all_hyps[nn]);
+//			all_vp[nn].beta_j_step(jj, EXty(ii, nn), EXtX(ii), all_hyps[nn]);
+
+			MoGaussian distn = all_vp[nn].beta_j_step(jj, EXty(ii, nn), EXtX(ii), all_hyps[nn]);
+			all_vp[nn].betas[jj] = distn;
 
 
 			rr_k_new(ii) = all_vp[nn].mean_beta(jj);
@@ -784,7 +791,8 @@ void _update_beta(const std::vector<std::uint32_t>& iter,
 				rr_k_old(ii) = old;
 
 				// Get param updates
-				all_vp[nn].gamma_j_step(jj, EXty(ii, nn), EXtX(ii), all_hyps[nn]);
+				MoGaussian distn = all_vp[nn].gamma_j_step(jj, EXty(ii, nn), EXtX(ii), all_hyps[nn]);
+				all_vp[nn].gammas[jj] = distn;
 
 				rr_k_new(ii) = all_vp[nn].mean_gam(jj);
 				EXty -= (all_vp[nn].mean_gam(jj) - old) * D_corr.col(ii);

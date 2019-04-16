@@ -28,9 +28,9 @@ parameters p;
 
 
 std::vector<MoGaussian> betas;
-	std::vector<MoGaussian> gammas;
-	std::vector<Gaussian> weights;
-	std::vector<Gaussian> covars;
+std::vector<MoGaussian> gammas;
+std::vector<Gaussian> weights;
+std::vector<Gaussian> covars;
 
 // Variational parameters for slab (params 1)
 Eigen::ArrayXd alpha_beta;         // P x (E+1)
@@ -58,13 +58,11 @@ VariationalParamsBase(parameters my_params) : p(my_params){
 };
 
 /*** utility functions ***/
-void resize(std::int32_t n_samples, std::int32_t n_var, long n_covar, long n_env);
-
 void run_default_init(long n_var, long n_covar, long n_env);
 
 void dump_snps_to_file(boost_io::filtering_ostream& my_outf, const GenotypeMatrix& X, long n_env) const;
 
-/*** mean of latent variables ***/
+/*** Get and set properties of latent variables ***/
 Eigen::VectorXd mean_beta() const;
 Eigen::VectorXd mean_gam() const;
 Eigen::VectorXd mean_weights() const;
@@ -74,6 +72,9 @@ double mean_beta(std::uint32_t jj) const;
 double mean_gam(std::uint32_t jj) const;
 double mean_weights(long ll) const;
 double mean_covar(long cc) const;
+
+void set_mean_covar(Eigen::MatrixXd mu);
+void set_mean_weights(Eigen::MatrixXd mu);
 
 /*** variance of latent variables ***/
 Eigen::ArrayXd var_beta() const;
@@ -85,8 +86,8 @@ Eigen::ArrayXd mean_gam_sq(int u0) const;
 /*** Updates ***/
 Gaussian weights_l_step(long ll, double EXty, double EXtX, Hyps hyps) const;
 Gaussian covar_c_step(long cc, double EXty, double EXtX, Hyps hyps) const;
-void gamma_j_step(long jj, double EXty, double EXtX, Hyps hyps);
-void beta_j_step(long jj, double EXty, double EXtX, Hyps hyps);
+MoGaussian gamma_j_step(long jj, double EXty, double EXtX, Hyps hyps);
+MoGaussian beta_j_step(long jj, double EXty, double EXtX, Hyps hyps);
 
 /*** KL divergence ***/
 double kl_div_beta(const Hyps& hyps) const;

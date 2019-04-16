@@ -67,16 +67,16 @@ TEST_CASE("Resume from multi-env + mog + emp_bayes"){
 			Hyps& hyps = all_hyps[0];
 
 			VB.updateAllParams(0, round_index, all_vp, all_hyps, logw_prev);
-			CHECK(VB.calc_logw(hyps, vp) == Approx(-92.2292775905));
+			CHECK(VB.calc_logw(hyps, vp) == Approx(-92.2141626048));
 			VB.updateAllParams(1, round_index, all_vp, all_hyps, logw_prev);
-			CHECK(VB.calc_logw(hyps, vp) == Approx(-89.6710643279));
+			CHECK(VB.calc_logw(hyps, vp) == Approx(-89.6586854116));
 			VB.updateAllParams(2, round_index, all_vp, all_hyps, logw_prev);
-			CHECK(VB.calc_logw(hyps, vp) == Approx(-88.4914916475));
+			CHECK(VB.calc_logw(hyps, vp) == Approx(-88.4813237554));
 
-			CHECK(VB.YM.squaredNorm() == Approx(14.6462021668));
-			CHECK(VB.YX.squaredNorm() == Approx(0.0004903837));
-			CHECK(VB.ETA.squaredNorm() == Approx(0.0773475751));
-			CHECK(VB.ETA_SQ.squaredNorm() == Approx(294.9017799794));
+			CHECK(VB.YM.squaredNorm() == Approx(14.6480266984));
+			CHECK(VB.YX.squaredNorm() == Approx(0.0004676258));
+			CHECK(VB.ETA.squaredNorm() == Approx(0.0744622661));
+			CHECK(VB.ETA_SQ.squaredNorm() == Approx(297.6156962976));
 
 			VbTracker tracker(p);
 			tracker.init_interim_output(0,2, VB.n_effects, VB.n_env, VB.env_names, vp);
@@ -85,11 +85,11 @@ TEST_CASE("Resume from multi-env + mog + emp_bayes"){
 							   VB.covar_names, VB.env_names);
 
 			VB.updateAllParams(3, round_index, all_vp, all_hyps, logw_prev);
-			CHECK(VB.calc_logw(hyps, vp) == Approx(-87.8880225449));
+			CHECK(VB.calc_logw(hyps, vp) == Approx(-87.880171198));
 
-			CHECK(vp.ym.squaredNorm() == Approx(15.7893306211));
-			CHECK(vp.yx.squaredNorm() == Approx(0.0000929716));
-			CHECK(vp.eta.squaredNorm() == Approx(0.0231641669));
+			CHECK(vp.ym.squaredNorm() == Approx(15.7914628605));
+			CHECK(vp.yx.squaredNorm() == Approx(0.0000880429));
+			CHECK(vp.eta.squaredNorm() == Approx(0.0221053892));
 		}
 
 		VB.run_inference(VB.hyps_inits, false, 2, trackers);
@@ -125,17 +125,17 @@ TEST_CASE("Resume from multi-env + mog + emp_bayes"){
 			VariationalParameters& vp = all_vp[0];
 			Hyps& hyps = all_hyps[0];
 
-			CHECK(VB.YM.squaredNorm() == Approx(14.64620215));
-			CHECK(VB.YX.squaredNorm() == Approx(0.0004903837));
-			CHECK(VB.ETA.squaredNorm() == Approx(0.0773475736));
-			CHECK(VB.ETA_SQ.squaredNorm() == Approx(294.9017821007));
+			CHECK(VB.YM.squaredNorm() == Approx(14.6480266997));
+			CHECK(VB.YX.squaredNorm() == Approx(0.0004676258));
+			CHECK(VB.ETA.squaredNorm() == Approx(0.0744622647));
+			CHECK(VB.ETA_SQ.squaredNorm() == Approx(297.6156980469));
 
 			VB.updateAllParams(3, round_index, all_vp, all_hyps, logw_prev);
-			CHECK(VB.calc_logw(hyps, vp) == Approx(-87.8880225713));
+			CHECK(VB.calc_logw(hyps, vp) == Approx(-87.8801711925));
 
-			CHECK(vp.ym.squaredNorm() == Approx(15.7893305635));
-			CHECK(vp.yx.squaredNorm() == Approx(0.0000929716));
-			CHECK(vp.eta.squaredNorm() == Approx(0.0231641668));
+			CHECK(vp.ym.squaredNorm() == Approx(15.7914630418));
+			CHECK(vp.yx.squaredNorm() == Approx(0.0000880429));
+			CHECK(vp.eta.squaredNorm() == Approx(0.0221053884));
 		}
 
 		VB.run_inference(VB.hyps_inits, false, 2, trackers);
@@ -199,16 +199,17 @@ TEST_CASE("Resume from multi-env + mog + squarem"){
 			Hyps& hyps = all_hyps[0];
 
 			VB.updateAllParams(0, round_index, all_vp, all_hyps, logw_prev);
-			CHECK(VB.calc_logw(hyps, vp) == Approx(-92.2292775905));
+			CHECK(VB.calc_logw(hyps, vp) == Approx(-92.2141626048));
 			VB.updateAllParams(1, round_index, all_vp, all_hyps, logw_prev);
-			CHECK(VB.calc_logw(hyps, vp) == Approx(-89.6710643279));
+			CHECK(VB.calc_logw(hyps, vp) == Approx(-89.6586854116));
 			VB.updateAllParams(2, round_index, all_vp, all_hyps, logw_prev);
-			CHECK(VB.calc_logw(hyps, vp) == Approx(-88.4914916475));
+			CHECK(VB.calc_logw(hyps, vp) == Approx(-88.4813237554));
 
-			CHECK(VB.YM.squaredNorm() == Approx(14.6462021668));
-			CHECK(VB.YX.squaredNorm() == Approx(0.0004903837));
-			CHECK(VB.ETA.squaredNorm() == Approx(0.0773475736));
-			CHECK(VB.ETA_SQ.squaredNorm() == Approx(294.9017821007));
+			CHECK(vp.covars[0].mean() == vp.muc(0));
+			CHECK(VB.YM.squaredNorm() == Approx(14.6480266984));
+			CHECK(VB.YX.squaredNorm() == Approx(0.0004676258));
+			CHECK(VB.ETA.squaredNorm() == Approx(0.0744622661));
+			CHECK(VB.ETA_SQ.squaredNorm() == Approx(297.6156962976));
 
 			VbTracker tracker(p);
 			tracker.init_interim_output(0,2, VB.n_effects, VB.n_env, VB.env_names, vp);
@@ -217,12 +218,12 @@ TEST_CASE("Resume from multi-env + mog + squarem"){
 							   VB.covar_names, VB.env_names);
 
 			VB.updateAllParams(3, round_index, all_vp, all_hyps, logw_prev);
-			CHECK(VB.calc_logw(hyps, vp) == Approx(-87.8880225449));
+			CHECK(VB.calc_logw(hyps, vp) == Approx(-87.880171198));
 
-			CHECK(vp.ym.squaredNorm() == Approx(15.7893305635));
-			CHECK(vp.yx.squaredNorm() == Approx(0.0000929716));
-			CHECK(vp.eta.squaredNorm() == Approx(0.0231641668));
-			CHECK(VB.ETA_SQ.squaredNorm() == Approx(397.6779293259));
+			CHECK(vp.ym.squaredNorm() == Approx(15.7914628605));
+			CHECK(vp.yx.squaredNorm() == Approx(0.0000880429));
+			CHECK(vp.eta.squaredNorm() == Approx(0.0221053892));
+			CHECK(VB.ETA_SQ.squaredNorm() == Approx(400.5912659102));
 		}
 
 		VB.run_inference(VB.hyps_inits, false, 2, trackers);
@@ -259,19 +260,20 @@ TEST_CASE("Resume from multi-env + mog + squarem"){
 			VariationalParameters& vp = all_vp[0];
 			Hyps& hyps = all_hyps[0];
 
-			CHECK(VB.YM.squaredNorm() == Approx(14.6462021668));
-			CHECK(VB.YX.squaredNorm() == Approx(0.0004903837));
-			CHECK(VB.ETA.squaredNorm() == Approx(0.0773475736));
-			CHECK(VB.ETA_SQ.squaredNorm() == Approx(294.9017821007));
-			CHECK(VB.calc_logw(hyps, vp) == Approx(-88.4914916517));
+			CHECK(vp.covars[0].mean() == vp.muc(0));
+			CHECK(VB.YM.squaredNorm() == Approx(14.6480266997));
+			CHECK(VB.YX.squaredNorm() == Approx(0.0004676258));
+			CHECK(VB.ETA.squaredNorm() == Approx(0.0744622647));
+			CHECK(VB.ETA_SQ.squaredNorm() == Approx(297.6156980469));
+			CHECK(VB.calc_logw(hyps, vp) == Approx(-88.4813237607));
 
 			VB.updateAllParams(3, round_index, all_vp, all_hyps, logw_prev);
-			CHECK(VB.calc_logw(hyps, vp) == Approx(-87.8880225713));
+			CHECK(VB.calc_logw(hyps, vp) == Approx(-87.8801711925));
 
-			CHECK(vp.ym.squaredNorm() == Approx(15.7893305635));
-			CHECK(vp.yx.squaredNorm() == Approx(0.0000929716));
-			CHECK(vp.eta.squaredNorm() == Approx(0.0231641668));
-			CHECK(VB.ETA_SQ.squaredNorm() == Approx(397.6779293259));
+			CHECK(vp.ym.squaredNorm() == Approx(15.7914630418));
+			CHECK(vp.yx.squaredNorm() == Approx(0.0000880429));
+			CHECK(vp.eta.squaredNorm() == Approx(0.0221053884));
+			CHECK(VB.ETA_SQ.squaredNorm() == Approx(400.5912674531));
 		}
 
 		VB.run_inference(VB.hyps_inits, false, 2, trackers);
