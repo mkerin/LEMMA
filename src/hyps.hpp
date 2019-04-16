@@ -23,7 +23,7 @@ int lam_b_ind   = 3;
 int lam_g_ind   = 4;
 
 public:
-double sigma;
+double sigma, sigma_w, sigma_c;
 Eigen::ArrayXd slab_var;
 Eigen::ArrayXd spike_var;
 Eigen::ArrayXd slab_relative_var;
@@ -39,6 +39,8 @@ parameters p;
 int n_effects;
 
 Hyps(parameters my_params) : p(my_params) {
+	sigma_w = 1.0;
+	sigma_c = 10000.0;
 };
 
 void init_from_grid(int n_effects,

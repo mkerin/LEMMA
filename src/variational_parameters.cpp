@@ -123,8 +123,16 @@ Eigen::VectorXd VariationalParamsBase::mean_weights() const {
 	return muw;
 }
 
+Eigen::VectorXd VariationalParamsBase::mean_covar() const {
+	return muc;
+}
+
 double VariationalParamsBase::mean_weights(long ll) const {
 	return muw[ll];
+}
+
+double VariationalParamsBase::mean_covar(long cc) const {
+	return muc[cc];
 }
 
 double VariationalParamsBase::mean_beta(std::uint32_t jj) const {
@@ -191,6 +199,99 @@ Eigen::ArrayXd VariationalParamsBase::mean_gam_sq(int u0) const {
 	return res;
 }
 
+/*** KL Divergence ***/
+double VariationalParamsBase::kl_div_gamma(const Hyps& hyps) const {
+	double res = 0;
+	double lambda = hyps.lambda[1];
+	double sigma_slab = hyps.slab_var(1);
+	double sigma_spike = hyps.spike_var(1);
+	long n_var = alpha_gam.rows();
+
+	res += std::log(lambda + eps) * alpha_gam.sum();
+	res += std::log(1.0 - lambda + eps) * ((double) n_var - alpha_gam.sum());
+
+	for (std::uint32_t kk = 0; kk < n_var; kk++) {
+		res -= alpha_gam(kk) * std::log(alpha_gam(kk) + eps);
+		res -= (1 - alpha_gam(kk)) * std::log(1 - alpha_gam(kk) + eps);
+	}
+
+	if(p.mode_mog_prior_gam) {
+		res += n_var / 2.0;
+
+		res -= mean_gam_sq(1).sum() / 2.0 / sigma_slab;
+		res -= mean_gam_sq(2).sum() / 2.0 / sigma_spike;
+
+		res += (alpha_gam * s1_gam_sq.log()).sum() / 2.0;
+		res += ((1.0 - alpha_gam) * s2_gam_sq.log()).sum() / 2.0;
+
+		res -= std::log(sigma_slab)  * alpha_gam.sum() / 2.0;
+		res -= std::log(sigma_spike) * (n_var - alpha_gam.sum()) / 2.0;
+	} else {
+		res += (alpha_gam * s1_gam_sq.log()).sum() / 2.0;
+		res -= (alpha_gam * (mu1_gam.square() + s1_gam_sq)).sum() / 2.0 / sigma_slab;
+
+		res += (1 - std::log(sigma_slab)) * alpha_gam.sum() / 2.0;
+	}
+	return res;
+};
+
+double VariationalParamsBase::kl_div_beta(const Hyps& hyps) const {
+	double res = 0;
+	double lambda = hyps.lambda[0];
+	double sigma_slab = hyps.slab_var(0);
+	double sigma_spike = hyps.spike_var(0);
+	long n_var = alpha_beta.rows();
+
+	res += std::log(lambda + eps) * alpha_beta.sum();
+	res += std::log(1.0 - lambda + eps) * ((double) n_var - alpha_beta.sum());
+
+	for (std::uint32_t kk = 0; kk < n_var; kk++) {
+		res -= alpha_beta(kk) * std::log(alpha_beta(kk) + eps);
+		res -= (1 - alpha_beta(kk)) * std::log(1 - alpha_beta(kk) + eps);
+	}
+
+	if(p.mode_mog_prior_beta) {
+		res += n_var / 2.0;
+
+		res -= mean_beta_sq(1).sum() / 2.0 / sigma_slab;
+		res -= mean_beta_sq(2).sum() / 2.0 / sigma_spike;
+
+		res += (alpha_beta * s1_beta_sq.log()).sum() / 2.0;
+		res += ((1.0 - alpha_beta) * s2_beta_sq.log()).sum() / 2.0;
+
+		res -= std::log(sigma_slab)  * alpha_beta.sum() / 2.0;
+		res -= std::log(sigma_spike) * (n_var - alpha_beta.sum()) / 2.0;
+	} else {
+		res += (alpha_beta * s1_beta_sq.log()).sum() / 2.0;
+		res -= (alpha_beta * (mu1_beta.square() + s1_beta_sq)).sum() / 2.0 / sigma_slab;
+
+		res += (1 - std::log(sigma_slab)) * alpha_beta.sum() / 2.0;
+	}
+	return res;
+};
+
+double VariationalParamsBase::kl_div_covars(const Hyps& hyps) const {
+	long n_covar = muc.rows();
+
+	double res = 0;
+	res += (double) n_covar * (1.0 - std::log(hyps.sigma * hyps.sigma_c)) / 2.0;
+	res += sc_sq.log().sum() / 2.0;
+	res -= sc_sq.sum() / 2.0 / hyps.sigma / hyps.sigma_c;
+	res -= muc.square().sum() / 2.0 / hyps.sigma / hyps.sigma_c;
+	return res;
+};
+
+double VariationalParamsBase::kl_div_weights(const Hyps& hyps) const {
+	long n_env = muw.rows();
+
+	double res = 0;
+	res += (double) n_env / 2.0;
+	res += sw_sq.log().sum() / 2.0;
+	res -= sw_sq.sum() / 2.0;
+	res -= mean_weights().array().square().sum() / 2.0;
+	return res;
+};
+
 void VariationalParamsBase::beta_j_step(long jj, double EXty, double EXtX, Hyps hyps) {
 	double old = mean_beta(jj);
 	double lambda = hyps.lambda[0];
@@ -209,8 +310,8 @@ void VariationalParamsBase::beta_j_step(long jj, double EXty, double EXtX, Hyps 
 	spike_g.nat_params << nat1, nat2_spike;
 
 	MoGaussian gg;
-	gg.gaussians[0] = slab_g;
-	gg.gaussians[1] = spike_g;
+	gg.slab = slab_g;
+	gg.spike = spike_g;
 	gg.maximise_mix_coeff(lambda, sigma0, sigma1);
 
 	alpha_beta(jj) = gg.mix;
@@ -238,8 +339,8 @@ void VariationalParamsBase::gamma_j_step(long jj, double EXty, double EXtX, Hyps
 	spike_g.nat_params << nat1, nat2_spike;
 
 	MoGaussian gg;
-	gg.gaussians[0] = slab_g;
-	gg.gaussians[1] = spike_g;
+	gg.slab = slab_g;
+	gg.spike = spike_g;
 	gg.maximise_mix_coeff(lambda, sigma0, sigma1);
 	check_nan(gg.mix, jj);
 
@@ -256,7 +357,19 @@ Gaussian VariationalParamsBase::weights_l_step(long ll, double EXty, double EXtX
 	double m1 = (EXty + old * EXtX) / hyps.sigma;
 	double m2 = - EXtX / 2.0 / hyps.sigma;
 	double nat1 = m1;
-	double nat2 = m2 - 1.0 / 2 / 1;
+	double nat2 = m2 - 1.0 / 2 / hyps.sigma_w;
+	Gaussian w;
+	w.nat_params << nat1, nat2;
+	return w;
+}
+
+Gaussian VariationalParamsBase::covar_c_step(long cc, double EXty, double EXtX, Hyps hyps) const {
+	double old = mean_covar(cc);
+
+	double m1 = (EXty + old * EXtX) / hyps.sigma;
+	double m2 = - EXtX / 2.0 / hyps.sigma;
+	double nat1 = m1;
+	double nat2 = m2 - 1.0 / 2 / hyps.sigma_c;
 	Gaussian w;
 	w.nat_params << nat1, nat2;
 	return w;

@@ -24,6 +24,13 @@ public:
 // This stores parameters used in VB and some summary quantities that
 // depend on those parameters.
 parameters p;
+	double eps = std::numeric_limits<double>::min();
+
+
+std::vector<MoGaussian> betas;
+	std::vector<MoGaussian> gammas;
+	std::vector<Gaussian> weights;
+	std::vector<Gaussian> covars;
 
 // Variational parameters for slab (params 1)
 Eigen::ArrayXd alpha_beta;         // P x (E+1)
@@ -61,10 +68,12 @@ void dump_snps_to_file(boost_io::filtering_ostream& my_outf, const GenotypeMatri
 Eigen::VectorXd mean_beta() const;
 Eigen::VectorXd mean_gam() const;
 Eigen::VectorXd mean_weights() const;
+Eigen::VectorXd mean_covar() const;
 
 double mean_beta(std::uint32_t jj) const;
 double mean_gam(std::uint32_t jj) const;
 double mean_weights(long ll) const;
+double mean_covar(long cc) const;
 
 /*** variance of latent variables ***/
 Eigen::ArrayXd var_beta() const;
@@ -75,8 +84,15 @@ Eigen::ArrayXd mean_gam_sq(int u0) const;
 
 /*** Updates ***/
 Gaussian weights_l_step(long ll, double EXty, double EXtX, Hyps hyps) const;
+Gaussian covar_c_step(long cc, double EXty, double EXtX, Hyps hyps) const;
 void gamma_j_step(long jj, double EXty, double EXtX, Hyps hyps);
 void beta_j_step(long jj, double EXty, double EXtX, Hyps hyps);
+
+/*** KL divergence ***/
+double kl_div_beta(const Hyps& hyps) const;
+double kl_div_gamma(const Hyps& hyps) const;
+double kl_div_covars(const Hyps& hyps) const;
+double kl_div_weights(const Hyps& hyps) const;
 
 /*** Misc ***/
 void check_nan(const double& alpha, const std::uint32_t& ii);

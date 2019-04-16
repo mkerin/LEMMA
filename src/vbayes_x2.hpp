@@ -603,7 +603,9 @@ void updateAllParams(const int& count,
 	// Update covar main effects
 	if (n_covar > 0) {
 		for (int nn = 0; nn < n_grid; nn++) {
-			updateCovarEffects(all_vp[nn], all_hyps[nn]);
+			for (int cc = 0; cc < n_covar; cc++){
+				_update_covar(cc, all_hyps[nn], all_vp[nn]);
+			}
 		}
 		check_monotonic_elbo(all_hyps, all_vp, count, logw_prev, "updateCovarEffects");
 	}
@@ -682,24 +684,44 @@ void updateAllParams(const int& count,
 	}
 }
 
-void updateCovarEffects(VariationalParameters& vp,
-                        const Hyps& hyps) __attribute__ ((hot)){
-	//
-	for (int cc = 0; cc < n_covar; cc++) {
-		double rr_k = vp.muc(cc);
+void _update_covar(long cc, const Hyps& hyps, VariationalParameters& vp){
+	double old = vp.mean_covar(cc);
 
-		// Update s_sq
-		vp.sc_sq(cc) = hyps.sigma * sigma_c / (sigma_c * (N - 1.0) + 1.0);
+	double EXty, EXtX;
+	EXty = Cty(cc) - (vp.ym + vp.yx.cwiseProduct(vp.eta)).dot(C.col(cc));
+	EXtX = (N-1.0);
 
-		// Update mu
-		auto A = Cty(cc) - (vp.ym + vp.yx.cwiseProduct(vp.eta)).dot(C.col(cc));
-		vp.muc(cc) = vp.sc_sq(cc) * ( (double) A + rr_k * (N - 1.0)) / hyps.sigma;
+	Gaussian w = vp.covar_c_step(cc, EXty, EXtX, hyps);
 
-		// Update predicted effects
-		double rr_k_diff     = vp.muc(cc) - rr_k;
-		vp.ym += rr_k_diff * C.col(cc);
-	}
+	vp.muc(cc) = w.mean();
+	vp.sc_sq(cc) = w.var();
+
+	vp.ym += (vp.mean_covar(cc) - old) * C.col(cc).matrix();
 }
+
+	void _updates_weights(long ll, const Hyps& hyps,
+						  VariationalParameters& vp){
+		double old = vp.mean_weights(ll);
+
+		Eigen::MatrixXd tmp;
+		tmp = vp.var_gam().matrix().transpose() * dXtEEX.block(0, ll * n_env, n_var, n_env).matrix() *  vp.mean_weights();
+
+		double EXty, EXtX;
+		EXty       = ((Y - vp.ym).array() * E.col(ll) * vp.yx.array()).sum();
+		EXty       -= (vp.yx.array() * vp.yx.array() * E.col(ll) * vp.eta.array()).sum();
+		EXty       -= tmp(0,0);
+
+		EXtX = (vp.yx.array().square() * E.col(ll).square()).sum();
+		EXtX += (vp.var_gam() * dXtEEX.col(ll*n_env + ll)).sum();
+
+		Gaussian w = vp.weights_l_step(ll, EXty, EXtX, hyps);
+
+		vp.muw(ll) = w.mean();
+		vp.sw_sq(ll) = w.var();
+
+		vp.eta += (vp.mean_weights(ll) - old) * E.col(ll).matrix();
+
+	}
 
 void _update_beta(const std::vector<std::uint32_t>& iter,
 				   std::vector<VariationalParameters>& all_vp,
@@ -713,7 +735,6 @@ void _update_beta(const std::vector<std::uint32_t>& iter,
 		D.resize(n_samples, ch_len);
 	}
 	X.col_block3(iter, D);
-
 	EXty = D.transpose() * (YY - YM - YX.cwiseProduct(ETA));
 
 	for (int nn = 0; nn < all_hyps.size(); nn++) {
@@ -778,7 +799,7 @@ void maximiseHyps(Hyps& hyps,
 	// max sigma
 	hyps.sigma  = calcExpLinear(hyps, vp);
 	if (n_covar > 0) {
-		hyps.sigma += (vp.sc_sq + vp.muc.square()).sum() / sigma_c;
+		hyps.sigma += (vp.sc_sq + vp.mean_covar().array().square()).sum() / sigma_c;
 		hyps.sigma /= (N + (double) n_covar);
 	} else {
 		hyps.sigma /= N;
@@ -855,32 +876,6 @@ void maximiseHyps(Hyps& hyps,
 	// hyps.sigma_g_spike = hyps.spike_relative_var(1);
 }
 
-void _updates_weights(long ll, Hyps& hyps,
-					  VariationalParameters& vp){
-	double old = vp.mean_weights(ll);
-
-	Eigen::MatrixXd tmp;
-	tmp = vp.var_gam().matrix().transpose() * dXtEEX.block(0, ll * n_env, n_var, n_env).matrix() *  vp.mean_weights();
-
-	double EXty, EXtX;
-	EXty       = ((Y - vp.ym).array() * E.col(ll) * vp.yx.array()).sum();
-	EXty       -= (vp.yx.array() * vp.yx.array() * E.col(ll) * vp.eta.array()).sum();
-	EXty       -= tmp(0,0);
-
-	EXtX = (vp.yx.array().square() * E.col(ll).square()).sum();
-	EXtX += (vp.var_gam() * dXtEEX.col(ll*n_env + ll)).sum();
-
-//	EXty *= self.N / len(El);
-//	EXtX *= self.N / len(El);
-	Gaussian w = vp.weights_l_step(ll, EXty, EXtX, hyps);
-
-	vp.muw(ll) = w.mean();
-	vp.sw_sq(ll) = w.var();
-
-	vp.eta += (vp.mean_weights(ll) - old) * E.col(ll).matrix();
-
-}
-
 double calc_logw(const Hyps& hyps,
                  const VariationalParameters& vp){
 
@@ -889,57 +884,28 @@ double calc_logw(const Hyps& hyps,
 	int_linear -= N * std::log(2.0 * PI * hyps.sigma) / 2.0;
 
 	// kl-beta
-	double kl_beta = calcKLBeta(hyps, vp);
+	double kl_beta = vp.kl_div_beta(hyps);
 
 	double kl_gamma = 0;
 	if(n_effects > 1) {
-		kl_gamma += calcKLGamma(hyps, vp);
+		kl_gamma += vp.kl_div_gamma(hyps);
 	}
 
 	// covariates
 	double kl_covar = 0.0;
 	if(n_covar > 0) {
-		kl_covar += (double) n_covar * (1.0 - std::log(hyps.sigma * sigma_c)) / 2.0;
-		kl_covar += vp.sc_sq.log().sum() / 2.0;
-		kl_covar -= vp.sc_sq.sum() / 2.0 / hyps.sigma / sigma_c;
-		kl_covar -= vp.muc.square().sum() / 2.0 / hyps.sigma / sigma_c;
+		kl_covar = vp.kl_div_covars(hyps);
 	}
 
 	// weights
 	double kl_weights = 0.0;
 	if(n_effects > 1 && n_env > 1) {
-		kl_weights += (double) n_env / 2.0;
-		kl_weights += vp.sw_sq.log().sum() / 2.0;
-		kl_weights -= vp.sw_sq.sum() / 2.0;
-		kl_weights -= vp.mean_weights().array().square().sum() / 2.0;
+		kl_weights = vp.kl_div_weights(hyps);
 	}
 
 	double res = int_linear + kl_beta + kl_gamma + kl_covar + kl_weights;
 
 	return res;
-}
-
-void calc_snpwise_regression(VariationalParametersLite& vp){
-	/*
-	   Genome-wide gxe scan now computed upstream
-	   Eigen::ArrayXXd snpstats contains results
-
-	   cols:
-	   neglogp-main, neglogp-gxe, coeff-gxe-main, coeff-gxe-env..
-	 */
-
-	// Keep values from point with highest p-val
-	vp.muw = Eigen::ArrayXd::Zero(n_env);
-	double vv = 0.0;
-	for (long int jj = 0; jj < n_var; jj++) {
-		if (snpstats(jj, 1) > vv) {
-			vv = snpstats(jj, 1);
-			vp.muw = snpstats.block(jj, 2, 1, n_env).transpose();
-
-			std::cout << "neglogp at variant " << jj << ": " << vv;
-			std::cout << std::endl << vp.muw.transpose() << std::endl;
-		}
-	}
 }
 
 /********** Helper functions ************/
@@ -952,61 +918,12 @@ void print_time_check(){
 	time_check = now;
 }
 
-void initRandomAlphaMu(VariationalParameters& vp){
-	// vp.alpha a uniform simplex, vp.mu standard gaussian
-	// Also sets predicted effects
-	std::default_random_engine gen_gauss, gen_unif;
-	std::normal_distribution<double> gaussian(0.0,1.0);
-	std::uniform_real_distribution<double> uniform(0.0,1.0);
-
-	// Beta
-	vp.mu1_beta.resize(n_var);
-	vp.alpha_beta.resize(n_var);
-	if(p.mode_mog_prior_beta) {
-		vp.mu2_beta = Eigen::ArrayXd::Zero(n_var);
-	}
-
-	for (std::uint32_t kk = 0; kk < n_var; kk++) {
-		vp.alpha_beta(kk) = uniform(gen_unif);
-		vp.mu1_beta(kk)    = gaussian(gen_gauss);
-	}
-	vp.alpha_beta /= vp.alpha_beta.sum();
-
-	// Gamma
-	if(n_effects > 1) {
-		vp.mu1_gam.resize(n_var);
-		vp.alpha_gam.resize(n_var);
-		if (p.mode_mog_prior_gam) {
-			vp.mu2_gam = Eigen::ArrayXd::Zero(n_var);
-		}
-
-		for (std::uint32_t kk = 0; kk < n_var; kk++) {
-			vp.alpha_gam(kk) = uniform(gen_unif);
-			vp.mu1_gam(kk) = gaussian(gen_gauss);
-		}
-		vp.alpha_gam /= vp.alpha_gam.sum();
-	}
-
-	if(n_covar > 0) {
-		vp.muc = Eigen::ArrayXd::Zero(n_covar);
-	}
-
-	// Gen predicted effects.
-	calcPredEffects(vp);
-
-	// Env weights - cast if DATA_AS_FLOAT
-	vp.muw     = 1.0 / (double) n_env;
-	vp.eta     = E.matrix() * vp.mean_weights().matrix().cast<scalarData>();
-	vp.eta_sq  = vp.eta.array().square().matrix();
-	vp.calcEdZtZ(dXtEEX, n_env);
-}
-
 void calcPredEffects(VariationalParameters& vp){
 	Eigen::VectorXd rr_beta = vp.mean_beta();
 
 	vp.ym = X * rr_beta;
 	if(n_covar > 0) {
-		vp.ym += C * vp.muc.matrix().cast<scalarData>();
+		vp.ym += C * vp.mean_covar().matrix().cast<scalarData>();
 	}
 
 	if(n_effects > 1) {
@@ -1020,7 +937,7 @@ void calcPredEffects(VariationalParametersLite& vp) {
 
 	vp.ym = X * rr_beta;
 	if(n_covar > 0) {
-		vp.ym += C * vp.muc.matrix().cast<scalarData>();
+		vp.ym += C * vp.mean_covar().matrix().cast<scalarData>();
 	}
 
 	if(n_effects > 1) {
@@ -1111,13 +1028,10 @@ double calcExpLinear(const Hyps& hyps,
 
 	// variances
 	if(n_covar > 0) {
-		// covar main
 		int_linear += (N - 1.0) * vp.sc_sq.sum();
 	}
-	// beta
 	int_linear += (N - 1.0) * vp.var_beta().sum();
 	if(n_effects > 1) {
-		// gamma
 		int_linear += (vp.EdZtZ * vp.var_gam()).sum();
 	}
 
@@ -1485,7 +1399,7 @@ void output_results(const std::vector<VbTracker>& trackers, const long& my_n_gri
 	compute_residuals_per_chr(vp_map, pred_main, pred_int, map_residuals_by_chr);
 	Eigen::VectorXd Ealpha = Eigen::VectorXd::Zero(n_samples);
 	if(n_covar > 0) {
-		Ealpha += (C * vp_map.muc.matrix().cast<scalarData>()).cast<double>();
+		Ealpha += (C * vp_map.mean_covar().matrix().cast<scalarData>()).cast<double>();
 	}
 	if(n_effects == 1) {
 		outf_map_pred << "Y Ealpha Xbeta";
@@ -1565,7 +1479,7 @@ void write_covars_to_file(boost_io::filtering_ostream& ofile,
 
 	ofile << std::setprecision(9) << std::fixed;
 	for (int cc = 0; cc < n_covar; cc++) {
-		ofile << covar_names[cc] << " " << vp.muc(cc) << std::endl;
+		ofile << covar_names[cc] << " " << vp.mean_covar(cc) << std::endl;
 	}
 }
 
