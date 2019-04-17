@@ -13,6 +13,7 @@ std::string incl_sids_file, incl_rsids_file, recombination_file;
 std::string r1_hyps_grid_file, r1_probs_grid_file, hyps_grid_file;
 std::string env_coeffs_file, covar_coeffs_file, hyps_probs_file, vb_init_file;
 std::string dxteex_file, snpstats_file, mog_weights_file;
+std::string beta_prior, gamma_prior;
 std::vector< std::string > rsid;
 unsigned int random_seed;
 long int chunk_size, vb_iter_max, vb_iter_start, param_dump_interval;
@@ -87,8 +88,8 @@ parameters() : bgen_file("NULL"),
 	low_mem = true;
 	mode_vb = false;
 	mode_no_gxe = false;
-	mode_mog_prior_beta = true;
-	mode_mog_prior_gam = true;
+	beta_prior = "MixOfGaussian";
+	gamma_prior = "MixOfGaussian";
 	mode_debug = false;
 	mode_random_start = false;
 	mode_pve_est = false;

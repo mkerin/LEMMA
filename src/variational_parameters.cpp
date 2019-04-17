@@ -22,6 +22,11 @@ void VariationalParamsBase::run_default_init(long n_var, long n_covar, long n_en
 
 		Eigen::ArrayXd w_init = Eigen::ArrayXd::Constant(n_env, 1.0 / n_env);
 		weights.set_mean(w_init);
+		pve.resize(2);
+		pve << -1, -1;
+	} else {
+		pve.resize(1);
+		pve << -1;
 	}
 
 	if(n_covar > 0) {
@@ -108,56 +113,49 @@ double VariationalParamsBase::var_covar(long jj) const {
 
 /*** KL Divergence ***/
 double VariationalParamsBase::kl_div_gamma(const Hyps& hyps) const {
-	double lambda = hyps.lambda[1];
-	double sigma_slab = hyps.slab_var(1);
-	double sigma_spike = hyps.spike_var(1);
-	double res = gammas.kl_div(lambda, sigma_slab, sigma_spike);
+	double res = gammas.kl_div();
 	return res;
 };
 
 double VariationalParamsBase::kl_div_beta(const Hyps& hyps) const {
-	double lambda = hyps.lambda[0];
-	double sigma_slab = hyps.slab_var(0);
-	double sigma_spike = hyps.spike_var(0);
-	double res = betas.kl_div(lambda, sigma_slab, sigma_spike);
+	double res = betas.kl_div();
 	return res;
 };
 
 double VariationalParamsBase::kl_div_covars(const Hyps& hyps) const {
-	double sigma = hyps.sigma * hyps.sigma_c;
-	double res = covars.kl_div(sigma);
+	double res = covars.kl_div();
 	return res;
 };
 
 double VariationalParamsBase::kl_div_weights(const Hyps& hyps) const {
-	double sigma = hyps.sigma_w;
-	double res = weights.kl_div(sigma);
+	double res = weights.kl_div();
 	return res;
 };
 
-MoGaussian VariationalParamsBase::beta_j_step(long jj, double EXty, double EXtX, Hyps hyps) {
+void VariationalParamsBase::beta_j_step(long jj, double EXty, double EXtX, Hyps hyps) {
 	double old = mean_beta(jj);
-	double lambda = hyps.lambda[0];
-	double sigma0 = hyps.slab_var[0];                                                     // slab
-	double sigma1 = hyps.spike_var[0];
-
 
 	double m1 = (EXty + old * EXtX) / hyps.sigma;
 	double m2 = -EXtX / 2.0 / hyps.sigma;
-	double nat1 = m1;
-	double nat2_slab = m2 - 1.0 / 2 / sigma0;
-	double nat2_spike = m2 - 1.0 / 2 / sigma1;
-	Gaussian slab_g, spike_g;
 
-	slab_g.nats << nat1, nat2_slab;
-	spike_g.nats << nat1, nat2_spike;
+	if(p.beta_prior == "MixOfGaussian") {
+		double nat1 = m1;
+		double nat2_slab = m2 - 1.0 / 2 / betas.sigma_slab;
+		double nat2_spike = m2 - 1.0 / 2 / betas.sigma_spike;
+		Gaussian slab_g, spike_g;
 
-	MoGaussian gg;
-	gg.slab = slab_g;
-	gg.spike = spike_g;
-	gg.maximise_mix_coeff(lambda, sigma0, sigma1);
+		slab_g.nats << nat1, nat2_slab;
+		spike_g.nats << nat1, nat2_spike;
 
-	return gg;
+		MoGaussian gg;
+		gg.slab = slab_g;
+		gg.spike = spike_g;
+		gg.maximise_mix_coeff(betas.lambda, betas.sigma_slab, betas.sigma_spike);
+
+		betas.set_ith_distn(jj, gg);
+	}
+
+//	return gg;
 }
 
 MoGaussian VariationalParamsBase::gamma_j_step(long jj, double EXty, double EXtX, Hyps hyps) {
@@ -221,6 +219,26 @@ void VariationalParamsBase::check_nan(const double& alpha,
 	}
 }
 
+void VariationalParamsBase::set_hyps(Hyps hyps){
+	sigma = hyps.sigma;
+	Eigen::ArrayXd tmp(3);
+	tmp << hyps.lambda(0), hyps.slab_var(0), hyps.spike_var(0);
+	betas.set_hyps(tmp);
+
+	if(hyps.lambda.size() > 1){
+		tmp << hyps.lambda(1), hyps.slab_var(1), hyps.spike_var(1);
+		gammas.set_hyps(tmp);
+
+		tmp.resize(1);
+		tmp << hyps.sigma_w;
+		weights.set_hyps(tmp);
+	}
+
+	tmp.resize(1);
+	tmp << hyps.sigma * hyps.sigma_c;
+	covars.set_hyps(tmp);
+}
+
 void VariationalParameters::init_from_lite(const VariationalParametersLite &init) {
 	// yx and ym set to point to appropriate col of VBayesX2::YM and VBayesX2::YX in constructor
 
@@ -228,6 +246,9 @@ void VariationalParameters::init_from_lite(const VariationalParametersLite &init
 	gammas = init.gammas;
 	weights = init.weights;
 	covars = init.covars;
+
+	sigma = init.sigma;
+	pve = init.pve;
 }
 
 VariationalParametersLite VariationalParameters::convert_to_lite() {
@@ -235,6 +256,9 @@ VariationalParametersLite VariationalParameters::convert_to_lite() {
 	vplite.ym         = ym;
 	vplite.yx         = yx;
 	vplite.eta   = eta;
+
+	vplite.sigma = sigma;
+	vplite.pve = pve;
 
 	vplite.betas = betas;
 	vplite.gammas = gammas;

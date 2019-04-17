@@ -98,22 +98,11 @@ void init_interim_output(const int ii,
 	}
 
 	// Diagnostics - add header
-	outf_iter << "count\tsigma";
-	for (int ee = 0; ee < n_effects; ee++) {
-		outf_iter << "\tpve" << ee;
-		if((ee == 0 && p.mode_mog_prior_beta) || (ee == 1 && p.mode_mog_prior_gam)) {
-			outf_iter << "\tpve_large" << ee;
-		}
-		outf_iter << "\tsigma" << ee;
-		if((ee == 0 && p.mode_mog_prior_beta) || (ee == 1 && p.mode_mog_prior_gam)) {
-			outf_iter << "\tsigma_spike" << ee;
-		}
-		outf_iter << "\tlambda" << ee;
+	outf_iter << "count sigma pve0 " << vp.betas.get_hyps_header("0");
+	if(n_env > 0) {
+		outf_iter << " pve1 " << vp.gammas.get_hyps_header("1");
 	}
-	outf_iter << "\ts_x";
-	if(n_effects > 1) outf_iter << "\ts_z";
-	outf_iter << "\tvar_covar";
-	outf_iter << "\telbo\tmax_alpha_diff\tsecs" << std::endl;
+	outf_iter << " s_x s_z var_covar elbo max_alpha_diff secs" << std::endl;
 }
 
 void push_interim_hyps(const int& cnt,
@@ -127,40 +116,27 @@ void push_interim_hyps(const int& cnt,
 	// Diagnostics + env-weights from latest vb iteration
 	std::chrono::duration<double> lapsecs = std::chrono::system_clock::now() - time_check;
 
-	outf_iter << cnt << "\t";
+	outf_iter << cnt;
 	outf_iter << std::setprecision(6) << std::fixed;
-	outf_iter << i_hyps.sigma << "\t";
-
-	for (int ee = 0; ee < n_effects; ee++) {
-		// PVE
-		outf_iter << std::setprecision(6) << std::fixed;
-		outf_iter << i_hyps.pve(ee) << "\t";
-		if ((ee == 0 && p.mode_mog_prior_beta) || (ee == 1 && p.mode_mog_prior_gam)) {
-			outf_iter << i_hyps.pve_large(ee) << "\t";
-		}
-
-		// Relative variance
-		outf_iter << std::setprecision(12) << std::fixed;
-		outf_iter << i_hyps.slab_relative_var(ee) << "\t";
-		if ((ee == 0 && p.mode_mog_prior_beta) || (ee == 1 && p.mode_mog_prior_gam)) {
-			outf_iter << i_hyps.spike_relative_var(ee) << "\t";
-		}
-
-		// Lambda
-		outf_iter << i_hyps.lambda(ee) << "\t";
+	outf_iter << " " << vp.sigma;
+	outf_iter << " " << vp.pve(0);
+	outf_iter << " " << vp.betas.get_hyps();
+	if(n_env > 0) {
+		outf_iter << " " << vp.pve(1);
+		outf_iter << " " << vp.gammas.get_hyps();
 	}
 
 	outf_iter << std::setprecision(6) << std::fixed;
 	for (int ee = 0; ee < n_effects; ee++) {
-		outf_iter << i_hyps.s_x(ee) << "\t";
+		outf_iter << i_hyps.s_x(ee) << " ";
 	}
-	outf_iter << vp.mean_covar().array().square().sum() << "\t";
-	outf_iter << c_logw << "\t";
-	outf_iter << c_alpha_diff << "\t";
+	outf_iter << vp.mean_covar().array().square().sum() << " ";
+	outf_iter << c_logw << " ";
+	outf_iter << c_alpha_diff << " ";
 	outf_iter << lapsecs.count() << std::endl;
 
-	if(n_effects > 1) {
-		outf_weights  << vp.mean_weights().transpose() << std::endl;
+	if(n_env > 0) {
+		outf_weights << vp.mean_weights().transpose() << std::endl;
 	}
 }
 
@@ -247,10 +223,10 @@ void dump_state(const int& cnt,
 		boost_io::close(outf_inits);
 	}
 
-	// Hyps
-	fstream_init(outf_inits, dir, "_dump_it" + std::to_string(cnt) + "_hyps", true);
-	outf_inits << hyps << std::endl;
-	boost_io::close(outf_inits);
+//	// Hyps
+//	fstream_init(outf_inits, dir, "_dump_it" + std::to_string(cnt) + "_hyps", true);
+//	outf_inits << hyps << std::endl;
+//	boost_io::close(outf_inits);
 }
 
 void push_interim_covar_values(const int& cnt,

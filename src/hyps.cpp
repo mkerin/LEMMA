@@ -28,10 +28,6 @@ bool Hyps::domain_is_valid() const {
 	if (slab_var.minCoeff() <= 0) res = false;
 	if (lambda.minCoeff() <= 0) res = false;
 	if (lambda.maxCoeff() >= 1) res = false;
-	if(p.mode_mog_prior_beta || p.mode_mog_prior_gam) {
-		if (spike_var.minCoeff() <= 0) res = false;
-		if (spike_relative_var.minCoeff() <= 0) res = false;
-	}
 	return res;
 }
 
@@ -42,10 +38,8 @@ Hyps operator+(const Hyps &h1, const Hyps &h2){
 	hyps.slab_var = h1.slab_var + h2.slab_var;
 	hyps.slab_relative_var = h1.slab_relative_var + h2.slab_relative_var;
 	hyps.lambda = h1.lambda + h2.lambda;
-	if(h1.p.mode_mog_prior_beta || h1.p.mode_mog_prior_gam) {
-		hyps.spike_var = h1.spike_var + h2.spike_var;
-		hyps.spike_relative_var = h1.spike_relative_var + h2.spike_relative_var;
-	}
+	hyps.spike_var = h1.spike_var + h2.spike_var;
+	hyps.spike_relative_var = h1.spike_relative_var + h2.spike_relative_var;
 	return hyps;
 }
 
@@ -113,24 +107,23 @@ void Hyps::init_from_grid(int my_n_effects, int ii, int n_var, const Eigen::Ref<
 	}
 }
 
-void Hyps::update_pve(){
-	// Compute heritability
-
-	pve = lambda * slab_relative_var * s_x;
-	pve_large = pve;
-	if(p.mode_mog_prior_beta) {
-		int ee = 0;
-		pve[ee] += (1 - lambda[ee]) * spike_relative_var[ee] * s_x[ee];
-	}
-
-	if (p.mode_mog_prior_gam && n_effects > 1) {
-		int ee = 1;
-		pve[ee] += (1 - lambda[ee]) * spike_relative_var[ee] * s_x[ee];
-	}
-
-	pve_large /= (pve.sum() + 1.0);
-	pve /= (pve.sum() + 1.0);
-}
+// void Hyps::update_pve(){
+//  // Compute heritability
+//
+//  pve = lambda * slab_relative_var * s_x;
+//  pve_large = pve;
+//  if(p.mode_mog_prior_beta) {
+//      int ee = 0;
+//      pve[ee] += (1 - lambda[ee]) * spike_relative_var[ee] * s_x[ee];
+//  }
+//
+//  if (p.mode_mog_prior_gam && n_effects > 1) {
+//      int ee = 1;
+//      pve[ee] += (1 - lambda[ee]) * spike_relative_var[ee] * s_x[ee];
+//  }
+//
+//  pve /= (pve.sum() + 1.0);
+// }
 
 std::ostream& operator<<(std::ostream& os, const Hyps& hyps){
 	os << hyps.sigma << std::endl;
@@ -140,25 +133,25 @@ std::ostream& operator<<(std::ostream& os, const Hyps& hyps){
 	return os;
 }
 
-boost_io::filtering_ostream& operator<<(boost_io::filtering_ostream& os, const Hyps& hyps){
-	std::vector<std::string> effects = {"_beta", "_gam"};
-	int n_effects = hyps.lambda.rows();
-	os << std::scientific << std::setprecision(7);
-	os << "hyp value" << std::endl;
-	os << "sigma " << hyps.sigma << std::endl;
-	for (int ii = 0; ii < n_effects; ii++) {
-		os << "lambda" << ii+1 << " " << hyps.lambda[ii] << std::endl;
-	}
-	for (int ii = 0; ii < n_effects; ii++) {
-		os << "sigma" << effects[ii] << "0 " << hyps.slab_relative_var[ii] << std::endl;
-	}
-	for (int ii = 0; ii < n_effects; ii++) {
-		if((ii == 0 && hyps.p.mode_mog_prior_beta) || (ii == 1 && hyps.p.mode_mog_prior_gam)) {
-			os << "sigma" << effects[ii] << "1 " << hyps.spike_relative_var[ii] << std::endl;
-		}
-	}
-	return os;
-}
+// boost_io::filtering_ostream& operator<<(boost_io::filtering_ostream& os, const Hyps& hyps){
+//  std::vector<std::string> effects = {"_beta", "_gam"};
+//  int n_effects = hyps.lambda.rows();
+//  os << std::scientific << std::setprecision(7);
+//  os << "hyp value" << std::endl;
+//  os << "sigma " << hyps.sigma << std::endl;
+//  for (int ii = 0; ii < n_effects; ii++) {
+//      os << "lambda" << ii+1 << " " << hyps.lambda[ii] << std::endl;
+//  }
+//  for (int ii = 0; ii < n_effects; ii++) {
+//      os << "sigma" << effects[ii] << "0 " << hyps.slab_relative_var[ii] << std::endl;
+//  }
+//  for (int ii = 0; ii < n_effects; ii++) {
+//      if((ii == 0 && hyps.p.mode_mog_prior_beta) || (ii == 1 && hyps.p.mode_mog_prior_gam)) {
+//          os << "sigma" << effects[ii] << "1 " << hyps.spike_relative_var[ii] << std::endl;
+//      }
+//  }
+//  return os;
+// }
 
 void Hyps::read_from_dump(const std::string& filename){
 	// TODO: Better to match label to value rather than assuming order

@@ -9,10 +9,26 @@
 #include <stdexcept>
 #include <vector>
 
+/*** Prior ***/
+
+double Prior::nats_to_mean(Eigen::ArrayXd nats) const {
+	return -1.0 * nats[0] / nats[1] / 2;
+}
+
+double Prior::nats_to_var(Eigen::ArrayXd nats) const {
+	assert(nats[1] < 0);
+	return -1.0 / nats[1] / 2;
+}
+
+double Prior::sigmoid(const double &x) {
+	return 1.0 / (1.0 + std::exp(-x));
+}
+
 /*** Gaussian ***/
 
 std::ostream& operator<< (std::ostream &out, const Gaussian &dist){
 	out << dist.mean() << " " << dist.var();
+	// out << dist.nats_to_mean(dist.nats) << " " << dist.nats_to_var(dist.nats);
 	return out;
 }
 
@@ -28,8 +44,10 @@ double Gaussian::var() const {
 /*** Mixture of Gaussians ***/
 
 std::ostream& operator<< (std::ostream &out, const MoGaussian &dist){
-	out << dist.mix << " ";
-	out << dist.slab << " " << dist.spike;
+	out << dist.mix;
+	out << " " << dist.slab << " " << dist.spike;
+	// out << " " << dist.nats_to_mean(dist.slab_nats) << " " << dist.nats_to_var(dist.slab_nats);
+	// out << " " << dist.nats_to_mean(dist.spike_nats) << " " << dist.nats_to_var(dist.spike_nats);
 	return out;
 }
 
@@ -50,10 +68,6 @@ void MoGaussian::maximise_mix_coeff(const double &lambda, const double &sigma0, 
 	ff_k -= mu1 * mu1 / s1;
 	ff_k -= std::log(s1);
 	mix  = sigmoid(ff_k / 2.0 + alpha_cnst);
-}
-
-double MoGaussian::sigmoid(const double &x) {
-	return 1.0 / (1.0 + std::exp(-x));
 }
 
 MoGaussian &MoGaussian::operator=(const MoGaussian &gg) {

@@ -1,11 +1,3 @@
-/* re-implementation of variational bayes algorithm for 1D GxE
-
-   How to use Eigen::Ref:
-   https://stackoverflow.com/questions/21132538/correct-usage-of-the-eigenref-class
-
-   Building static executable:
-   https://stackoverflow.com/questions/3283021/compile-a-standalone-static-executable
- */
 #ifndef VBAYES_X2_HPP
 #define VBAYES_X2_HPP
 
@@ -41,17 +33,10 @@
 namespace boost_m = boost::math;
 namespace boost_io = boost::iostreams;
 
-inline double sigmoid(double x){
-	return 1.0 / (1.0 + std::exp(-x));
-}
-
 class VBayesX2 {
 public:
 // Constants
 const double PI = 3.1415926535897;
-const double eps = std::numeric_limits<double>::min();
-const double alpha_tol = 1e-4;
-const double logw_tol = 1e-2;
 const double sigma_c = 10000;
 std::vector< std::string > covar_names;
 std::vector< std::string > env_names;
@@ -432,35 +417,35 @@ void runInnerLoop(const bool random_init,
 
 		updateAllParams(count, round_index, all_vp, all_hyps, logw_prev);
 
-		// SQUAREM
-		if (p.mode_squarem) {
-			if(count % 3 == 0) {
-				theta0 = all_hyps;
-			} else if (count % 3 == 1) {
-				theta1 = all_hyps;
-			} else if (count >= p.vb_iter_start + 2) {
-				theta2 = all_hyps;
-				for (int nn = 0; nn < n_grid; nn++) {
-					Hyps rr = theta1[nn] - theta0[nn];
-					Hyps vv = (theta2[nn] - theta1[nn]) - rr;
-					double step = std::min(-rr.normL2() / vv.normL2(), -1.0);
-					Hyps theta = theta0[nn] - 2 * step * rr + step * step * vv;
-
-					// check all hyps in theta remain in valid domain
-					while(!theta.domain_is_valid()) {
-						step = std::min(step * 0.5, -1.0);
-						theta = theta0[nn] - 2 * step * rr + step * step * vv;
-					}
-
-					// Copy s_x and pve from theta2
-					theta.s_x = theta2[nn].s_x;
-					theta.pve = theta2[nn].pve;
-					theta.pve_large = theta2[nn].pve_large;
-
-					all_hyps[nn] = theta;
-				}
-			}
-		}
+//		// SQUAREM
+//		if (p.mode_squarem) {
+//			if(count % 3 == 0) {
+//				theta0 = all_hyps;
+//			} else if (count % 3 == 1) {
+//				theta1 = all_hyps;
+//			} else if (count >= p.vb_iter_start + 2) {
+//				theta2 = all_hyps;
+//				for (int nn = 0; nn < n_grid; nn++) {
+//					Hyps rr = theta1[nn] - theta0[nn];
+//					Hyps vv = (theta2[nn] - theta1[nn]) - rr;
+//					double step = std::min(-rr.normL2() / vv.normL2(), -1.0);
+//					Hyps theta = theta0[nn] - 2 * step * rr + step * step * vv;
+//
+//					// check all hyps in theta remain in valid domain
+//					while(!theta.domain_is_valid()) {
+//						step = std::min(step * 0.5, -1.0);
+//						theta = theta0[nn] - 2 * step * rr + step * step * vv;
+//					}
+//
+//					// Copy s_x and pve from theta2
+//					theta.s_x = theta2[nn].s_x;
+//					theta.pve = theta2[nn].pve;
+//					theta.pve_large = theta2[nn].pve_large;
+//
+//					all_hyps[nn] = theta;
+//				}
+//			}
+//		}
 
 		// update elbo
 		for (int nn = 0; nn < n_grid; nn++) {
@@ -470,7 +455,7 @@ void runInnerLoop(const bool random_init,
 
 		// Interim output
 		for (int nn = 0; nn < n_grid; nn++) {
-			all_hyps[nn].update_pve();
+//			all_hyps[nn].update_pve();
 			all_tracker[nn].push_interim_hyps(count, all_hyps[nn], i_logw[nn], alpha_diff[nn], n_effects,
 			                                  n_var, n_env, all_vp[nn]);
 			if (p.param_dump_interval > 0 && count % p.param_dump_interval == 0) {
@@ -511,7 +496,7 @@ void runInnerLoop(const bool random_init,
 						                           X, covar_names, env_names);
 					}
 				} else {
-					if (alpha_diff[nn] < alpha_tol && logw_diff < logw_tol) {
+					if (alpha_diff[nn] < p.alpha_tol && logw_diff < p.elbo_tol) {
 						converged[nn] = 1;
 						all_tracker[nn].dump_state(count, n_samples, n_covar, n_var,
 						                           n_env, n_effects,
@@ -582,6 +567,7 @@ void setup_variational_params(const std::vector<Hyps>& all_hyps,
 	for (int nn = 0; nn < n_grid; nn++) {
 		VariationalParameters vp(p, YM.col(nn), YX.col(nn), ETA.col(nn), ETA_SQ.col(nn));
 		vp.init_from_lite(vp_init);
+		vp.set_hyps(all_hyps[nn]);
 		if(n_effects > 1) {
 			vp.calcEdZtZ(dXtEEX, n_env);
 		}
@@ -603,7 +589,7 @@ void updateAllParams(const int& count,
 	// Update covar main effects
 	if (n_covar > 0) {
 		for (int nn = 0; nn < n_grid; nn++) {
-			for (int cc = 0; cc < n_covar; cc++){
+			for (int cc = 0; cc < n_covar; cc++) {
 				_update_covar(cc, all_hyps[nn], all_vp[nn]);
 			}
 		}
@@ -613,22 +599,22 @@ void updateAllParams(const int& count,
 	// Update main & interaction effects
 	bool is_fwd_pass = (count % 2 == 0);
 	if(is_fwd_pass) {
-		for (auto chunk: main_fwd_pass_chunks){
+		for (auto chunk: main_fwd_pass_chunks) {
 			_update_beta(chunk, all_vp, all_hyps);
 		}
 		check_monotonic_elbo(all_hyps, all_vp, count, logw_prev, "updateAlphaMu_fwd_main");
 
-		for (auto chunk: gxe_fwd_pass_chunks){
+		for (auto chunk: gxe_fwd_pass_chunks) {
 			_update_gamma(chunk, all_vp, all_hyps);
 		}
 		check_monotonic_elbo(all_hyps, all_vp, count, logw_prev, "updateAlphaMu_fwd_gxe");
 	} else {
-		for (auto chunk: gxe_back_pass_chunks){
+		for (auto chunk: gxe_back_pass_chunks) {
 			_update_gamma(chunk, all_vp, all_hyps);
 		}
 		check_monotonic_elbo(all_hyps, all_vp, count, logw_prev, "updateAlphaMu_back_gxe");
 
-		for (auto chunk: main_back_pass_chunks){
+		for (auto chunk: main_back_pass_chunks) {
 			_update_beta(chunk, all_vp, all_hyps);
 		}
 		check_monotonic_elbo(all_hyps, all_vp, count, logw_prev, "updateAlphaMu_back_main");
@@ -638,10 +624,10 @@ void updateAllParams(const int& count,
 	if (n_effects > 1 && n_env > 1) {
 		for (int nn = 0; nn < n_grid; nn++) {
 			for (int uu = 0; uu < p.env_update_repeats; uu++) {
-				for (auto ll : env_fwd_pass){
+				for (auto ll : env_fwd_pass) {
 					_updates_weights(ll, all_hyps[nn], all_vp[nn]);
 				}
-				for (auto ll : env_back_pass){
+				for (auto ll : env_back_pass) {
 					_updates_weights(ll, all_hyps[nn], all_vp[nn]);
 				}
 			}
@@ -678,10 +664,10 @@ void updateAllParams(const int& count,
 		}
 	}
 
-	// Update PVE
-	for (int nn = 0; nn < n_grid; nn++) {
-		all_hyps[nn].update_pve();
-	}
+//	// Update PVE
+//	for (int nn = 0; nn < n_grid; nn++) {
+//		all_hyps[nn].update_pve();
+//	}
 }
 
 void _update_covar(long cc, const Hyps& hyps, VariationalParameters& vp){
@@ -700,36 +686,36 @@ void _update_covar(long cc, const Hyps& hyps, VariationalParameters& vp){
 	vp.ym += (vp.mean_covar(cc) - old) * C.col(cc).matrix();
 }
 
-	void _updates_weights(long ll, const Hyps& hyps,
-						  VariationalParameters& vp){
-		double old = vp.mean_weights(ll);
+void _updates_weights(long ll, const Hyps& hyps,
+                      VariationalParameters& vp){
+	double old = vp.mean_weights(ll);
 
-		Eigen::MatrixXd tmp;
-		tmp = vp.var_gam().matrix().transpose() * dXtEEX.block(0, ll * n_env, n_var, n_env).matrix() *  vp.mean_weights();
+	Eigen::MatrixXd tmp;
+	tmp = vp.var_gam().matrix().transpose() * dXtEEX.block(0, ll * n_env, n_var, n_env).matrix() *  vp.mean_weights();
 
-		double EXty, EXtX;
-		EXty       = ((Y - vp.ym).array() * E.col(ll) * vp.yx.array()).sum();
-		EXty       -= (vp.yx.array() * vp.yx.array() * E.col(ll) * vp.eta.array()).sum();
-		EXty       -= tmp(0,0);
+	double EXty, EXtX;
+	EXty       = ((Y - vp.ym).array() * E.col(ll) * vp.yx.array()).sum();
+	EXty       -= (vp.yx.array() * vp.yx.array() * E.col(ll) * vp.eta.array()).sum();
+	EXty       -= tmp(0,0);
 
-		EXtX = (vp.yx.array().square() * E.col(ll).square()).sum();
-		EXtX += (vp.var_gam() * dXtEEX.col(ll*n_env + ll)).sum();
+	EXtX = (vp.yx.array().square() * E.col(ll).square()).sum();
+	EXtX += (vp.var_gam() * dXtEEX.col(ll*n_env + ll)).sum();
 
-		Gaussian w = vp.weights_l_step(ll, EXty, EXtX, hyps);
+	Gaussian w = vp.weights_l_step(ll, EXty, EXtX, hyps);
 
 //		vp.weights(ll) = (1 - stepsize) * vp.weights(ll) + stepsize * w;
-		vp.weights.set_ith_distn(ll, w);
+	vp.weights.set_ith_distn(ll, w);
 
 //		vp.muw(ll) = w.mean();
 //		vp.sw_sq(ll) = w.var();
 
-		vp.eta += (vp.mean_weights(ll) - old) * E.col(ll).matrix();
+	vp.eta += (vp.mean_weights(ll) - old) * E.col(ll).matrix();
 
-	}
+}
 
 void _update_beta(const std::vector<std::uint32_t>& iter,
-				   std::vector<VariationalParameters>& all_vp,
-				   const std::vector<Hyps>& all_hyps){
+                  std::vector<VariationalParameters>& all_vp,
+                  const std::vector<Hyps>& all_hyps){
 	long ch_len   = iter.size();
 
 	EigenDataMatrix D, EXty;
@@ -754,10 +740,10 @@ void _update_beta(const std::vector<std::uint32_t>& iter,
 			// Get param updates
 //			all_vp[nn].beta_j_step(jj, EXty(ii, nn), EXtX(ii), all_hyps[nn]);
 
-			MoGaussian distn = all_vp[nn].beta_j_step(jj, EXty(ii, nn), EXtX(ii), all_hyps[nn]);
-			all_vp[nn].betas.set_ith_distn(jj, distn);
+//			MoGaussian distn = all_vp[nn].beta_j_step(jj, EXty(ii, nn), EXtX(ii), all_hyps[nn]);
+//			all_vp[nn].betas.set_ith_distn(jj, distn);
 
-
+			all_vp[nn].beta_j_step(jj, EXty(ii, nn), EXtX(ii), all_hyps[nn]);
 			rr_k_new(ii) = all_vp[nn].mean_beta(jj);
 			EXty -= (all_vp[nn].mean_beta(jj) - old) * D_corr.col(ii);
 		}
@@ -765,44 +751,44 @@ void _update_beta(const std::vector<std::uint32_t>& iter,
 	}
 }
 
-	void _update_gamma(const std::vector<std::uint32_t>& iter,
-					   std::vector<VariationalParameters>& all_vp,
-					   const std::vector<Hyps>& all_hyps){
-		long ch_len   = iter.size();
+void _update_gamma(const std::vector<std::uint32_t>& iter,
+                   std::vector<VariationalParameters>& all_vp,
+                   const std::vector<Hyps>& all_hyps){
+	long ch_len   = iter.size();
 
-		EigenDataMatrix D, EXty;
+	EigenDataMatrix D, EXty;
 
-		// D is n_samples x snp_batch
-		if(D.cols() != ch_len) {
-			D.resize(n_samples, ch_len);
-		}
-		X.col_block3(iter, D);
-
-		EXty = D.transpose() * ((YY - YM).cwiseProduct(ETA) - YX.cwiseProduct(ETA_SQ));
-
-		for (int nn = 0; nn < all_hyps.size(); nn++) {
-			EigenDataMatrix D_corr = (D.transpose() * all_vp[nn].eta_sq.asDiagonal() * D);
-			EigenDataMatrix EXtX = D_corr.diagonal();
-			EigenDataVector rr_k_old(ch_len), rr_k_new(ch_len);
-
-			for (int ii = 0; ii < ch_len; ii++) {
-				long jj = (iter[ii] % n_var);
-				double old = all_vp[nn].mean_gam(jj);
-				rr_k_old(ii) = old;
-
-				// Get param updates
-				MoGaussian distn = all_vp[nn].gamma_j_step(jj, EXty(ii, nn), EXtX(ii), all_hyps[nn]);
-				all_vp[nn].gammas.set_ith_distn(jj, distn);
-
-				rr_k_new(ii) = all_vp[nn].mean_gam(jj);
-				EXty -= (all_vp[nn].mean_gam(jj) - old) * D_corr.col(ii);
-			}
-			all_vp[nn].yx += D * (rr_k_new - rr_k_old);
-		}
+	// D is n_samples x snp_batch
+	if(D.cols() != ch_len) {
+		D.resize(n_samples, ch_len);
 	}
+	X.col_block3(iter, D);
+
+	EXty = D.transpose() * ((YY - YM).cwiseProduct(ETA) - YX.cwiseProduct(ETA_SQ));
+
+	for (int nn = 0; nn < all_hyps.size(); nn++) {
+		EigenDataMatrix D_corr = (D.transpose() * all_vp[nn].eta_sq.asDiagonal() * D);
+		EigenDataMatrix EXtX = D_corr.diagonal();
+		EigenDataVector rr_k_old(ch_len), rr_k_new(ch_len);
+
+		for (int ii = 0; ii < ch_len; ii++) {
+			long jj = (iter[ii] % n_var);
+			double old = all_vp[nn].mean_gam(jj);
+			rr_k_old(ii) = old;
+
+			// Get param updates
+			MoGaussian distn = all_vp[nn].gamma_j_step(jj, EXty(ii, nn), EXtX(ii), all_hyps[nn]);
+			all_vp[nn].gammas.set_ith_distn(jj, distn);
+
+			rr_k_new(ii) = all_vp[nn].mean_gam(jj);
+			EXty -= (all_vp[nn].mean_gam(jj) - old) * D_corr.col(ii);
+		}
+		all_vp[nn].yx += D * (rr_k_new - rr_k_old);
+	}
+}
 
 void maximiseHyps(Hyps& hyps,
-                  const VariationalParameters& vp){
+                  VariationalParameters& vp){
 
 	// max sigma
 	hyps.sigma  = calcExpLinear(hyps, vp);
@@ -812,17 +798,25 @@ void maximiseHyps(Hyps& hyps,
 	} else {
 		hyps.sigma /= N;
 	}
+	vp.sigma = hyps.sigma;
+
+	Eigen::ArrayXd tmp(1);
+	tmp << sigma_c * vp.sigma;
+	vp.covars.set_hyps(tmp);
 
 	Eigen::ArrayXd beta_hyps = vp.betas.get_opt_hyps();
 	hyps.lambda[0] = beta_hyps[0];
 	hyps.slab_var[0] = beta_hyps[1];
 	hyps.spike_var[0] = beta_hyps[2];
 
-	if(n_env > 0){
+	vp.betas.set_hyps(beta_hyps);
+
+	if(n_env > 0) {
 		Eigen::ArrayXd gam_hyps = vp.gammas.get_opt_hyps();
 		hyps.lambda[1] = gam_hyps[0];
 		hyps.slab_var[1] = gam_hyps[1];
 		hyps.spike_var[1] = gam_hyps[2];
+		vp.gammas.set_hyps(gam_hyps);
 	}
 
 	hyps.slab_relative_var = hyps.slab_var / hyps.sigma;
@@ -833,8 +827,8 @@ double calc_logw(const Hyps& hyps,
                  const VariationalParameters& vp){
 
 	// Expectation of linear regression log-likelihood
-	double int_linear = -1.0 * calcExpLinear(hyps, vp) / 2.0 / hyps.sigma;
-	int_linear -= N * std::log(2.0 * PI * hyps.sigma) / 2.0;
+	double int_linear = -1.0 * calcExpLinear(hyps, vp) / 2.0 / vp.sigma;
+	int_linear -= N * std::log(2.0 * PI * vp.sigma) / 2.0;
 
 	// kl-beta
 	double kl_beta = vp.kl_div_beta(hyps);
@@ -913,22 +907,22 @@ void check_monotonic_elbo(const Hyps& hyps,
 	logw_prev = i_logw;
 }
 
-	void check_monotonic_elbo(const std::vector<Hyps>& all_hyps,
-							  std::vector<VariationalParameters>& all_vp,
-							  const int count,
-							  std::vector<double>& logw_prev,
-							  const std::string& prev_function){
+void check_monotonic_elbo(const std::vector<Hyps>& all_hyps,
+                          std::vector<VariationalParameters>& all_vp,
+                          const int count,
+                          std::vector<double>& logw_prev,
+                          const std::string& prev_function){
 
-		for (int nn = 0; nn < all_hyps.size(); nn++) {
-			double i_logw = calc_logw(all_hyps[nn], all_vp[nn]);
-			if (i_logw < logw_prev[nn]) {
-				std::cout << count << ": " << prev_function;
-				std::cout << " " << logw_prev[nn] << " -> " << i_logw;
-				std::cout << " (difference of " << i_logw - logw_prev[nn] << ")" << std::endl;
-			}
-			logw_prev[nn] = i_logw;
+	for (int nn = 0; nn < all_hyps.size(); nn++) {
+		double i_logw = calc_logw(all_hyps[nn], all_vp[nn]);
+		if (i_logw < logw_prev[nn]) {
+			std::cout << count << ": " << prev_function;
+			std::cout << " " << logw_prev[nn] << " -> " << i_logw;
+			std::cout << " (difference of " << i_logw - logw_prev[nn] << ")" << std::endl;
 		}
+		logw_prev[nn] = i_logw;
 	}
+}
 
 void normaliseLogWeights(std::vector< double >& my_weights){
 	// Safer to normalise log-weights than niavely convert to weights
@@ -1215,19 +1209,9 @@ void output_results(const std::vector<VbTracker>& trackers, const long& my_n_gri
 	}
 
 	/*** Hyps - header ***/
-	outf << "weight elbo count sigma";
-
-	for (int ee = 0; ee < n_effects; ee++) {
-		outf << " pve" << ee;
-		if((ee == 0 && p.mode_mog_prior_beta) || (ee == 1 && p.mode_mog_prior_gam)) {
-			outf << " pve_large" << ee;
-		}
-		outf << " sigma" << ee;
-		if((ee == 0 && p.mode_mog_prior_beta) || (ee == 1 && p.mode_mog_prior_gam)) {
-			outf << " sigma_spike" << ee;
-			outf << " sigma_spike_dilution" << ee;
-		}
-		outf << " lambda" << ee;
+	outf << "weight elbo count sigma pve0 " << trackers[0].vp.betas.get_hyps_header("0");
+	if(n_env > 0) {
+		outf << " pve1 " << trackers[0].vp.gammas.get_hyps_header("1");
 	}
 	outf << std::endl;
 
@@ -1238,33 +1222,15 @@ void output_results(const std::vector<VbTracker>& trackers, const long& my_n_gri
 		outf << " " << trackers[ii].logw;
 		outf << std::setprecision(6) << std::fixed;
 		outf << " " << trackers[ii].count;
-		outf << " " << trackers[ii].hyps.sigma;
+		outf << " " << trackers[ii].vp.sigma;
 
 		outf << std::setprecision(8) << std::fixed;
-		for (int ee = 0; ee < n_effects; ee++) {
+		outf << " " << trackers[ii].vp.pve(0);
+		outf << " " << trackers[ii].vp.betas.get_hyps();
 
-			// PVE
-			outf << " " << trackers[ii].hyps.pve(ee);
-			if((ee == 0 && p.mode_mog_prior_beta) || (ee == 1 && p.mode_mog_prior_gam)) {
-				outf << " " << trackers[ii].hyps.pve_large(ee);
-			}
-
-			// MoG variances
-			outf << std::scientific << std::setprecision(5);
-			outf << " " << trackers[ii].hyps.slab_relative_var(ee);
-			outf << std::setprecision(8) << std::fixed;
-
-			if((ee == 0 && p.mode_mog_prior_beta) || (ee == 1 && p.mode_mog_prior_gam)) {
-				outf << std::scientific << std::setprecision(5);
-				outf << " " << trackers[ii].hyps.spike_relative_var(ee);
-
-				outf << std::setprecision(3) << std::fixed;
-				outf << " " << trackers[ii].hyps.slab_relative_var(ee) / trackers[ii].hyps.spike_relative_var(ee);
-				outf << std::setprecision(8) << std::fixed;
-			}
-
-			// Lambda
-			outf << " " << trackers[ii].hyps.lambda(ee);
+		if(n_env > 0) {
+			outf << " " << trackers[ii].vp.pve(1);
+			outf << " " << trackers[ii].vp.gammas.get_hyps();
 		}
 		outf << std::endl;
 	}

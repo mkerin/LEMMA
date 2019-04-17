@@ -33,7 +33,6 @@ Eigen::ArrayXd lambda;
 // Not hyperparameters, but things that depend on them
 Eigen::ArrayXd s_x;
 Eigen::ArrayXd pve;
-Eigen::ArrayXd pve_large;
 
 parameters p;
 int n_effects;
@@ -47,7 +46,7 @@ void init_from_grid(int n_effects,
                     int ii,
                     int n_var,
                     const Eigen::Ref<const Eigen::MatrixXd>& hyps_grid);
-void update_pve();
+//void update_pve();
 void read_from_dump(const std::string& filename);
 double normL2() const;
 bool domain_is_valid() const;

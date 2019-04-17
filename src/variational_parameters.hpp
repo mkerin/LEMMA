@@ -31,6 +31,11 @@ MoGaussianVec gammas;
 GaussianVec weights;
 GaussianVec covars;
 
+// Estimated variance of phenotype.
+// Not sure where else to put.
+double sigma;
+Eigen::ArrayXd pve;
+
 VariationalParamsBase(parameters my_params) : p(my_params){
 };
 
@@ -66,7 +71,7 @@ double var_covar(long jj) const;
 Gaussian weights_l_step(long ll, double EXty, double EXtX, Hyps hyps) const;
 Gaussian covar_c_step(long cc, double EXty, double EXtX, Hyps hyps) const;
 MoGaussian gamma_j_step(long jj, double EXty, double EXtX, Hyps hyps);
-MoGaussian beta_j_step(long jj, double EXty, double EXtX, Hyps hyps);
+void beta_j_step(long jj, double EXty, double EXtX, Hyps hyps);
 
 /*** KL divergence ***/
 double kl_div_beta(const Hyps& hyps) const;
@@ -75,6 +80,7 @@ double kl_div_covars(const Hyps& hyps) const;
 double kl_div_weights(const Hyps& hyps) const;
 
 /*** Misc ***/
+void set_hyps(Hyps hyps);
 void check_nan(const double& alpha, const std::uint32_t& ii);
 };
 

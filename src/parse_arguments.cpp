@@ -132,7 +132,10 @@ void parse_arguments(parameters &p, int argc, char **argv) {
 		"--beta_spike_diff_factor",
 		"--gam_spike_diff_factor",
 		"--min_spike_diff_factor",
-		"--n_pve_samples"
+		"--n_pve_samples",
+		"--snp_priors_gaussian",
+		"--beta_prior_gaussian",
+		"--gamma_prior_gaussian"
 	};
 
 	std::set<std::string>::iterator set_it;
@@ -330,20 +333,26 @@ void parse_arguments(parameters &p, int argc, char **argv) {
 				i += 1;
 			}
 
-			if(strcmp(in_str, "--effects_prior_mog") == 0) {
-				p.mode_mog_prior_beta = true;
-				p.mode_mog_prior_gam = true;
-				i += 0;
-			}
-
 			if(strcmp(in_str, "--mode_spike_slab") == 0) {
-				p.mode_mog_prior_beta = false;
-				p.mode_mog_prior_gam = false;
+				p.beta_prior = "SpikeNSlab";
+				p.gamma_prior = "SpikeNSlab";
+				throw std::logic_error("Not currently supported");
 				i += 0;
 			}
 
-			if(strcmp(in_str, "--mode_mog_beta") == 0) {
-				p.mode_mog_prior_beta = true;
+			if(strcmp(in_str, "--snp_priors_gaussian") == 0) {
+				p.beta_prior = "Gaussian";
+				p.gamma_prior = "Gaussian";
+				i += 0;
+			}
+
+			if(strcmp(in_str, "--beta_prior_gaussian") == 0) {
+				p.beta_prior = "Gaussian";
+				i += 0;
+			}
+
+			if(strcmp(in_str, "--gamma_prior_gaussian") == 0) {
+				p.gamma_prior = "Gaussian";
 				i += 0;
 			}
 
@@ -365,11 +374,6 @@ void parse_arguments(parameters &p, int argc, char **argv) {
 
 			if(strcmp(in_str, "--mode_no_gxe") == 0) {
 				p.mode_no_gxe = true;
-				i += 0;
-			}
-
-			if(strcmp(in_str, "--mode_mog_gamma") == 0) {
-				p.mode_mog_prior_gam = true;
 				i += 0;
 			}
 
