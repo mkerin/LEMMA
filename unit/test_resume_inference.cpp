@@ -15,24 +15,24 @@
 
 // Scenarios
 char* case1a[] = { (char*) "--mode_vb",
-				 (char*) "--mode_empirical_bayes",
-				 (char*) "--vb_iter_max", (char*) "10",
-				 (char*) "--hyps_grid", (char*) "data/io_test/single_hyps_gxage.txt",
-				 (char*) "--pheno", (char*) "data/io_test/pheno.txt",
-				 (char*) "--environment", (char*) "data/io_test/n50_p100_env.txt",
-				 (char*) "--bgen", (char*) "data/io_test/n50_p100.bgen",
-				 (char*) "--out", (char*) "data/io_test/test1a.out.gz"};
+	               (char*) "--mode_empirical_bayes",
+	               (char*) "--vb_iter_max", (char*) "10",
+	               (char*) "--hyps_grid", (char*) "data/io_test/single_hyps_gxage.txt",
+	               (char*) "--pheno", (char*) "data/io_test/pheno.txt",
+	               (char*) "--environment", (char*) "data/io_test/n50_p100_env.txt",
+	               (char*) "--bgen", (char*) "data/io_test/n50_p100.bgen",
+	               (char*) "--out", (char*) "data/io_test/test1a.out.gz"};
 
 char* case1b[] = { (char*) "--mode_vb",
-				   (char*) "--mode_empirical_bayes",
-				   (char*) "--vb_iter_max", (char*) "10",
-				   (char*) "--vb_iter_start", (char*) "3",
-				   (char*) "--resume_from_param_dump",
-				   (char*) "data/io_test/r2_interim_files/grid_point_0/test1a_dump_it2",
-				   (char*) "--pheno", (char*) "data/io_test/pheno.txt",
-				   (char*) "--environment", (char*) "data/io_test/n50_p100_env.txt",
-				   (char*) "--bgen", (char*) "data/io_test/n50_p100.bgen",
-				   (char*) "--out", (char*) "data/io_test/test1b.out"};
+	               (char*) "--mode_empirical_bayes",
+	               (char*) "--vb_iter_max", (char*) "10",
+	               (char*) "--vb_iter_start", (char*) "3",
+	               (char*) "--resume_from_param_dump",
+	               (char*) "data/io_test/r2_interim_files/grid_point_0/test1a_dump_it2",
+	               (char*) "--pheno", (char*) "data/io_test/pheno.txt",
+	               (char*) "--environment", (char*) "data/io_test/n50_p100_env.txt",
+	               (char*) "--bgen", (char*) "data/io_test/n50_p100.bgen",
+	               (char*) "--out", (char*) "data/io_test/test1b.out"};
 
 
 
@@ -81,8 +81,8 @@ TEST_CASE("Resume from multi-env + mog + emp_bayes"){
 			VbTracker tracker(p);
 			tracker.init_interim_output(0,2, VB.n_effects, VB.n_env, VB.env_names, vp);
 			tracker.dump_state(2, VB.n_samples, VB.n_covar, VB.n_var, VB.n_env,
-							   VB.n_effects, vp, hyps, VB.Y, VB.C, VB.X,
-							   VB.covar_names, VB.env_names);
+			                   VB.n_effects, vp, hyps, VB.Y, VB.C, VB.X,
+			                   VB.covar_names, VB.env_names);
 
 			VB.updateAllParams(3, round_index, all_vp, all_hyps, logw_prev);
 			CHECK(VB.calc_logw(hyps, vp) == Approx(-87.880171198));
@@ -148,24 +148,24 @@ TEST_CASE("Resume from multi-env + mog + emp_bayes"){
 
 
 char* case2a[] = { (char*) "--mode_vb",
-				   (char*) "--mode_squarem",
-				   (char*) "--vb_iter_max", (char*) "10",
-				   (char*) "--hyps_grid", (char*) "data/io_test/single_hyps_gxage.txt",
-				   (char*) "--pheno", (char*) "data/io_test/pheno.txt",
-				   (char*) "--environment", (char*) "data/io_test/n50_p100_env.txt",
-				   (char*) "--bgen", (char*) "data/io_test/n50_p100.bgen",
-				   (char*) "--out", (char*) "data/io_test/test2a.out.gz"};
+	               (char*) "--mode_squarem",
+	               (char*) "--vb_iter_max", (char*) "10",
+	               (char*) "--hyps_grid", (char*) "data/io_test/single_hyps_gxage.txt",
+	               (char*) "--pheno", (char*) "data/io_test/pheno.txt",
+	               (char*) "--environment", (char*) "data/io_test/n50_p100_env.txt",
+	               (char*) "--bgen", (char*) "data/io_test/n50_p100.bgen",
+	               (char*) "--out", (char*) "data/io_test/test2a.out.gz"};
 
 char* case2b[] = { (char*) "--mode_vb",
-				   (char*) "--mode_squarem",
-				   (char*) "--vb_iter_max", (char*) "10",
-				   (char*) "--vb_iter_start", (char*) "3",
-				   (char*) "--resume_from_param_dump",
-				   (char*) "data/io_test/r2_interim_files/grid_point_0/test2a_dump_it2",
-				   (char*) "--pheno", (char*) "data/io_test/pheno.txt",
-				   (char*) "--environment", (char*) "data/io_test/n50_p100_env.txt",
-				   (char*) "--bgen", (char*) "data/io_test/n50_p100.bgen",
-				   (char*) "--out", (char*) "data/io_test/test2b.out"};
+	               (char*) "--mode_squarem",
+	               (char*) "--vb_iter_max", (char*) "10",
+	               (char*) "--vb_iter_start", (char*) "3",
+	               (char*) "--resume_from_param_dump",
+	               (char*) "data/io_test/r2_interim_files/grid_point_0/test2a_dump_it2",
+	               (char*) "--pheno", (char*) "data/io_test/pheno.txt",
+	               (char*) "--environment", (char*) "data/io_test/n50_p100_env.txt",
+	               (char*) "--bgen", (char*) "data/io_test/n50_p100.bgen",
+	               (char*) "--out", (char*) "data/io_test/test2b.out"};
 
 TEST_CASE("Resume from multi-env + mog + squarem"){
 	parameters p;
@@ -205,7 +205,7 @@ TEST_CASE("Resume from multi-env + mog + squarem"){
 			VB.updateAllParams(2, round_index, all_vp, all_hyps, logw_prev);
 			CHECK(VB.calc_logw(hyps, vp) == Approx(-88.4813237554));
 
-			CHECK(vp.covars[0].mean() == vp.muc(0));
+			CHECK(vp.covars.mean(0) == vp.muc(0));
 			CHECK(VB.YM.squaredNorm() == Approx(14.6480266984));
 			CHECK(VB.YX.squaredNorm() == Approx(0.0004676258));
 			CHECK(VB.ETA.squaredNorm() == Approx(0.0744622661));
@@ -214,8 +214,8 @@ TEST_CASE("Resume from multi-env + mog + squarem"){
 			VbTracker tracker(p);
 			tracker.init_interim_output(0,2, VB.n_effects, VB.n_env, VB.env_names, vp);
 			tracker.dump_state(2, VB.n_samples, VB.n_covar, VB.n_var, VB.n_env,
-							   VB.n_effects, vp, hyps, VB.Y, VB.C, VB.X,
-							   VB.covar_names, VB.env_names);
+			                   VB.n_effects, vp, hyps, VB.Y, VB.C, VB.X,
+			                   VB.covar_names, VB.env_names);
 
 			VB.updateAllParams(3, round_index, all_vp, all_hyps, logw_prev);
 			CHECK(VB.calc_logw(hyps, vp) == Approx(-87.880171198));
@@ -260,16 +260,19 @@ TEST_CASE("Resume from multi-env + mog + squarem"){
 			VariationalParameters& vp = all_vp[0];
 			Hyps& hyps = all_hyps[0];
 
-			CHECK(vp.covars[0].mean() == vp.muc(0));
+			CHECK(vp.covars.mean(0) == vp.muc(0));
 			CHECK(VB.YM.squaredNorm() == Approx(14.6480266997));
 			CHECK(VB.YX.squaredNorm() == Approx(0.0004676258));
 			CHECK(VB.ETA.squaredNorm() == Approx(0.0744622647));
 			CHECK(VB.ETA_SQ.squaredNorm() == Approx(297.6156980469));
 			CHECK(VB.calc_logw(hyps, vp) == Approx(-88.4813237607));
 
+//			CHECK(vp.kl_div_beta() == vp.betas.kl)
+
 			VB.updateAllParams(3, round_index, all_vp, all_hyps, logw_prev);
 			CHECK(VB.calc_logw(hyps, vp) == Approx(-87.8801711925));
 
+			CHECK(vp.covars.mean(0) == vp.muc(0));
 			CHECK(vp.ym.squaredNorm() == Approx(15.7914630418));
 			CHECK(vp.yx.squaredNorm() == Approx(0.0000880429));
 			CHECK(vp.eta.squaredNorm() == Approx(0.0221053884));

@@ -415,6 +415,10 @@ TEST_CASE( "Example 4: multi-env + mog + covars + emp_bayes" ){
 			CHECK(hyps.slab_relative_var[0] == Approx(0.0080644075));
 			CHECK(hyps.slab_relative_var[1] == Approx(0.0050698799));
 
+			CHECK(hyps.lambda[0] == vp.betas.get_opt_hyps()(0));
+			CHECK(hyps.slab_var[0] == vp.betas.get_opt_hyps()(1));
+			CHECK(hyps.spike_var[0] == vp.betas.get_opt_hyps()(2));
+
 			Eq_beta = vp.alpha_beta * vp.mu1_beta;
 			if(p.mode_mog_prior_beta) Eq_beta.array() += (1 - vp.alpha_beta) * vp.mu2_beta;
 			check_ym  = VB.X * Eq_beta;
@@ -437,6 +441,8 @@ TEST_CASE( "Example 4: multi-env + mog + covars + emp_bayes" ){
 
 			VB.updateAllParams(2, round_index, all_vp, all_hyps, logw_prev);
 
+			CHECK(vp.mean_beta(63)   == vp.betas.mean(63));
+			CHECK(vp.mean_weights(0) == vp.weights.mean(0));
 			CHECK(vp.alpha_beta(63)           == Approx(0.1850853878));
 			CHECK(vp.muw(0, 0)              == Approx(0.0358282042));
 			CHECK(vp.alpha_gam(63)           == Approx(0.1033664645));

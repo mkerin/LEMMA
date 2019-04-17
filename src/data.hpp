@@ -1123,6 +1123,9 @@ void assign_vb_init_from_file(VariationalParametersLite& vp_init){
 		EigenUtils::read_matrix_and_skip_cols(params.vb_init_file, 1, vb_init_mat, vb_init_colnames);
 		assert(vb_init_mat.rows() == n_var);
 
+		vp_init.betas.read_from_grid(vb_init_mat.block(0, 0, n_var, 5));
+		vp_init.gammas.read_from_grid(vb_init_mat.block(0, 5, n_var, 5));
+
 		vp_init.alpha_beta = vb_init_mat.col(0);
 		vp_init.mu1_beta = vb_init_mat.col(1);
 		vp_init.s1_beta_sq = vb_init_mat.col(2);
@@ -1161,9 +1164,11 @@ void set_vb_init(){
 			EigenUtils::read_matrix_and_skip_cols(params.env_coeffs_file, 1, coeffs, col_names);
 			vp_init.muw = coeffs.col(0);
 			vp_init.sw_sq = coeffs.col(1);
+			vp_init.weights.read_from_grid(coeffs);
 		} else if(col_names.size() == 1) {
 			EigenUtils::read_matrix(params.env_coeffs_file, coeffs, col_names);
 			vp_init.muw = coeffs.col(0);
+			vp_init.weights.set_mean(coeffs.col(0));
 		} else {
 			throw std::runtime_error("Unexpected file to --environment_weights");
 		}
@@ -1183,9 +1188,11 @@ void set_vb_init(){
 			EigenUtils::read_matrix_and_skip_cols(params.covar_coeffs_file, 1, coeffs, col_names);
 			vp_init.muc = coeffs.col(0);
 			vp_init.sc_sq = coeffs.col(1);
+			vp_init.covars.read_from_grid(coeffs);
 		} else if(col_names.size() == 1) {
 			EigenUtils::read_matrix(params.covar_coeffs_file, coeffs, col_names);
 			vp_init.muc = coeffs.col(0);
+			vp_init.covars.set_mean(coeffs.col(0));
 		} else {
 			throw std::runtime_error("Unexpected file to --environment_weights");
 		}
@@ -1194,7 +1201,10 @@ void set_vb_init(){
 		std::cout << "Starting covars at least squares fit" << std::endl;
 		Eigen::MatrixXd CtC = C.transpose() * C;
 		Eigen::MatrixXd Cty = C.transpose() * Y;
-		vp_init.muc = CtC.colPivHouseholderQr().solve(Cty);
+		Eigen::MatrixXd muc = CtC.colPivHouseholderQr().solve(Cty);
+
+		vp_init.muc = muc;
+		vp_init.covars.set_mean(muc);
 	}
 
 	// Manually set coeffs for SNP latent variables

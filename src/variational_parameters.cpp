@@ -36,9 +36,11 @@ void VariationalParamsBase::run_default_init(long n_var, long n_covar, long n_en
 			mu2_gam   = Eigen::ArrayXd::Zero(n_var);
 			s2_gam_sq = Eigen::ArrayXd::Constant(n_var, 0.01);
 		}
-		double eps = std::numeric_limits<double>::min();
-		muw = Eigen::ArrayXd::Constant(n_env, 1.0 / n_env);
+		Eigen::ArrayXd w_init = Eigen::ArrayXd::Constant(n_env, 1.0 / n_env);
+		muw = w_init;
 		sw_sq = Eigen::ArrayXd::Constant(n_env, 0.01);
+
+		weights.set_mean(w_init);
 	}
 
 	if(n_covar > 0) {
@@ -49,270 +51,122 @@ void VariationalParamsBase::run_default_init(long n_var, long n_covar, long n_en
 
 void VariationalParamsBase::dump_snps_to_file(boost_io::filtering_ostream& outf,
                                               const GenotypeMatrix& X, long n_env) const {
-	outf << "SNPID alpha_beta mu1_beta s1_beta";
-	if(p.mode_mog_prior_beta) outf << " mu2_beta s2_beta";
-	if(n_env > 0) {
-		outf << " alpha_gam mu1_gam s1_gam";
-		if (p.mode_mog_prior_gam) outf << " mu2_gam s2_gam";
-	}
-	outf << std::endl;
-	outf << std::scientific << std::setprecision(8);
-	long n_var = alpha_beta.rows();
-	for (long ii = 0; ii < n_var; ii++) {
-		outf << X.SNPID[ii];
-		outf << " " << alpha_beta(ii);
-		outf << " " << mu1_beta(ii);
-		outf << " " << s1_beta_sq(ii);
-		if(p.mode_mog_prior_beta) {
-			outf << " " << mu2_beta(ii);
-			outf << " " << s2_beta_sq(ii);
-		}
-		if(n_env > 0) {
-			outf << " " << alpha_gam(ii);
-			outf << " " << mu1_gam(ii);
-			outf << " " << s1_gam_sq(ii);
-			if (p.mode_mog_prior_gam) {
-				outf << " " << mu2_gam(ii);
-				outf << " " << s2_gam_sq(ii);
-			}
-		}
-		outf << std::endl;
-	}
+	long n_var = betas.size();
+	 outf << "SNPID " << betas.header("beta");
+	 if(n_env > 0){
+	  outf << " " << gammas.header("gam");
+	 }
+	 outf << std::endl;
+	 outf << std::scientific << std::setprecision(8);
+	 for (long ii = 0; ii < n_var; ii++) {
+	  outf << X.SNPID[ii];
+	  outf << " " << betas.get_ith_distn(ii);
+	  if(n_env > 0) {
+	      outf << " " << gammas.get_ith_distn(ii);
+	  }
+	  outf << std::endl;
+	 }
 }
 
 /*** Get and set properties of latent variables ***/
 
 Eigen::VectorXd VariationalParamsBase::mean_beta() const {
-	Eigen::VectorXd rr_beta;
-	if(p.mode_mog_prior_beta) {
-		rr_beta = alpha_beta * (mu1_beta - mu2_beta) + mu2_beta;
-	} else {
-		rr_beta = alpha_beta * mu1_beta;
-	}
-	return rr_beta;
+	 return betas.mean();
+
+//	Eigen::VectorXd rr_beta;
+//	if(p.mode_mog_prior_beta) {
+//		rr_beta = alpha_beta * (mu1_beta - mu2_beta) + mu2_beta;
+//	} else {
+//		rr_beta = alpha_beta * mu1_beta;
+//	}
+//	return rr_beta;
 }
 
 Eigen::VectorXd VariationalParamsBase::mean_gam() const {
-	Eigen::VectorXd rr_gam;
-	if(p.mode_mog_prior_gam) {
-		rr_gam = alpha_gam * (mu1_gam - mu2_gam) + mu2_gam;
-	} else {
-		rr_gam = alpha_gam * mu1_gam;
-	}
-	return rr_gam;
+	 return gammas.mean();
 }
 
 Eigen::VectorXd VariationalParamsBase::mean_weights() const {
-	return muw;
+	 return weights.mean();
 }
 
 Eigen::VectorXd VariationalParamsBase::mean_covar() const {
-	return muc;
+	 return covars.mean();
 }
 
 double VariationalParamsBase::mean_weights(long ll) const {
-	return muw[ll];
+	 return weights.mean(ll);
 }
 
 double VariationalParamsBase::mean_covar(long cc) const {
-//	return covars[cc].mean();
-	return muc[cc];
+	 return covars.mean(cc);
 }
 
 double VariationalParamsBase::mean_beta(std::uint32_t jj) const {
-	double rr_beta = alpha_beta(jj) * mu1_beta(jj);
-	if(p.mode_mog_prior_beta) {
-		rr_beta += (1.0 - alpha_beta(jj)) * mu2_beta(jj);
-	}
-	return rr_beta;
+	 return betas.mean(jj);
 }
 
 double VariationalParamsBase::mean_gam(std::uint32_t jj) const {
-	double rr_gam = alpha_gam(jj) * mu1_gam(jj);
-	if(p.mode_mog_prior_gam) {
-		rr_gam += (1.0 - alpha_gam(jj)) * mu2_gam(jj);
-	}
-	return rr_gam;
+	 return gammas.mean(jj);
 }
 
 Eigen::ArrayXd VariationalParamsBase::var_beta() const {
-	Eigen::ArrayXd varB = alpha_beta * (s1_beta_sq + (1.0 - alpha_beta) * mu1_beta.square());
-	if(p.mode_mog_prior_beta) {
-		varB += (1.0 - alpha_beta) * (s2_beta_sq + (alpha_beta) * mu2_beta.square());
-		varB -= 2.0 * alpha_beta * (1.0 - alpha_beta) * mu1_beta * mu2_beta;
-	}
-	return varB;
+	 return betas.var();
 }
 
 Eigen::ArrayXd VariationalParamsBase::var_gam() const {
-	Eigen::ArrayXd varG = alpha_gam * (s1_gam_sq + (1.0 - alpha_gam) * mu1_gam.square());
-	if (p.mode_mog_prior_gam) {
-		varG += (1.0 - alpha_gam) * (s2_gam_sq + (alpha_gam) * mu2_gam.square());
-		varG -= 2.0 * alpha_gam * (1.0 - alpha_gam) * mu1_gam * mu2_gam;
-	}
-	return varG;
+	 return gammas.var();
 }
 
 Eigen::ArrayXd VariationalParamsBase::var_weights() const {
-	return sw_sq;
-}
-
-Eigen::ArrayXd VariationalParamsBase::mean_beta_sq(int u0) const {
-	// if u0 == 1; E[u \beta^2]
-	// if u0 == 0; E[1 - u \beta^2]
-	Eigen::ArrayXd res;
-	assert(u0 == 1 || u0 == 2);
-	if(u0 == 1)
-		res = alpha_beta * (s1_beta_sq + mu1_beta.square());
-	else if (u0 == 2 && p.mode_mog_prior_beta) {
-		res = (1 - alpha_beta) * (s2_beta_sq + mu2_beta.square());
-	}
-	return res;
-}
-
-Eigen::ArrayXd VariationalParamsBase::mean_gam_sq(int u0) const {
-	// if u0 == 1; E[u \beta^2]
-	// if u0 == 0; E[1 - u \beta^2]
-	Eigen::ArrayXd res;
-	assert(u0 == 1 || u0 == 2);
-	if(u0 == 1)
-		res = alpha_gam * (s1_gam_sq + mu1_gam.square());
-	else if (u0 == 2 && p.mode_mog_prior_gam) {
-		res = (1 - alpha_gam) * (s2_gam_sq + mu2_gam.square());
-	}
-	return res;
-}
-
-void VariationalParamsBase::set_mean_covar(Eigen::MatrixXd mu){
-	long nn = mu.rows();
-
-	covars.resize(nn);
-	for (long ii = 0; ii < nn; ii++){
-		covars[ii].set_mean_var(mu(ii), 0.5);
-	}
+	 return weights.var();
 }
 
 /*** KL Divergence ***/
 double VariationalParamsBase::kl_div_gamma(const Hyps& hyps) const {
-	double res = 0;
-	double lambda = hyps.lambda[1];
-	double sigma_slab = hyps.slab_var(1);
-	double sigma_spike = hyps.spike_var(1);
-	long n_var = alpha_gam.rows();
-
-	res += std::log(lambda + eps) * alpha_gam.sum();
-	res += std::log(1.0 - lambda + eps) * ((double) n_var - alpha_gam.sum());
-
-	for (std::uint32_t kk = 0; kk < n_var; kk++) {
-		res -= alpha_gam(kk) * std::log(alpha_gam(kk) + eps);
-		res -= (1 - alpha_gam(kk)) * std::log(1 - alpha_gam(kk) + eps);
-	}
-
-	if(p.mode_mog_prior_gam) {
-		res += n_var / 2.0;
-
-		res -= mean_gam_sq(1).sum() / 2.0 / sigma_slab;
-		res -= mean_gam_sq(2).sum() / 2.0 / sigma_spike;
-
-		res += (alpha_gam * s1_gam_sq.log()).sum() / 2.0;
-		res += ((1.0 - alpha_gam) * s2_gam_sq.log()).sum() / 2.0;
-
-		res -= std::log(sigma_slab)  * alpha_gam.sum() / 2.0;
-		res -= std::log(sigma_spike) * (n_var - alpha_gam.sum()) / 2.0;
-	} else {
-		res += (alpha_gam * s1_gam_sq.log()).sum() / 2.0;
-		res -= (alpha_gam * (mu1_gam.square() + s1_gam_sq)).sum() / 2.0 / sigma_slab;
-
-		res += (1 - std::log(sigma_slab)) * alpha_gam.sum() / 2.0;
-	}
+	 double lambda = hyps.lambda[1];
+	 double sigma_slab = hyps.slab_var(1);
+	 double sigma_spike = hyps.spike_var(1);
+	 double res = gammas.kl_div(lambda, sigma_slab, sigma_spike);
 	return res;
 };
 
 double VariationalParamsBase::kl_div_beta(const Hyps& hyps) const {
-	double res = 0;
-	double lambda = hyps.lambda[0];
-	double sigma_slab = hyps.slab_var(0);
-	double sigma_spike = hyps.spike_var(0);
-	long n_var = alpha_beta.rows();
-
-	res += std::log(lambda + eps) * alpha_beta.sum();
-	res += std::log(1.0 - lambda + eps) * ((double) n_var - alpha_beta.sum());
-
-	for (std::uint32_t kk = 0; kk < n_var; kk++) {
-		res -= alpha_beta(kk) * std::log(alpha_beta(kk) + eps);
-		res -= (1 - alpha_beta(kk)) * std::log(1 - alpha_beta(kk) + eps);
-	}
-
-	if(p.mode_mog_prior_beta) {
-		res += n_var / 2.0;
-
-		res -= mean_beta_sq(1).sum() / 2.0 / sigma_slab;
-		res -= mean_beta_sq(2).sum() / 2.0 / sigma_spike;
-
-		res += (alpha_beta * s1_beta_sq.log()).sum() / 2.0;
-		res += ((1.0 - alpha_beta) * s2_beta_sq.log()).sum() / 2.0;
-
-		res -= std::log(sigma_slab)  * alpha_beta.sum() / 2.0;
-		res -= std::log(sigma_spike) * (n_var - alpha_beta.sum()) / 2.0;
-	} else {
-		res += (alpha_beta * s1_beta_sq.log()).sum() / 2.0;
-		res -= (alpha_beta * (mu1_beta.square() + s1_beta_sq)).sum() / 2.0 / sigma_slab;
-
-		res += (1 - std::log(sigma_slab)) * alpha_beta.sum() / 2.0;
-	}
+	 double lambda = hyps.lambda[0];
+	 double sigma_slab = hyps.slab_var(0);
+	 double sigma_spike = hyps.spike_var(0);
+	 double res = betas.kl_div(lambda, sigma_slab, sigma_spike);
 	return res;
 };
 
 double VariationalParamsBase::kl_div_covars(const Hyps& hyps) const {
-	long n_covar = muc.rows();
-
-	double res = 0;
-	res += (double) n_covar * (1.0 - std::log(hyps.sigma * hyps.sigma_c)) / 2.0;
-	res += sc_sq.log().sum() / 2.0;
-	res -= sc_sq.sum() / 2.0 / hyps.sigma / hyps.sigma_c;
-	res -= muc.square().sum() / 2.0 / hyps.sigma / hyps.sigma_c;
-
-//	double prior_var = hyps.sigma * hyps.sigma_c;
-//	for (auto distn: covars){
-//		res += distn.kl_div(prior_var);
-//	}
-
+	 double sigma = hyps.sigma * hyps.sigma_c;
+	 double res = covars.kl_div(sigma);
 	return res;
 };
 
 double VariationalParamsBase::kl_div_weights(const Hyps& hyps) const {
-	long n_env = muw.rows();
-
-	double res = 0;
-	res += (double) n_env / 2.0;
-	res += sw_sq.log().sum() / 2.0;
-	res -= sw_sq.sum() / 2.0;
-	res -= mean_weights().array().square().sum() / 2.0;
-
-//	double prior_var = 1;
-//	for (auto distn: weights){
-//		res += distn.kl_div(prior_var);
-//	}
-
+	 double sigma = hyps.sigma_w;
+	 double res = weights.kl_div(sigma);
 	return res;
 };
 
 MoGaussian VariationalParamsBase::beta_j_step(long jj, double EXty, double EXtX, Hyps hyps) {
 	double old = mean_beta(jj);
 	double lambda = hyps.lambda[0];
-	double sigma0 = hyps.slab_var[0]; // slab
+	double sigma0 = hyps.slab_var[0];                 // slab
 	double sigma1 = hyps.spike_var[0];
 
 
 	double m1 = (EXty + old * EXtX) / hyps.sigma;
-	double m2 = - EXtX / 2.0 / hyps.sigma;
+	double m2 = -EXtX / 2.0 / hyps.sigma;
 	double nat1 = m1;
 	double nat2_slab = m2 - 1.0 / 2 / sigma0;
 	double nat2_spike = m2 - 1.0 / 2 / sigma1;
 	Gaussian slab_g, spike_g;
 
-	slab_g.nat_params << nat1, nat2_slab;
-	spike_g.nat_params << nat1, nat2_spike;
+	slab_g.nats << nat1, nat2_slab;
+	spike_g.nats << nat1, nat2_spike;
 
 	MoGaussian gg;
 	gg.slab = slab_g;
@@ -330,19 +184,19 @@ MoGaussian VariationalParamsBase::beta_j_step(long jj, double EXty, double EXtX,
 MoGaussian VariationalParamsBase::gamma_j_step(long jj, double EXty, double EXtX, Hyps hyps) {
 	double old = mean_gam(jj);
 	double lambda = hyps.lambda[1];
-	double sigma0 = hyps.slab_var[1]; // slab
+	double sigma0 = hyps.slab_var[1];                 // slab
 	double sigma1 = hyps.spike_var[1];
 
 
 	double m1 = (EXty + old * EXtX) / hyps.sigma;
-	double m2 = - EXtX / 2.0 / hyps.sigma;
+	double m2 = -EXtX / 2.0 / hyps.sigma;
 	double nat1 = m1;
 	double nat2_slab = m2 - 1.0 / 2 / sigma0;
 	double nat2_spike = m2 - 1.0 / 2 / sigma1;
 	Gaussian slab_g, spike_g;
 
-	slab_g.nat_params << nat1, nat2_slab;
-	spike_g.nat_params << nat1, nat2_spike;
+	slab_g.nats << nat1, nat2_slab;
+	spike_g.nats << nat1, nat2_spike;
 
 	MoGaussian gg;
 	gg.slab = slab_g;
@@ -362,11 +216,11 @@ Gaussian VariationalParamsBase::weights_l_step(long ll, double EXty, double EXtX
 	double old = mean_weights(ll);
 
 	double m1 = (EXty + old * EXtX) / hyps.sigma;
-	double m2 = - EXtX / 2.0 / hyps.sigma;
+	double m2 = -EXtX / 2.0 / hyps.sigma;
 	double nat1 = m1;
 	double nat2 = m2 - 1.0 / 2 / hyps.sigma_w;
 	Gaussian w;
-	w.nat_params << nat1, nat2;
+	w.nats << nat1, nat2;
 	return w;
 }
 
@@ -374,16 +228,16 @@ Gaussian VariationalParamsBase::covar_c_step(long cc, double EXty, double EXtX, 
 	double old = mean_covar(cc);
 
 	double m1 = (EXty + old * EXtX) / hyps.sigma;
-	double m2 = - EXtX / 2.0 / hyps.sigma;
+	double m2 = -EXtX / 2.0 / hyps.sigma;
 	double nat1 = m1;
 	double nat2 = m2 - 1.0 / 2 / hyps.sigma_c;
 	Gaussian w;
-	w.nat_params << nat1, nat2;
+	w.nats << nat1, nat2;
 	return w;
 }
 
 void VariationalParamsBase::check_nan(const double& alpha,
-			   const std::uint32_t& ii){
+                                      const std::uint32_t& ii){
 	// check for NaNs and spit out diagnostics if so.
 	if(std::isnan(alpha)) {
 		// TODO: dump snpstats to file
@@ -437,6 +291,11 @@ VariationalParametersLite VariationalParameters::convert_to_lite() {
 	vplite.muc   = muc;
 	vplite.muw   = muw;
 	vplite.eta   = eta;
+
+	vplite.betas = betas;
+	vplite.gammas = gammas;
+	vplite.weights = weights;
+	vplite.covars = covars;
 	return vplite;
 }
 
@@ -444,14 +303,14 @@ void VariationalParameters::calcEdZtZ(const Eigen::Ref<const Eigen::ArrayXXd> &d
 	Eigen::ArrayXd muw_sq(n_env * n_env);
 	for (int ll = 0; ll < n_env; ll++) {
 		for (int mm = 0; mm < n_env; mm++) {
-			muw_sq(mm*n_env + ll) = muw(mm) * muw(ll);
+			muw_sq(mm*n_env + ll) = weights.mean(mm) * weights.mean(ll);
 		}
 	}
 
 	EdZtZ = (dXtEEX.rowwise() * muw_sq.transpose()).rowwise().sum();
 	if(n_env > 1) {
 		for (int ll = 0; ll < n_env; ll++) {
-			EdZtZ += dXtEEX.col(ll * n_env + ll) * sw_sq(ll);
+			EdZtZ += dXtEEX.col(ll * n_env + ll) * weights.var(ll);
 		}
 	}
 }

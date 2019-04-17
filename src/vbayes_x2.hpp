@@ -692,7 +692,7 @@ void _update_covar(long cc, const Hyps& hyps, VariationalParameters& vp){
 	EXtX = (N-1.0);
 
 	Gaussian w = vp.covar_c_step(cc, EXty, EXtX, hyps);
-	vp.covars[cc] = w;
+	vp.covars.set_ith_distn(cc, w);
 
 	vp.muc(cc) = w.mean();
 	vp.sc_sq(cc) = w.var();
@@ -718,7 +718,7 @@ void _update_covar(long cc, const Hyps& hyps, VariationalParameters& vp){
 		Gaussian w = vp.weights_l_step(ll, EXty, EXtX, hyps);
 
 //		vp.weights(ll) = (1 - stepsize) * vp.weights(ll) + stepsize * w;
-		vp.weights[ll] = w;
+		vp.weights.set_ith_distn(ll, w);
 
 		vp.muw(ll) = w.mean();
 		vp.sw_sq(ll) = w.var();
@@ -755,7 +755,7 @@ void _update_beta(const std::vector<std::uint32_t>& iter,
 //			all_vp[nn].beta_j_step(jj, EXty(ii, nn), EXtX(ii), all_hyps[nn]);
 
 			MoGaussian distn = all_vp[nn].beta_j_step(jj, EXty(ii, nn), EXtX(ii), all_hyps[nn]);
-			all_vp[nn].betas[jj] = distn;
+			all_vp[nn].betas.set_ith_distn(jj, distn);
 
 
 			rr_k_new(ii) = all_vp[nn].mean_beta(jj);
@@ -792,7 +792,7 @@ void _update_beta(const std::vector<std::uint32_t>& iter,
 
 				// Get param updates
 				MoGaussian distn = all_vp[nn].gamma_j_step(jj, EXty(ii, nn), EXtX(ii), all_hyps[nn]);
-				all_vp[nn].gammas[jj] = distn;
+				all_vp[nn].gammas.set_ith_distn(jj, distn);
 
 				rr_k_new(ii) = all_vp[nn].mean_gam(jj);
 				EXty -= (all_vp[nn].mean_gam(jj) - old) * D_corr.col(ii);
@@ -807,81 +807,26 @@ void maximiseHyps(Hyps& hyps,
 	// max sigma
 	hyps.sigma  = calcExpLinear(hyps, vp);
 	if (n_covar > 0) {
-		hyps.sigma += (vp.sc_sq + vp.mean_covar().array().square()).sum() / sigma_c;
+		hyps.sigma += vp.covars.mean_sq().sum() / hyps.sigma_c;
 		hyps.sigma /= (N + (double) n_covar);
 	} else {
 		hyps.sigma /= N;
 	}
 
-	// beta - max lambda
-	int ee = 0;
-	hyps.lambda[ee] = vp.alpha_beta.sum();
+	Eigen::ArrayXd beta_hyps = vp.betas.get_opt_hyps();
+	hyps.lambda[0] = beta_hyps[0];
+	hyps.slab_var[0] = beta_hyps[1];
+	hyps.spike_var[0] = beta_hyps[2];
 
-	// beta - max spike & slab variances
-	hyps.slab_var[ee]  = (vp.alpha_beta * (vp.s1_beta_sq + vp.mu1_beta.square())).sum();
-	hyps.slab_var[ee] /= hyps.lambda[ee];
-	hyps.slab_relative_var[ee] = hyps.slab_var[ee] / hyps.sigma;
-	if(p.mode_mog_prior_beta) {
-		hyps.spike_var[ee]  = ((1.0 - vp.alpha_beta) * (vp.s2_beta_sq + vp.mu2_beta.square())).sum();
-		hyps.spike_var[ee] /= ( (double)n_var - hyps.lambda[ee]);
-		hyps.spike_relative_var[ee] = hyps.spike_var[ee] / hyps.sigma;
+	if(n_env > 0){
+		Eigen::ArrayXd gam_hyps = vp.gammas.get_opt_hyps();
+		hyps.lambda[1] = gam_hyps[0];
+		hyps.slab_var[1] = gam_hyps[1];
+		hyps.spike_var[1] = gam_hyps[2];
 	}
 
-	// beta - finish max lambda
-	hyps.lambda[ee] /= n_var;
-
-	// gamma
-	if(n_effects > 1) {
-		ee = 1;
-		hyps.lambda[ee] = vp.alpha_gam.sum();
-
-		// max spike & slab variances
-		hyps.slab_var[ee]  = (vp.alpha_gam * (vp.s1_gam_sq + vp.mu1_gam.square())).sum();
-		hyps.slab_var[ee] /= hyps.lambda[ee];
-		hyps.slab_relative_var[ee] = hyps.slab_var[ee] / hyps.sigma;
-		if(p.mode_mog_prior_gam) {
-			hyps.spike_var[ee]  = ((1.0 - vp.alpha_gam) * (vp.s2_gam_sq + vp.mu2_gam.square())).sum();
-			hyps.spike_var[ee] /= ( (double)n_var - hyps.lambda[ee]);
-			hyps.spike_relative_var[ee] = hyps.spike_var[ee] / hyps.sigma;
-		}
-
-		// finish max lambda
-		hyps.lambda[ee] /= n_var;
-	}
-
-//		// max spike & slab variances
-//		hyps.slab_var.resize(n_effects);
-//		hyps.spike_var.resize(n_effects);
-//		for (int ee = 0; ee < n_effects; ee++){
-//
-//			// Initial unconstrained max
-//			hyps.slab_var[ee]  = (vp.alpha.col(ee) * (vp.s_sq.col(ee) + vp.mu.col(ee).square())).sum();
-//			hyps.slab_var[ee] /= hyps.lambda[ee];
-//			if(p.mode_mog_prior){
-//				hyps.spike_var[ee]  = ((1.0 - vp.alpha.col(ee)) * (vp.sp_sq.col(ee) + vp.mup.col(ee).square())).sum();
-//				hyps.spike_var[ee] /= ( (double)n_var - hyps.lambda[ee]);
-//			}
-//
-//			// Remaxise while maintaining same diff in MoG variances if getting too close
-//			if(p.mode_mog_prior && hyps.slab_var[ee] < p.min_spike_diff_factor * hyps.spike_var[ee]){
-//				hyps.slab_var[ee]  = (vp.alpha.col(ee) * (vp.s_sq.col(ee) + vp.mu.col(ee).square())).sum();
-//				hyps.slab_var[ee] += p.min_spike_diff_factor * ((1.0 - vp.alpha.col(ee)) * (vp.sp_sq.col(ee) + vp.mup.col(ee).square())).sum();
-//				hyps.slab_var[ee] /= (double) n_var;
-//				hyps.spike_var[ee] = hyps.slab_var[ee] / p.min_spike_diff_factor;
-//			}
-//		}
-//
-//		hyps.slab_relative_var = hyps.slab_var / hyps.sigma;
-//		if(p.mode_mog_prior){
-//			hyps.spike_relative_var = hyps.spike_var / hyps.sigma;
-//		}
-
-	// hyps.lam_b         = hyps.lambda(0);
-	// hyps.lam_g         = hyps.lambda(1);
-	// hyps.sigma_b       = hyps.slab_relative_var(0);
-	// hyps.sigma_g       = hyps.slab_relative_var(1);
-	// hyps.sigma_g_spike = hyps.spike_relative_var(0);
-	// hyps.sigma_g_spike = hyps.spike_relative_var(1);
+	hyps.slab_relative_var = hyps.slab_var / hyps.sigma;
+	hyps.spike_relative_var = hyps.spike_var / hyps.sigma;
 }
 
 double calc_logw(const Hyps& hyps,

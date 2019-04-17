@@ -27,10 +27,10 @@ parameters p;
 	double eps = std::numeric_limits<double>::min();
 
 
-std::vector<MoGaussian> betas;
-std::vector<MoGaussian> gammas;
-std::vector<Gaussian> weights;
-std::vector<Gaussian> covars;
+MoGaussianVec betas;
+MoGaussianVec gammas;
+GaussianVec weights;
+GaussianVec covars;
 
 // Variational parameters for slab (params 1)
 Eigen::ArrayXd alpha_beta;         // P x (E+1)

@@ -18,6 +18,8 @@
 #include <boost/iostreams/device/file.hpp>
 #include <boost/iostreams/filter/gzip.hpp>
 
+namespace boost_io = boost::iostreams;
+
 namespace EigenUtils {
 
 template <typename EigenMat>
@@ -50,6 +52,10 @@ void read_matrix_and_skip_cols(const std::string &filename,
                                const int& n_skip_cols,
                                Eigen::MatrixXd &M,
                                std::vector <std::string> &col_names);
+
+void fstream_init(boost_io::filtering_ostream& my_outf,
+                  const std::string& filename,
+                  bool allow_gzip=true);
 }
 
 #endif //LEMMA_EIGEN_UTILS_HPP

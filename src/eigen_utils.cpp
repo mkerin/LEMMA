@@ -81,7 +81,7 @@ void EigenUtils::read_matrix(const std::string &filename, const long &n_rows, Ei
 			ss >> sss;
 			/// NA
 			if (sss == "NA" || sss == "NAN" || sss == "NaN" || sss == "nan") {
-				tmp_d = 0;                  // Will skip over this value in future
+				tmp_d = 0;                                                  // Will skip over this value in future
 				incomplete_row[i] = true;
 			} else {
 				try{
@@ -93,7 +93,7 @@ void EigenUtils::read_matrix(const std::string &filename, const long &n_rows, Ei
 			}
 			M(i, k) = tmp_d;
 		}
-		i++;          // loop should end at i == n_samples
+		i++;                          // loop should end at i == n_samples
 	}
 	if (i < n_rows) {
 		throw std::runtime_error("ERROR: could not convert txt file (too few lines).");
@@ -168,7 +168,7 @@ void EigenUtils::read_matrix(const std::string &filename, Eigen::MatrixXd &M, st
 
 			M(i, k) = tmp_d;
 		}
-		i++;          // loop should end at i == n_rows
+		i++;                          // loop should end at i == n_rows
 	}
 	if (i < n_rows) {
 		throw std::runtime_error("ERROR: could not convert txt file (too few lines).");
@@ -248,7 +248,7 @@ void EigenUtils::read_matrix_and_skip_cols(const std::string &filename,
 				M(i, k - n_skip_cols) = tmp_d;
 			}
 		}
-		i++;          // loop should end at i == n_rows
+		i++;                          // loop should end at i == n_rows
 	}
 	if (i < n_rows) {
 		throw std::runtime_error("ERROR: could not convert txt file (too few lines).");
@@ -353,6 +353,25 @@ void EigenUtils::center_matrix(EigenMat& M){
 			M(i, k) -= mu;
 		}
 	}
+}
+
+void EigenUtils::fstream_init(boost_io::filtering_ostream& my_outf,
+                              const std::string& filename,
+                              bool allow_gzip){
+	my_outf.reset();
+
+	std::string stem = filename.substr(0, filename.find('.'));
+	std::string ext  = filename.substr(filename.find('.'), filename.size());
+
+	if(!allow_gzip) {
+		ext = ext.substr(0, ext.find(".gz"));
+	}
+	std::string ofile      = stem + ext;
+
+	if (ext.find(".gz") != std::string::npos) {
+		my_outf.push(boost_io::gzip_compressor());
+	}
+	my_outf.push(boost_io::file_sink(ofile));
 }
 
 // Explicit instantiation
