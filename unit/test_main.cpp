@@ -374,7 +374,7 @@ TEST_CASE( "Example 4: multi-env + mog + covars + emp_bayes" ){
 			CHECK(VB.n_env == 4);
 			CHECK(VB.n_var == 67);
 			CHECK(VB.n_effects == 2);
-			CHECK(VB.vp_init.muw(0) == 0.25);
+			CHECK(VB.vp_init.mean_weights(0) == 0.25);
 			CHECK(VB.p.init_weights_with_snpwise_scan == false);
 			CHECK(VB.dXtEEX(0, 0) == Approx(38.9610805993));
 			CHECK(VB.dXtEEX(1, 0) == Approx(38.2995451744));
@@ -404,10 +404,10 @@ TEST_CASE( "Example 4: multi-env + mog + covars + emp_bayes" ){
 
 			VB.updateAllParams(0, round_index, all_vp, all_hyps, logw_prev);
 
-			CHECK(vp.alpha_beta(0)            == Approx(0.1347598474));
-			CHECK(vp.alpha_beta(1)            == Approx(0.1406737102));
-			CHECK(vp.alpha_beta(63)           == Approx(0.142092349));
-			CHECK(vp.muw(0, 0)              == Approx(0.1053510228));
+			CHECK(vp.betas.mix(0)            == Approx(0.1347598474));
+			CHECK(vp.betas.mix(1)            == Approx(0.1406737102));
+			CHECK(vp.betas.mix(63)           == Approx(0.142092349));
+			CHECK(vp.mean_weights(0)              == Approx(0.1053510228));
 
 			CHECK(hyps.sigma                == Approx(0.6979599837));
 			CHECK(hyps.lambda[0]            == Approx(0.1683579572));
@@ -419,34 +419,32 @@ TEST_CASE( "Example 4: multi-env + mog + covars + emp_bayes" ){
 			CHECK(hyps.slab_var[0] == vp.betas.get_opt_hyps()(1));
 			CHECK(hyps.spike_var[0] == vp.betas.get_opt_hyps()(2));
 
-			Eq_beta = vp.alpha_beta * vp.mu1_beta;
-			if(p.mode_mog_prior_beta) Eq_beta.array() += (1 - vp.alpha_beta) * vp.mu2_beta;
+			Eq_beta = vp.mean_beta();
 			check_ym  = VB.X * Eq_beta;
-			check_ym += VB.C * vp.muc.cast<scalarData>().matrix();
+			check_ym += VB.C * vp.mean_covar().cast<scalarData>().matrix();
 			CHECK(vp.ym(0)            == Approx(check_ym(0)));
 
 			VB.updateAllParams(1, round_index, all_vp, all_hyps, logw_prev);
 
-//			CHECK(vp.alpha_beta(0)            == Approx(0.1466416933));
-//			CHECK(vp.muw(0, 0)              == Approx(0.0594808543));
-//			CHECK(vp.alpha_gam(63)           == Approx(0.1180509779));
+//			CHECK(vp.betas.mix(0)            == Approx(0.1466416933));
+//			CHECK(vp.mean_weights(0)              == Approx(0.0594808543));
+//			CHECK(vp.gammas.mix(63)           == Approx(0.1180509779));
 //			CHECK(vp.mu1_gam(63)              == Approx(0.0019247043));
 //			CHECK(vp.s1_gam_sq(63)            == Approx(0.002611992));
 
-			Eq_beta = vp.alpha_beta * vp.mu1_beta;
-			if(p.mode_mog_prior_beta) Eq_beta.array() += (1 - vp.alpha_beta) * vp.mu2_beta;
+			Eq_beta = vp.mean_beta();
 			check_ym  = VB.X * Eq_beta;
-			check_ym += VB.C * vp.muc.cast<scalarData>().matrix();
+			check_ym += VB.C * vp.mean_covar().cast<scalarData>().matrix();
 			CHECK(vp.ym(0)            == Approx(check_ym(0)));
 
 			VB.updateAllParams(2, round_index, all_vp, all_hyps, logw_prev);
 
 			CHECK(vp.mean_beta(63)   == vp.betas.mean(63));
 			CHECK(vp.mean_weights(0) == vp.weights.mean(0));
-			CHECK(vp.alpha_beta(63)           == Approx(0.1850853878));
-			CHECK(vp.muw(0, 0)              == Approx(0.0358282042));
-			CHECK(vp.alpha_gam(63)           == Approx(0.1033664645));
-			CHECK(vp.mu1_gam(63)              == Approx(0.0000581649));
+			CHECK(vp.betas.mix(63)           == Approx(0.1850853878));
+			CHECK(vp.mean_weights(0)              == Approx(0.0358282042));
+			CHECK(vp.gammas.mix(63)           == Approx(0.1033664645));
+			CHECK(vp.mean_gam(63)              == Approx(0.0000060221));
 
 			CHECK(VB.calc_logw(hyps, vp) == Approx(-88.4813237554));
 			VbTracker tracker(p);
@@ -465,33 +463,6 @@ TEST_CASE( "Example 4: multi-env + mog + covars + emp_bayes" ){
 			// CHECK(VB.calcKLGamma(hyps, vp)  == Approx(-0.0053957728));
 
 			// check int_linear
-
-			// Expectation of linear regression log-likelihood
-			int_linear  = (VB.Y - vp.ym).squaredNorm();
-			int_linear -= 2.0 * (VB.Y - vp.ym).cwiseProduct(vp.eta).dot(vp.yx);
-			int_linear += vp.yx.cwiseProduct(vp.eta_sq).dot(vp.yx);
-			// CHECK(int_linear == Approx(21.6133648827));
-
-			double int_linear2  = (VB.Y - vp.ym - vp.yx.cwiseProduct(vp.eta)).squaredNorm();
-			int_linear2 -= vp.yx.cwiseProduct(vp.eta).squaredNorm();
-			int_linear2 += vp.yx.cwiseProduct(vp.eta_sq).dot(vp.yx);
-			// CHECK(int_linear2 == Approx(21.6133648827));
-
-			double kl_covar = 0.0;
-			kl_covar += (double) VB.n_covar * (1.0 - std::log(hyps.sigma * VB.sigma_c)) / 2.0;
-			kl_covar += vp.sc_sq.log().sum() / 2.0;
-			kl_covar -= vp.sc_sq.sum() / 2.0 / hyps.sigma / VB.sigma_c;
-			kl_covar -= vp.muc.square().sum() / 2.0 / hyps.sigma / VB.sigma_c;
-			// CHECK(kl_covar == Approx(-24.0588694492));
-
-			// weights
-			double kl_weights = 0.0;
-			kl_weights += (double) VB.n_env / 2.0;
-			kl_weights += vp.sw_sq.log().sum() / 2.0;
-			kl_weights -= vp.sw_sq.sum() / 2.0;
-			kl_weights -= vp.muw.square().sum() / 2.0;
-			// CHECK(kl_weights == Approx(-0.4078325179));
-
 
 			// variances
 			CHECK(vp.EdZtZ.sum() == Approx(6260.1708501913));
@@ -540,7 +511,7 @@ TEST_CASE( "Example 4: multi-env + mog + covars + emp_bayes" ){
 //			CHECK(VB.N == 50.0);
 //			CHECK(VB.n_env == 4);
 //			CHECK(VB.n_effects == 2);
-//			CHECK(VB.vp_init.muw(0) == 0.25);
+//			CHECK(VB.vp_init.mean_weights(0) == 0.25);
 //			CHECK(VB.p.init_weights_with_snpwise_scan == false);
 //			CHECK(VB.dXtEEX(0, 0) == Approx(38.9610805993));
 //			CHECK(VB.dXtEEX(1, 0) == Approx(38.2995451744));
@@ -581,7 +552,7 @@ TEST_CASE( "Example 4: multi-env + mog + covars + emp_bayes" ){
 //			CHECK(VB.N == 50.0);
 //			CHECK(VB.n_env == 4);
 //			CHECK(VB.n_effects == 2);
-//			CHECK(VB.vp_init.muw(0) == 0.25);
+//			CHECK(VB.vp_init.mean_weights(0) == 0.25);
 //			CHECK(VB.p.init_weights_with_snpwise_scan == false);
 //			CHECK(VB.dXtEEX(0, 0) == Approx(38.9610805993));
 //			CHECK(VB.dXtEEX(1, 0) == Approx(38.3718));
@@ -767,7 +738,7 @@ TEST_CASE( "Example 4: multi-env + mog + covars + emp_bayes" ){
 //			std::vector<double> logw_prev(n_grid, -std::numeric_limits<double>::max());
 //			std::vector<std::vector< double > > logw_updates(n_grid);
 //
-//			vp.alpha_beta(0) = std::nan("1");
+//			vp.betas.mix(0) = std::nan("1");
 //
 //			CHECK_THROWS(VB.updateAllParams(0, round_index, all_vp, all_hyps, logw_prev));
 //		}

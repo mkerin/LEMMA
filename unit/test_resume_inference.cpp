@@ -205,7 +205,6 @@ TEST_CASE("Resume from multi-env + mog + squarem"){
 			VB.updateAllParams(2, round_index, all_vp, all_hyps, logw_prev);
 			CHECK(VB.calc_logw(hyps, vp) == Approx(-88.4813237554));
 
-			CHECK(vp.covars.mean(0) == vp.muc(0));
 			CHECK(VB.YM.squaredNorm() == Approx(14.6480266984));
 			CHECK(VB.YX.squaredNorm() == Approx(0.0004676258));
 			CHECK(VB.ETA.squaredNorm() == Approx(0.0744622661));
@@ -260,7 +259,6 @@ TEST_CASE("Resume from multi-env + mog + squarem"){
 			VariationalParameters& vp = all_vp[0];
 			Hyps& hyps = all_hyps[0];
 
-			CHECK(vp.covars.mean(0) == vp.muc(0));
 			CHECK(VB.YM.squaredNorm() == Approx(14.6480266997));
 			CHECK(VB.YX.squaredNorm() == Approx(0.0004676258));
 			CHECK(VB.ETA.squaredNorm() == Approx(0.0744622647));
@@ -272,7 +270,6 @@ TEST_CASE("Resume from multi-env + mog + squarem"){
 			VB.updateAllParams(3, round_index, all_vp, all_hyps, logw_prev);
 			CHECK(VB.calc_logw(hyps, vp) == Approx(-87.8801711925));
 
-			CHECK(vp.covars.mean(0) == vp.muc(0));
 			CHECK(vp.ym.squaredNorm() == Approx(15.7914630418));
 			CHECK(vp.yx.squaredNorm() == Approx(0.0000880429));
 			CHECK(vp.eta.squaredNorm() == Approx(0.0221053884));

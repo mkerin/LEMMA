@@ -1089,11 +1089,13 @@ void assign_vb_init_from_file(VariationalParametersLite& vp_init){
 		alpha_init = Eigen::Map<Eigen::ArrayXXd>(vb_init_mat.col(0).data(), n_var, n_effects);
 		mu_init = Eigen::Map<Eigen::ArrayXXd>(vb_init_mat.col(1).data(), n_var, n_effects);
 
-		vp_init.alpha_beta     = alpha_init.col(0);
-		vp_init.mu1_beta       = mu_init.col(0);
+		vp_init.betas.set_mean(mu_init.col(0));
+//		vp_init.alpha_beta     = alpha_init.col(0);
+//		vp_init.mu1_beta       = mu_init.col(0);
 		if(n_env > 0) {
-			vp_init.alpha_gam     = alpha_init.col(1);
-			vp_init.mu1_gam       = mu_init.col(1);
+			vp_init.gammas.set_mean(mu_init.col(1));
+//			vp_init.alpha_gam     = alpha_init.col(1);
+//			vp_init.mu1_gam       = mu_init.col(1);
 		}
 	} else if (vb_init_colnames == case2) {
 		read_vb_init_file(params.vb_init_file, vb_init_mat, vb_init_colnames,
@@ -1111,11 +1113,13 @@ void assign_vb_init_from_file(VariationalParametersLite& vp_init){
 				std::cout << init_key[kk] << std::endl;
 			} else {
 				index_kk = it - G.SNPKEY.begin();
-				vp_init.alpha_beta(index_kk)    = 1.0;
-				vp_init.mu1_beta(index_kk)      = vb_init_mat(kk, 5);
+//				vp_init.alpha_beta(index_kk)    = 1.0;
+//				vp_init.mu1_beta(index_kk)      = vb_init_mat(kk, 5);
+				vp_init.betas.set_mean(index_kk, vb_init_mat(kk, 5));
 				if(n_effects > 1) {
-					vp_init.alpha_gam(index_kk) = 1.0;
-					vp_init.mu1_gam(index_kk)   = vb_init_mat(kk, 6);
+//					vp_init.alpha_gam(index_kk) = 1.0;
+//					vp_init.mu1_gam(index_kk)   = vb_init_mat(kk, 6);
+					vp_init.gammas.set_mean(index_kk, vb_init_mat(kk, 6));
 				}
 			}
 		}
@@ -1126,16 +1130,16 @@ void assign_vb_init_from_file(VariationalParametersLite& vp_init){
 		vp_init.betas.read_from_grid(vb_init_mat.block(0, 0, n_var, 5));
 		vp_init.gammas.read_from_grid(vb_init_mat.block(0, 5, n_var, 5));
 
-		vp_init.alpha_beta = vb_init_mat.col(0);
-		vp_init.mu1_beta = vb_init_mat.col(1);
-		vp_init.s1_beta_sq = vb_init_mat.col(2);
-		vp_init.mu2_beta = vb_init_mat.col(3);
-		vp_init.s2_beta_sq = vb_init_mat.col(4);
-		vp_init.alpha_gam = vb_init_mat.col(5);
-		vp_init.mu1_gam = vb_init_mat.col(6);
-		vp_init.s1_gam_sq = vb_init_mat.col(7);
-		vp_init.mu2_gam = vb_init_mat.col(8);
-		vp_init.s2_gam_sq = vb_init_mat.col(9);
+//		vp_init.alpha_beta = vb_init_mat.col(0);
+//		vp_init.mu1_beta = vb_init_mat.col(1);
+//		vp_init.s1_beta_sq = vb_init_mat.col(2);
+//		vp_init.mu2_beta = vb_init_mat.col(3);
+//		vp_init.s2_beta_sq = vb_init_mat.col(4);
+//		vp_init.alpha_gam = vb_init_mat.col(5);
+//		vp_init.mu1_gam = vb_init_mat.col(6);
+//		vp_init.s1_gam_sq = vb_init_mat.col(7);
+//		vp_init.mu2_gam = vb_init_mat.col(8);
+//		vp_init.s2_gam_sq = vb_init_mat.col(9);
 	} else {
 		// Unknown header
 		std::cout << "Unknown header in " << params.vb_init_file << std::endl;
@@ -1162,12 +1166,9 @@ void set_vb_init(){
 		Eigen::MatrixXd coeffs;
 		if(col_names == case1) {
 			EigenUtils::read_matrix_and_skip_cols(params.env_coeffs_file, 1, coeffs, col_names);
-			vp_init.muw = coeffs.col(0);
-			vp_init.sw_sq = coeffs.col(1);
 			vp_init.weights.read_from_grid(coeffs);
 		} else if(col_names.size() == 1) {
 			EigenUtils::read_matrix(params.env_coeffs_file, coeffs, col_names);
-			vp_init.muw = coeffs.col(0);
 			vp_init.weights.set_mean(coeffs.col(0));
 		} else {
 			throw std::runtime_error("Unexpected file to --environment_weights");
@@ -1186,12 +1187,9 @@ void set_vb_init(){
 		Eigen::MatrixXd coeffs;
 		if(col_names == case1) {
 			EigenUtils::read_matrix_and_skip_cols(params.covar_coeffs_file, 1, coeffs, col_names);
-			vp_init.muc = coeffs.col(0);
-			vp_init.sc_sq = coeffs.col(1);
 			vp_init.covars.read_from_grid(coeffs);
 		} else if(col_names.size() == 1) {
 			EigenUtils::read_matrix(params.covar_coeffs_file, coeffs, col_names);
-			vp_init.muc = coeffs.col(0);
 			vp_init.covars.set_mean(coeffs.col(0));
 		} else {
 			throw std::runtime_error("Unexpected file to --environment_weights");
@@ -1203,7 +1201,6 @@ void set_vb_init(){
 		Eigen::MatrixXd Cty = C.transpose() * Y;
 		Eigen::MatrixXd muc = CtC.colPivHouseholderQr().solve(Cty);
 
-		vp_init.muc = muc;
 		vp_init.covars.set_mean(muc);
 	}
 

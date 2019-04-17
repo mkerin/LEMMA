@@ -115,6 +115,10 @@ void set_mean(Eigen::ArrayXd mu){
 	assert(mu.rows() == nn);
 	nats.col(0) = -2.0 * nats.col(1) * mu;
 }
+void set_mean(long ii, double mu){
+	assert(ii < nn);
+	nats(ii, 0) = -2.0 * nats(ii, 1) * mu;
+}
 
 /*** Allow coordinate updates ***/
 Gaussian get_ith_distn(long ii) const;
@@ -214,6 +218,11 @@ void set_mean(Eigen::ArrayXd mu){
 	assert(mu.rows() == nn);
 	slab_nats.col(0) = -2.0 * slab_nats.col(1) * mu;
 	spike_nats.col(0) = -2.0 * spike_nats.col(1) * mu;
+}
+void set_mean(long ii, double mu){
+	assert(ii < nn);
+	slab_nats(ii, 0) = -2.0 * slab_nats(ii, 1) * mu;
+	spike_nats(ii, 0) = -2.0 * spike_nats(ii, 1) * mu;
 }
 
 /*** Allow coordinate updates ***/

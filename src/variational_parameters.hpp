@@ -24,35 +24,12 @@ public:
 // This stores parameters used in VB and some summary quantities that
 // depend on those parameters.
 parameters p;
-	double eps = std::numeric_limits<double>::min();
-
+double eps = std::numeric_limits<double>::min();
 
 MoGaussianVec betas;
 MoGaussianVec gammas;
 GaussianVec weights;
 GaussianVec covars;
-
-// Variational parameters for slab (params 1)
-Eigen::ArrayXd alpha_beta;         // P x (E+1)
-Eigen::ArrayXd mu1_beta;            // P x (E+1)
-Eigen::ArrayXd s1_beta_sq;          // P x (E+1)
-Eigen::ArrayXd mu2_beta;            // P x (E+1)
-Eigen::ArrayXd s2_beta_sq;          // P x (E+1)
-
-// Variational parameters for spike (MoG prior mode; params 2)
-Eigen::ArrayXd alpha_gam;         // P x (E+1)
-Eigen::ArrayXd mu1_gam;            // P x (E+1)
-Eigen::ArrayXd s1_gam_sq;          // P x (E+1)
-Eigen::ArrayXd mu2_gam;            // P x (E+1)
-Eigen::ArrayXd s2_gam_sq;          // P x (E+1)
-
-// Variational parameters for covariate main effects
-Eigen::ArrayXd muc;            // C x 1
-Eigen::ArrayXd sc_sq;          // C x 1
-
-// Variational params for weights
-Eigen::ArrayXd muw;              // n_env x 1
-Eigen::ArrayXd sw_sq;            // n_env x 1
 
 VariationalParamsBase(parameters my_params) : p(my_params){
 };
@@ -80,8 +57,10 @@ void set_mean_weights(Eigen::MatrixXd mu);
 Eigen::ArrayXd var_beta() const;
 Eigen::ArrayXd var_gam() const;
 Eigen::ArrayXd var_weights() const;
-Eigen::ArrayXd mean_beta_sq(int u0) const;
-Eigen::ArrayXd mean_gam_sq(int u0) const;
+Eigen::ArrayXd var_covar() const;
+
+double var_weights(long jj) const;
+double var_covar(long jj) const;
 
 /*** Updates ***/
 Gaussian weights_l_step(long ll, double EXty, double EXtX, Hyps hyps) const;

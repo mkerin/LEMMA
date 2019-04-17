@@ -93,10 +93,7 @@ void init_interim_output(const int ii,
 			if (ll + 1 < n_env) outf_weights << " ";
 		}
 		outf_weights << std::endl;
-		for (int ll = 0; ll < n_env; ll++) {
-			outf_weights << vp.muw(ll);
-			if (ll + 1 < n_env) outf_weights << " ";
-		}
+		outf_weights << vp.mean_weights().transpose();
 		outf_weights << std::endl;
 	}
 
@@ -157,17 +154,13 @@ void push_interim_hyps(const int& cnt,
 	for (int ee = 0; ee < n_effects; ee++) {
 		outf_iter << i_hyps.s_x(ee) << "\t";
 	}
-	outf_iter << vp.muc.square().sum() << "\t";
+	outf_iter << vp.mean_covar().array().square().sum() << "\t";
 	outf_iter << c_logw << "\t";
 	outf_iter << c_alpha_diff << "\t";
 	outf_iter << lapsecs.count() << std::endl;
 
 	if(n_effects > 1) {
-		for (int ll = 0; ll < n_env; ll++) {
-			outf_weights << vp.muw(ll);
-			if (ll < n_env - 1) outf_weights << "\t";
-		}
-		outf_weights << std::endl;
+		outf_weights  << vp.mean_weights().transpose() << std::endl;
 	}
 }
 
@@ -212,7 +205,7 @@ void dump_state(const int& cnt,
 	fstream_init(outf_inits, dir, "_dump_it" + std::to_string(cnt) + "_aggregate", true);
 	Eigen::VectorXd Ealpha = Eigen::VectorXd::Zero(n_samples);
 	if(n_covar > 0) {
-		Ealpha += (C.matrix() * vp.muc.matrix().cast<scalarData>()).cast<double>();
+		Ealpha += (C.matrix() * vp.mean_covar().matrix().cast<scalarData>()).cast<double>();
 	}
 	outf_inits << "Y Ealpha Xbeta eta Xgamma";
 	outf_inits << std::endl;
@@ -235,8 +228,8 @@ void dump_state(const int& cnt,
 		outf_inits << "covar mu s_sq" << std::endl;
 		for (int cc = 0; cc < n_covar; cc++) {
 			outf_inits << covar_names[cc] << " ";
-			outf_inits << vp.muc(cc) << " ";
-			outf_inits << vp.sc_sq(cc) << std::endl;
+			outf_inits << vp.mean_covar(cc) << " ";
+			outf_inits << vp.var_covar(cc) << std::endl;
 		}
 		boost_io::close(outf_inits);
 	}
@@ -248,8 +241,8 @@ void dump_state(const int& cnt,
 		outf_inits << "env mu s_sq" << std::endl;
 		for (int ll = 0; ll < n_env; ll++) {
 			outf_inits << env_names[ll] << " ";
-			outf_inits << vp.muw(ll) << " ";
-			outf_inits << vp.sw_sq(ll) << std::endl;
+			outf_inits << vp.mean_weights(ll) << " ";
+			outf_inits << vp.var_weights(ll) << std::endl;
 		}
 		boost_io::close(outf_inits);
 	}
@@ -269,8 +262,8 @@ void push_interim_covar_values(const int& cnt,
 	outf_inits << "covar_name mu_covar s_sq_covar";
 	outf_inits << std::endl;
 	for (int cc = 0; cc < n_covar; cc++) {
-		outf_inits << covar_names[cc] << " " << vp.muc(cc);
-		outf_inits << " " << vp.sc_sq(cc);
+		outf_inits << covar_names[cc] << " " << vp.mean_covar(cc);
+		outf_inits << " " << vp.var_covar(cc);
 		outf_inits << std::endl;
 	}
 	boost_io::close(outf_inits);

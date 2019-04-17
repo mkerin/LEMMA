@@ -272,7 +272,7 @@ explicit VBayesX2(Data& dat) : X(dat.G),
 		// cast used if DATA_AS_FLOAT
 		vp_init.eta     = E.matrix() * vp_init.mean_weights().matrix().cast<scalarData>();
 		vp_init.eta_sq  = vp_init.eta.array().square().matrix();
-		vp_init.eta_sq += E.square().matrix() * vp_init.sw_sq.matrix().template cast<scalarData>();
+		vp_init.eta_sq += E.square().matrix() * vp_init.var_weights().matrix().template cast<scalarData>();
 	}
 	calcPredEffects(vp_init);
 
@@ -409,7 +409,7 @@ void runInnerLoop(const bool random_init,
 	// Run inner loop until convergence
 	std::vector<int> converged(n_grid, 0);
 	bool all_converged = false;
-	std::vector<Eigen::ArrayXd> alpha_prev(n_grid);
+	std::vector<Eigen::VectorXd> alpha_prev(n_grid);
 	std::vector<double> i_logw(n_grid, -1*std::numeric_limits<double>::max());
 
 	for (int nn = 0; nn < n_grid; nn++) {
@@ -425,7 +425,7 @@ void runInnerLoop(const bool random_init,
 	int count = p.vb_iter_start;
 	while(!all_converged && count < p.vb_iter_max) {
 		for (int nn = 0; nn < n_grid; nn++) {
-			alpha_prev[nn] = all_vp[nn].alpha_beta;
+			alpha_prev[nn] = all_vp[nn].mean_beta();
 		}
 		std::vector<double> logw_prev = i_logw;
 		std::vector<double> alpha_diff(n_grid);
@@ -465,7 +465,7 @@ void runInnerLoop(const bool random_init,
 		// update elbo
 		for (int nn = 0; nn < n_grid; nn++) {
 			i_logw[nn]     = calc_logw(all_hyps[nn], all_vp[nn]);
-			alpha_diff[nn] = (alpha_prev[nn] - all_vp[nn].alpha_beta).abs().maxCoeff();
+			alpha_diff[nn] = (alpha_prev[nn] - all_vp[nn].mean_beta()).array().abs().maxCoeff();
 		}
 
 		// Interim output
@@ -694,8 +694,8 @@ void _update_covar(long cc, const Hyps& hyps, VariationalParameters& vp){
 	Gaussian w = vp.covar_c_step(cc, EXty, EXtX, hyps);
 	vp.covars.set_ith_distn(cc, w);
 
-	vp.muc(cc) = w.mean();
-	vp.sc_sq(cc) = w.var();
+//	vp.muc(cc) = w.mean();
+//	vp.sc_sq(cc) = w.var();
 
 	vp.ym += (vp.mean_covar(cc) - old) * C.col(cc).matrix();
 }
@@ -720,8 +720,8 @@ void _update_covar(long cc, const Hyps& hyps, VariationalParameters& vp){
 //		vp.weights(ll) = (1 - stepsize) * vp.weights(ll) + stepsize * w;
 		vp.weights.set_ith_distn(ll, w);
 
-		vp.muw(ll) = w.mean();
-		vp.sw_sq(ll) = w.var();
+//		vp.muw(ll) = w.mean();
+//		vp.sw_sq(ll) = w.var();
 
 		vp.eta += (vp.mean_weights(ll) - old) * E.col(ll).matrix();
 
@@ -981,7 +981,7 @@ double calcExpLinear(const Hyps& hyps,
 
 	// variances
 	if(n_covar > 0) {
-		int_linear += (N - 1.0) * vp.sc_sq.sum();
+		int_linear += (N - 1.0) * vp.var_covar().sum();
 	}
 	int_linear += (N - 1.0) * vp.var_beta().sum();
 	if(n_effects > 1) {
@@ -989,78 +989,6 @@ double calcExpLinear(const Hyps& hyps,
 	}
 
 	return int_linear;
-}
-
-double calcKLBeta(const Hyps& hyps,
-                  const VariationalParameters& vp){
-	// KL Divergence of log[ p(beta | u, theta) / q(u, beta) ]
-	double res = 0;
-	int ee = 0;
-
-	res += std::log(hyps.lambda(ee) + eps) * vp.alpha_beta.sum();
-	res += std::log(1.0 - hyps.lambda(ee) + eps) * ((double) n_var - vp.alpha_beta.sum());
-
-	// Need std::log for eps guard to work
-	for (std::uint32_t kk = 0; kk < n_var; kk++) {
-		res -= vp.alpha_beta(kk) * std::log(vp.alpha_beta(kk) + eps);
-		res -= (1 - vp.alpha_beta(kk)) * std::log(1 - vp.alpha_beta(kk) + eps);
-	}
-
-	// beta
-	if(p.mode_mog_prior_beta) {
-		res += n_var / 2.0;
-
-		res -= vp.mean_beta_sq(1).sum() / 2.0 / hyps.slab_var(ee);
-		res -= vp.mean_beta_sq(2).sum() / 2.0 / hyps.spike_var(ee);
-
-		res += (vp.alpha_beta * vp.s1_beta_sq.log()).sum() / 2.0;
-		res += ((1.0 - vp.alpha_beta) * vp.s2_beta_sq.log()).sum() / 2.0;
-
-		res -= std::log(hyps.slab_var(ee))  * vp.alpha_beta.sum() / 2.0;
-		res -= std::log(hyps.spike_var(ee)) * (n_var - vp.alpha_beta.sum()) / 2.0;
-	} else {
-		res += (vp.alpha_beta * vp.s1_beta_sq.log()).sum() / 2.0;
-		res -= (vp.alpha_beta * (vp.mu1_beta.square() + vp.s1_beta_sq)).sum() / 2.0 / hyps.slab_var(ee);
-
-		res += (1 - std::log(hyps.slab_var(ee))) * vp.alpha_beta.sum() / 2.0;
-	}
-	return res;
-}
-
-double calcKLGamma(const Hyps& hyps,
-                   const VariationalParameters& vp){
-	// KL Divergence of log[ p(beta | u, theta) / q(u, beta) ]
-	double res = 0;
-	int ee = 1;
-
-	res += std::log(hyps.lambda(ee) + eps) * vp.alpha_gam.sum();
-	res += std::log(1.0 - hyps.lambda(ee) + eps) * ((double) n_var - vp.alpha_gam.sum());
-
-	// Need std::log for eps guard to work
-	for (std::uint32_t kk = 0; kk < n_var; kk++) {
-		res -= vp.alpha_gam(kk) * std::log(vp.alpha_gam(kk) + eps);
-		res -= (1 - vp.alpha_gam(kk)) * std::log(1 - vp.alpha_gam(kk) + eps);
-	}
-
-	// beta
-	if(p.mode_mog_prior_gam) {
-		res += n_var / 2.0;
-
-		res -= vp.mean_gam_sq(1).sum() / 2.0 / hyps.slab_var(ee);
-		res -= vp.mean_gam_sq(2).sum() / 2.0 / hyps.spike_var(ee);
-
-		res += (vp.alpha_gam * vp.s1_gam_sq.log()).sum() / 2.0;
-		res += ((1.0 - vp.alpha_gam) * vp.s2_gam_sq.log()).sum() / 2.0;
-
-		res -= std::log(hyps.slab_var(ee))  * vp.alpha_gam.sum() / 2.0;
-		res -= std::log(hyps.spike_var(ee)) * (n_var - vp.alpha_gam.sum()) / 2.0;
-	} else {
-		res += (vp.alpha_gam * vp.s1_gam_sq.log()).sum() / 2.0;
-		res -= (vp.alpha_gam * (vp.mu1_gam.square() + vp.s1_gam_sq)).sum() / 2.0 / hyps.slab_var(ee);
-
-		res += (1 - std::log(hyps.slab_var(ee))) * vp.alpha_gam.sum() / 2.0;
-	}
-	return res;
 }
 
 void rescanGWAS(const VariationalParametersLite& vp,
