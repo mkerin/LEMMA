@@ -51,9 +51,9 @@ void write_snp_stats_to_file(boost_io::filtering_ostream &ofile, const int &n_ef
 	// Assumes ofile has been initialised
 
 	ofile << "chr rsid pos a0 a1 maf info";
-	ofile << " mean_beta " << vp.betas.header("beta");
+	ofile << " mean_beta " << vp.betas_header("beta");
 	if(n_effects > 1) {
-		ofile << " mean_gam " << vp.gammas.header("gam");
+		ofile << " mean_gam " << vp.gammas_header("gam");
 	}
 	ofile << std::endl;
 
@@ -62,9 +62,11 @@ void write_snp_stats_to_file(boost_io::filtering_ostream &ofile, const int &n_ef
 	for (std::uint32_t kk = 0; kk < n_var; kk++) {
 		ofile << X.chromosome[kk] << " " << X.rsid[kk] << " " << X.position[kk];
 		ofile << " " << X.al_0[kk] << " " << X.al_1[kk] << " " << X.maf[kk] << " " << X.info[kk];
-		ofile << " " << vp.mean_beta(kk) << " " << vp.betas.get_ith_distn(kk);
+		ofile << " " << vp.mean_beta(kk) << " ";
+		vp.write_ith_beta_to_stream(kk, ofile);
 		if(n_effects > 1) {
-			ofile << " " << vp.mean_gam(kk) << " " << vp.gammas.get_ith_distn(kk);
+			ofile << " " << vp.mean_gam(kk) << " ";
+			vp.write_ith_gamma_to_stream(kk, ofile);
 		}
 		ofile << std::endl;
 	}
@@ -77,9 +79,9 @@ void write_snp_stats_to_file(boost_io::filtering_ostream &ofile, const int &n_ef
 	// Assumes ofile has been initialised
 
 	ofile << "chr rsid pos a0 a1 maf info";
-	ofile << " mean_beta " << vp.betas.header("beta");
+	ofile << " mean_beta " << vp.betas_header("beta");
 	if(n_effects > 1) {
-		ofile << " mean_gam " << vp.gammas.header("gam");
+		ofile << " mean_gam " << vp.gammas_header("gam");
 	}
 	ofile << std::endl;
 	ofile << std::scientific << std::setprecision(7);
@@ -87,9 +89,11 @@ void write_snp_stats_to_file(boost_io::filtering_ostream &ofile, const int &n_ef
 	for (std::uint32_t kk = 0; kk < n_var; kk++) {
 		ofile << X.chromosome[kk] << " " << X.rsid[kk] << " " << X.position[kk];
 		ofile << " " << X.al_0[kk] << " " << X.al_1[kk] << " " << X.maf[kk] << " " << X.info[kk];
-		ofile << " " << vp.mean_beta(kk) << " " << vp.betas.get_ith_distn(kk);
+		ofile << " " << vp.mean_beta(kk) << " ";
+		vp.write_ith_beta_to_stream(kk, ofile);
 		if(n_effects > 1) {
-			ofile << " " << vp.mean_gam(kk) << " " << vp.gammas.get_ith_distn(kk);
+			ofile << " " << vp.mean_gam(kk) << " ";
+			vp.write_ith_gamma_to_stream(kk, ofile);
 		}
 		ofile << std::endl;
 	}
@@ -109,10 +113,10 @@ void write_snp_stats_to_file(boost_io::filtering_ostream &ofile, const int &n_ef
 	// Assumes ofile has been initialised
 
 	ofile << "chr rsid pos a0 a1 maf info";
-	ofile << " beta0 " << vp.betas.header("beta");
+	ofile << " beta0 " << vp.betas_header("beta");
 	ofile << " loco_t_stat0 loco_t_neglogp0";
 	if(n_effects > 1) {
-		ofile << " beta1 " << vp.gammas.header("gam");
+		ofile << " beta1 " << vp.gammas_header("gam");
 		ofile << " loco_t_stat1 loco_t_neglogp1";
 		ofile << " loco_chi_stat loco_robust_neglogp";
 		ofile << " loco_f_stat loco_f_neglogp";
@@ -126,14 +130,16 @@ void write_snp_stats_to_file(boost_io::filtering_ostream &ofile, const int &n_ef
 
 		// main effects
 		ofile << " " << vp.mean_beta(kk);
-		ofile << " " << vp.betas.get_ith_distn(kk);
+		ofile << " ";
+		vp.write_ith_beta_to_stream(kk, ofile);
 		ofile << " " << test_stat_beta(kk);
 		ofile << " " << neglogp_beta(kk);
 
 		// Interaction effects
 		if(n_effects > 1) {
 			ofile << " " << vp.mean_gam(kk);
-			ofile << " " << vp.gammas.get_ith_distn(kk);
+			ofile << " ";
+			vp.write_ith_gamma_to_stream(kk, ofile);
 			ofile << " " << test_stat_gam(kk);
 			ofile << " " << neglogp_gam(kk);
 			ofile << " " << test_stat_rgam(kk);

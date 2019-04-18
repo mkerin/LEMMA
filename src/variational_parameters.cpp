@@ -45,9 +45,11 @@ void VariationalParamsBase::dump_snps_to_file(boost_io::filtering_ostream& outf,
 	outf << std::scientific << std::setprecision(8);
 	for (long ii = 0; ii < n_var; ii++) {
 		outf << X.SNPID[ii];
-		outf << " " << betas.get_ith_distn(ii);
+		outf << " ";
+		write_ith_beta_to_stream(ii, outf);
 		if(n_env > 0) {
-			outf << " " << gammas.get_ith_distn(ii);
+			outf << " ";
+			write_ith_beta_to_stream(ii, outf);
 		}
 		outf << std::endl;
 	}
@@ -111,103 +113,6 @@ double VariationalParamsBase::var_covar(long jj) const {
 	return covars.var(jj);
 }
 
-/*** KL Divergence ***/
-double VariationalParamsBase::kl_div_gamma(const Hyps& hyps) const {
-	double res = gammas.kl_div();
-	return res;
-};
-
-double VariationalParamsBase::kl_div_beta(const Hyps& hyps) const {
-	double res = betas.kl_div();
-	return res;
-};
-
-double VariationalParamsBase::kl_div_covars(const Hyps& hyps) const {
-	double res = covars.kl_div();
-	return res;
-};
-
-double VariationalParamsBase::kl_div_weights(const Hyps& hyps) const {
-	double res = weights.kl_div();
-	return res;
-};
-
-void VariationalParamsBase::beta_j_step(long jj, double EXty, double EXtX, Hyps hyps) {
-	double old = mean_beta(jj);
-
-	double m1 = (EXty + old * EXtX) / hyps.sigma;
-	double m2 = -EXtX / 2.0 / hyps.sigma;
-
-	if(p.beta_prior == "MixOfGaussian") {
-		double nat1 = m1;
-		double nat2_slab = m2 - 1.0 / 2 / betas.sigma_slab;
-		double nat2_spike = m2 - 1.0 / 2 / betas.sigma_spike;
-		Gaussian slab_g, spike_g;
-
-		slab_g.nats << nat1, nat2_slab;
-		spike_g.nats << nat1, nat2_spike;
-
-		MoGaussian gg;
-		gg.slab = slab_g;
-		gg.spike = spike_g;
-		gg.maximise_mix_coeff(betas.lambda, betas.sigma_slab, betas.sigma_spike);
-
-		betas.set_ith_distn(jj, gg);
-	}
-
-//	return gg;
-}
-
-MoGaussian VariationalParamsBase::gamma_j_step(long jj, double EXty, double EXtX, Hyps hyps) {
-	double old = mean_gam(jj);
-	double lambda = hyps.lambda[1];
-	double sigma0 = hyps.slab_var[1];                                                     // slab
-	double sigma1 = hyps.spike_var[1];
-
-
-	double m1 = (EXty + old * EXtX) / hyps.sigma;
-	double m2 = -EXtX / 2.0 / hyps.sigma;
-	double nat1 = m1;
-	double nat2_slab = m2 - 1.0 / 2 / sigma0;
-	double nat2_spike = m2 - 1.0 / 2 / sigma1;
-	Gaussian slab_g, spike_g;
-
-	slab_g.nats << nat1, nat2_slab;
-	spike_g.nats << nat1, nat2_spike;
-
-	MoGaussian gg;
-	gg.slab = slab_g;
-	gg.spike = spike_g;
-	gg.maximise_mix_coeff(lambda, sigma0, sigma1);
-	check_nan(gg.mix, jj);
-
-	return gg;
-}
-
-Gaussian VariationalParamsBase::weights_l_step(long ll, double EXty, double EXtX, Hyps hyps) const {
-	double old = mean_weights(ll);
-
-	double m1 = (EXty + old * EXtX) / hyps.sigma;
-	double m2 = -EXtX / 2.0 / hyps.sigma;
-	double nat1 = m1;
-	double nat2 = m2 - 1.0 / 2 / hyps.sigma_w;
-	Gaussian w;
-	w.nats << nat1, nat2;
-	return w;
-}
-
-Gaussian VariationalParamsBase::covar_c_step(long cc, double EXty, double EXtX, Hyps hyps) const {
-	double old = mean_covar(cc);
-
-	double m1 = (EXty + old * EXtX) / hyps.sigma;
-	double m2 = -EXtX / 2.0 / hyps.sigma;
-	double nat1 = m1;
-	double nat2 = m2 - 1.0 / 2 / hyps.sigma_c;
-	Gaussian w;
-	w.nats << nat1, nat2;
-	return w;
-}
-
 void VariationalParamsBase::check_nan(const double& alpha,
                                       const std::uint32_t& ii){
 	// check for NaNs and spit out diagnostics if so.
@@ -225,7 +130,7 @@ void VariationalParamsBase::set_hyps(Hyps hyps){
 	tmp << hyps.lambda(0), hyps.slab_var(0), hyps.spike_var(0);
 	betas.set_hyps(tmp);
 
-	if(hyps.lambda.size() > 1){
+	if(hyps.lambda.size() > 1) {
 		tmp << hyps.lambda(1), hyps.slab_var(1), hyps.spike_var(1);
 		gammas.set_hyps(tmp);
 
