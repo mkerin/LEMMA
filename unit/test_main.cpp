@@ -13,6 +13,7 @@
 #include "../src/data.hpp"
 #include "../src/hyps.hpp"
 #include "../src/genotype_matrix.hpp"
+#include "../src/variational_parameters.hpp"
 
 
 TEST_CASE( "Algebra in Eigen3" ) {
@@ -75,16 +76,17 @@ TEST_CASE( "Algebra in Eigen3" ) {
 	}
 
 	SECTION("Refs still work after resizing underlying object"){
+		// This is not possible
 		Eigen::MatrixXd tmp = Eigen::MatrixXd::Random(3, 3);
 		Eigen::Ref<Eigen::VectorXd> ym = tmp.col(0);
 
-		CHECK(ym.squaredNorm() == ym.dot(tmp.col(0)));
-		CHECK(ym.rows() == 3);
-		CHECK(ym(2) == 3);
+		// CHECK(ym.squaredNorm() == ym.dot(tmp.col(0)));
+		// CHECK(ym.rows() == 3);
+		// CHECK(ym(2) == 3);
 
-		tmp.conservativeResize(2, 2);
-		CHECK(tmp.rows() == 2);
-		CHECK(ym.rows() == 2);
+		// tmp.conservativeResize(2, 2);
+		// CHECK(tmp.rows() == 2);
+		// CHECK(ym.rows() == 2);
 	}
 
 	SECTION("Conservative Resize"){

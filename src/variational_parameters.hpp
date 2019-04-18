@@ -20,7 +20,7 @@
 
 namespace boost_io = boost::iostreams;
 
-class VariationalParamsBase {
+class VariationalParameters {
 
 public:
 	// This stores parameters used in VB and some summary quantities that
@@ -41,8 +41,15 @@ public:
 	double sigma;
 	Eigen::ArrayXd pve;
 	Eigen::ArrayXd s_x;
+	Eigen::ArrayXd EdZtZ;
 
-	VariationalParamsBase(parameters my_params) : p(my_params) {
+	// Other quantities to track
+	EigenDataVector yx;                    // N x 1
+	EigenDataVector ym;                    // N x 1
+	EigenDataVector eta;
+	EigenDataVector eta_sq;
+
+	VariationalParameters(parameters my_params) : p(my_params) {
 		if (p.beta_prior == "MixOfGaussian") {
 			betas.reset(new MoGaussianVec);
 		} else if (p.beta_prior == "Gaussian") {
@@ -58,6 +65,40 @@ public:
 			throw std::runtime_error("Unrecognised beta prior: " + p.beta_prior);
 		}
 	};
+	VariationalParameters(const VariationalParameters &obj) : p(obj.p) {
+		ym     = obj.ym;
+		yx     = obj.yx;
+		eta    = obj.eta;
+		eta_sq = obj.eta_sq;
+
+		sigma  = obj.sigma;
+		pve    = obj.pve;
+		s_x    = obj.s_x;
+		EdZtZ = obj.EdZtZ;
+
+		betas.reset(obj.betas->clone());
+		gammas.reset(obj.gammas->clone());
+		weights = obj.weights;
+		covars  = obj.covars;
+	}
+	VariationalParameters& operator = (const VariationalParameters &obj) {
+		p      = obj.p;
+		ym     = obj.ym;
+		yx     = obj.yx;
+		eta    = obj.eta;
+		eta_sq = obj.eta_sq;
+
+		sigma  = obj.sigma;
+		pve    = obj.pve;
+		s_x    = obj.s_x;
+		EdZtZ = obj.EdZtZ;
+
+		betas.reset(obj.betas->clone());
+		gammas.reset(obj.gammas->clone());
+		weights = obj.weights;
+		covars  = obj.covars;
+		return *this;
+	}
 
 	/*** utility functions ***/
 	void run_default_init(long n_var, long n_covar, long n_env);
@@ -101,101 +142,21 @@ public:
 	}
 	void update_pve(long n_env){
 		pve[0] = betas->get_hyps_var() * s_x[0];
-		if (n_env > 0){
+		if (n_env > 0) {
 			pve[1] = gammas->get_hyps_var() * s_x[1];
 		}
 		pve /= (pve.sum() + sigma);
 	}
-};
-
-// Store subset of Variational Parameters to be RAM efficient
-class VariationalParametersLite : public VariationalParamsBase {
-public:
-// Other quantities to track
-	EigenDataVector yx;                // N x 1
-	EigenDataVector ym;                // N x 1
-	EigenDataVector eta;
-	EigenDataVector eta_sq;
-
-	explicit VariationalParametersLite(parameters my_params) : VariationalParamsBase(my_params) {};
-	VariationalParametersLite(const VariationalParametersLite &obj) : VariationalParamsBase(obj.p) {
-		ym     = obj.ym;
-		yx     = obj.yx;
-		eta    = obj.eta;
-		eta_sq = obj.eta_sq;
-
-		sigma  = obj.sigma;
-		pve    = obj.pve;
-		s_x    = obj.s_x;
-
-		betas.reset(obj.betas->clone());
-		gammas.reset(obj.gammas->clone());
-		weights = obj.weights;
-		covars  = obj.covars;
-	}
-	VariationalParametersLite& operator = (const VariationalParametersLite &obj) {
-		p      = obj.p;
-		ym     = obj.ym;
-		yx     = obj.yx;
-		eta    = obj.eta;
-		eta_sq = obj.eta_sq;
-
-		sigma  = obj.sigma;
-		pve    = obj.pve;
-		s_x    = obj.s_x;
-
-		betas.reset(obj.betas->clone());
-		gammas.reset(obj.gammas->clone());
-		weights = obj.weights;
-		covars  = obj.covars;
-		return *this;
-	}
-
-};
-
-class VariationalParameters : public VariationalParamsBase {
-public:
-// This stores parameters used in VB and some summary quantities that
-// depend on those parameters.
-
-// Summary quantities
-	EigenRefDataVector yx;                  // N x 1
-	EigenRefDataVector ym;                  // N x 1
-	EigenRefDataVector eta;                 // expected value of matrix product E x w
-	EigenRefDataVector eta_sq;              // expected value (E x w) cdot (E x w)
-
-	Eigen::ArrayXd EdZtZ;               // expectation of the diagonal of Z^t Z
-	parameters p;
-
-
-	VariationalParameters(parameters my_params,
-	                      EigenRefDataVector my_ym,
-	                      EigenRefDataVector my_yx,
-	                      EigenRefDataVector my_eta,
-	                      EigenRefDataVector my_eta_sq) : VariationalParamsBase(my_params), yx(my_yx), ym(my_ym),
-		eta(my_eta), eta_sq(my_eta_sq){
-	};
-	VariationalParameters(const VariationalParameters &obj) : VariationalParamsBase(obj.p), yx(obj.yx), ym(obj.ym),
-															  eta(obj.eta), eta_sq(obj.eta_sq){
-		sigma  = obj.sigma;
-		pve    = obj.pve;
-		s_x    = obj.s_x;
-		EdZtZ  = obj.EdZtZ;
-
-		betas.reset(obj.betas->clone());
-		gammas.reset(obj.gammas->clone());
-		weights = obj.weights;
-		covars  = obj.covars;
-	}
-
-	~VariationalParameters(){
-	};
-
-	void init_from_lite(const VariationalParametersLite& init);
-
-	VariationalParametersLite convert_to_lite();
 
 	void calcEdZtZ(const Eigen::Ref<const Eigen::ArrayXXd>& dXtEEX, const int& n_env);
 };
+
+//// Store subset of Variational Parameters to be RAM efficient
+//class VariationalParameters : public VariationalParameters {
+//public:
+//
+//	explicit VariationalParameters(parameters my_params) : VariationalParameters(my_params) {};
+//
+//};
 
 #endif

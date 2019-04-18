@@ -84,7 +84,7 @@ public:
 	Eigen::ArrayXXd external_dXtEEX;
 
 // Init points
-	VariationalParametersLite vp_init;
+	VariationalParameters vp_init;
 	std::vector<Hyps> hyps_inits;
 
 	genfile::bgen::View::UniquePtr bgenView;
@@ -1064,7 +1064,7 @@ public:
 		// }
 	}
 
-	void assign_vb_init_from_file(VariationalParametersLite& vp_init){
+	void assign_vb_init_from_file(VariationalParameters& vp_init){
 		// Set initial conditions for VB
 		std::cout << "Reading initialisation for alpha from file" << std::endl;
 

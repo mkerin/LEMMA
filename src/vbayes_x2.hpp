@@ -84,14 +84,11 @@ public:
 
 	Eigen::ArrayXXd& dXtEEX;             // P x n_env^2; col (l * n_env + m) is the diagonal of X^T * diag(E_l * E_m) * X
 
-// Global location of y_m = E[X beta] and y_x = E[X gamma]
-	EigenDataMatrix YY, YX, YM, ETA, ETA_SQ;
-
 // genome wide scan computed upstream
 	Eigen::ArrayXXd& snpstats;
 
 // Init points
-	VariationalParametersLite vp_init;
+	VariationalParameters vp_init;
 	std::vector<Hyps> hyps_inits;
 
 // boost fstreams
@@ -102,7 +99,7 @@ public:
 // Monitoring
 	std::chrono::system_clock::time_point time_check;
 	std::chrono::duration<double> elapsed_innerLoop;
-	VariationalParametersLite GLOBAL_map_vp;
+	VariationalParameters GLOBAL_map_vp;
 
 	explicit VBayesX2(Data& dat) : X(dat.G),
 		Y(Eigen::Map<EigenDataVector>(dat.Y.data(), dat.Y.rows())),
@@ -534,7 +531,8 @@ public:
 		for (int nn = 0; nn < n_grid; nn++) {
 			all_tracker[nn].logw = i_logw[nn];
 			all_tracker[nn].count = count;
-			all_tracker[nn].vp = all_vp[nn].convert_to_lite();
+//			all_tracker[nn].vp = all_vp[nn].convert_to_lite();
+			all_tracker[nn].vp = all_vp[nn];
 			all_tracker[nn].hyps = all_hyps[nn];
 			all_tracker[nn].push_vp_converged(X, n_var, n_effects);
 		}
@@ -544,28 +542,9 @@ public:
 	                              std::vector<VariationalParameters>& all_vp){
 		unsigned long n_grid = all_hyps.size();
 
-		// Init global locations YM YX
-		YY.resize(n_samples, n_grid);
-		YM.resize(n_samples, n_grid);
-		for (int nn = 0; nn < n_grid; nn++) {
-			YM.col(nn) = vp_init.ym;
-			YY.col(nn) = Y;
-		}
-		YX.resize(n_samples, n_grid);
-		ETA.resize(n_samples, n_grid);
-		ETA_SQ.resize(n_samples, n_grid);
-		if (n_effects > 1) {
-			for (int nn = 0; nn < n_grid; nn++) {
-				YX.col(nn) = vp_init.yx;
-				ETA.col(nn) = vp_init.eta;
-				ETA_SQ.col(nn) = vp_init.eta_sq;
-			}
-		}
-
 		// Init variational params
 		for (int nn = 0; nn < n_grid; nn++) {
-			VariationalParameters vp(p, YM.col(nn), YX.col(nn), ETA.col(nn), ETA_SQ.col(nn));
-			vp.init_from_lite(vp_init);
+			VariationalParameters vp = vp_init;
 			vp.set_hyps(all_hyps[nn]);
 			if(n_effects > 1) {
 				vp.calcEdZtZ(dXtEEX, n_env);
@@ -713,12 +692,13 @@ public:
 			D.resize(n_samples, ch_len);
 		}
 		X.col_block(iter, D);
-		EXty = D.transpose() * (YY - YM - YX.cwiseProduct(ETA));
 
 		for (int nn = 0; nn < all_vp.size(); nn++) {
 			EigenDataMatrix D_corr = (D.transpose() * D);
 			EigenDataMatrix EXtX = D_corr.diagonal();
 			EigenDataVector rr_k_old(ch_len), rr_k_new(ch_len);
+
+			EXty = D.transpose() * (Y - all_vp[nn].ym - all_vp[nn].yx.cwiseProduct(all_vp[nn].eta));
 
 			for (int ii = 0; ii < ch_len; ii++) {
 				long jj = (iter[ii] % n_var);
@@ -726,7 +706,7 @@ public:
 				rr_k_old(ii) = old;
 
 				// Get param updates
-				all_vp[nn].betas->cavi_update_ith_var(jj, EXty(ii, nn), EXtX(ii), all_vp[nn].sigma);
+				all_vp[nn].betas->cavi_update_ith_var(jj, EXty(ii, 0), EXtX(ii), all_vp[nn].sigma);
 
 				rr_k_new(ii) = all_vp[nn].mean_beta(jj);
 				EXty -= (all_vp[nn].mean_beta(jj) - old) * D_corr.col(ii);
@@ -746,12 +726,12 @@ public:
 		}
 		X.col_block(iter, D);
 
-		EXty = D.transpose() * ((YY - YM).cwiseProduct(ETA) - YX.cwiseProduct(ETA_SQ));
-
 		for (int nn = 0; nn < all_vp.size(); nn++) {
 			EigenDataMatrix D_corr = (D.transpose() * all_vp[nn].eta_sq.asDiagonal() * D);
 			EigenDataMatrix EXtX = D_corr.diagonal();
 			EigenDataVector rr_k_old(ch_len), rr_k_new(ch_len);
+
+			EXty = D.transpose() * ((Y - all_vp[nn].ym).cwiseProduct(all_vp[nn].eta) - all_vp[nn].yx.cwiseProduct(all_vp[nn].eta_sq));
 
 			for (int ii = 0; ii < ch_len; ii++) {
 				long jj = (iter[ii] % n_var);
@@ -759,7 +739,7 @@ public:
 				rr_k_old(ii) = old;
 
 				// Get param updates
-				all_vp[nn].gammas->cavi_update_ith_var(jj, EXty(ii, nn), EXtX(ii), all_vp[nn].sigma);
+				all_vp[nn].gammas->cavi_update_ith_var(jj, EXty(ii, 0), EXtX(ii), all_vp[nn].sigma);
 
 				rr_k_new(ii) = all_vp[nn].mean_gam(jj);
 				EXty -= (all_vp[nn].mean_gam(jj) - old) * D_corr.col(ii);
@@ -834,21 +814,7 @@ public:
 		time_check = now;
 	}
 
-	void calcPredEffects(VariationalParameters& vp){
-		Eigen::VectorXd rr_beta = vp.mean_beta();
-
-		vp.ym = X * rr_beta;
-		if(n_covar > 0) {
-			vp.ym += C * vp.mean_covar().matrix().cast<scalarData>();
-		}
-
-		if(n_effects > 1) {
-			Eigen::VectorXd rr_gam = vp.mean_gam();
-			vp.yx = X * rr_gam;
-		}
-	}
-
-	void calcPredEffects(VariationalParametersLite& vp) {
+	void calcPredEffects(VariationalParameters& vp) {
 		Eigen::VectorXd rr_beta = vp.mean_beta();
 
 		vp.ym = X * rr_beta;
@@ -946,7 +912,7 @@ public:
 		return int_linear;
 	}
 
-	void rescanGWAS(const VariationalParametersLite& vp,
+	void rescanGWAS(const VariationalParameters& vp,
 	                Eigen::Ref<Eigen::VectorXd> neglogp){
 		// casts used is DATA_AS_FLOAT
 		Eigen::VectorXd pheno = (Y.cast<double>() - vp.ym.cast<double>());
@@ -979,7 +945,7 @@ public:
 		}
 	}
 
-	void compute_residuals_per_chr(const VariationalParametersLite& vp,
+	void compute_residuals_per_chr(const VariationalParameters& vp,
 	                               std::vector<Eigen::VectorXd>& pred_main,
 	                               std::vector<Eigen::VectorXd>& pred_int,
 	                               std::vector<Eigen::VectorXd>& chr_residuals){
@@ -1023,7 +989,7 @@ public:
 		}
 	}
 
-	void LOCO_pvals(const VariationalParametersLite& vp,
+	void LOCO_pvals(const VariationalParameters& vp,
 	                const std::vector<Eigen::VectorXd>& chr_residuals,
 	                Eigen::Ref<Eigen::VectorXd> neglogp_beta,
 	                Eigen::Ref<Eigen::VectorXd> neglogp_gam,
@@ -1199,7 +1165,7 @@ public:
 		/*********** Stats from MAP to file ************/
 		std::vector<Eigen::VectorXd> map_residuals_by_chr(n_chrs), pred_main(n_chrs), pred_int(n_chrs);
 		long int ii_map = std::distance(weights.begin(), std::max_element(weights.begin(), weights.end()));
-		VariationalParametersLite vp_map = trackers[ii_map].vp;
+		VariationalParameters vp_map = trackers[ii_map].vp;
 		GLOBAL_map_vp = trackers[ii_map].vp;
 
 		// Predicted effects to file
@@ -1279,7 +1245,7 @@ public:
 	}
 
 	void write_covars_to_file(boost_io::filtering_ostream& ofile,
-	                          VariationalParametersLite vp) {
+	                          VariationalParameters vp) {
 		// Assumes ofile has been initialised.
 
 		// Header

@@ -35,7 +35,7 @@ namespace boost_io = boost::iostreams;
 class VbTracker {
 public:
 	int count;                                // Number of iterations to convergence at each step
-	VariationalParametersLite vp;                 // best mu at each ii
+	VariationalParameters vp;                 // best mu at each ii
 	double logw;                                 // best logw at each ii
 	Hyps hyps;                                  // hyps values at end of VB inference.
 
@@ -153,16 +153,6 @@ public:
 	}
 
 
-	void push_interim_param_values(const int& cnt,
-	                               const int& n_effects,
-	                               const unsigned long& n_var,
-	                               const VariationalParameters& vp,
-	                               const GenotypeMatrix& X){
-		fstream_init(outf_inits, dir, "_params_iter" + std::to_string(cnt), true);
-		write_snp_stats_to_file(outf_inits, n_effects, n_var, vp, X, p, true);
-		boost_io::close(outf_inits);
-	}
-
 	void dump_state(const int& cnt,
 	                const long& n_samples,
 	                const long& n_covar,
@@ -227,22 +217,6 @@ public:
 //	fstream_init(outf_inits, dir, "_dump_it" + std::to_string(cnt) + "_hyps", true);
 //	outf_inits << hyps << std::endl;
 //	boost_io::close(outf_inits);
-	}
-
-	void push_interim_covar_values(const int& cnt,
-	                               const long& n_covar,
-	                               const VariationalParameters& vp,
-	                               const std::vector< std::string >& covar_names){
-		fstream_init(outf_inits, dir, "_covars_iter" + std::to_string(cnt), true);
-
-		outf_inits << "covar_name mu_covar s_sq_covar";
-		outf_inits << std::endl;
-		for (int cc = 0; cc < n_covar; cc++) {
-			outf_inits << covar_names[cc] << " " << vp.mean_covar(cc);
-			outf_inits << " " << vp.var_covar(cc);
-			outf_inits << std::endl;
-		}
-		boost_io::close(outf_inits);
 	}
 
 	void push_rescan_gwas(const GenotypeMatrix& X,

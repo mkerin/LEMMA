@@ -73,34 +73,7 @@ void write_snp_stats_to_file(boost_io::filtering_ostream &ofile, const int &n_ef
 }
 
 void write_snp_stats_to_file(boost_io::filtering_ostream &ofile, const int &n_effects, const int &n_var,
-                             const VariationalParametersLite &vp, const GenotypeMatrix &X, const parameters &p,
-                             const bool &write_mog) {
-	// Function to write parameter values from genetic effects to file
-	// Assumes ofile has been initialised
-
-	ofile << "chr rsid pos a0 a1 maf info";
-	ofile << " mean_beta " << vp.betas_header("beta");
-	if(n_effects > 1) {
-		ofile << " mean_gam " << vp.gammas_header("gam");
-	}
-	ofile << std::endl;
-	ofile << std::scientific << std::setprecision(7);
-
-	for (std::uint32_t kk = 0; kk < n_var; kk++) {
-		ofile << X.chromosome[kk] << " " << X.rsid[kk] << " " << X.position[kk];
-		ofile << " " << X.al_0[kk] << " " << X.al_1[kk] << " " << X.maf[kk] << " " << X.info[kk];
-		ofile << " " << vp.mean_beta(kk) << " ";
-		vp.write_ith_beta_to_stream(kk, ofile);
-		if(n_effects > 1) {
-			ofile << " " << vp.mean_gam(kk) << " ";
-			vp.write_ith_gamma_to_stream(kk, ofile);
-		}
-		ofile << std::endl;
-	}
-}
-
-void write_snp_stats_to_file(boost_io::filtering_ostream &ofile, const int &n_effects, const int &n_var,
-                             const VariationalParametersLite &vp, const GenotypeMatrix &X, const parameters &p,
+                             const VariationalParameters &vp, const GenotypeMatrix &X, const parameters &p,
                              const bool &write_mog, const Eigen::Ref<const Eigen::VectorXd> &neglogp_beta,
                              const Eigen::Ref<const Eigen::VectorXd> &neglogp_gam,
                              const Eigen::Ref<const Eigen::VectorXd> &neglogp_rgam,

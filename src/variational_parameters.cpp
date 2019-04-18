@@ -10,7 +10,7 @@
 #include "tools/eigen3.3/Dense"
 #include "Prior.hpp"
 
-void VariationalParamsBase::run_default_init(long n_var, long n_covar, long n_env){
+void VariationalParameters::run_default_init(long n_var, long n_covar, long n_env){
 	/* - snp latent variables initialised from zero
 	 * - covar latent variables initialised from zero
 	 * - env latent variables initialised from uniform
@@ -38,7 +38,7 @@ void VariationalParamsBase::run_default_init(long n_var, long n_covar, long n_en
 	}
 }
 
-void VariationalParamsBase::dump_snps_to_file(boost_io::filtering_ostream& outf,
+void VariationalParameters::dump_snps_to_file(boost_io::filtering_ostream& outf,
                                               const GenotypeMatrix& X, long n_env) const {
 	long n_var = betas->size();
 	outf << "SNPID " << betas->header("beta");
@@ -61,63 +61,63 @@ void VariationalParamsBase::dump_snps_to_file(boost_io::filtering_ostream& outf,
 
 /*** Get and set properties of latent variables ***/
 
-Eigen::VectorXd VariationalParamsBase::mean_beta() const {
+Eigen::VectorXd VariationalParameters::mean_beta() const {
 	return betas->mean();
 }
 
-Eigen::VectorXd VariationalParamsBase::mean_gam() const {
+Eigen::VectorXd VariationalParameters::mean_gam() const {
 	return gammas->mean();
 }
 
-Eigen::VectorXd VariationalParamsBase::mean_weights() const {
+Eigen::VectorXd VariationalParameters::mean_weights() const {
 	return weights.mean();
 }
 
-Eigen::VectorXd VariationalParamsBase::mean_covar() const {
+Eigen::VectorXd VariationalParameters::mean_covar() const {
 	return covars.mean();
 }
 
-double VariationalParamsBase::mean_weights(long ll) const {
+double VariationalParameters::mean_weights(long ll) const {
 	return weights.mean(ll);
 }
 
-double VariationalParamsBase::mean_covar(long cc) const {
+double VariationalParameters::mean_covar(long cc) const {
 	return covars.mean(cc);
 }
 
-double VariationalParamsBase::mean_beta(std::uint32_t jj) const {
+double VariationalParameters::mean_beta(std::uint32_t jj) const {
 	return betas->mean(jj);
 }
 
-double VariationalParamsBase::mean_gam(std::uint32_t jj) const {
+double VariationalParameters::mean_gam(std::uint32_t jj) const {
 	return gammas->mean(jj);
 }
 
-Eigen::ArrayXd VariationalParamsBase::var_beta() const {
+Eigen::ArrayXd VariationalParameters::var_beta() const {
 	return betas->var();
 }
 
-Eigen::ArrayXd VariationalParamsBase::var_gam() const {
+Eigen::ArrayXd VariationalParameters::var_gam() const {
 	return gammas->var();
 }
 
-Eigen::ArrayXd VariationalParamsBase::var_weights() const {
+Eigen::ArrayXd VariationalParameters::var_weights() const {
 	return weights.var();
 }
 
-Eigen::ArrayXd VariationalParamsBase::var_covar() const {
+Eigen::ArrayXd VariationalParameters::var_covar() const {
 	return covars.var();
 }
 
-double VariationalParamsBase::var_weights(long jj) const {
+double VariationalParameters::var_weights(long jj) const {
 	return weights.var(jj);
 }
 
-double VariationalParamsBase::var_covar(long jj) const {
+double VariationalParameters::var_covar(long jj) const {
 	return covars.var(jj);
 }
 
-void VariationalParamsBase::check_nan(const double& alpha,
+void VariationalParameters::check_nan(const double& alpha,
                                       const std::uint32_t& ii){
 	// check for NaNs and spit out diagnostics if so.
 	if(std::isnan(alpha)) {
@@ -128,7 +128,7 @@ void VariationalParamsBase::check_nan(const double& alpha,
 	}
 }
 
-void VariationalParamsBase::set_hyps(Hyps hyps){
+void VariationalParameters::set_hyps(Hyps hyps){
 	sigma = hyps.sigma;
 	Eigen::ArrayXd tmp(3);
 	tmp << hyps.lambda(0), hyps.slab_var(0), hyps.spike_var(0);
@@ -146,36 +146,6 @@ void VariationalParamsBase::set_hyps(Hyps hyps){
 	tmp.resize(1);
 	tmp << hyps.sigma * hyps.sigma_c;
 	covars.set_hyps(tmp);
-}
-
-void VariationalParameters::init_from_lite(const VariationalParametersLite &init) {
-	// yx and ym set to point to appropriate col of VBayesX2::YM and VBayesX2::YX in constructor
-
-	betas.reset(init.betas->clone());
-	gammas.reset(init.gammas->clone());
-	weights = init.weights;
-	covars = init.covars;
-
-	sigma = init.sigma;
-	pve = init.pve;
-	s_x = init.s_x;
-}
-
-VariationalParametersLite VariationalParameters::convert_to_lite() {
-	VariationalParametersLite vplite(p);
-	vplite.ym    = ym;
-	vplite.yx    = yx;
-	vplite.eta   = eta;
-
-	vplite.sigma = sigma;
-	vplite.pve = pve;
-	vplite.s_x = s_x;
-
-	vplite.betas.reset(betas->clone());
-	vplite.gammas.reset(gammas->clone());
-	vplite.weights = weights;
-	vplite.covars = covars;
-	return vplite;
 }
 
 void VariationalParameters::calcEdZtZ(const Eigen::Ref<const Eigen::ArrayXXd> &dXtEEX, const int &n_env) {

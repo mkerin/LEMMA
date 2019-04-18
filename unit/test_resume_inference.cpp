@@ -73,10 +73,10 @@ TEST_CASE("Resume from multi-env + mog + emp_bayes"){
 			VB.updateAllParams(2, round_index, all_vp, all_hyps, logw_prev);
 			CHECK(VB.calc_logw(vp) == Approx(-88.4813237554));
 
-			CHECK(VB.YM.squaredNorm() == Approx(14.6480266984));
-			CHECK(VB.YX.squaredNorm() == Approx(0.0004676258));
-			CHECK(VB.ETA.squaredNorm() == Approx(0.0744622661));
-			CHECK(VB.ETA_SQ.squaredNorm() == Approx(297.6156962976));
+			CHECK(vp.ym.squaredNorm() == Approx(14.6480266984));
+			CHECK(vp.yx.squaredNorm() == Approx(0.0004676258));
+			CHECK(vp.eta.squaredNorm() == Approx(0.0744622661));
+			CHECK(vp.eta_sq.squaredNorm() == Approx(297.6156962976));
 
 			VbTracker tracker(p);
 			tracker.init_interim_output(0,2, VB.n_effects, VB.n_env, VB.env_names, vp);
@@ -125,10 +125,10 @@ TEST_CASE("Resume from multi-env + mog + emp_bayes"){
 			VariationalParameters& vp = all_vp[0];
 			Hyps& hyps = all_hyps[0];
 
-			CHECK(VB.YM.squaredNorm() == Approx(14.6480266997));
-			CHECK(VB.YX.squaredNorm() == Approx(0.0004676258));
-			CHECK(VB.ETA.squaredNorm() == Approx(0.0744622647));
-			CHECK(VB.ETA_SQ.squaredNorm() == Approx(297.6156980469));
+			CHECK(vp.ym.squaredNorm() == Approx(14.6480266997));
+			CHECK(vp.yx.squaredNorm() == Approx(0.0004676258));
+			CHECK(vp.eta.squaredNorm() == Approx(0.0744622647));
+			CHECK(vp.eta_sq.squaredNorm() == Approx(297.6156980469));
 
 			VB.updateAllParams(3, round_index, all_vp, all_hyps, logw_prev);
 			CHECK(VB.calc_logw(vp) == Approx(-87.8801711925));
@@ -205,10 +205,10 @@ TEST_CASE("Resume from multi-env + mog + squarem"){
 			VB.updateAllParams(2, round_index, all_vp, all_hyps, logw_prev);
 			CHECK(VB.calc_logw(vp) == Approx(-88.4813237554));
 
-			CHECK(VB.YM.squaredNorm() == Approx(14.6480266984));
-			CHECK(VB.YX.squaredNorm() == Approx(0.0004676258));
-			CHECK(VB.ETA.squaredNorm() == Approx(0.0744622661));
-			CHECK(VB.ETA_SQ.squaredNorm() == Approx(297.6156962976));
+			CHECK(vp.ym.squaredNorm() == Approx(14.6480266984));
+			CHECK(vp.yx.squaredNorm() == Approx(0.0004676258));
+			CHECK(vp.eta.squaredNorm() == Approx(0.0744622661));
+			CHECK(vp.eta_sq.squaredNorm() == Approx(297.6156962976));
 
 			VbTracker tracker(p);
 			tracker.init_interim_output(0,2, VB.n_effects, VB.n_env, VB.env_names, vp);
@@ -222,7 +222,7 @@ TEST_CASE("Resume from multi-env + mog + squarem"){
 			CHECK(vp.ym.squaredNorm() == Approx(15.7914628605));
 			CHECK(vp.yx.squaredNorm() == Approx(0.0000880429));
 			CHECK(vp.eta.squaredNorm() == Approx(0.0221053892));
-			CHECK(VB.ETA_SQ.squaredNorm() == Approx(400.5912659102));
+			CHECK(vp.eta_sq.squaredNorm() == Approx(400.5912659102));
 		}
 
 		VB.run_inference(VB.hyps_inits, false, 2, trackers);
@@ -259,10 +259,10 @@ TEST_CASE("Resume from multi-env + mog + squarem"){
 			VariationalParameters& vp = all_vp[0];
 			Hyps& hyps = all_hyps[0];
 
-			CHECK(VB.YM.squaredNorm() == Approx(14.6480266997));
-			CHECK(VB.YX.squaredNorm() == Approx(0.0004676258));
-			CHECK(VB.ETA.squaredNorm() == Approx(0.0744622647));
-			CHECK(VB.ETA_SQ.squaredNorm() == Approx(297.6156980469));
+			CHECK(vp.ym.squaredNorm() == Approx(14.6480266997));
+			CHECK(vp.yx.squaredNorm() == Approx(0.0004676258));
+			CHECK(vp.eta.squaredNorm() == Approx(0.0744622647));
+			CHECK(vp.eta_sq.squaredNorm() == Approx(297.6156980469));
 			CHECK(VB.calc_logw(vp) == Approx(-88.4813237607));
 
 //			CHECK(vp.kl_div_beta() == vp.betas.kl)
@@ -273,7 +273,7 @@ TEST_CASE("Resume from multi-env + mog + squarem"){
 			CHECK(vp.ym.squaredNorm() == Approx(15.7914630418));
 			CHECK(vp.yx.squaredNorm() == Approx(0.0000880429));
 			CHECK(vp.eta.squaredNorm() == Approx(0.0221053884));
-			CHECK(VB.ETA_SQ.squaredNorm() == Approx(400.5912674531));
+			CHECK(vp.eta_sq.squaredNorm() == Approx(400.5912674531));
 		}
 
 		VB.run_inference(VB.hyps_inits, false, 2, trackers);
