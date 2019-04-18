@@ -74,6 +74,19 @@ TEST_CASE( "Algebra in Eigen3" ) {
 		CHECK(y1(2) == 14);
 	}
 
+	SECTION("Refs still work after resizing underlying object"){
+		Eigen::MatrixXd tmp = Eigen::MatrixXd::Random(3, 3);
+		Eigen::Ref<Eigen::VectorXd> ym = tmp.col(0);
+
+		CHECK(ym.squaredNorm() == ym.dot(tmp.col(0)));
+		CHECK(ym.rows() == 3);
+		CHECK(ym(2) == 3);
+
+		tmp.conservativeResize(2, 2);
+		CHECK(tmp.rows() == 2);
+		CHECK(ym.rows() == 2);
+	}
+
 	SECTION("Conservative Resize"){
 		std::vector<int> keep;
 		keep.push_back(1);
@@ -269,10 +282,10 @@ TEST_CASE("Data") {
 			CHECK(data.G(0, 61) == Approx(1.4862052498));
 			CHECK(data.G(0, 62) == Approx(-0.3299831646));
 			CHECK(data.G(0, 63) == Approx(-1.0968694989));
-			CHECK(data.G.compressed_dosage_means(60) == Approx(1.00203125));
-			CHECK(data.G.compressed_dosage_means(61) == Approx(0.9821875));
-			CHECK(data.G.compressed_dosage_means(62) == Approx(0.10390625));
-			CHECK(data.G.compressed_dosage_means(63) == Approx(0.68328125));
+			CHECK(data.G.col_means(60) == Approx(1.00203125));
+			CHECK(data.G.col_means(61) == Approx(0.9821875));
+			CHECK(data.G.col_means(62) == Approx(0.10390625));
+			CHECK(data.G.col_means(63) == Approx(0.68328125));
 			CHECK(data.n_var == 75);
 		}
 	}
@@ -299,10 +312,10 @@ TEST_CASE("Data") {
 			CHECK(data.G(0, 61) == Approx(1.4862052498));
 			CHECK(data.G(0, 62) == Approx(-0.3299831646));
 			CHECK(data.G(0, 63) == Approx(-1.0968694989));
-			CHECK(data.G.compressed_dosage_means(60) == Approx(1.00203125));
-			CHECK(data.G.compressed_dosage_means(61) == Approx(0.9821875));
-			CHECK(data.G.compressed_dosage_means(62) == Approx(0.10390625));
-			CHECK(data.G.compressed_dosage_means(63) == Approx(0.68328125));
+			CHECK(data.G.col_means(60) == Approx(1.00203125));
+			CHECK(data.G.col_means(61) == Approx(0.9821875));
+			CHECK(data.G.col_means(62) == Approx(0.10390625));
+			CHECK(data.G.col_means(63) == Approx(0.68328125));
 			CHECK(data.n_var == 75);
 		}
 	}
@@ -406,15 +419,15 @@ TEST_CASE( "Example 4: multi-env + mog + covars + emp_bayes" ){
 
 			CHECK(vp.mean_weights(0)              == Approx(0.1053510228));
 
-			CHECK(hyps.sigma                == Approx(0.6979599837));
-			CHECK(hyps.lambda[0]            == Approx(0.1683579572));
-			CHECK(hyps.lambda[1]            == Approx(0.1347097155));
-			CHECK(hyps.slab_relative_var[0] == Approx(0.0080644075));
-			CHECK(hyps.slab_relative_var[1] == Approx(0.0050698799));
+			CHECK(vp.sigma                == Approx(0.6979599837));
+			CHECK(vp.betas->get_hyps()(0, 0)            == Approx(0.1683579572));
+			CHECK(vp.gammas->get_hyps()(0, 0)            == Approx(0.1347097155));
+			// CHECK(hyps.slab_relative_var[0] == Approx(0.0080644075));
+			// CHECK(hyps.slab_relative_var[1] == Approx(0.0050698799));
 
-			CHECK(hyps.lambda[0] == vp.betas->get_opt_hyps()(0));
-			CHECK(hyps.slab_var[0] == vp.betas->get_opt_hyps()(1));
-			CHECK(hyps.spike_var[0] == vp.betas->get_opt_hyps()(2));
+			// CHECK(vp.betas->get_hyps()(0, 0) == vp.betas->get_opt_hyps()(0));
+			// CHECK(hyps.slab_var[0] == vp.betas->get_opt_hyps()(1));
+			// CHECK(hyps.spike_var[0] == vp.betas->get_opt_hyps()(2));
 
 			Eq_beta = vp.mean_beta();
 			check_ym  = VB.X * Eq_beta;
@@ -440,7 +453,7 @@ TEST_CASE( "Example 4: multi-env + mog + covars + emp_bayes" ){
 			CHECK(vp.mean_weights(0)              == Approx(0.0358282042));
 			CHECK(vp.mean_gam(63)              == Approx(0.0000060221));
 
-			CHECK(VB.calc_logw(hyps, vp) == Approx(-88.4813237554));
+			CHECK(VB.calc_logw(vp) == Approx(-88.4813237554));
 			VbTracker tracker(p);
 			tracker.init_interim_output(0,2, VB.n_effects, VB.n_env, VB.env_names, vp);
 			tracker.dump_state(2, VB.n_samples, VB.n_covar, VB.n_var, VB.n_env,
@@ -448,7 +461,7 @@ TEST_CASE( "Example 4: multi-env + mog + covars + emp_bayes" ){
 			                   VB.covar_names, VB.env_names);
 
 			// Checking logw
-			double int_linear = -1.0 * VB.calcExpLinear(hyps, vp) / 2.0 / hyps.sigma;
+			double int_linear = -1.0 * VB.calcExpLinear(vp) / 2.0 / hyps.sigma;
 			int_linear -= VB.N * std::log(2.0 * VB.PI * hyps.sigma) / 2.0;
 			// CHECK(int_linear  == Approx(-58.5936502834));
 

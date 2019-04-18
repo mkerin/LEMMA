@@ -72,7 +72,7 @@ public:
 	std::vector< std::vector < std::uint32_t > > main_back_pass_chunks, gxe_back_pass_chunks;
 	std::vector< int > env_fwd_pass;
 	std::vector< int > env_back_pass;
-	std::map<unsigned long, Eigen::MatrixXd> D_correlations;         //We can keep D^t D for the main effects
+	std::map<long, Eigen::MatrixXd> D_correlations;         //We can keep D^t D for the main effects
 
 // Data
 	GenotypeMatrix&  X;
@@ -381,7 +381,6 @@ public:
 	                  std::vector<VbTracker>& all_tracker){
 		// minimise KL Divergence and assign elbo estimate
 		// Assumes vp_init already exist
-		// TODO: re intergrate random starts
 		int print_interval = 25;
 		if(random_init) {
 			throw std::logic_error("Random starts no longer implemented");
@@ -407,7 +406,7 @@ public:
 		std::vector<Hyps> theta2 = all_hyps;
 
 		// Allow more flexible start point so that we can resume previous inference run
-		int count = p.vb_iter_start;
+		long count = p.vb_iter_start;
 		while(!all_converged && count < p.vb_iter_max) {
 			for (int nn = 0; nn < n_grid; nn++) {
 				alpha_prev[nn] = all_vp[nn].mean_beta();
@@ -449,7 +448,7 @@ public:
 
 			// update elbo
 			for (int nn = 0; nn < n_grid; nn++) {
-				i_logw[nn]     = calc_logw(all_hyps[nn], all_vp[nn]);
+				i_logw[nn]     = calc_logw(all_vp[nn]);
 				alpha_diff[nn] = (alpha_prev[nn] - all_vp[nn].mean_beta()).array().abs().maxCoeff();
 			}
 
@@ -590,34 +589,34 @@ public:
 		if (n_covar > 0) {
 			for (int nn = 0; nn < n_grid; nn++) {
 				for (int cc = 0; cc < n_covar; cc++) {
-					_update_covar(cc, all_hyps[nn], all_vp[nn]);
+					_update_covar(cc, all_vp[nn]);
 				}
 			}
-			check_monotonic_elbo(all_hyps, all_vp, count, logw_prev, "updateCovarEffects");
+			check_monotonic_elbo(all_vp, count, logw_prev, "updateCovarEffects");
 		}
 
 		// Update main & interaction effects
 		bool is_fwd_pass = (count % 2 == 0);
 		if(is_fwd_pass) {
-			for (auto chunk: main_fwd_pass_chunks) {
-				_update_beta(chunk, all_vp, all_hyps);
+			for (auto const &chunk: main_fwd_pass_chunks) {
+				_update_beta(chunk, all_vp);
 			}
-			check_monotonic_elbo(all_hyps, all_vp, count, logw_prev, "updateAlphaMu_fwd_main");
+			check_monotonic_elbo(all_vp, count, logw_prev, "updateAlphaMu_fwd_main");
 
-			for (auto chunk: gxe_fwd_pass_chunks) {
-				_update_gamma(chunk, all_vp, all_hyps);
+			for (auto const &chunk: gxe_fwd_pass_chunks) {
+				_update_gamma(chunk, all_vp);
 			}
-			check_monotonic_elbo(all_hyps, all_vp, count, logw_prev, "updateAlphaMu_fwd_gxe");
+			check_monotonic_elbo(all_vp, count, logw_prev, "updateAlphaMu_fwd_gxe");
 		} else {
-			for (auto chunk: gxe_back_pass_chunks) {
-				_update_gamma(chunk, all_vp, all_hyps);
+			for (auto const &chunk: gxe_back_pass_chunks) {
+				_update_gamma(chunk, all_vp);
 			}
-			check_monotonic_elbo(all_hyps, all_vp, count, logw_prev, "updateAlphaMu_back_gxe");
+			check_monotonic_elbo(all_vp, count, logw_prev, "updateAlphaMu_back_gxe");
 
-			for (auto chunk: main_back_pass_chunks) {
-				_update_beta(chunk, all_vp, all_hyps);
+			for (auto const &chunk: main_back_pass_chunks) {
+				_update_beta(chunk, all_vp);
 			}
-			check_monotonic_elbo(all_hyps, all_vp, count, logw_prev, "updateAlphaMu_back_main");
+			check_monotonic_elbo(all_vp, count, logw_prev, "updateAlphaMu_back_main");
 		}
 
 		// Update env-weights
@@ -625,10 +624,10 @@ public:
 			for (int nn = 0; nn < n_grid; nn++) {
 				for (int uu = 0; uu < p.env_update_repeats; uu++) {
 					for (auto ll : env_fwd_pass) {
-						_updates_weights(ll, all_hyps[nn], all_vp[nn]);
+						_updates_weights(ll, all_vp[nn]);
 					}
 					for (auto ll : env_back_pass) {
-						_updates_weights(ll, all_hyps[nn], all_vp[nn]);
+						_updates_weights(ll, all_vp[nn]);
 					}
 				}
 
@@ -648,11 +647,11 @@ public:
 				}
 				// WARNING: Hard coded limit!
 				// WARNING: Updates S_x in hyps
-				all_hyps[nn].s_x(0) = (double) n_var;
-				all_hyps[nn].s_x(1) = (dXtEEX.rowwise() * muw_sq.transpose()).sum() / (N - 1.0);
-				all_hyps[nn].s_x(1) -= (XtE * all_vp[nn].mean_weights().matrix()).array().square().sum() / N / (N - 1.0);
+				all_vp[nn].s_x(0) = (double) n_var;
+				all_vp[nn].s_x(1) = (dXtEEX.rowwise() * muw_sq.transpose()).sum() / (N - 1.0);
+				all_vp[nn].s_x(1) -= (XtE * all_vp[nn].mean_weights().matrix()).array().square().sum() / N / (N - 1.0);
 
-				check_monotonic_elbo(all_hyps[nn], all_vp[nn], count, logw_prev[nn], "updateEnvWeights");
+				check_monotonic_elbo(all_vp[nn], count, logw_prev[nn], "updateEnvWeights");
 			}
 		}
 
@@ -660,17 +659,17 @@ public:
 		if (round_index > 1 && p.mode_empirical_bayes) {
 			for (int nn = 0; nn < n_grid; nn++) {
 				maximiseHyps(all_hyps[nn], all_vp[nn]);
-				check_monotonic_elbo(all_hyps[nn], all_vp[nn], count, logw_prev[nn], "maxHyps");
+				check_monotonic_elbo(all_vp[nn], count, logw_prev[nn], "maxHyps");
 			}
 		}
 
-//	// Update PVE
-//	for (int nn = 0; nn < n_grid; nn++) {
-//		all_hyps[nn].update_pve();
-//	}
+		// Update PVE
+		for (int nn = 0; nn < n_grid; nn++) {
+			all_vp[nn].update_pve(n_env);
+		}
 	}
 
-	void _update_covar(long cc, const Hyps& hyps, VariationalParameters& vp){
+	void _update_covar(long cc, VariationalParameters &vp) {
 		double old = vp.mean_covar(cc);
 
 		double EXty, EXtX;
@@ -678,13 +677,12 @@ public:
 		EXtX = (N-1.0);
 
 		// Perform param updates
-		vp.covars.cavi_update_ith_var(cc, EXty, EXtX, hyps.sigma);
+		vp.covars.cavi_update_ith_var(cc, EXty, EXtX, vp.sigma);
 
 		vp.ym += (vp.mean_covar(cc) - old) * C.col(cc).matrix();
 	}
 
-	void _updates_weights(long ll, const Hyps& hyps,
-	                      VariationalParameters& vp){
+	void _updates_weights(long ll, VariationalParameters &vp) {
 		double old = vp.mean_weights(ll);
 
 		Eigen::MatrixXd tmp;
@@ -699,15 +697,13 @@ public:
 		EXtX += (vp.var_gam() * dXtEEX.col(ll*n_env + ll)).sum();
 
 		// Perform param updates
-		vp.weights.cavi_update_ith_var(ll, EXty, EXtX, hyps.sigma);
+		vp.weights.cavi_update_ith_var(ll, EXty, EXtX, vp.sigma);
 
 		vp.eta += (vp.mean_weights(ll) - old) * E.col(ll).matrix();
 
 	}
 
-	void _update_beta(const std::vector<std::uint32_t>& iter,
-	                  std::vector<VariationalParameters>& all_vp,
-	                  const std::vector<Hyps>& all_hyps){
+	void _update_beta(const std::vector<std::uint32_t> &iter, std::vector<VariationalParameters> &all_vp) {
 		long ch_len   = iter.size();
 
 		EigenDataMatrix D, EXty;
@@ -716,10 +712,10 @@ public:
 		if(D.cols() != ch_len) {
 			D.resize(n_samples, ch_len);
 		}
-		X.col_block3(iter, D);
+		X.col_block(iter, D);
 		EXty = D.transpose() * (YY - YM - YX.cwiseProduct(ETA));
 
-		for (int nn = 0; nn < all_hyps.size(); nn++) {
+		for (int nn = 0; nn < all_vp.size(); nn++) {
 			EigenDataMatrix D_corr = (D.transpose() * D);
 			EigenDataMatrix EXtX = D_corr.diagonal();
 			EigenDataVector rr_k_old(ch_len), rr_k_new(ch_len);
@@ -730,7 +726,7 @@ public:
 				rr_k_old(ii) = old;
 
 				// Get param updates
-				all_vp[nn].betas->cavi_update_ith_var(jj, EXty(ii, nn), EXtX(ii), all_hyps[nn].sigma);
+				all_vp[nn].betas->cavi_update_ith_var(jj, EXty(ii, nn), EXtX(ii), all_vp[nn].sigma);
 
 				rr_k_new(ii) = all_vp[nn].mean_beta(jj);
 				EXty -= (all_vp[nn].mean_beta(jj) - old) * D_corr.col(ii);
@@ -739,9 +735,7 @@ public:
 		}
 	}
 
-	void _update_gamma(const std::vector<std::uint32_t>& iter,
-	                   std::vector<VariationalParameters>& all_vp,
-	                   const std::vector<Hyps>& all_hyps){
+	void _update_gamma(const std::vector<std::uint32_t> &iter, std::vector<VariationalParameters> &all_vp) {
 		long ch_len   = iter.size();
 
 		EigenDataMatrix D, EXty;
@@ -750,11 +744,11 @@ public:
 		if(D.cols() != ch_len) {
 			D.resize(n_samples, ch_len);
 		}
-		X.col_block3(iter, D);
+		X.col_block(iter, D);
 
 		EXty = D.transpose() * ((YY - YM).cwiseProduct(ETA) - YX.cwiseProduct(ETA_SQ));
 
-		for (int nn = 0; nn < all_hyps.size(); nn++) {
+		for (int nn = 0; nn < all_vp.size(); nn++) {
 			EigenDataMatrix D_corr = (D.transpose() * all_vp[nn].eta_sq.asDiagonal() * D);
 			EigenDataMatrix EXtX = D_corr.diagonal();
 			EigenDataVector rr_k_old(ch_len), rr_k_new(ch_len);
@@ -765,7 +759,7 @@ public:
 				rr_k_old(ii) = old;
 
 				// Get param updates
-				all_vp[nn].gammas->cavi_update_ith_var(jj, EXty(ii, nn), EXtX(ii), all_hyps[nn].sigma);
+				all_vp[nn].gammas->cavi_update_ith_var(jj, EXty(ii, nn), EXtX(ii), all_vp[nn].sigma);
 
 				rr_k_new(ii) = all_vp[nn].mean_gam(jj);
 				EXty -= (all_vp[nn].mean_gam(jj) - old) * D_corr.col(ii);
@@ -778,66 +772,54 @@ public:
 	                  VariationalParameters& vp){
 
 		// max sigma
-		hyps.sigma  = calcExpLinear(hyps, vp);
+		vp.sigma  = calcExpLinear(vp);
 		if (n_covar > 0) {
-			hyps.sigma += (vp.covars.mean().array().square() + vp.covars.var()).sum() / hyps.sigma_c;
-			hyps.sigma /= (N + (double) n_covar);
+			vp.sigma += (vp.covars.mean().array().square() + vp.covars.var()).sum() / hyps.sigma_c;
+			vp.sigma /= (N + (double) n_covar);
 		} else {
-			hyps.sigma /= N;
+			vp.sigma /= N;
 		}
-		vp.sigma = hyps.sigma;
+//		hyps.sigma = vp.sigma;
 
 		Eigen::ArrayXd tmp(1);
 		tmp << sigma_c * vp.sigma;
 		vp.covars.set_hyps(tmp);
 
 		Eigen::ArrayXd beta_hyps = vp.betas->get_opt_hyps();
-		hyps.lambda[0] = beta_hyps[0];
-		hyps.slab_var[0] = beta_hyps[1];
-		hyps.spike_var[0] = beta_hyps[2];
+//		hyps.lambda[0] = beta_hyps[0];
+//		hyps.slab_var[0] = beta_hyps[1];
+//		hyps.spike_var[0] = beta_hyps[2];
 
 		vp.betas->set_hyps(beta_hyps);
 
 		if(n_env > 0) {
 			Eigen::ArrayXd gam_hyps = vp.gammas->get_opt_hyps();
-			hyps.lambda[1] = gam_hyps[0];
-			hyps.slab_var[1] = gam_hyps[1];
-			hyps.spike_var[1] = gam_hyps[2];
+//			hyps.lambda[1] = gam_hyps[0];
+//			hyps.slab_var[1] = gam_hyps[1];
+//			hyps.spike_var[1] = gam_hyps[2];
 			vp.gammas->set_hyps(gam_hyps);
 		}
 
-		hyps.slab_relative_var = hyps.slab_var / hyps.sigma;
-		hyps.spike_relative_var = hyps.spike_var / hyps.sigma;
+//		hyps.slab_relative_var = hyps.slab_var / hyps.sigma;
+//		hyps.spike_relative_var = hyps.spike_var / hyps.sigma;
 	}
 
-	double calc_logw(const Hyps& hyps,
-	                 const VariationalParameters& vp){
+	double calc_logw(const VariationalParameters &vp) {
 
 		// Expectation of linear regression log-likelihood
-		double int_linear = -1.0 * calcExpLinear(hyps, vp) / 2.0 / vp.sigma;
-		int_linear -= N * std::log(2.0 * PI * vp.sigma) / 2.0;
+		double res = -N * std::log(2.0 * PI * vp.sigma) / 2.0;
+		res -= calcExpLinear(vp) / 2.0 / vp.sigma;
 
-		// kl-beta
-		double kl_beta = vp.betas->kl_div();
-
-		double kl_gamma = 0;
+		res += vp.betas->kl_div();
 		if(n_effects > 1) {
-			kl_gamma += vp.gammas->kl_div();
+			res += vp.gammas->kl_div();
 		}
-
-		// covariates
-		double kl_covar = 0.0;
 		if(n_covar > 0) {
-			kl_covar = vp.covars.kl_div();
+			res += vp.covars.kl_div();
 		}
-
-		// weights
-		double kl_weights = 0.0;
 		if(n_effects > 1 && n_env > 1) {
-			kl_weights = vp.weights.kl_div();
+			res +=  vp.weights.kl_div();
 		}
-
-		double res = int_linear + kl_beta + kl_gamma + kl_covar + kl_weights;
 
 		return res;
 	}
@@ -880,12 +862,8 @@ public:
 		}
 	}
 
-	void check_monotonic_elbo(const Hyps& hyps,
-	                          VariationalParameters& vp,
-	                          const int count,
-	                          double& logw_prev,
-	                          const std::string& prev_function){
-		double i_logw     = calc_logw(hyps, vp);
+	void check_monotonic_elbo(VariationalParameters &vp, const int count, double &logw_prev, const std::string &prev_function) {
+		double i_logw     = calc_logw(vp);
 		if(i_logw < logw_prev) {
 			std::cout << count << ": " << prev_function;
 			std::cout << " " << logw_prev << " -> " << i_logw;
@@ -894,14 +872,11 @@ public:
 		logw_prev = i_logw;
 	}
 
-	void check_monotonic_elbo(const std::vector<Hyps>& all_hyps,
-	                          std::vector<VariationalParameters>& all_vp,
-	                          const int count,
-	                          std::vector<double>& logw_prev,
-	                          const std::string& prev_function){
+	void check_monotonic_elbo(std::vector<VariationalParameters> &all_vp, const int count, std::vector<double> &logw_prev,
+								  const std::string &prev_function) {
 
-		for (int nn = 0; nn < all_hyps.size(); nn++) {
-			double i_logw = calc_logw(all_hyps[nn], all_vp[nn]);
+		for (int nn = 0; nn < all_vp.size(); nn++) {
+			double i_logw = calc_logw(all_vp[nn]);
 			if (i_logw < logw_prev[nn]) {
 				std::cout << count << ": " << prev_function;
 				std::cout << " " << logw_prev[nn] << " -> " << i_logw;
@@ -944,8 +919,7 @@ public:
 		}
 	}
 
-	double calcExpLinear(const Hyps& hyps,
-	                     const VariationalParameters& vp){
+	double calcExpLinear(const VariationalParameters &vp) {
 		// Expectation of ||Y - C tau - X beta - Z gamma||^2
 		double int_linear = 0;
 

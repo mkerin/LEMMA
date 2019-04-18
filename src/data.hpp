@@ -524,7 +524,7 @@ public:
 				G.assign_index(ii, jj, dosage_j[ii]);
 			}
 			// G.compressed_dosage_sds[jj] = sigma;
-			// G.compressed_dosage_means[jj] = mu;
+			// G.col_means[jj] = mu;
 
 			jj++;
 		}

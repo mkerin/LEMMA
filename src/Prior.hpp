@@ -64,6 +64,7 @@ public:
 	virtual Eigen::ArrayXXd get_hyps() const = 0;
 	virtual void set_hyps(const Eigen::ArrayXd& vec) = 0;
 	virtual Eigen::ArrayXd get_opt_hyps() const = 0;
+	virtual double get_hyps_var() const = 0;
 
 	/*** File IO ***/
 	virtual void write_ith_distn_to_stream(long ii, std::ostream& outf) const = 0;
@@ -180,6 +181,9 @@ public:
 	}
 	void set_hyps(const Eigen::ArrayXd& vec) override {
 		sigma = vec[0];
+	}
+	double get_hyps_var() const override {
+			return sigma;
 	}
 };
 
@@ -395,6 +399,9 @@ public:
 		lambda = vec[0];
 		sigma_slab = vec[1];
 		sigma_spike = vec[2];
+	}
+	double get_hyps_var() const override {
+		return lambda * sigma_slab + (1 - lambda) * sigma_spike;
 	}
 };
 

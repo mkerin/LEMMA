@@ -40,10 +40,23 @@ public:
 	// Not sure where else to put.
 	double sigma;
 	Eigen::ArrayXd pve;
+	Eigen::ArrayXd s_x;
 
 	VariationalParamsBase(parameters my_params) : p(my_params) {
-		betas.reset(new MoGaussianVec);
-		gammas.reset(new MoGaussianVec);
+		if (p.beta_prior == "MixOfGaussian") {
+			betas.reset(new MoGaussianVec);
+		} else if (p.beta_prior == "Gaussian") {
+			betas.reset(new GaussianVec);
+		} else {
+			throw std::runtime_error("Unrecognised beta prior: " + p.beta_prior);
+		}
+		if (p.beta_prior == "MixOfGaussian") {
+			gammas.reset(new MoGaussianVec);
+		} else if (p.beta_prior == "Gaussian") {
+			gammas.reset(new GaussianVec);
+		} else {
+			throw std::runtime_error("Unrecognised beta prior: " + p.beta_prior);
+		}
 	};
 
 	/*** utility functions ***/
@@ -86,6 +99,13 @@ public:
 	std::string gammas_header(std::string prefix = "") const {
 		return gammas->header(prefix);
 	}
+	void update_pve(long n_env){
+		pve[0] = betas->get_hyps_var() * s_x[0];
+		if (n_env > 0){
+			pve[1] = gammas->get_hyps_var() * s_x[1];
+		}
+		pve /= (pve.sum() + sigma);
+	}
 };
 
 // Store subset of Variational Parameters to be RAM efficient
@@ -106,6 +126,7 @@ public:
 
 		sigma  = obj.sigma;
 		pve    = obj.pve;
+		s_x    = obj.s_x;
 
 		betas.reset(obj.betas->clone());
 		gammas.reset(obj.gammas->clone());
@@ -121,6 +142,7 @@ public:
 
 		sigma  = obj.sigma;
 		pve    = obj.pve;
+		s_x    = obj.s_x;
 
 		betas.reset(obj.betas->clone());
 		gammas.reset(obj.gammas->clone());
@@ -157,6 +179,7 @@ public:
 															  eta(obj.eta), eta_sq(obj.eta_sq){
 		sigma  = obj.sigma;
 		pve    = obj.pve;
+		s_x    = obj.s_x;
 		EdZtZ  = obj.EdZtZ;
 
 		betas.reset(obj.betas->clone());

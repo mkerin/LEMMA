@@ -53,15 +53,12 @@ public:
 	std::vector< std::string > al_0, al_1, rsid;
 	std::vector< std::uint32_t > position;
 	std::vector< double > maf, info;
-	// chr~pos~a0~a1
 	std::vector< std::string > SNPKEY;
 	std::vector< std::string > SNPID;
 
 	std::vector<std::map<std::size_t, bool>> missing_genos;
-	Eigen::VectorXd compressed_dosage_means;
-	Eigen::VectorXd compressed_dosage_sds;
-	Eigen::VectorXd compressed_dosage_inv_sds;  // 1 / col-wise sd
-	// Eigen::VectorXd aa;  // vector of ages
+	Eigen::VectorXd col_means;
+	Eigen::VectorXd col_sds_inv;
 	std::size_t nn, pp;
 
 	// Interface type of Eigen indices -> see eigen3/Eigen/src/Core/EigenBase.h
@@ -84,30 +81,11 @@ public:
 	~GenotypeMatrix() = default;
 
 	/********** Input / Write access methods ************/
-
 	// Eigen element access
 	void assign_index(const long& ii, const long& jj, double x);
 
-//	// Replacement(s) for write-version of Eigen Method .col()
-//	template<typename T>
-//	void assign_col(const T& jj, Eigen::Ref<Eigen::VectorXd> vec){
-//		assert(vec.rows() == nn);
-//
-//		if(low_mem){
-//			for (Index ii = 0; ii < nn; ii++){
-//				M(ii, jj) = CompressDosage(vec[ii]);
-//			}
-//		} else {
-//			for (Index ii = 0; ii < nn; ii++){
-//				G(ii, jj) = vec[ii];
-//			}
-//		}
-//
-//		scaling_performed = false;
-//	}
 
 	/********** Output / Read access methods ************/
-
 	// Eigen element access
 	double operator()(const long& ii, const long& jj){
 		if(!scaling_performed){
@@ -115,7 +93,7 @@ public:
 		}
 
 		if(low_mem){
-			return (DecompressDosage(M(ii, jj)) - compressed_dosage_means[jj]) * compressed_dosage_inv_sds[jj];
+			return (DecompressDosage(M(ii, jj)) - col_means[jj]) * col_sds_inv[jj];
 		} else {
 			return G(ii, jj);
 		}
@@ -132,54 +110,14 @@ public:
 
 		if(low_mem){
 			vec = M.cast<float>().col(jj);
-			vec *= (intervalWidth * compressed_dosage_inv_sds[jj]);
-			vec.array() += (0.5 * intervalWidth - compressed_dosage_means[jj]) * compressed_dosage_inv_sds[jj];
+			vec *= (intervalWidth * col_sds_inv[jj]);
+			vec.array() += (0.5 * intervalWidth - col_means[jj]) * col_sds_inv[jj];
 		} else {
 			vec = G.col(jj);
 		}
 		return vec;
 	}
-#else
-	// Eigen read column
-	Eigen::VectorXd col(long jj);
-#endif
 
-	// Eigen read column
-	void col(long jj, EigenRefDataVector vec);
-//
-//	void col(long jj, Eigen::Ref<Eigen::VectorXf> vec){
-//		assert(jj < pp);
-//		if(!scaling_performed){
-//			calc_scaled_values();
-//		}
-//
-//		if(low_mem){
-//			vec = M.cast<float>().col(jj);
-//			vec *= (intervalWidth * compressed_dosage_inv_sds[jj]);
-//			vec.array() += (0.5 * intervalWidth - compressed_dosage_means[jj]) * compressed_dosage_inv_sds[jj];
-//		} else {
-//			vec = G.col(jj);
-//		}
-//	}
-
-//	// Dot with jth col - this was actually slower. Oh well.
-//	double dot_with_jth_col(const Eigen::Ref<const Eigen::VectorXd>& vec, Index jj){
-//		assert(jj < pp);
-//		double tmp, offset, res;
-//		if(!scaling_performed){
-//			calc_scaled_values();
-//		}
-//
-//		tmp = vec.dot(M.col(jj).cast<double>());
-//		offset = vec.sum();
-//
-//		res = intervalWidth * tmp + offset * (intervalWidth * 0.5 - compressed_dosage_means[jj]);
-//		res *= compressed_dosage_inv_sds[jj];
-//		return res;
-//	}
-
-	// Eigen matrix multiplication
-#ifdef DATA_AS_FLOAT
 	// Eigen matrix multiplication
 	EigenDataMatrix operator*(Eigen::Ref<Eigen::MatrixXd> rhs){
 		if(!scaling_performed){
@@ -190,60 +128,40 @@ public:
 			EigenDataMatrix res(nn, rhs.cols());
 			for (int ll = 0; ll < rhs.cols(); ll++){
 				Eigen::Ref<Eigen::VectorXd> tmp = rhs.col(ll);
-				res.col(ll) = M.cast<scalarData>() * compressed_dosage_inv_sds.cast<scalarData>().asDiagonal() * tmp.cast<scalarData>();
+				res.col(ll) = M.cast<scalarData>() * col_sds_inv.cast<scalarData>().asDiagonal() * tmp.cast<scalarData>();
 			}
 			res *= intervalWidth;
-			// res = M.cast<scalarData>() * compressed_dosage_inv_sds.cast<scalarData>().asDiagonal() * rhs.cast<scalarData>() * intervalWidth;
-			res.array().rowwise() += (compressed_dosage_inv_sds.cast<scalarData>().asDiagonal() * rhs.cast<scalarData>()).array().colwise().sum() * intervalWidth * 0.5;
-			res.array().rowwise() -= (compressed_dosage_inv_sds.cast<scalarData>().cwiseProduct(compressed_dosage_means.cast<scalarData>()).asDiagonal() * rhs.cast<scalarData>()).array().colwise().sum();
+			// res = M.cast<scalarData>() * col_sds_inv.cast<scalarData>().asDiagonal() * rhs.cast<scalarData>() * intervalWidth;
+			res.array().rowwise() += (col_sds_inv.cast<scalarData>().asDiagonal() * rhs.cast<scalarData>()).array().colwise().sum() * intervalWidth * 0.5;
+			res.array().rowwise() -= (col_sds_inv.cast<scalarData>().cwiseProduct(col_means.cast<scalarData>()).asDiagonal() * rhs.cast<scalarData>()).array().colwise().sum();
 			return res;
 		} else {
 			return G * rhs.cast<scalarData>();
 		}
 	}
+#else
+	// Eigen read column
+	Eigen::VectorXd col(long jj);
 #endif
 
-	// Eigen matrix multiplication
+	// Eigen read column
+	void col(long jj, EigenRefDataVector vec);
+
 	EigenDataMatrix operator*(EigenRefDataMatrix rhs);
 
 	Eigen::MatrixXd transpose_multiply(EigenRefDataArrayXX lhs);
-
-	EigenDataMatrix col_block(const std::uint32_t& ch_start,
-							  const int& ch_len);
 
 	// Eigen lhs matrix multiplication
 	Eigen::VectorXd mult_vector_by_chr(const int& chr, const Eigen::Ref<const Eigen::VectorXd>& rhs);
 
 	template <typename Deriv>
-	void col_block3(const std::vector< std::uint32_t>& chunk,
-					Eigen::MatrixBase<Deriv>& D);
+	void col_block(const std::vector<std::uint32_t> &chunk,
+				   Eigen::MatrixBase<Deriv> &D);
 
 	template <typename Deriv>
 	void get_cols(const std::vector<int> &index,
 				  const std::vector<std::uint32_t> &iter_chunk,
 				  Eigen::MatrixBase<Deriv>& D);
-
-	// // Eigen lhs matrix multiplication
-	// Eigen::VectorXd transpose_vector_multiply(const Eigen::Ref<const Eigen::VectorXd>& lhs,
-	// 										  bool lhs_centered){
-	// 	// G.transpose_vector_multiply(y) <=> (y^t G)^t <=> G^t y
-	// 	// NOTE: assumes that lhs is centered!
-	// 	if(!scaling_performed){
-	// 		calc_scaled_values();
-	// 	}
-	//
-	// 	Eigen::VectorXd res;
-	// 	if(low_mem){
-	// 		assert(lhs.rows() == M.rows());
-	// 		assert(std::abs(lhs.sum()) < 1e-9);
-	//
-	// 		res = lhs.transpose() * M.cast<double>();
-	//
-	// 		return res.cwiseProduct(compressed_dosage_inv_sds) * intervalWidth;
-	// 	} else {
-	// 		return lhs.transpose() * G;
-	// 	}
-	// }
 
 	/********** Mean center & unit variance; internal use ************/
 	void calc_scaled_values();

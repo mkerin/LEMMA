@@ -24,9 +24,13 @@ void VariationalParamsBase::run_default_init(long n_var, long n_covar, long n_en
 		weights.set_mean(w_init);
 		pve.resize(2);
 		pve << -1, -1;
+		s_x.resize(2);
+		s_x << -1, -1;
 	} else {
 		pve.resize(1);
 		pve << -1;
+		s_x.resize(1);
+		s_x << -1;
 	}
 
 	if(n_covar > 0) {
@@ -154,6 +158,7 @@ void VariationalParameters::init_from_lite(const VariationalParametersLite &init
 
 	sigma = init.sigma;
 	pve = init.pve;
+	s_x = init.s_x;
 }
 
 VariationalParametersLite VariationalParameters::convert_to_lite() {
@@ -164,6 +169,7 @@ VariationalParametersLite VariationalParameters::convert_to_lite() {
 
 	vplite.sigma = sigma;
 	vplite.pve = pve;
+	vplite.s_x = s_x;
 
 	vplite.betas.reset(betas->clone());
 	vplite.gammas.reset(gammas->clone());
