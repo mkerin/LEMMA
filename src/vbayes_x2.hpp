@@ -46,7 +46,7 @@ public:
 		                                           "lambda_b", "lambda_g"};
 
 // sizes
-	int n_effects;    // no. interaction variables + 1
+	int n_effects;        // no. interaction variables + 1
 	std::uint32_t n_samples;
 	unsigned long n_covar;
 	unsigned long n_env;
@@ -54,7 +54,7 @@ public:
 	std::uint32_t n_var2;
 	bool random_params_init;
 	bool run_round1;
-	double N;     // (double) n_samples
+	double N;         // (double) n_samples
 
 // Chromosomes in data
 	int n_chrs;
@@ -72,17 +72,17 @@ public:
 	std::vector< std::vector < std::uint32_t > > main_back_pass_chunks, gxe_back_pass_chunks;
 	std::vector< int > env_fwd_pass;
 	std::vector< int > env_back_pass;
-	std::map<unsigned long, Eigen::MatrixXd> D_correlations;     //We can keep D^t D for the main effects
+	std::map<unsigned long, Eigen::MatrixXd> D_correlations;         //We can keep D^t D for the main effects
 
 // Data
 	GenotypeMatrix&  X;
-	EigenDataVector Y;               // residual phenotype matrix
-	EigenDataArrayX Cty;              // vector of C^T x y where C the matrix of covariates
-	EigenDataArrayXX E;              // matrix of variables used for GxE interactions
-	EigenDataMatrix& C;              // matrix of covariates (superset of GxE variables)
-	Eigen::MatrixXd XtE;              // matrix of covariates (superset of GxE variables)
+	EigenDataVector Y;                   // residual phenotype matrix
+	EigenDataArrayX Cty;                  // vector of C^T x y where C the matrix of covariates
+	EigenDataArrayXX E;                  // matrix of variables used for GxE interactions
+	EigenDataMatrix& C;                  // matrix of covariates (superset of GxE variables)
+	Eigen::MatrixXd XtE;                  // matrix of covariates (superset of GxE variables)
 
-	Eigen::ArrayXXd& dXtEEX;         // P x n_env^2; col (l * n_env + m) is the diagonal of X^T * diag(E_l * E_m) * X
+	Eigen::ArrayXXd& dXtEEX;             // P x n_env^2; col (l * n_env + m) is the diagonal of X^T * diag(E_l * E_m) * X
 
 // Global location of y_m = E[X beta] and y_x = E[X gamma]
 	EigenDataMatrix YY, YX, YM, ETA, ETA_SQ;
@@ -730,7 +730,7 @@ public:
 				rr_k_old(ii) = old;
 
 				// Get param updates
-				all_vp[nn].betas.cavi_update_ith_var(jj, EXty(ii, nn), EXtX(ii), all_hyps[nn].sigma);
+				all_vp[nn].betas->cavi_update_ith_var(jj, EXty(ii, nn), EXtX(ii), all_hyps[nn].sigma);
 
 				rr_k_new(ii) = all_vp[nn].mean_beta(jj);
 				EXty -= (all_vp[nn].mean_beta(jj) - old) * D_corr.col(ii);
@@ -765,7 +765,7 @@ public:
 				rr_k_old(ii) = old;
 
 				// Get param updates
-				all_vp[nn].gammas.cavi_update_ith_var(jj, EXty(ii, nn), EXtX(ii), all_hyps[nn].sigma);
+				all_vp[nn].gammas->cavi_update_ith_var(jj, EXty(ii, nn), EXtX(ii), all_hyps[nn].sigma);
 
 				rr_k_new(ii) = all_vp[nn].mean_gam(jj);
 				EXty -= (all_vp[nn].mean_gam(jj) - old) * D_corr.col(ii);
@@ -791,19 +791,19 @@ public:
 		tmp << sigma_c * vp.sigma;
 		vp.covars.set_hyps(tmp);
 
-		Eigen::ArrayXd beta_hyps = vp.betas.get_opt_hyps();
+		Eigen::ArrayXd beta_hyps = vp.betas->get_opt_hyps();
 		hyps.lambda[0] = beta_hyps[0];
 		hyps.slab_var[0] = beta_hyps[1];
 		hyps.spike_var[0] = beta_hyps[2];
 
-		vp.betas.set_hyps(beta_hyps);
+		vp.betas->set_hyps(beta_hyps);
 
 		if(n_env > 0) {
-			Eigen::ArrayXd gam_hyps = vp.gammas.get_opt_hyps();
+			Eigen::ArrayXd gam_hyps = vp.gammas->get_opt_hyps();
 			hyps.lambda[1] = gam_hyps[0];
 			hyps.slab_var[1] = gam_hyps[1];
 			hyps.spike_var[1] = gam_hyps[2];
-			vp.gammas.set_hyps(gam_hyps);
+			vp.gammas->set_hyps(gam_hyps);
 		}
 
 		hyps.slab_relative_var = hyps.slab_var / hyps.sigma;
@@ -818,11 +818,11 @@ public:
 		int_linear -= N * std::log(2.0 * PI * vp.sigma) / 2.0;
 
 		// kl-beta
-		double kl_beta = vp.betas.kl_div();
+		double kl_beta = vp.betas->kl_div();
 
 		double kl_gamma = 0;
 		if(n_effects > 1) {
-			kl_gamma += vp.gammas.kl_div();
+			kl_gamma += vp.gammas->kl_div();
 		}
 
 		// covariates
@@ -1196,9 +1196,9 @@ public:
 		}
 
 		/*** Hyps - header ***/
-		outf << "weight elbo count sigma pve0 " << trackers[0].vp.betas.get_hyps_header("0");
+		outf << "weight elbo count sigma pve0 " << trackers[0].vp.betas->get_hyps_header("0");
 		if(n_env > 0) {
-			outf << " pve1 " << trackers[0].vp.gammas.get_hyps_header("1");
+			outf << " pve1 " << trackers[0].vp.gammas->get_hyps_header("1");
 		}
 		outf << std::endl;
 
@@ -1213,11 +1213,11 @@ public:
 
 			outf << std::setprecision(8) << std::fixed;
 			outf << " " << trackers[ii].vp.pve(0);
-			outf << " " << trackers[ii].vp.betas.get_hyps();
+			outf << " " << trackers[ii].vp.betas->get_hyps();
 
 			if(n_env > 0) {
 				outf << " " << trackers[ii].vp.pve(1);
-				outf << " " << trackers[ii].vp.gammas.get_hyps();
+				outf << " " << trackers[ii].vp.gammas->get_hyps();
 			}
 			outf << std::endl;
 		}
@@ -1349,7 +1349,7 @@ public:
 		return res;
 	}
 
-	int getValueRAM(){     //Note: this value is in KB!
+	int getValueRAM(){         //Note: this value is in KB!
 #ifndef OSX
 		FILE* file = fopen("/proc/self/status", "r");
 		int result = -1;

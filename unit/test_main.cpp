@@ -404,9 +404,6 @@ TEST_CASE( "Example 4: multi-env + mog + covars + emp_bayes" ){
 
 			VB.updateAllParams(0, round_index, all_vp, all_hyps, logw_prev);
 
-			CHECK(vp.betas.mix(0)            == Approx(0.1347598474));
-			CHECK(vp.betas.mix(1)            == Approx(0.1406737102));
-			CHECK(vp.betas.mix(63)           == Approx(0.142092349));
 			CHECK(vp.mean_weights(0)              == Approx(0.1053510228));
 
 			CHECK(hyps.sigma                == Approx(0.6979599837));
@@ -415,9 +412,9 @@ TEST_CASE( "Example 4: multi-env + mog + covars + emp_bayes" ){
 			CHECK(hyps.slab_relative_var[0] == Approx(0.0080644075));
 			CHECK(hyps.slab_relative_var[1] == Approx(0.0050698799));
 
-			CHECK(hyps.lambda[0] == vp.betas.get_opt_hyps()(0));
-			CHECK(hyps.slab_var[0] == vp.betas.get_opt_hyps()(1));
-			CHECK(hyps.spike_var[0] == vp.betas.get_opt_hyps()(2));
+			CHECK(hyps.lambda[0] == vp.betas->get_opt_hyps()(0));
+			CHECK(hyps.slab_var[0] == vp.betas->get_opt_hyps()(1));
+			CHECK(hyps.spike_var[0] == vp.betas->get_opt_hyps()(2));
 
 			Eq_beta = vp.mean_beta();
 			check_ym  = VB.X * Eq_beta;
@@ -426,7 +423,6 @@ TEST_CASE( "Example 4: multi-env + mog + covars + emp_bayes" ){
 
 			VB.updateAllParams(1, round_index, all_vp, all_hyps, logw_prev);
 
-//			CHECK(vp.betas.mix(0)            == Approx(0.1466416933));
 //			CHECK(vp.mean_weights(0)              == Approx(0.0594808543));
 //			CHECK(vp.gammas.mix(63)           == Approx(0.1180509779));
 //			CHECK(vp.mu1_gam(63)              == Approx(0.0019247043));
@@ -439,11 +435,9 @@ TEST_CASE( "Example 4: multi-env + mog + covars + emp_bayes" ){
 
 			VB.updateAllParams(2, round_index, all_vp, all_hyps, logw_prev);
 
-			CHECK(vp.mean_beta(63)   == vp.betas.mean(63));
+			CHECK(vp.mean_beta(63)   == vp.betas->mean(63));
 			CHECK(vp.mean_weights(0) == vp.weights.mean(0));
-			CHECK(vp.betas.mix(63)           == Approx(0.1850853878));
 			CHECK(vp.mean_weights(0)              == Approx(0.0358282042));
-			CHECK(vp.gammas.mix(63)           == Approx(0.1033664645));
 			CHECK(vp.mean_gam(63)              == Approx(0.0000060221));
 
 			CHECK(VB.calc_logw(hyps, vp) == Approx(-88.4813237554));
@@ -738,7 +732,6 @@ TEST_CASE( "Example 4: multi-env + mog + covars + emp_bayes" ){
 //			std::vector<double> logw_prev(n_grid, -std::numeric_limits<double>::max());
 //			std::vector<std::vector< double > > logw_updates(n_grid);
 //
-//			vp.betas.mix(0) = std::nan("1");
 //
 //			CHECK_THROWS(VB.updateAllParams(0, round_index, all_vp, all_hyps, logw_prev));
 //		}

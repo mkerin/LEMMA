@@ -16,6 +16,7 @@
 
 #include <iostream>
 #include <limits>
+#include <memory>
 
 namespace boost_io = boost::iostreams;
 
@@ -24,15 +25,14 @@ class VariationalParamsBase {
 public:
 	// This stores parameters used in VB and some summary quantities that
 	// depend on those parameters.
-	parameters p;
 	double eps = std::numeric_limits<double>::min();
 
 	GaussianVec weights;
 	GaussianVec covars;
+	parameters p;
 
-
-	MoGaussianVec betas;
-	MoGaussianVec gammas;
+	std::unique_ptr<ExponentialFamVec> betas;
+	std::unique_ptr<ExponentialFamVec> gammas;
 
 
 
@@ -41,7 +41,9 @@ public:
 	double sigma;
 	Eigen::ArrayXd pve;
 
-	VariationalParamsBase(parameters my_params) : p(my_params){
+	VariationalParamsBase(parameters my_params) : p(my_params) {
+		betas.reset(new MoGaussianVec);
+		gammas.reset(new MoGaussianVec);
 	};
 
 	/*** utility functions ***/
@@ -73,16 +75,16 @@ public:
 	void set_hyps(Hyps hyps);
 	void check_nan(const double& alpha, const std::uint32_t& ii);
 	void write_ith_beta_to_stream(long ii, std::ostream& outf) const {
-		betas.write_ith_distn_to_stream(ii, outf);
+		betas->write_ith_distn_to_stream(ii, outf);
 	}
 	void write_ith_gamma_to_stream(long ii, std::ostream& outf) const {
-		gammas.write_ith_distn_to_stream(ii, outf);
+		gammas->write_ith_distn_to_stream(ii, outf);
 	}
 	std::string betas_header(std::string prefix = "") const {
-		return betas.header(prefix);
+		return betas->header(prefix);
 	}
 	std::string gammas_header(std::string prefix = "") const {
-		return gammas.header(prefix);
+		return gammas->header(prefix);
 	}
 };
 
@@ -90,13 +92,43 @@ public:
 class VariationalParametersLite : public VariationalParamsBase {
 public:
 // Other quantities to track
-	EigenDataVector yx;            // N x 1
-	EigenDataVector ym;            // N x 1
+	EigenDataVector yx;                // N x 1
+	EigenDataVector ym;                // N x 1
 	EigenDataVector eta;
 	EigenDataVector eta_sq;
 
-	VariationalParametersLite(parameters my_params) : VariationalParamsBase(my_params) {
-	};
+	explicit VariationalParametersLite(parameters my_params) : VariationalParamsBase(my_params) {};
+	VariationalParametersLite(const VariationalParametersLite &obj) : VariationalParamsBase(obj.p) {
+		ym     = obj.ym;
+		yx     = obj.yx;
+		eta    = obj.eta;
+		eta_sq = obj.eta_sq;
+
+		sigma  = obj.sigma;
+		pve    = obj.pve;
+
+		betas.reset(obj.betas->clone());
+		gammas.reset(obj.gammas->clone());
+		weights = obj.weights;
+		covars  = obj.covars;
+	}
+	VariationalParametersLite& operator = (const VariationalParametersLite &obj) {
+		p      = obj.p;
+		ym     = obj.ym;
+		yx     = obj.yx;
+		eta    = obj.eta;
+		eta_sq = obj.eta_sq;
+
+		sigma  = obj.sigma;
+		pve    = obj.pve;
+
+		betas.reset(obj.betas->clone());
+		gammas.reset(obj.gammas->clone());
+		weights = obj.weights;
+		covars  = obj.covars;
+		return *this;
+	}
+
 };
 
 class VariationalParameters : public VariationalParamsBase {
@@ -105,12 +137,13 @@ public:
 // depend on those parameters.
 
 // Summary quantities
-	EigenRefDataVector yx;              // N x 1
-	EigenRefDataVector ym;              // N x 1
-	EigenRefDataVector eta;             // expected value of matrix product E x w
-	EigenRefDataVector eta_sq;          // expected value (E x w) cdot (E x w)
+	EigenRefDataVector yx;                  // N x 1
+	EigenRefDataVector ym;                  // N x 1
+	EigenRefDataVector eta;                 // expected value of matrix product E x w
+	EigenRefDataVector eta_sq;              // expected value (E x w) cdot (E x w)
 
-	Eigen::ArrayXd EdZtZ;           // expectation of the diagonal of Z^t Z
+	Eigen::ArrayXd EdZtZ;               // expectation of the diagonal of Z^t Z
+	parameters p;
 
 
 	VariationalParameters(parameters my_params,
@@ -120,6 +153,17 @@ public:
 	                      EigenRefDataVector my_eta_sq) : VariationalParamsBase(my_params), yx(my_yx), ym(my_ym),
 		eta(my_eta), eta_sq(my_eta_sq){
 	};
+	VariationalParameters(const VariationalParameters &obj) : VariationalParamsBase(obj.p), yx(obj.yx), ym(obj.ym),
+															  eta(obj.eta), eta_sq(obj.eta_sq){
+		sigma  = obj.sigma;
+		pve    = obj.pve;
+		EdZtZ  = obj.EdZtZ;
+
+		betas.reset(obj.betas->clone());
+		gammas.reset(obj.gammas->clone());
+		weights = obj.weights;
+		covars  = obj.covars;
+	}
 
 	~VariationalParameters(){
 	};

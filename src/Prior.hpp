@@ -15,14 +15,17 @@
 
 
 // Base class for vectors of exponential family distributions
+// https://www.geeksforgeeks.org/advanced-c-virtual-copy-constructor/
 class ExponentialFamVec {
 public:
 // no. of distributions in vec
 	long nn;
 	double eps = std::numeric_limits<double>::min();
 
-	virtual void resize(long n_vars) = 0;
+	virtual ExponentialFamVec *clone() = 0;
+	virtual ~ExponentialFamVec() = default;
 
+	virtual void resize(long n_vars) = 0;
 	virtual long size() const {
 		return nn;
 	}
@@ -74,12 +77,17 @@ public:
 	double sigma;
 
 	GaussianVec() = default;
+	~GaussianVec() = default;
 	GaussianVec(long n_vars) {
 		// Initialise all gaussians at mean 0, var 0.01
 		nn = n_vars;
 		nats.resize(nn, 2);
 		nats.col(0) = Eigen::ArrayXd::Zero(nn);
 		nats.col(1) = Eigen::ArrayXd::Constant(nn, -50);
+	}
+
+	ExponentialFamVec *clone() override {
+		return new GaussianVec(*this);
 	}
 
 	/*** Basic properties ***/
@@ -185,6 +193,7 @@ public:
 	double lambda, sigma_spike, sigma_slab;
 
 	MoGaussianVec() = default;
+	~MoGaussianVec() = default;
 	explicit MoGaussianVec(long n_vars) {
 		// Initialise all gaussians at mean 0, var 0.01
 		nn = n_vars;
@@ -195,6 +204,10 @@ public:
 		slab_nats.col(0) = Eigen::ArrayXd::Zero(nn);
 		spike_nats.col(1) = Eigen::ArrayXd::Constant(nn, -50);
 		slab_nats.col(1) = Eigen::ArrayXd::Constant(nn, -50);
+	}
+
+	ExponentialFamVec *clone() override {
+		return new MoGaussianVec(*this);
 	}
 
 	/*** Basic properties ***/

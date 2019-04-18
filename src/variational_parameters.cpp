@@ -15,9 +15,9 @@ void VariationalParamsBase::run_default_init(long n_var, long n_covar, long n_en
 	 * - covar latent variables initialised from zero
 	 * - env latent variables initialised from uniform
 	 */
-	betas.resize(n_var);
+	betas->resize(n_var);
 	if(n_env > 0) {
-		gammas.resize(n_var);
+		gammas->resize(n_var);
 		weights.resize(n_env);
 
 		Eigen::ArrayXd w_init = Eigen::ArrayXd::Constant(n_env, 1.0 / n_env);
@@ -36,10 +36,10 @@ void VariationalParamsBase::run_default_init(long n_var, long n_covar, long n_en
 
 void VariationalParamsBase::dump_snps_to_file(boost_io::filtering_ostream& outf,
                                               const GenotypeMatrix& X, long n_env) const {
-	long n_var = betas.size();
-	outf << "SNPID " << betas.header("beta");
+	long n_var = betas->size();
+	outf << "SNPID " << betas->header("beta");
 	if(n_env > 0) {
-		outf << " " << gammas.header("gam");
+		outf << " " << gammas->header("gam");
 	}
 	outf << std::endl;
 	outf << std::scientific << std::setprecision(8);
@@ -58,11 +58,11 @@ void VariationalParamsBase::dump_snps_to_file(boost_io::filtering_ostream& outf,
 /*** Get and set properties of latent variables ***/
 
 Eigen::VectorXd VariationalParamsBase::mean_beta() const {
-	return betas.mean();
+	return betas->mean();
 }
 
 Eigen::VectorXd VariationalParamsBase::mean_gam() const {
-	return gammas.mean();
+	return gammas->mean();
 }
 
 Eigen::VectorXd VariationalParamsBase::mean_weights() const {
@@ -82,19 +82,19 @@ double VariationalParamsBase::mean_covar(long cc) const {
 }
 
 double VariationalParamsBase::mean_beta(std::uint32_t jj) const {
-	return betas.mean(jj);
+	return betas->mean(jj);
 }
 
 double VariationalParamsBase::mean_gam(std::uint32_t jj) const {
-	return gammas.mean(jj);
+	return gammas->mean(jj);
 }
 
 Eigen::ArrayXd VariationalParamsBase::var_beta() const {
-	return betas.var();
+	return betas->var();
 }
 
 Eigen::ArrayXd VariationalParamsBase::var_gam() const {
-	return gammas.var();
+	return gammas->var();
 }
 
 Eigen::ArrayXd VariationalParamsBase::var_weights() const {
@@ -128,11 +128,11 @@ void VariationalParamsBase::set_hyps(Hyps hyps){
 	sigma = hyps.sigma;
 	Eigen::ArrayXd tmp(3);
 	tmp << hyps.lambda(0), hyps.slab_var(0), hyps.spike_var(0);
-	betas.set_hyps(tmp);
+	betas->set_hyps(tmp);
 
 	if(hyps.lambda.size() > 1) {
 		tmp << hyps.lambda(1), hyps.slab_var(1), hyps.spike_var(1);
-		gammas.set_hyps(tmp);
+		gammas->set_hyps(tmp);
 
 		tmp.resize(1);
 		tmp << hyps.sigma_w;
@@ -147,8 +147,8 @@ void VariationalParamsBase::set_hyps(Hyps hyps){
 void VariationalParameters::init_from_lite(const VariationalParametersLite &init) {
 	// yx and ym set to point to appropriate col of VBayesX2::YM and VBayesX2::YX in constructor
 
-	betas = init.betas;
-	gammas = init.gammas;
+	betas.reset(init.betas->clone());
+	gammas.reset(init.gammas->clone());
 	weights = init.weights;
 	covars = init.covars;
 
@@ -158,15 +158,15 @@ void VariationalParameters::init_from_lite(const VariationalParametersLite &init
 
 VariationalParametersLite VariationalParameters::convert_to_lite() {
 	VariationalParametersLite vplite(p);
-	vplite.ym         = ym;
-	vplite.yx         = yx;
+	vplite.ym    = ym;
+	vplite.yx    = yx;
 	vplite.eta   = eta;
 
 	vplite.sigma = sigma;
 	vplite.pve = pve;
 
-	vplite.betas = betas;
-	vplite.gammas = gammas;
+	vplite.betas.reset(betas->clone());
+	vplite.gammas.reset(gammas->clone());
 	vplite.weights = weights;
 	vplite.covars = covars;
 	return vplite;
