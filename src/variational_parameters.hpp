@@ -7,7 +7,7 @@
 #include "hyps.hpp"
 #include "Prior.hpp"
 
-#include "tools/eigen3.3/Dense"
+#include "tools/Eigen/Dense"
 
 #include <boost/iostreams/filtering_stream.hpp>
 #include <boost/iostreams/device/file.hpp>
@@ -28,6 +28,7 @@ public:
 	double eps = std::numeric_limits<double>::min();
 
 	GaussianVec weights;
+	GaussianVec weights_momentum;
 	GaussianVec covars;
 	parameters p;
 
@@ -43,9 +44,13 @@ public:
 	Eigen::ArrayXd s_x;
 	Eigen::ArrayXd EdZtZ;
 
+	EigenArrayXl current_minibatch_index;
+	EigenDataVector y;
+	EigenDataMatrix E, C;
+
 	// Other quantities to track
-	EigenDataVector yx;                    // N x 1
-	EigenDataVector ym;                    // N x 1
+	EigenDataVector ym;                        // N x 1
+	EigenDataVector yx;                        // N x 1
 	EigenDataVector eta;
 	EigenDataVector eta_sq;
 
@@ -66,6 +71,7 @@ public:
 		}
 	};
 	VariationalParameters(const VariationalParameters &obj) : p(obj.p) {
+		y      = obj.y;
 		ym     = obj.ym;
 		yx     = obj.yx;
 		eta    = obj.eta;
@@ -85,6 +91,7 @@ public:
 		p      = obj.p;
 		ym     = obj.ym;
 		yx     = obj.yx;
+		y      = obj.y;
 		eta    = obj.eta;
 		eta_sq = obj.eta_sq;
 
@@ -126,6 +133,40 @@ public:
 	double var_covar(long jj) const;
 
 	/*** Misc ***/
+	void update_summary_vars(const EigenArrayXl index, EigenRefDataVector my_y, EigenRefDataMatrix my_C,
+			EigenDataMatrix my_E, const GenotypeMatrix& X){
+		assert(p.mode_svi);
+		assert(X.minibatch_index_set);
+		current_minibatch_index = index;
+
+		// Eigen flexi indexing quite sensitive...
+		Eigen::VectorXd mean_vec;
+
+		y = my_y(index);
+		E = my_E(index, Eigen::all);
+
+
+		mean_vec = betas->mean();
+		ym = X * mean_vec;
+		if(covars.size() > 0){
+			mean_vec = covars.mean();
+			ym += my_C(index, ":") * covars.mean();
+		}
+
+		if(gammas->size() > 0) {
+			mean_vec = gammas->mean();
+			yx = X * mean_vec;
+		}
+		if(weights.size() > 0){
+			mean_vec = weights.mean();
+			Eigen::VectorXd eta = my_E(index, ":") * mean_vec;
+			eta_sq  = eta.array().square().matrix();
+			eta_sq += my_E(index, ":").array().square().matrix() * weights.var().matrix();
+		}
+
+
+
+	}
 	void set_hyps(Hyps hyps);
 	void check_nan(const double& alpha, const std::uint32_t& ii);
 	void write_ith_beta_to_stream(long ii, std::ostream& outf) const {

@@ -23,7 +23,7 @@
 #include <thread>
 #include <set>
 #include "sys/types.h"
-#include "tools/eigen3.3/Dense"
+#include "tools/Eigen/Dense"
 #include <boost/iostreams/filtering_stream.hpp>
 #include <boost/iostreams/device/file.hpp>
 #include <boost/math/distributions/fisher_f.hpp>
@@ -46,15 +46,14 @@ public:
 		                                           "lambda_b", "lambda_g"};
 
 // sizes
-	int n_effects;        // no. interaction variables + 1
+	int n_effects;            // no. interaction variables + 1
 	std::uint32_t n_samples;
 	unsigned long n_covar;
 	unsigned long n_env;
 	std::uint32_t n_var;
 	std::uint32_t n_var2;
-	bool random_params_init;
 	bool run_round1;
-	double N;         // (double) n_samples
+	double N;             // (double) n_samples
 
 // Chromosomes in data
 	int n_chrs;
@@ -72,17 +71,17 @@ public:
 	std::vector< std::vector < std::uint32_t > > main_back_pass_chunks, gxe_back_pass_chunks;
 	std::vector< int > env_fwd_pass;
 	std::vector< int > env_back_pass;
-	std::map<long, Eigen::MatrixXd> D_correlations;         //We can keep D^t D for the main effects
+	std::map<long, Eigen::MatrixXd> D_correlations;             //We can keep D^t D for the main effects
 
 // Data
 	GenotypeMatrix&  X;
-	EigenDataVector Y;                   // residual phenotype matrix
-	EigenDataArrayX Cty;                  // vector of C^T x y where C the matrix of covariates
-	EigenDataArrayXX E;                  // matrix of variables used for GxE interactions
-	EigenDataMatrix& C;                  // matrix of covariates (superset of GxE variables)
-	Eigen::MatrixXd XtE;                  // matrix of covariates (superset of GxE variables)
+	EigenDataVector Y;                       // residual phenotype matrix
+	EigenDataArrayX Cty;                      // vector of C^T x y where C the matrix of covariates
+	EigenDataArrayXX E;                      // matrix of variables used for GxE interactions
+	EigenDataMatrix& C;                      // matrix of covariates (superset of GxE variables)
+	Eigen::MatrixXd XtE;                      // matrix of covariates (superset of GxE variables)
 
-	Eigen::ArrayXXd& dXtEEX;             // P x n_env^2; col (l * n_env + m) is the diagonal of X^T * diag(E_l * E_m) * X
+	Eigen::ArrayXXd& dXtEEX;                 // P x n_env^2; col (l * n_env + m) is the diagonal of X^T * diag(E_l * E_m) * X
 
 // genome wide scan computed upstream
 	Eigen::ArrayXXd& snpstats;
@@ -133,7 +132,6 @@ public:
 		assert(n_env == env_names.size());
 
 
-		random_params_init = false;
 		if(p.user_requests_round1) {
 			run_round1     = true;
 		} else {
@@ -244,10 +242,8 @@ public:
 		}
 
 		// Generate initial values for each run
-		random_params_init = false;
 		if(p.mode_random_start) {
 			std::cout << "Beta and gamma initialised with random draws" << std::endl;
-			random_params_init = true;
 		}
 
 		if(n_env > 0) {
@@ -601,6 +597,11 @@ public:
 		// Update env-weights
 		if (n_effects > 1 && n_env > 1) {
 			for (int nn = 0; nn < n_grid; nn++) {
+				GaussianVec weights_old;
+				if(p.mode_env_momentum){
+					weights_old = all_vp[nn].weights;
+				}
+
 				for (int uu = 0; uu < p.env_update_repeats; uu++) {
 					for (auto ll : env_fwd_pass) {
 						_updates_weights(ll, all_vp[nn]);
@@ -608,6 +609,14 @@ public:
 					for (auto ll : env_back_pass) {
 						_updates_weights(ll, all_vp[nn]);
 					}
+				}
+
+
+				// Momentum update
+				if (p.mode_env_momentum){
+					GaussianVec nat_gradient = all_vp[nn].weights - weights_old;
+					all_vp[nn].weights_momentum = all_vp[nn].weights_momentum * p.env_momentum_coeff + nat_gradient;
+					all_vp[nn].weights = weights_old + all_vp[nn].weights_momentum;
 				}
 
 				// Recompute eta_sq
@@ -839,7 +848,7 @@ public:
 	}
 
 	void check_monotonic_elbo(std::vector<VariationalParameters> &all_vp, const int count, std::vector<double> &logw_prev,
-								  const std::string &prev_function) {
+	                          const std::string &prev_function) {
 
 		for (int nn = 0; nn < all_vp.size(); nn++) {
 			double i_logw = calc_logw(all_vp[nn]);
@@ -1289,7 +1298,7 @@ public:
 		return res;
 	}
 
-	int getValueRAM(){         //Note: this value is in KB!
+	int getValueRAM(){             //Note: this value is in KB!
 #ifndef OSX
 		FILE* file = fopen("/proc/self/status", "r");
 		int result = -1;

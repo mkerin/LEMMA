@@ -6,7 +6,7 @@
 #include <cmath>
 #include <limits>
 #include <iostream>
-#include "../src/tools/eigen3.3/Dense"
+#include "../src/tools/Eigen/Dense"
 #include "../src/parse_arguments.hpp"
 #include "../src/vbayes_x2.hpp"
 #include "../src/data.hpp"

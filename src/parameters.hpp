@@ -28,10 +28,11 @@ bool keep_constant_variants, user_requests_round1, scale_pheno;
 bool mode_alternating_updates, mode_pve_est;
 bool restrict_gamma_updates, mode_no_gxe, mode_debug;
 bool init_weights_with_snpwise_scan, flip_high_maf_variants, min_spike_diff_set;
-bool mode_random_start;
+bool mode_random_start, mode_svi, mode_env_momentum;
 bool mode_remove_squared_envs, mode_squarem, mode_incl_squared_envs;
 double min_maf, min_info, elbo_tol, alpha_tol, gamma_updates_thresh;
 double beta_spike_diff_factor, gam_spike_diff_factor, min_spike_diff_factor;
+double env_momentum_coeff;
 std::vector < std::string > incl_sample_ids, gconf;
 
 // constructors/destructors
@@ -93,6 +94,8 @@ parameters() : bgen_file("NULL"),
 	mode_debug = false;
 	mode_random_start = false;
 	mode_pve_est = false;
+	mode_env_momentum = false;
+	env_momentum_coeff = 0;
 	select_snps = false;
 	select_rsid = false;
 	geno_check = true;                     // check allele probs sum to 1 by default

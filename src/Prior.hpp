@@ -53,11 +53,12 @@ public:
 	/*** Updates ***/
 	virtual void cavi_update_ith_var(long ii, double EXty, double EXtX, double pheno_sigma) = 0;
 	virtual void scavi_update_ith_var(long ii, double EXty, double EXtX, double pheno_sigma, double stepsize){
-		throw std::logic_error("Not yet implemented");
+		throw std::logic_error("Not implemented");
 	}
 	virtual Eigen::ArrayXd maximise_mix_coeff(const Eigen::ArrayXXd& slab_nats, const Eigen::ArrayXXd& spike_nats){
-		throw std::logic_error("Not yet implemented");
+		throw std::logic_error("Not implemented");
 	}
+
 
 	/*** Each prior structure should store its own hyps ***/
 	virtual std::string get_hyps_header(std::string prefix) const = 0;
@@ -77,7 +78,9 @@ public:
 	Eigen::ArrayXXd nats;
 	double sigma;
 
-	GaussianVec() = default;
+	GaussianVec(){
+		nn = 0;
+	};
 	~GaussianVec() = default;
 	GaussianVec(long n_vars) {
 		// Initialise all gaussians at mean 0, var 0.01
@@ -149,6 +152,26 @@ public:
 		nats(ii, 0) = (1 - stepsize) * nats(ii, 0) + stepsize * nat1;
 		nats(ii, 1) = (1 - stepsize) * nats(ii, 1) + stepsize * nat2;
 	}
+	GaussianVec operator+(const GaussianVec& obj){
+		GaussianVec res(obj.size());
+		assert(obj.size() == this->size());
+
+		res.nats = this->nats + obj.nats;
+		return res;
+	}
+	GaussianVec operator-(const GaussianVec& obj){
+		GaussianVec res(obj.size());
+		assert(obj.size() == this->size());
+
+		res.nats = this->nats - obj.nats;
+		return res;
+	}
+	GaussianVec operator*(const double& scalar){
+		GaussianVec res = *this;
+		res.nats *= scalar;
+		return res;
+	}
+
 
 
 	/*** File IO ***/
@@ -196,7 +219,9 @@ public:
 	Eigen::ArrayXd mix;
 	double lambda, sigma_spike, sigma_slab;
 
-	MoGaussianVec() = default;
+	MoGaussianVec(){
+		nn = 0;
+	}
 	~MoGaussianVec() = default;
 	explicit MoGaussianVec(long n_vars) {
 		// Initialise all gaussians at mean 0, var 0.01

@@ -4,7 +4,7 @@
 
 #include "eigen_utils.hpp"
 
-#include "tools/eigen3.3/Dense"
+#include "tools/Eigen/Dense"
 #include <boost/iostreams/filtering_stream.hpp>
 #include <boost/iostreams/device/file.hpp>
 #include <boost/iostreams/filter/gzip.hpp>
@@ -81,7 +81,7 @@ void EigenUtils::read_matrix(const std::string &filename, const long &n_rows, Ei
 			ss >> sss;
 			/// NA
 			if (sss == "NA" || sss == "NAN" || sss == "NaN" || sss == "nan") {
-				tmp_d = 0;                                                  // Will skip over this value in future
+				tmp_d = 0;                                                                  // Will skip over this value in future
 				incomplete_row[i] = true;
 			} else {
 				try{
@@ -93,7 +93,7 @@ void EigenUtils::read_matrix(const std::string &filename, const long &n_rows, Ei
 			}
 			M(i, k) = tmp_d;
 		}
-		i++;                          // loop should end at i == n_samples
+		i++;                                  // loop should end at i == n_samples
 	}
 	if (i < n_rows) {
 		throw std::runtime_error("ERROR: could not convert txt file (too few lines).");
@@ -168,7 +168,7 @@ void EigenUtils::read_matrix(const std::string &filename, Eigen::MatrixXd &M, st
 
 			M(i, k) = tmp_d;
 		}
-		i++;                          // loop should end at i == n_rows
+		i++;                                  // loop should end at i == n_rows
 	}
 	if (i < n_rows) {
 		throw std::runtime_error("ERROR: could not convert txt file (too few lines).");
@@ -248,7 +248,7 @@ void EigenUtils::read_matrix_and_skip_cols(const std::string &filename,
 				M(i, k - n_skip_cols) = tmp_d;
 			}
 		}
-		i++;                          // loop should end at i == n_rows
+		i++;                                  // loop should end at i == n_rows
 	}
 	if (i < n_rows) {
 		throw std::runtime_error("ERROR: could not convert txt file (too few lines).");

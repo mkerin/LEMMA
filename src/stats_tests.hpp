@@ -5,8 +5,8 @@
 
 #include <cmath>
 
-#include "tools/eigen3.3/Dense"
-#include "tools/eigen3.3/Eigenvalues"
+#include "tools/Eigen/Dense"
+#include "tools/Eigen/Eigenvalues"
 
 #include <boost/math/distributions/chi_squared.hpp>
 #include <boost/math/distributions/students_t.hpp>
@@ -16,15 +16,15 @@ namespace boost_m  = boost::math;
 
 template <typename Derived1, typename Derived2>
 void student_t_test(long nn,
-                      const Eigen::MatrixBase<Derived1>& HtH_inv,
-                      const Eigen::MatrixBase<Derived2>& Hty,
-                      double rss,
-                      int jj,
-                      double& tstat,
-                      double& pval){
+                    const Eigen::MatrixBase<Derived1>& HtH_inv,
+                    const Eigen::MatrixBase<Derived2>& Hty,
+                    double rss,
+                    int jj,
+                    double& tstat,
+                    double& pval){
 	/* 2-sided Student t-test on regression output
-	H0: beta[jj] != 0
- 	*/
+	   H0: beta[jj] != 0
+	 */
 	int pp = HtH_inv.rows();
 	assert(jj <= pp);
 
@@ -49,15 +49,15 @@ double student_t_test(long nn,
 
 template <typename Derived1, typename Derived2>
 void hetero_chi_sq(const Eigen::MatrixBase<Derived1>& HtH_inv,
-                      const Eigen::MatrixBase<Derived2>& Hty,
-                      const Eigen::MatrixBase<Derived1>& HtVH,
-                      int jj,
-                      double& chi_stat,
-                      double& pval){
+                   const Eigen::MatrixBase<Derived2>& Hty,
+                   const Eigen::MatrixBase<Derived1>& HtVH,
+                   int jj,
+                   double& chi_stat,
+                   double& pval){
 	/* Standard errors adjusted for Heteroscedasticity
-	https://en.wikipedia.org/wiki/Heteroscedasticity-consistent_standard_errors
-	HtVH = (H.transpose() * resid_sq.asDiagonal() * H)
-	*/
+	   https://en.wikipedia.org/wiki/Heteroscedasticity-consistent_standard_errors
+	   HtVH = (H.transpose() * resid_sq.asDiagonal() * H)
+	 */
 	int pp = HtH_inv.rows();
 	assert(jj <= pp);
 
@@ -72,9 +72,9 @@ void hetero_chi_sq(const Eigen::MatrixBase<Derived1>& HtH_inv,
 
 template <typename Derived1, typename Derived2>
 double hetero_chi_sq(const Eigen::MatrixBase<Derived1>& HtH_inv,
-                      const Eigen::MatrixBase<Derived2>& Hty,
-                      const Eigen::MatrixBase<Derived1>& HtVH,
-                      int jj){
+                     const Eigen::MatrixBase<Derived2>& Hty,
+                     const Eigen::MatrixBase<Derived1>& HtVH,
+                     int jj){
 	double tstat, pval;
 	hetero_chi_sq(HtH_inv, Hty, HtVH, jj, tstat, pval);
 	return pval;

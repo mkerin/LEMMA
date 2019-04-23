@@ -135,8 +135,7 @@ void parse_arguments(parameters &p, int argc, char **argv) {
 		"--n_pve_samples",
 		"--snp_priors_gaussian",
 		"--beta_prior_gaussian",
-		"--gamma_prior_gaussian",
-		"--env_momentum_coeff"
+		"--gamma_prior_gaussian"
 	};
 
 	std::set<std::string>::iterator set_it;
@@ -320,13 +319,6 @@ void parse_arguments(parameters &p, int argc, char **argv) {
 				p.min_spike_diff_factor = std::stod(argv[i + 1]);
 				p.min_spike_diff_set = true;
 				std::cout << "Slab variance constrained to atleast " << p.min_spike_diff_factor << "x spike variance" << std::endl;
-				i += 1;
-			}
-
-			if(strcmp(in_str, "--env_momentum_coeff") == 0) {
-				p.env_momentum_coeff = std::stod(argv[i + 1]);
-				p.mode_env_momentum = true;
-				std::cout << "Adding momentum to env weights update with parameter: " << p.env_momentum_coeff << std::endl;
 				i += 1;
 			}
 

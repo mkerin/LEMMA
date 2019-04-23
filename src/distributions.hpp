@@ -1,0 +1,8 @@
+//
+// Created by kerin on 2019-04-16.
+//
+
+#ifndef LEMMA_DISTRIBUTIONS_HPP
+#define LEMMA_DISTRIBUTIONS_HPP
+
+#endif //LEMMA_DISTRIBUTIONS_HPP

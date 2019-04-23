@@ -13,7 +13,7 @@
 #include "hyps.hpp"
 #include "file_streaming.hpp"
 #include "variational_parameters.hpp"
-#include "tools/eigen3.3/Dense"
+#include "tools/Eigen/Dense"
 
 #include <boost/iostreams/filtering_stream.hpp>
 #include <boost/iostreams/device/file_descriptor.hpp>
@@ -34,10 +34,10 @@ namespace boost_io = boost::iostreams;
 
 class VbTracker {
 public:
-	int count;                                // Number of iterations to convergence at each step
-	VariationalParameters vp;                 // best mu at each ii
-	double logw;                                 // best logw at each ii
-	Hyps hyps;                                  // hyps values at end of VB inference.
+	int count;                                    // Number of iterations to convergence at each step
+	VariationalParameters vp;                     // best mu at each ii
+	double logw;                                     // best logw at each ii
+	Hyps hyps;                                      // hyps values at end of VB inference.
 
 	parameters p;
 

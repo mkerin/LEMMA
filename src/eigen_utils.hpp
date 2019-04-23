@@ -5,7 +5,7 @@
 #ifndef LEMMA_EIGEN_UTILS_HPP
 #define LEMMA_EIGEN_UTILS_HPP
 
-#include "tools/eigen3.3/Dense"
+#include "tools/Eigen/Dense"
 
 #include <iostream>
 #include <cmath>

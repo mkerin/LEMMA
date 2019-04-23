@@ -7,7 +7,7 @@
 #include <limits>
 #include "hyps.hpp"
 #include "parameters.hpp"
-#include "tools/eigen3.3/Dense"
+#include "tools/Eigen/Dense"
 #include "Prior.hpp"
 
 void VariationalParameters::run_default_init(long n_var, long n_covar, long n_env){

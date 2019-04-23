@@ -3,7 +3,7 @@
 #include "catch.hpp"
 
 #include <iostream>
-#include "../src/tools/eigen3.3/Dense"
+#include "../src/tools/Eigen/Dense"
 #include "../src/parse_arguments.hpp"
 #include "../src/pve.hpp"
 #include "../src/data.hpp"

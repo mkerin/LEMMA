@@ -4,7 +4,7 @@
 #include <map>
 #include <string>
 #include "data.hpp"
-#include "tools/eigen3.3/Dense"
+#include "tools/Eigen/Dense"
 
 #include <boost/iostreams/filtering_stream.hpp>
 #include <boost/iostreams/device/file.hpp>
@@ -12,7 +12,7 @@
 
 
 void Data::read_txt_file(const std::string &filename, Eigen::MatrixXd &M, unsigned long &n_cols,
-						 std::vector<std::string> &col_names, std::map<int, bool> &incomplete_row) {
+                         std::vector<std::string> &col_names, std::map<int, bool> &incomplete_row) {
 	// pass top line of txt file filename to col_names, and body to M.
 	// TODO: Implement how to deal with missing values.
 
@@ -65,7 +65,7 @@ void Data::read_txt_file(const std::string &filename, Eigen::MatrixXd &M, unsign
 				} else {
 					try{
 						tmp_d = stod(sss);
-					} catch (const std::invalid_argument &exc){
+					} catch (const std::invalid_argument &exc) {
 						std::cout << sss << " on line " << i << std::endl;
 						throw;
 					}
@@ -78,7 +78,7 @@ void Data::read_txt_file(const std::string &filename, Eigen::MatrixXd &M, unsign
 					incomplete_row[i] = true;
 				}
 			}
-			i++; // loop should end at i == n_samples
+			i++;             // loop should end at i == n_samples
 		}
 		if (i < n_samples) {
 			throw std::runtime_error("ERROR: could not convert txt file (too few lines).");
@@ -90,7 +90,7 @@ void Data::read_txt_file(const std::string &filename, Eigen::MatrixXd &M, unsign
 
 template<typename EigenMat>
 EigenMat reduce_mat_to_complete_cases(EigenMat &M, bool &matrix_reduced, const unsigned long &n_cols,
-									  const std::map<std::size_t, bool> &incomplete_cases) {
+                                      const std::map<std::size_t, bool> &incomplete_cases) {
 	// Remove rows contained in incomplete_cases
 	long nn = M.rows();
 	EigenMat M_tmp;
@@ -117,4 +117,3 @@ EigenMat reduce_mat_to_complete_cases(EigenMat &M, bool &matrix_reduced, const u
 	matrix_reduced = true;
 	return M_tmp;
 }
-
