@@ -333,7 +333,7 @@ public:
 					Eigen::MatrixXd E_sq(n_samples, n_signif_envs_sq);
 					std::vector<std::string> env_sq_names;
 					for (int nn = 0; nn < n_signif_envs_sq; nn++) {
-						E_sq.col(nn) = E_sq.col(cols_to_remove[nn]).array().square();
+						E_sq.col(nn) = E.col(cols_to_remove[nn]).array().square();
 						env_sq_names.push_back(env_names[cols_to_remove[nn]] + "_sq");
 					}
 
