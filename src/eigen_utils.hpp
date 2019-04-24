@@ -27,7 +27,7 @@ void center_matrix(EigenMat& M);
 
 template <typename EigenMat>
 void scale_matrix_and_remove_constant_cols(EigenMat& M,
-                                           unsigned long& n_cols,
+                                           long& n_cols,
                                            std::vector< std::string >& col_names);
 
 Eigen::MatrixXf solve(const Eigen::MatrixXf &A, const Eigen::MatrixXf &b);

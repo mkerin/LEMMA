@@ -50,36 +50,36 @@ public:
 	parameters params;
 
 
-	unsigned long n_pheno;                                 // number of phenotypes
-	unsigned long n_covar;                                 // number of covariates
-	unsigned long n_env;                                 // number of env variables
-	int n_effects;                                   // number of environmental interactions
-	long n_samples;                                 // number of samples
+	long n_pheno;                                     // number of phenotypes
+	long n_covar;                                     // number of covariates
+	long n_env;                                     // number of env variables
+	int n_effects;                                       // number of environmental interactions
+	long n_samples;                                     // number of samples
 	long n_var;
-	long n_var_parsed;                                 // Track progress through IndexQuery
+	long n_var_parsed;                                     // Track progress through IndexQuery
 	long int n_dxteex_computed;
 	long int n_snpstats_computed;
 
-	bool Y_reduced;                                   // Variables to track whether we have already
-	bool W_reduced;                                   // reduced to complete cases or not.
+	bool Y_reduced;                                       // Variables to track whether we have already
+	bool W_reduced;                                       // reduced to complete cases or not.
 	bool E_reduced;
 
 	std::vector< std::string > external_dXtEEX_SNPID;
 	std::vector< std::string > rsid_list;
 
-	std::map<int, bool> missing_envs;                                   // set of subjects missing >= 1 env variables
-	std::map<int, bool> missing_covars;                                 // set of subjects missing >= 1 covariate
-	std::map<int, bool> missing_phenos;                                 // set of subjects missing >= phenotype
-	std::map< std::size_t, bool > incomplete_cases;                                 // union of samples missing data
+	std::map<int, bool> missing_envs;                                       // set of subjects missing >= 1 env variables
+	std::map<int, bool> missing_covars;                                     // set of subjects missing >= 1 covariate
+	std::map<int, bool> missing_phenos;                                     // set of subjects missing >= phenotype
+	std::map< std::size_t, bool > incomplete_cases;                                     // union of samples missing data
 
 	std::vector< std::string > pheno_names;
 	std::vector< std::string > covar_names;
 	std::vector< std::string > env_names;
 
 	GenotypeMatrix G;
-	EigenDataMatrix Y, Y2;                                 // phenotype matrix (#2 always has covars regressed)
-	EigenDataMatrix C;                                 // covariate matrix
-	EigenDataMatrix E;                                 // env matrix
+	EigenDataMatrix Y, Y2;                                     // phenotype matrix (#2 always has covars regressed)
+	EigenDataMatrix C;                                     // covariate matrix
+	EigenDataMatrix E;                                     // env matrix
 	Eigen::ArrayXXd dXtEEX;
 	Eigen::ArrayXXd external_dXtEEX;
 
@@ -1113,7 +1113,7 @@ public:
 			std::cout << " is the number of lines in file given to --vb_init." << std::endl;
 
 			std::vector<std::string>::iterator it;
-			unsigned long index_kk;
+			long index_kk;
 			for(int kk = 0; kk < vb_init_mat.rows(); kk++) {
 				it = std::find(G.SNPKEY.begin(), G.SNPKEY.end(), init_key[kk]);
 				if (it == G.SNPKEY.end()) {
@@ -1237,7 +1237,7 @@ public:
 	template <typename EigenMat>
 	EigenMat reduce_mat_to_complete_cases( EigenMat& M,
 	                                       bool& matrix_reduced,
-	                                       const unsigned long& n_cols,
+	                                       const long& n_cols,
 	                                       const std::map< std::size_t, bool >& incomplete_cases ) {
 		// Remove rows contained in incomplete_cases
 		EigenMat M_tmp;
@@ -1246,7 +1246,7 @@ public:
 		}
 
 		// Create temporary matrix of complete cases
-		unsigned long n_incomplete = incomplete_cases.size();
+		long n_incomplete = incomplete_cases.size();
 		M_tmp.resize(n_samples - n_incomplete, n_cols);
 
 		// Fill M_tmp with non-missing entries of M
@@ -1282,8 +1282,8 @@ public:
 	                                   const std::string& yy_string){
 		//
 		std::cout << "Regressing " << Astring << " from " << yy_string << ":" << std::endl;
-		unsigned long nnn = A_names.size();
-		for(int cc = 0; cc < std::min(nnn, (unsigned long) 10); cc++) {
+		long nnn = A_names.size();
+		for(int cc = 0; cc < std::min(nnn, (long) 10); cc++) {
 			std::cout << ( cc > 0 ? ", " : "" ) << A_names[cc];
 		}
 		if (nnn > 10) {
