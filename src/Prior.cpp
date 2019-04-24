@@ -3,7 +3,7 @@
 //
 #include "Prior.hpp"
 
-#include "tools/eigen3.3/Dense"
+#include "tools/Eigen/Dense"
 
 #include <cmath>
 #include <stdexcept>

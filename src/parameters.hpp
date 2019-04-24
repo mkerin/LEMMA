@@ -84,7 +84,7 @@ parameters() : bgen_file("NULL"),
 	maf_lim = false;
 	info_lim = false;
 	mode_empirical_bayes = true;
-	mode_squarem = true;
+	mode_squarem = false;
 	mode_alternating_updates = false;
 	low_mem = true;
 	mode_vb = false;

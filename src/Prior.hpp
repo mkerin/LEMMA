@@ -6,7 +6,7 @@
 #ifndef LEMMA_PRIOR_HPP
 #define LEMMA_PRIOR_HPP
 
-#include "tools/eigen3.3/Dense"
+#include "tools/Eigen/Dense"
 
 #include <cmath>
 #include <stdexcept>
@@ -105,7 +105,7 @@ public:
 	double mean(long ii) const override {
 		return nats_to_mean(ii, nats);
 	}
-	double var(long ii) const override  {
+	double var(long ii) const override {
 		return nats_to_var(ii, nats);
 	}
 	double kl_div() const override {
@@ -180,7 +180,7 @@ public:
 		outf << " " << nats_to_var(ii, nats);
 	}
 	std::string header(std::string prefix) const override;
-	void read_from_grid(const Eigen::MatrixXd& grid) override ;
+	void read_from_grid(const Eigen::MatrixXd& grid) override;
 	std::string get_hyps_header(std::string prefix) const override {
 		std::vector<std::string> vv = {"sigma"};
 		if(prefix.length() > 0) {
@@ -206,7 +206,7 @@ public:
 		sigma = vec[0];
 	}
 	double get_hyps_var() const override {
-			return sigma;
+		return sigma;
 	}
 };
 

@@ -5,7 +5,7 @@
 #include "parameters.hpp"
 #include "my_timer.hpp"
 
-#include "tools/eigen3.3/Dense" // For vectorise profiling
+#include "tools/Eigen/Dense" // For vectorise profiling
 
 #include <iostream>
 #include <iomanip>

@@ -7,7 +7,7 @@
 #include "file_streaming.hpp"
 #include "parameters.hpp"
 
-#include "tools/eigen3.3/Dense"
+#include "tools/Eigen/Dense"
 
 #include <random>
 
@@ -32,8 +32,8 @@ void PVE::fill_gaussian_noise(unsigned int seed, Eigen::Ref<Eigen::MatrixXd> zz,
 	std::mt19937 generator{seed};
 	std::normal_distribution<scalarData> noise_normal(0.0, 1);
 
-	for (int bb = 0; bb < pp; bb++){
-		for (std::size_t ii = 0; ii < nn; ii++){
+	for (int bb = 0; bb < pp; bb++) {
+		for (std::size_t ii = 0; ii < nn; ii++) {
 			zz(ii, bb) = noise_normal(generator);
 		}
 	}
@@ -65,7 +65,7 @@ void PVE::he_reg_single_component_mog() {
 
 	// mean of traces
 	Eigen::ArrayXd atrK1(B), atrK1K1(B), atrK2(B), atrK2K2(B), atrK1K2(B);
-	for (int bb = 0; bb < B; bb++){
+	for (int bb = 0; bb < B; bb++) {
 		atrK1(bb) = (U * Xtz.col(bb)).squaredNorm() / usum;
 		atrK1K1(bb) = XuXtz.col(bb).squaredNorm() / usum / usum;
 		atrK2(bb) = (uuinv.asDiagonal() * Xtz.col(bb)).squaredNorm() / (P - usum);
@@ -82,8 +82,8 @@ void PVE::he_reg_single_component_mog() {
 	// solve HE regression with two components
 	Eigen::Matrix3d A;
 	A << mtrK1K1, mtrK1K2, mtrK1,
-			mtrK1K2, mtrK2K2, mtrK2,
-			mtrK1,   mtrK2,   N;
+	    mtrK1K2, mtrK2K2, mtrK2,
+	    mtrK1,   mtrK2,   N;
 	std::cout << "A: " << std::endl << A << std::endl;
 	sigmas = A.colPivHouseholderQr().solve(bb);
 }
@@ -107,7 +107,7 @@ void PVE::he_reg_single_component() {
 
 	// mean of traces
 	Eigen::ArrayXd atrK1(B), atrK1K1(B);
-	for (int bb = 0; bb < B; bb++){
+	for (int bb = 0; bb < B; bb++) {
 		atrK1(bb) = Xtz.col(bb).squaredNorm() / P;
 		atrK1K1(bb) = XXtz.col(bb).squaredNorm() / P / P;
 		to_interim_results(atrK1(bb), atrK1K1(bb));
@@ -118,7 +118,7 @@ void PVE::he_reg_single_component() {
 	// solve HE regression with two components
 	Eigen::Matrix2d A;
 	A << mtrK1K1, mtrK1,
-			mtrK1,   N;
+	    mtrK1,   N;
 	std::cout << "A: " << std::endl << A << std::endl;
 	sigmas = A.colPivHouseholderQr().solve(bb);
 }
@@ -148,7 +148,7 @@ void PVE::he_reg_gxe() {
 
 	// // mean of traces
 	Eigen::ArrayXd atrK1(B), atrK1K1(B), atrV1(B), atrV1V1(B), atrK1V1(B);
-	for (int bb = 0; bb < B; bb++){
+	for (int bb = 0; bb < B; bb++) {
 		atrK1(bb) = Xtz.col(bb).squaredNorm() / P;
 		atrK1K1(bb) = XXtz.col(bb).squaredNorm() / P / P;
 		atrV1(bb) = Xtez.col(bb).squaredNorm() / P;
@@ -166,8 +166,8 @@ void PVE::he_reg_gxe() {
 	// solve HE regression with two components
 	Eigen::Matrix3d A;
 	A << mtrK1K1, mtrK1V1, mtrK1,
-			mtrK1V1, mtrV1V1, mtrV1,
-			mtrK1,   mtrV1,   N;
+	    mtrK1V1, mtrV1V1, mtrV1,
+	    mtrK1,   mtrV1,   N;
 
 	std::cout << "A: " << std::endl << A << std::endl;
 
@@ -177,17 +177,17 @@ void PVE::he_reg_gxe() {
 void PVE::run(const std::string &file) {
 	// Filepath to write interim results to
 	init_interim_results(file);
-	if(mode_gxe){
+	if(mode_gxe) {
 		std::cout << "G+GxE effects model (gaussian prior)" << std::endl;
 		he_reg_gxe();
-	} else if(mog_beta){
+	} else if(mog_beta) {
 		std::cout << "Main effects model (MoG prior)" << std::endl;
 		he_reg_single_component_mog();
 	} else {
 		std::cout << "Main effects model (gaussian prior)" << std::endl;
 		he_reg_single_component();
 	}
-	boost_io:close(outf);
+boost_io: close(outf);
 
 	std::cout << "Variance components estimates" << std::endl;
 	std::cout << sigmas << std::endl;
