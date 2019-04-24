@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.7.2)
-project(LEMMA VERSION 0.10.6)
+project(LEMMA VERSION 0.10.7)
 
 set(CMAKE_CXX_STANDARD 11)
 
@@ -62,7 +62,7 @@ list(APPEND LOC_COMPILE_OPTS -DVERSION_MAJOR=${PROJECT_VERSION_MAJOR})
 list(APPEND LOC_COMPILE_OPTS -DVERSION_MINOR=${PROJECT_VERSION_MINOR})
 list(APPEND LOC_COMPILE_OPTS -DVERSION_PATCH=${PROJECT_VERSION_PATCH})
 
-set(SOURCES src/hyps.cpp src/variational_parameters.cpp src/genotype_matrix.cpp src/parse_arguments.cpp src/file_streaming.cpp src/eigen_utils.cpp)
+set(SOURCES src/hyps.cpp src/variational_parameters.cpp src/genotype_matrix.cpp src/parse_arguments.cpp src/file_streaming.cpp src/eigen_utils.cpp src/Prior.cpp)
 set(BGEN_INCL_DIRS ${BGEN}/genfile/include ${BGEN}/3rd_party/zstd-1.1.0/lib ${BGEN}/db/include ${BGEN}/3rd_party/sqlite3 ${BGEN}/3rd_party/boost_1_55_0)
 
 
@@ -93,7 +93,8 @@ target_link_libraries(${TARGET}_Xf ${BGEN_LIB} ${DB_LIB} ${SQLITE_LIB} ${ZSTD_LI
 
 
 ## Catch Unit Tests
-set(TSOURCES unit/test_pve.cpp unit/test_main.cpp unit/test_hyps.cpp unit/test_resume_inference.cpp)
+# set(TSOURCES unit/test_eigen.cpp)
+set(TSOURCES unit/test_priors.cpp unit/test_pve.cpp unit/test_main.cpp unit/test_hyps.cpp unit/test_resume_inference.cpp unit/test_eigen.cpp)
 add_executable(tests unit/main.cpp ${TSOURCES} ${SOURCES})
 target_link_libraries(tests ${BGEN_LIB} ${DB_LIB} ${SQLITE_LIB} ${ZSTD_LIB} ${LIBS} ${LINKER_OPTS})
 target_compile_options(tests PRIVATE -msse2 ${LOC_COMPILE_OPTS})
@@ -105,6 +106,10 @@ target_link_libraries(tests_Xf ${BGEN_LIB} ${DB_LIB} ${SQLITE_LIB} ${ZSTD_LIB} $
 target_compile_options(tests_Xf PRIVATE -DDATA_AS_FLOAT -msse2 ${LOC_COMPILE_OPTS})
 target_include_directories(tests_Xf PRIVATE ${BGEN_INCL_DIRS})
 set_target_properties(tests_Xf PROPERTIES LINK_FLAGS "${LIB-DIRS}")
+
+add_executable(minimal_tests unit/main.cpp unit/test_eigen.cpp)
+target_link_libraries(minimal_tests ${LINKER_OPTS})
+target_compile_options(minimal_tests PRIVATE -msse2 ${LOC_COMPILE_OPTS})
 #
 ### Profiling by hand
 #add_executable(profile_read_cols examples/profile_read_cols.cpp examples/genotype_matrix_multithread.cpp)

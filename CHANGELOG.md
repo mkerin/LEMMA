@@ -1,3 +1,13 @@
+# Version 0.10.7
+
+- Using Eigen dev branch
+- Achieved runtime polymorphism for different priors
+- added momentum to env weights update
+
+TODO:
+- fix Xf functionality
+- broken the dump state functionality...
+
 # Version 0.10.6
 
 Changes:
@@ -9,7 +19,6 @@ Commandline:
 - SQUAREM on by default
 -- --empirical_bayes turns on niave hyp maximisation
 -- --constant_hyps reduces to just variational inference
-
 
 # Version 0.10.6
 
