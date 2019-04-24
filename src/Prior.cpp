@@ -16,6 +16,7 @@ Eigen::ArrayXd ExponentialFamVec::nats_to_mean(const Eigen::ArrayXXd& nats) cons
 }
 
 Eigen::ArrayXd ExponentialFamVec::nats_to_var(const Eigen::ArrayXXd& nats) const {
+	assert(nats.col(1).maxCoeff() < 0);
 	return -0.5 / nats.col(1);
 }
 
@@ -41,6 +42,7 @@ double ExponentialFamVec::nats_to_mean(long ii, const Eigen::ArrayXXd& nats) con
 }
 
 double ExponentialFamVec::nats_to_var(long ii, const Eigen::ArrayXXd& nats) const {
+	assert(nats(ii, 1) < 0);
 	return -0.5 / nats(ii, 1);
 }
 

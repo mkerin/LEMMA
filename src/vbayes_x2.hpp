@@ -614,9 +614,15 @@ public:
 
 				// Momentum update
 				if (p.mode_env_momentum){
-					GaussianVec nat_gradient = all_vp[nn].weights - weights_old;
-					all_vp[nn].weights_momentum = all_vp[nn].weights_momentum * p.env_momentum_coeff + nat_gradient;
-					all_vp[nn].weights = weights_old + all_vp[nn].weights_momentum;
+					if(count > 1) {
+						GaussianVec nat_gradient = all_vp[nn].weights - weights_old;
+						all_vp[nn].weights_momentum = all_vp[nn].weights_momentum * p.env_momentum_coeff + nat_gradient;
+					}
+
+					if (count > 5) {
+						all_vp[nn].weights = weights_old + all_vp[nn].weights_momentum;
+						all_vp[nn].eta = E.matrix() * all_vp[nn].weights.mean();
+					}
 				}
 
 				// Recompute eta_sq
@@ -839,7 +845,7 @@ public:
 
 	void check_monotonic_elbo(VariationalParameters &vp, const int count, double &logw_prev, const std::string &prev_function) {
 		double i_logw     = calc_logw(vp);
-		if(i_logw < logw_prev) {
+		if(i_logw < logw_prev || !std::isfinite(i_logw)) {
 			std::cout << count << ": " << prev_function;
 			std::cout << " " << logw_prev << " -> " << i_logw;
 			std::cout << " (difference of " << i_logw - logw_prev << ")"<< std::endl;
@@ -852,7 +858,7 @@ public:
 
 		for (int nn = 0; nn < all_vp.size(); nn++) {
 			double i_logw = calc_logw(all_vp[nn]);
-			if (i_logw < logw_prev[nn]) {
+			if (i_logw < logw_prev[nn] || !std::isfinite(i_logw)) {
 				std::cout << count << ": " << prev_function;
 				std::cout << " " << logw_prev[nn] << " -> " << i_logw;
 				std::cout << " (difference of " << i_logw - logw_prev[nn] << ")" << std::endl;

@@ -158,6 +158,7 @@ public:
 
 		res.nats = this->nats + obj.nats;
 		res.nn = this->size();
+		res.sigma = this->sigma;
 		return res;
 	}
 	GaussianVec operator-(const GaussianVec& obj){
@@ -166,11 +167,13 @@ public:
 
 		res.nats = this->nats - obj.nats;
 		res.nn = this->size();
+		res.sigma = this->sigma;
 		return res;
 	}
 	GaussianVec operator*(const double& scalar){
-		GaussianVec res = *this;
-		res.nats *= scalar;
+		GaussianVec res(this->size());
+		res.nats = scalar * this->nats;
+		res.sigma = this->sigma;
 		return res;
 	}
 
