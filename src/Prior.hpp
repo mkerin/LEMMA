@@ -157,6 +157,7 @@ public:
 		assert(obj.size() == this->size());
 
 		res.nats = this->nats + obj.nats;
+		res.nn = this->size();
 		return res;
 	}
 	GaussianVec operator-(const GaussianVec& obj){
@@ -164,6 +165,7 @@ public:
 		assert(obj.size() == this->size());
 
 		res.nats = this->nats - obj.nats;
+		res.nn = this->size();
 		return res;
 	}
 	GaussianVec operator*(const double& scalar){

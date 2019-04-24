@@ -86,6 +86,7 @@ public:
 		gammas.reset(obj.gammas->clone());
 		weights = obj.weights;
 		covars  = obj.covars;
+		weights_momentum = obj.weights_momentum;
 	}
 	VariationalParameters& operator = (const VariationalParameters &obj) {
 		p      = obj.p;
@@ -104,6 +105,7 @@ public:
 		gammas.reset(obj.gammas->clone());
 		weights = obj.weights;
 		covars  = obj.covars;
+		weights_momentum = obj.weights_momentum;
 		return *this;
 	}
 
