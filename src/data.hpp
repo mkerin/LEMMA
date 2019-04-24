@@ -50,36 +50,36 @@ public:
 	parameters params;
 
 
-	unsigned long n_pheno;             // number of phenotypes
-	unsigned long n_covar;             // number of covariates
-	unsigned long n_env;             // number of env variables
-	int n_effects;               // number of environmental interactions
-	long n_samples;             // number of samples
+	unsigned long n_pheno;                                 // number of phenotypes
+	unsigned long n_covar;                                 // number of covariates
+	unsigned long n_env;                                 // number of env variables
+	int n_effects;                                   // number of environmental interactions
+	long n_samples;                                 // number of samples
 	long n_var;
-	long n_var_parsed;             // Track progress through IndexQuery
+	long n_var_parsed;                                 // Track progress through IndexQuery
 	long int n_dxteex_computed;
 	long int n_snpstats_computed;
 
-	bool Y_reduced;               // Variables to track whether we have already
-	bool W_reduced;               // reduced to complete cases or not.
+	bool Y_reduced;                                   // Variables to track whether we have already
+	bool W_reduced;                                   // reduced to complete cases or not.
 	bool E_reduced;
 
 	std::vector< std::string > external_dXtEEX_SNPID;
 	std::vector< std::string > rsid_list;
 
-	std::map<int, bool> missing_envs;               // set of subjects missing >= 1 env variables
-	std::map<int, bool> missing_covars;             // set of subjects missing >= 1 covariate
-	std::map<int, bool> missing_phenos;             // set of subjects missing >= phenotype
-	std::map< std::size_t, bool > incomplete_cases;             // union of samples missing data
+	std::map<int, bool> missing_envs;                                   // set of subjects missing >= 1 env variables
+	std::map<int, bool> missing_covars;                                 // set of subjects missing >= 1 covariate
+	std::map<int, bool> missing_phenos;                                 // set of subjects missing >= phenotype
+	std::map< std::size_t, bool > incomplete_cases;                                 // union of samples missing data
 
 	std::vector< std::string > pheno_names;
 	std::vector< std::string > covar_names;
 	std::vector< std::string > env_names;
 
 	GenotypeMatrix G;
-	EigenDataMatrix Y, Y2;             // phenotype matrix (#2 always has covars regressed)
-	EigenDataMatrix C;             // covariate matrix
-	EigenDataMatrix E;             // env matrix
+	EigenDataMatrix Y, Y2;                                 // phenotype matrix (#2 always has covars regressed)
+	EigenDataMatrix C;                                 // covariate matrix
+	EigenDataMatrix E;                                 // env matrix
 	Eigen::ArrayXXd dXtEEX;
 	Eigen::ArrayXXd external_dXtEEX;
 
@@ -325,17 +325,21 @@ public:
 				}
 			}
 			if (n_signif_envs_sq > 0) {
-				std::cout << "Projecting out squared dependance from: " << std::endl;
-				for (int ee : cols_to_remove) {
-					std::cout << env_names[ee] << std::endl;
+				Eigen::MatrixXd E_sq(n_samples, n_signif_envs_sq);
+				std::vector<std::string> env_sq_names;
+				for (int nn = 0; nn < n_signif_envs_sq; nn++) {
+					E_sq.col(nn) = E.col(cols_to_remove[nn]).array().square();
+					env_sq_names.push_back(env_names[cols_to_remove[nn]] + "_sq");
 				}
+
 				if (params.mode_incl_squared_envs) {
-					Eigen::MatrixXd E_sq(n_samples, n_signif_envs_sq);
-					std::vector<std::string> env_sq_names;
-					for (int nn = 0; nn < n_signif_envs_sq; nn++) {
-						E_sq.col(nn) = E.col(cols_to_remove[nn]).array().square();
-						env_sq_names.push_back(env_names[cols_to_remove[nn]] + "_sq");
+					std::cout << "Including squared env effects from: " << std::endl;
+					for (int ee : cols_to_remove) {
+						std::cout << env_names[ee] << std::endl;
 					}
+
+					EigenUtils::center_matrix(E_sq);
+					EigenUtils::scale_matrix_and_remove_constant_cols(E_sq, n_signif_envs_sq, env_sq_names);
 
 					EigenDataMatrix tmp(n_samples, n_covar + n_signif_envs_sq);
 					tmp << C, E_sq;
@@ -346,13 +350,13 @@ public:
 					assert(n_covar == covar_names.size());
 					assert(n_covar == C.cols());
 				} else if (params.mode_remove_squared_envs) {
-					Eigen::MatrixXd E_sq(n_samples, n_signif_envs_sq);
-					for (int nn = 0; nn < n_signif_envs_sq; nn++) {
-						E_sq.col(nn) = E_sq.col(cols_to_remove[nn]).array().square();
+					std::cout << "Projecting out squared dependance from: " << std::endl;
+					for (int ee : cols_to_remove) {
+						std::cout << env_names[ee] << std::endl;
 					}
+
 					Eigen::MatrixXd H(n_samples, n_covar + n_signif_envs_sq);
 					H << E_sq, C;
-					// std::cout << "formed H" << std::endl;
 
 					Eigen::MatrixXd HtH = H.transpose() * H;
 					Eigen::MatrixXd Hty = H.transpose() * Y;
@@ -360,7 +364,11 @@ public:
 
 					Y -= E_sq * beta.block(0, 0, n_signif_envs_sq, 1);
 				} else {
-					std::cout << "Warning: Projection of significant square envs suppressed" << std::endl;
+					std::cout << "Warning: Projection of significant square envs (";
+					for (int ee : cols_to_remove) {
+						std::cout << env_names[ee] << ", ";
+					}
+					std::cout << ") suppressed" << std::endl;
 				}
 			}
 
