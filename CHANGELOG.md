@@ -4,6 +4,9 @@ Changes:
 - Support for SQUAREM accelerator
 - GxE tests done with 'robust' standard errors (to heteroskedacity)
 - Don't allow convergence on SQUAREM iteration
+- bugfix; set default initialisation for elbo_tol
+- bugfix; output max change in gammas as well as betas
+- bugfix; set s_x when n_env == 1
 
 Commandline:
 - SQUAREM on by default
