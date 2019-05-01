@@ -72,8 +72,9 @@ public:
 		vb_iter_max = 10000;
 		vb_iter_start = 0;
 		n_pve_samples = 100;
-		beta_spike_diff_factor = 10000.0;                     // Initial diff in variance of spike & slab
-		gam_spike_diff_factor = 10000.0;                     // Initial diff in variance of spike & slab
+		// Initial difference in variance of spike & slab
+		beta_spike_diff_factor = 1000;
+		gam_spike_diff_factor = 1000;
 		param_dump_interval = -1;
 		range = false;
 		min_spike_diff_set = false;
@@ -94,7 +95,8 @@ public:
 		mode_pve_est = false;
 		select_snps = false;
 		select_rsid = false;
-		geno_check = true;                     // check allele probs sum to 1 by default
+		// check allele probs sum to 1 by default
+		geno_check = true;
 		verbose = false;
 		xtra_verbose = false;
 		use_vb_on_covars = true;
