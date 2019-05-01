@@ -27,7 +27,7 @@ void VariationalParameters::run_default_init(long n_var, long n_covar, long n_en
 		s_x.resize(2);
 		s_x << -1, -1;
 
-		if(p.mode_env_momentum){
+		if(p.mode_env_momentum) {
 			weights_momentum.resize(n_env);
 			weights_momentum.nats = Eigen::ArrayXXd::Zero(n_env, 2);
 		}
@@ -40,6 +40,10 @@ void VariationalParameters::run_default_init(long n_var, long n_covar, long n_en
 
 	if(n_covar > 0) {
 		covars.resize(n_covar);
+	}
+
+	if(p.mode_vb_accelerated) {
+		betas_u.resize(n_var);
 	}
 }
 

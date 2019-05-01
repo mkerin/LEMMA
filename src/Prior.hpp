@@ -37,6 +37,7 @@ public:
 	double nats_to_var(long ii, const Eigen::ArrayXXd& nats) const;
 
 	/*** Basic properties must be defined ***/
+	virtual std::string get_type() const = 0;
 	virtual Eigen::VectorXd mean() const = 0;
 	virtual Eigen::ArrayXd var() const = 0;
 	virtual double kl_div() const = 0;
@@ -49,6 +50,9 @@ public:
 	/*** Basic access ***/
 	virtual void set_mean(const Eigen::ArrayXd& mu) = 0;
 	virtual void set_mean(long ii, double mu) = 0;
+	virtual void set_mean_var(long ii, double mu, double var) {
+		throw std::logic_error("Not implemented");
+	}
 
 	/*** Updates ***/
 	virtual void cavi_update_ith_var(long ii, double EXty, double EXtX, double pheno_sigma) = 0;
@@ -56,6 +60,11 @@ public:
 		throw std::logic_error("Not implemented");
 	}
 	virtual Eigen::ArrayXd maximise_mix_coeff(const Eigen::ArrayXXd& slab_nats, const Eigen::ArrayXXd& spike_nats){
+		throw std::logic_error("Not implemented");
+	}
+	virtual double get_ith_var_update(long ii, double EXtX, double pheno_sigma) {
+		// ie get optimised s_sq
+		// Used in acceleration step
 		throw std::logic_error("Not implemented");
 	}
 
@@ -95,6 +104,10 @@ public:
 	}
 
 	/*** Basic properties ***/
+	std::string get_type() const override {
+		std::string res = "Gaussian";
+		return res;
+	}
 	void resize(long n_vars) override;
 	Eigen::VectorXd mean() const override {
 		return nats_to_mean(nats);
@@ -117,6 +130,11 @@ public:
 	}
 	void set_mean(long ii, double mu) override {
 		assert(ii < nn);
+		nats(ii, 0) = -2.0 * nats(ii, 1) * mu;
+	}
+	void set_mean_var(long ii, double mu, double var) override {
+		assert(ii < nn);
+		nats(ii, 1) = -0.5 / var;
 		nats(ii, 0) = -2.0 * nats(ii, 1) * mu;
 	}
 
@@ -152,6 +170,17 @@ public:
 		nats(ii, 0) = (1 - stepsize) * nats(ii, 0) + stepsize * nat1;
 		nats(ii, 1) = (1 - stepsize) * nats(ii, 1) + stepsize * nat2;
 	}
+	virtual double get_ith_var_update(long ii, double EXtX, double pheno_sigma) override {
+		// ie get optimised s_sq
+		// Used in acceleration step
+		assert(ii < nn);
+
+		double m2 = -EXtX / 2.0 / pheno_sigma;
+		double nat2 = m2 - 1.0 / 2 / sigma;
+		double s_sq = -0.5 / nat2;
+		return s_sq;
+	}
+
 	GaussianVec operator+(const GaussianVec& obj){
 		GaussianVec res(obj.size());
 		assert(obj.size() == this->size());
@@ -245,6 +274,10 @@ public:
 	}
 
 	/*** Basic properties ***/
+	std::string get_type() const override {
+		std::string res = "MixOfGaussian";
+		return res;
+	}
 	void resize(long n_vars) override {
 		// Initialise all gaussians at mean 0, var 0.01
 		nn = n_vars;

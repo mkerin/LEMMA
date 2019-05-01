@@ -17,6 +17,7 @@
 #include <iostream>
 #include <limits>
 #include <memory>
+#include <cmath>
 
 namespace boost_io = boost::iostreams;
 
@@ -48,11 +49,20 @@ public:
 	EigenDataVector y;
 	EigenDataMatrix E, C;
 
-	// Other quantities to track
-	EigenDataVector ym;                        // N x 1
-	EigenDataVector yx;                        // N x 1
+	// Other quantities to track (N x 1)
+	EigenDataVector ym;
+	EigenDataVector yx;
 	EigenDataVector eta;
 	EigenDataVector eta_sq;
+
+	// Acceleration quantities
+	EigenDataVector E2_varw;
+	EigenDataVector ym_u, yx_u, eta_u;
+	double theta;
+
+	GaussianVec betas_u;
+	GaussianVec gammas_u;
+
 
 	VariationalParameters(parameters my_params) : p(my_params) {
 		if (p.beta_prior == "MixOfGaussian") {
@@ -87,6 +97,13 @@ public:
 		weights = obj.weights;
 		covars  = obj.covars;
 		weights_momentum = obj.weights_momentum;
+
+		betas_u = obj.betas_u;
+		gammas_u = obj.gammas_u;
+		ym_u = obj.ym_u;
+		yx_u = obj.yx_u;
+		eta_u = obj.eta_u;
+		theta = obj.theta;
 	}
 	VariationalParameters& operator = (const VariationalParameters &obj) {
 		p      = obj.p;
@@ -106,6 +123,13 @@ public:
 		weights = obj.weights;
 		covars  = obj.covars;
 		weights_momentum = obj.weights_momentum;
+
+		betas_u = obj.betas_u;
+		gammas_u = obj.gammas_u;
+		ym_u = obj.ym_u;
+		yx_u = obj.yx_u;
+		eta_u = obj.eta_u;
+		theta = obj.theta;
 		return *this;
 	}
 
@@ -113,6 +137,18 @@ public:
 	void run_default_init(long n_var, long n_covar, long n_env);
 
 	void dump_snps_to_file(boost_io::filtering_ostream& my_outf, const GenotypeMatrix& X, long n_env) const;
+
+	/*** Acceleration ***/
+	void increment_theta(){
+		if(!p.leave_theta_constant) {
+			theta = std::sqrt(std::pow(theta, 4.0) + 4 * std::pow(theta, 2.0)) - std::pow(theta, 2.0);
+			theta *= 0.5;
+		}
+	}
+
+	double theta_sq() const {
+		return std::pow(theta, 2.0);
+	}
 
 	/*** Get and set properties of latent variables ***/
 	Eigen::VectorXd mean_beta() const;
@@ -136,7 +172,7 @@ public:
 
 	/*** Misc ***/
 	void update_summary_vars(const EigenArrayXl index, EigenRefDataVector my_y, EigenRefDataMatrix my_C,
-			EigenDataMatrix my_E, const GenotypeMatrix& X){
+	                         EigenDataMatrix my_E, const GenotypeMatrix& X){
 		assert(p.mode_svi);
 		assert(X.minibatch_index_set);
 		current_minibatch_index = index;
@@ -150,7 +186,7 @@ public:
 
 		mean_vec = betas->mean();
 		ym = X * mean_vec;
-		if(covars.size() > 0){
+		if(covars.size() > 0) {
 			mean_vec = covars.mean();
 			ym += my_C(index, ":") * covars.mean();
 		}
@@ -159,15 +195,12 @@ public:
 			mean_vec = gammas->mean();
 			yx = X * mean_vec;
 		}
-		if(weights.size() > 0){
+		if(weights.size() > 0) {
 			mean_vec = weights.mean();
 			Eigen::VectorXd eta = my_E(index, ":") * mean_vec;
 			eta_sq  = eta.array().square().matrix();
 			eta_sq += my_E(index, ":").array().square().matrix() * weights.var().matrix();
 		}
-
-
-
 	}
 	void set_hyps(Hyps hyps);
 	void check_nan(const double& alpha, const std::uint32_t& ii);

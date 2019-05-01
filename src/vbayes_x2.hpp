@@ -46,14 +46,14 @@ public:
 		                                           "lambda_b", "lambda_g"};
 
 // sizes
-	int n_effects;            // no. interaction variables + 1
+	int n_effects;                                                                                                                                                            // no. interaction variables + 1
 	std::uint32_t n_samples;
 	unsigned long n_covar;
 	unsigned long n_env;
 	std::uint32_t n_var;
 	std::uint32_t n_var2;
 	bool run_round1;
-	double N;             // (double) n_samples
+	double N;                                                                                                                                                             // (double) n_samples
 
 // Chromosomes in data
 	int n_chrs;
@@ -71,17 +71,17 @@ public:
 	std::vector< std::vector < std::uint32_t > > main_back_pass_chunks, gxe_back_pass_chunks;
 	std::vector< int > env_fwd_pass;
 	std::vector< int > env_back_pass;
-	std::map<long, Eigen::MatrixXd> D_correlations;             //We can keep D^t D for the main effects
+	std::map<long, Eigen::MatrixXd> D_correlations;                                                                                                                                                             //We can keep D^t D for the main effects
 
 // Data
 	GenotypeMatrix&  X;
-	EigenDataVector Y;                       // residual phenotype matrix
-	EigenDataArrayX Cty;                      // vector of C^T x y where C the matrix of covariates
-	EigenDataArrayXX E;                      // matrix of variables used for GxE interactions
-	EigenDataMatrix& C;                      // matrix of covariates (superset of GxE variables)
-	Eigen::MatrixXd XtE;                      // matrix of covariates (superset of GxE variables)
+	EigenDataVector Y;                                                                                                                                                                       // residual phenotype matrix
+	EigenDataArrayX Cty;                                                                                                                                                                      // vector of C^T x y where C the matrix of covariates
+	EigenDataArrayXX E;                                                                                                                                                                      // matrix of variables used for GxE interactions
+	EigenDataMatrix& C;                                                                                                                                                                      // matrix of covariates (superset of GxE variables)
+	Eigen::MatrixXd XtE;                                                                                                                                                                      // matrix of covariates (superset of GxE variables)
 
-	Eigen::ArrayXXd& dXtEEX;                 // P x n_env^2; col (l * n_env + m) is the diagonal of X^T * diag(E_l * E_m) * X
+	Eigen::ArrayXXd& dXtEEX;                                                                                                                                                                 // P x n_env^2; col (l * n_env + m) is the diagonal of X^T * diag(E_l * E_m) * X
 
 // genome wide scan computed upstream
 	Eigen::ArrayXXd& snpstats;
@@ -130,6 +130,8 @@ public:
 		assert(n_covar == covar_names.size());
 		assert(n_env == E.cols());
 		assert(n_env == env_names.size());
+
+		X.calc_scaled_values();
 
 
 		if(p.user_requests_round1) {
@@ -390,7 +392,8 @@ public:
 		std::vector<double> i_logw(n_grid, -1*std::numeric_limits<double>::max());
 
 		for (int nn = 0; nn < n_grid; nn++) {
-			all_tracker[nn].init_interim_output(nn, round_index, n_effects, n_env, env_names, all_vp[nn]);
+			all_tracker[nn].init_interim_output(nn, round_index, n_effects, n_env, n_covar,
+			                                    env_names, all_vp[nn]);
 		}
 
 		// SQUAREM objects
@@ -449,7 +452,7 @@ public:
 			for (int nn = 0; nn < n_grid; nn++) {
 //			all_hyps[nn].update_pve();
 				all_tracker[nn].push_interim_hyps(count, all_hyps[nn], i_logw[nn], alpha_diff[nn], n_effects,
-				                                  n_var, n_env, all_vp[nn]);
+				                                  n_var, n_env, n_covar, all_vp[nn]);
 				if (p.param_dump_interval > 0 && count % p.param_dump_interval == 0) {
 					all_tracker[nn].dump_state(count, n_samples, n_covar, n_var,
 					                           n_env, n_effects,
@@ -545,6 +548,15 @@ public:
 			if(n_effects > 1) {
 				vp.calcEdZtZ(dXtEEX, n_env);
 			}
+			if(p.mode_vb_accelerated) {
+				vp.theta = 1.0 / n_var;
+				vp.ym_u = EigenDataVector::Zero(n_samples);
+				vp.yx_u = EigenDataVector::Zero(n_samples);
+				if(n_env > 1) {
+					vp.eta_u = EigenDataVector::Zero(n_samples);
+					vp.E2_varw = E.square().matrix() * vp.weights.var().matrix();
+				}
+			}
 			all_vp.push_back(vp);
 		}
 	}
@@ -598,7 +610,7 @@ public:
 		if (n_effects > 1 && n_env > 1) {
 			for (int nn = 0; nn < n_grid; nn++) {
 				GaussianVec weights_old;
-				if(p.mode_env_momentum){
+				if(p.mode_env_momentum) {
 					weights_old = all_vp[nn].weights;
 				}
 
@@ -613,7 +625,7 @@ public:
 
 
 				// Momentum update
-				if (p.mode_env_momentum){
+				if (p.mode_env_momentum) {
 					if(count > 1) {
 						GaussianVec nat_gradient = all_vp[nn].weights - weights_old;
 						all_vp[nn].weights_momentum = all_vp[nn].weights_momentum * p.env_momentum_coeff + nat_gradient;
@@ -628,6 +640,7 @@ public:
 				// Recompute eta_sq
 				all_vp[nn].eta_sq  = all_vp[nn].eta.array().square().matrix();
 				all_vp[nn].eta_sq += E.square().matrix() * all_vp[nn].var_weights().matrix().cast<scalarData>();
+				all_vp[nn].E2_varw = E.square().matrix() * all_vp[nn].weights.var().matrix();
 
 				// Recompute expected value of diagonal of ZtZ
 				all_vp[nn].calcEdZtZ(dXtEEX, n_env);
@@ -707,26 +720,67 @@ public:
 			D.resize(n_samples, ch_len);
 		}
 		X.col_block(iter, D);
+		EigenDataMatrix D_corr = (D.transpose() * D);
+		EigenDataMatrix EXtX = D_corr.diagonal();
 
 		for (int nn = 0; nn < all_vp.size(); nn++) {
-			EigenDataMatrix D_corr = (D.transpose() * D);
-			EigenDataMatrix EXtX = D_corr.diagonal();
-			EigenDataVector rr_k_old(ch_len), rr_k_new(ch_len);
+			if(p.mode_vb_accelerated) {
+				// assume single batch for now!!
+				VariationalParameters& vp = all_vp[nn];
+				// get_hyps_var() appropriate for MoGaussianVec??
+				assert(vp.betas->get_type() == "Gaussian");
+				for (int ii = 0; ii < ch_len; ii++) {
+					long jj = (iter[ii] % n_var);
+					double old_mean = vp.mean_beta(jj);
+					double old_mean_u = vp.betas_u.mean(jj);
 
-			EXty = D.transpose() * (Y - all_vp[nn].ym - all_vp[nn].yx.cwiseProduct(all_vp[nn].eta));
+					double s_sq = vp.betas->get_ith_var_update(jj, EXtX(ii), vp.sigma);
 
-			for (int ii = 0; ii < ch_len; ii++) {
-				long jj = (iter[ii] % n_var);
-				double old = all_vp[nn].mean_beta(jj);
-				rr_k_old(ii) = old;
+					EigenDataMatrix gradf;
+					if(n_env > 0) {
+						gradf = D.col(ii).transpose() * (Y - (vp.ym + vp.theta_sq() * vp.ym_u) -
+						                                 (vp.eta + vp.theta_sq() * vp.eta_u).cwiseProduct(
+															 vp.yx + vp.theta_sq() * vp.yx_u));
+					} else {
+						gradf = D.col(ii).transpose() * (Y - (vp.ym + vp.theta_sq() * vp.ym_u));
+					}
 
-				// Get param updates
-				all_vp[nn].betas->cavi_update_ith_var(jj, EXty(ii, 0), EXtX(ii), all_vp[nn].sigma);
+					// Or use; vp.betas->get_var_hyps();
+					double t = s_sq / vp.sigma * gradf(0, 0) - old_mean * s_sq / vp.betas->get_hyps_var();
 
-				rr_k_new(ii) = all_vp[nn].mean_beta(jj);
-				EXty -= (all_vp[nn].mean_beta(jj) - old) * D_corr.col(ii);
+					double mean = vp.betas->mean(jj) + t;
+					double mean_u = vp.betas_u.mean(jj) - (1 - n_var * vp.theta) / vp.theta_sq() * t;
+
+					vp.betas->set_mean_var(jj, mean, s_sq);
+					vp.betas_u.set_mean(jj, mean_u);
+
+					// Increment
+					vp.increment_theta();
+					vp.ym += (mean - old_mean) * D.col(ii);
+					vp.ym_u += (mean_u - old_mean_u) * D.col(ii);
+				}
+			} else {
+				EigenDataVector rr_k_old(ch_len), rr_k_new(ch_len);
+
+				if(n_env > 0) {
+					EXty = D.transpose() * (Y - all_vp[nn].ym - all_vp[nn].yx.cwiseProduct(all_vp[nn].eta));
+				} else {
+					EXty = D.transpose() * (Y - all_vp[nn].ym);
+				}
+				for (int ii = 0; ii < ch_len; ii++) {
+					long jj = (iter[ii] % n_var);
+					double old = all_vp[nn].mean_beta(jj);
+					rr_k_old(ii) = old;
+
+					// Get param updates
+					all_vp[nn].betas->cavi_update_ith_var(jj, EXty(ii, 0), EXtX(ii), all_vp[nn].sigma);
+
+					rr_k_new(ii) = all_vp[nn].mean_beta(jj);
+					EXty -= (all_vp[nn].mean_beta(jj) - old) * D_corr.col(ii);
+				}
+				// Adjust residuals
+				all_vp[nn].ym += D * (rr_k_new - rr_k_old);
 			}
-			all_vp[nn].ym += D * (rr_k_new - rr_k_old);
 		}
 	}
 
@@ -765,38 +819,63 @@ public:
 
 	void maximiseHyps(Hyps& hyps,
 	                  VariationalParameters& vp){
+		if(p.mode_vb_accelerated) {
+			assert(n_covar == 0);
+			assert(n_env <= 1);
+			Eigen::ArrayXd opt_means;
+			std::unique_ptr<ExponentialFamVec> opt_betas, opt_gammas;
+			opt_betas.reset(vp.betas->clone());
 
-		// max sigma
-		vp.sigma  = calcExpLinear(vp);
-		if (n_covar > 0) {
-			vp.sigma += (vp.covars.mean().array().square() + vp.covars.var()).sum() / hyps.sigma_c;
-			vp.sigma /= (N + (double) n_covar);
+			opt_means = vp.betas->mean() + vp.theta_sq() * vp.betas_u.mean();
+			opt_betas->set_mean(opt_means);
+
+			// max sigma
+			vp.sigma  = calcExpLinear(vp);
+			if (n_covar > 0) {
+				vp.sigma += (vp.covars.mean().array().square() + vp.covars.var()).sum() / hyps.sigma_c;
+				vp.sigma /= (N + (double) n_covar);
+			} else {
+				vp.sigma /= N;
+			}
+
+			Eigen::ArrayXd tmp(1);
+			tmp << sigma_c * vp.sigma;
+			vp.covars.set_hyps(tmp);
+
+			Eigen::ArrayXd beta_hyps = opt_betas->get_opt_hyps();
+			vp.betas->set_hyps(beta_hyps);
+			vp.betas_u.set_hyps(beta_hyps);
+
+			if(n_env > 0) {
+				opt_gammas.reset(vp.gammas->clone());
+				opt_means = vp.gammas->mean() + vp.theta_sq() * vp.gammas_u.mean();
+				opt_gammas->set_mean(opt_means);
+				Eigen::ArrayXd gam_hyps = opt_gammas->get_opt_hyps();
+				vp.gammas->set_hyps(gam_hyps);
+				vp.gammas_u.set_hyps(gam_hyps);
+			}
 		} else {
-			vp.sigma /= N;
+			// max sigma
+			vp.sigma  = calcExpLinear(vp);
+			if (n_covar > 0) {
+				vp.sigma += (vp.covars.mean().array().square() + vp.covars.var()).sum() / hyps.sigma_c;
+				vp.sigma /= (N + (double) n_covar);
+			} else {
+				vp.sigma /= N;
+			}
+
+			Eigen::ArrayXd tmp(1);
+			tmp << sigma_c * vp.sigma;
+			vp.covars.set_hyps(tmp);
+
+			Eigen::ArrayXd beta_hyps = vp.betas->get_opt_hyps();
+			vp.betas->set_hyps(beta_hyps);
+
+			if(n_env > 0) {
+				Eigen::ArrayXd gam_hyps = vp.gammas->get_opt_hyps();
+				vp.gammas->set_hyps(gam_hyps);
+			}
 		}
-//		hyps.sigma = vp.sigma;
-
-		Eigen::ArrayXd tmp(1);
-		tmp << sigma_c * vp.sigma;
-		vp.covars.set_hyps(tmp);
-
-		Eigen::ArrayXd beta_hyps = vp.betas->get_opt_hyps();
-//		hyps.lambda[0] = beta_hyps[0];
-//		hyps.slab_var[0] = beta_hyps[1];
-//		hyps.spike_var[0] = beta_hyps[2];
-
-		vp.betas->set_hyps(beta_hyps);
-
-		if(n_env > 0) {
-			Eigen::ArrayXd gam_hyps = vp.gammas->get_opt_hyps();
-//			hyps.lambda[1] = gam_hyps[0];
-//			hyps.slab_var[1] = gam_hyps[1];
-//			hyps.spike_var[1] = gam_hyps[2];
-			vp.gammas->set_hyps(gam_hyps);
-		}
-
-//		hyps.slab_relative_var = hyps.slab_var / hyps.sigma;
-//		hyps.spike_relative_var = hyps.spike_var / hyps.sigma;
 	}
 
 	double calc_logw(const VariationalParameters &vp) {
@@ -805,7 +884,17 @@ public:
 		double res = -N * std::log(2.0 * PI * vp.sigma) / 2.0;
 		res -= calcExpLinear(vp) / 2.0 / vp.sigma;
 
-		res += vp.betas->kl_div();
+		if(p.mode_vb_accelerated) {
+			std::unique_ptr<ExponentialFamVec> opt_betas;
+			opt_betas.reset(vp.betas->clone());
+
+			Eigen::ArrayXd opt_means = vp.betas->mean() + vp.theta_sq() * vp.betas_u.mean();
+			opt_betas->set_mean(opt_means);
+			res += opt_betas->kl_div();
+		} else {
+			res += vp.betas->kl_div();
+		}
+
 		if(n_effects > 1) {
 			res += vp.gammas->kl_div();
 		}
@@ -905,21 +994,37 @@ public:
 		double int_linear = 0;
 
 		// Expectation of linear regression log-likelihood
-		int_linear  = (Y - vp.ym).squaredNorm();
-		if(n_effects > 1) {
-			int_linear -= 2.0 * (Y - vp.ym).cwiseProduct(vp.eta).dot(vp.yx);
-			if (n_env > 1) {
-				int_linear += vp.yx.cwiseProduct(vp.eta_sq).dot(vp.yx);
-			} else {
-				int_linear += vp.yx.cwiseProduct(vp.eta).squaredNorm();
+		if(p.mode_vb_accelerated) {
+			auto opt_ym = (vp.ym + vp.theta_sq() * vp.ym_u);
+			int_linear  = (Y - opt_ym).squaredNorm();
+			if(n_effects > 1) {
+				auto opt_eta = (vp.eta + vp.theta_sq() * vp.eta_u);
+				int_linear -= 2.0 * (Y - opt_ym).cwiseProduct(opt_eta).dot((vp.yx + vp.theta_sq() * vp.yx_u));
+				if (n_env > 1) {
+					// Eigen::ArrayXd opt_eta = (vp.eta + vp.theta_sq() * vp.eta_u);
+					auto opt_eta_sq = vp.E2_varw + opt_eta.cwiseProduct(opt_eta);
+					int_linear += (vp.yx + vp.theta_sq() * vp.yx_u).cwiseProduct(opt_eta_sq.matrix()).dot((vp.yx + vp.theta_sq() * vp.yx_u));
+				} else {
+					int_linear += (vp.yx + vp.theta_sq() * vp.yx_u).cwiseProduct(opt_eta).squaredNorm();
+				}
+			}
+		} else {
+			int_linear  = (Y - vp.ym).squaredNorm();
+			if(n_effects > 1) {
+				int_linear -= 2.0 * (Y - vp.ym).cwiseProduct(vp.eta).dot(vp.yx);
+				if (n_env > 1) {
+					int_linear += vp.yx.cwiseProduct(vp.eta_sq).dot(vp.yx);
+				} else {
+					int_linear += vp.yx.cwiseProduct(vp.eta).squaredNorm();
+				}
 			}
 		}
 
 		// variances
+		int_linear += (N - 1.0) * vp.var_beta().sum();
 		if(n_covar > 0) {
 			int_linear += (N - 1.0) * vp.var_covar().sum();
 		}
-		int_linear += (N - 1.0) * vp.var_beta().sum();
 		if(n_effects > 1) {
 			int_linear += (vp.EdZtZ * vp.var_gam()).sum();
 		}
@@ -1304,7 +1409,7 @@ public:
 		return res;
 	}
 
-	int getValueRAM(){             //Note: this value is in KB!
+	int getValueRAM(){                                                                                                                                                             //Note: this value is in KB!
 #ifndef OSX
 		FILE* file = fopen("/proc/self/status", "r");
 		int result = -1;

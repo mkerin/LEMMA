@@ -67,12 +67,8 @@ public:
 		boost_io::close(outf_rescan);
 	};
 
-	void init_interim_output(const int ii,
-	                         const int round_index,
-	                         const int n_effects,
-	                         const int n_env,
-	                         std::vector< std::string > env_names,
-	                         const VariationalParameters& vp){
+	void init_interim_output(const int &ii, const int &round_index, const int &n_effects, const long &n_env, const long &n_covar,
+								 std::vector<std::string> env_names, const VariationalParameters &vp) {
 		time_check = std::chrono::system_clock::now();
 
 		// Create directories
@@ -102,7 +98,10 @@ public:
 		if(n_env > 0) {
 			outf_iter << " pve1 " << vp.gammas->get_hyps_header("1");
 		}
-		outf_iter << " s_x s_z var_covar elbo max_alpha_diff secs" << std::endl;
+		outf_iter << " s_x";
+		if(n_env > 0) outf_iter << " s_z";
+		if(n_covar > 0) outf_iter << " var_covar";
+		outf_iter << " elbo max_alpha_diff secs" << std::endl;
 	}
 
 	void push_interim_hyps(const int& cnt,
@@ -110,8 +109,9 @@ public:
 	                       const double& c_logw,
 	                       const double& c_alpha_diff,
 	                       const int& n_effects,
-	                       const unsigned long& n_var,
-	                       const unsigned long& n_env,
+	                       const long& n_var,
+	                       const long& n_env,
+						   const long& n_covar,
 	                       const VariationalParameters& vp) {
 		// Diagnostics + env-weights from latest vb iteration
 		std::chrono::duration<double> lapsecs = std::chrono::system_clock::now() - time_check;
@@ -130,7 +130,7 @@ public:
 		for (int ee = 0; ee < n_effects; ee++) {
 			outf_iter << i_hyps.s_x(ee) << " ";
 		}
-		outf_iter << vp.mean_covar().array().square().sum() << " ";
+		if(n_covar > 0) outf_iter << vp.mean_covar().array().square().sum() << " ";
 		outf_iter << c_logw << " ";
 		outf_iter << c_alpha_diff << " ";
 		outf_iter << lapsecs.count() << std::endl;
