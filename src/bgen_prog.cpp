@@ -99,7 +99,8 @@ int main( int argc, char** argv ) {
 			Eigen::VectorXd Y = data.Y.cast<double>();
 			Eigen::MatrixXd C = data.C.cast<double>();
 			if(data.n_env > 0) {
-				assert(data.n_env == 1 || p.mode_vb);                                 // If multi env; use VB to collapse to single
+				// If multi env; use VB to collapse to single
+				assert(data.n_env == 1 || p.mode_vb);
 				PVE pve(p, data.G, Y, C, eta);
 				pve.run(p.out_file);
 				pve.to_file(p.out_file);
