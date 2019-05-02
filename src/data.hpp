@@ -333,7 +333,7 @@ void standardise_non_genetic_data(){
 				Eigen::MatrixXd E_sq(n_samples, n_signif_envs_sq);
 				std::vector<std::string> env_sq_names;
 				for (int nn = 0; nn < n_signif_envs_sq; nn++) {
-					E_sq.col(nn) = E_sq.col(cols_to_remove[nn]).array().square();
+					E_sq.col(nn) = E.col(cols_to_remove[nn]).array().square();
 					env_sq_names.push_back(env_names[cols_to_remove[nn]] + "_sq");
 				}
 
@@ -348,7 +348,7 @@ void standardise_non_genetic_data(){
 			} else if (params.mode_remove_squared_envs) {
 				Eigen::MatrixXd E_sq(n_samples, n_signif_envs_sq);
 				for (int nn = 0; nn < n_signif_envs_sq; nn++) {
-					E_sq.col(nn) = E_sq.col(cols_to_remove[nn]).array().square();
+					E_sq.col(nn) = E.col(cols_to_remove[nn]).array().square();
 				}
 				Eigen::MatrixXd H(n_samples, n_covar + n_signif_envs_sq);
 				H << E_sq, C;

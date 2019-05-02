@@ -16,6 +16,7 @@
 // Scenarios
 char* case1a[] = { (char*) "--mode_vb",
 				 (char*) "--mode_empirical_bayes",
+				 (char*) "--spike_diff_factor", (char*) "10000",
 				 (char*) "--vb_iter_max", (char*) "10",
 				 (char*) "--hyps_grid", (char*) "data/io_test/single_hyps_gxage.txt",
 				 (char*) "--pheno", (char*) "data/io_test/pheno.txt",
@@ -25,6 +26,7 @@ char* case1a[] = { (char*) "--mode_vb",
 
 char* case1b[] = { (char*) "--mode_vb",
 				   (char*) "--mode_empirical_bayes",
+				   (char*) "--spike_diff_factor", (char*) "10000",
 				   (char*) "--vb_iter_max", (char*) "10",
 				   (char*) "--vb_iter_start", (char*) "3",
 				   (char*) "--resume_from_param_dump",
@@ -149,6 +151,7 @@ TEST_CASE("Resume from multi-env + mog + emp_bayes"){
 
 char* case2a[] = { (char*) "--mode_vb",
 				   (char*) "--mode_squarem",
+				   (char*) "--spike_diff_factor", (char*) "10000",
 				   (char*) "--vb_iter_max", (char*) "10",
 				   (char*) "--hyps_grid", (char*) "data/io_test/single_hyps_gxage.txt",
 				   (char*) "--pheno", (char*) "data/io_test/pheno.txt",
@@ -158,6 +161,7 @@ char* case2a[] = { (char*) "--mode_vb",
 
 char* case2b[] = { (char*) "--mode_vb",
 				   (char*) "--mode_squarem",
+				   (char*) "--spike_diff_factor", (char*) "10000",
 				   (char*) "--vb_iter_max", (char*) "10",
 				   (char*) "--vb_iter_start", (char*) "3",
 				   (char*) "--resume_from_param_dump",
