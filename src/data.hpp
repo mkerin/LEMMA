@@ -50,36 +50,36 @@ public:
 	parameters p;
 
 
-	unsigned long n_pheno;         // number of phenotypes
-	unsigned long n_covar;         // number of covariates
-	unsigned long n_env;         // number of env variables
-	int n_effects;           // number of environmental interactions
-	long n_samples;         // number of samples
+	unsigned long n_pheno;                 // number of phenotypes
+	unsigned long n_covar;                 // number of covariates
+	unsigned long n_env;                 // number of env variables
+	int n_effects;                   // number of environmental interactions
+	long n_samples;                 // number of samples
 	long n_var;
-	long n_var_parsed;         // Track progress through IndexQuery
+	long n_var_parsed;                 // Track progress through IndexQuery
 	long int n_dxteex_computed;
 	long int n_snpstats_computed;
 
-	bool Y_reduced;           // Variables to track whether we have already
-	bool W_reduced;           // reduced to complete cases or not.
+	bool Y_reduced;                   // Variables to track whether we have already
+	bool W_reduced;                   // reduced to complete cases or not.
 	bool E_reduced;
 
 	std::vector< std::string > external_dXtEEX_SNPID;
 	std::vector< std::string > rsid_list;
 
-	std::map<int, bool> missing_envs;           // set of subjects missing >= 1 env variables
-	std::map<int, bool> missing_covars;         // set of subjects missing >= 1 covariate
-	std::map<int, bool> missing_phenos;         // set of subjects missing >= phenotype
-	std::map< std::size_t, bool > incomplete_cases;         // union of samples missing data
+	std::map<int, bool> missing_envs;                   // set of subjects missing >= 1 env variables
+	std::map<int, bool> missing_covars;                 // set of subjects missing >= 1 covariate
+	std::map<int, bool> missing_phenos;                 // set of subjects missing >= phenotype
+	std::map< std::size_t, bool > incomplete_cases;                 // union of samples missing data
 
 	std::vector< std::string > pheno_names;
 	std::vector< std::string > covar_names;
 	std::vector< std::string > env_names;
 
 	GenotypeMatrix G;
-	EigenDataMatrix Y, Y2;         // phenotype matrix (#2 always has covars regressed)
-	EigenDataMatrix C;         // covariate matrix
-	EigenDataMatrix E;         // env matrix
+	EigenDataMatrix Y, Y2;                 // phenotype matrix (#2 always has covars regressed)
+	EigenDataMatrix C;                 // covariate matrix
+	EigenDataMatrix E;                 // env matrix
 	Eigen::ArrayXXd dXtEEX;
 	Eigen::ArrayXXd external_dXtEEX;
 
@@ -387,10 +387,9 @@ public:
 		// Set default hyper-parameters if not read from file
 		if(p.hyps_grid_file == "NULL") {
 			std::cout << "Initialising hyper-parameters with default settings" << std::endl;
-			hyps_inits.resize(1);
-			for (auto& hyps: hyps_inits) {
-				hyps.use_default_init(2, 1000);
-			}
+			Hyps hyps(p);
+			hyps.use_default_init(2, 1000);
+			hyps_inits.push_back(hyps);
 		}
 	}
 
