@@ -702,12 +702,6 @@ void parse_arguments(parameters &p, int argc, char **argv) {
 		std::cout << "provided in conjunction with --mode_vb." << std::endl;
 		std::exit(EXIT_FAILURE);
 	}
-	bool has_hyps = p.hyps_grid_file != "NULL";
-	if(p.mode_vb && p.hyps_grid_file == "NULL") {
-		std::cout << "ERROR: search grids for hyperparameter values";
-		std::cout << "should be provided in conjunction with --mode_vb." << std::endl;
-		std::exit(EXIT_FAILURE);
-	}
 
 	if(p.env_file == "NULL" && p.env_coeffs_file != "NULL") {
 		std::cout << "WARNING: --environment_weights will be ignored as no --environment provided" << std::endl;

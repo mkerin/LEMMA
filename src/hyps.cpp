@@ -72,8 +72,6 @@ Hyps operator*(const double &scalar, const Hyps &h1){
 }
 
 void Hyps::init_from_grid(int my_n_effects, int ii, int n_var, const Eigen::Ref<const Eigen::MatrixXd> &hyps_grid) {
-	n_effects = my_n_effects;
-
 	// Unpack
 	double my_sigma = hyps_grid(ii, sigma_ind);
 	double my_sigma_b = hyps_grid(ii, sigma_b_ind);
@@ -81,15 +79,8 @@ void Hyps::init_from_grid(int my_n_effects, int ii, int n_var, const Eigen::Ref<
 	double my_lam_b = hyps_grid(ii, lam_b_ind);
 	double my_lam_g = hyps_grid(ii, lam_g_ind);
 
-	// Resize
-	slab_var.resize(n_effects);
-	spike_var.resize(n_effects);
-	slab_relative_var.resize(n_effects);
-	spike_relative_var.resize(n_effects);
-	lambda.resize(n_effects);
-	s_x.resize(n_effects);
-
 	// Assign initial hyps
+	resize(my_n_effects);
 	if(n_effects == 1) {
 		sigma = my_sigma;
 		slab_var << my_sigma * my_sigma_b;

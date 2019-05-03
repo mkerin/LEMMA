@@ -120,14 +120,14 @@ TEST_CASE("Data") {
 		CHECK(data.E(0, 0) == Approx(0.785198212));
 
 		data.standardise_non_genetic_data();
-		CHECK(data.params.use_vb_on_covars);
+		CHECK(data.p.use_vb_on_covars);
 		CHECK(data.E(0, 0) == Approx(0.9959851422));
 
 		data.read_full_bgen();
 		SECTION("Ex1. bgen read in & standardised correctly") {
 			CHECK(data.G.low_mem);
-			CHECK(data.params.low_mem);
-			CHECK(!data.params.flip_high_maf_variants);
+			CHECK(data.p.low_mem);
+			CHECK(!data.p.flip_high_maf_variants);
 			CHECK(data.G(0, 0) == Approx(-1.8575040711));
 			CHECK(data.G(0, 1) == Approx(-0.7404793547));
 			CHECK(data.G(0, 2) == Approx(-0.5845122102));
@@ -162,7 +162,7 @@ TEST_CASE("Data") {
 		CHECK(data.E(0, 0) == Approx(0.785198212));
 
 		data.standardise_non_genetic_data();
-		CHECK(data.params.use_vb_on_covars);
+		CHECK(data.p.use_vb_on_covars);
 		CHECK(data.E(0, 0) == Approx(0.8123860763));
 
 		data.read_full_bgen();
@@ -198,9 +198,9 @@ TEST_CASE("Data") {
 //
 		data.standardise_non_genetic_data();
 		SECTION("Check non genetic data standardised + covars regressed") {
-			CHECK(data.params.scale_pheno);
-			CHECK(data.params.use_vb_on_covars);
-			CHECK(data.params.covar_file == "NULL");
+			CHECK(data.p.scale_pheno);
+			CHECK(data.p.use_vb_on_covars);
+			CHECK(data.p.covar_file == "NULL");
 //			CHECK(data.Y(0,0) == Approx(-3.6676363273605137)); Centered
 			CHECK(data.Y(0,0) == Approx(-1.5800573524786081));
 			CHECK(data.Y2(0, 0) == Approx(-1.5567970303));
@@ -210,8 +210,8 @@ TEST_CASE("Data") {
 		data.read_full_bgen();
 		SECTION("Ex1. bgen read in & standardised correctly") {
 			CHECK(data.G.low_mem);
-			CHECK(data.params.low_mem);
-			CHECK(!data.params.flip_high_maf_variants);
+			CHECK(data.p.low_mem);
+			CHECK(!data.p.flip_high_maf_variants);
 			CHECK(data.G(0, 0) == Approx(-1.8575040711));
 			CHECK(data.G(0, 1) == Approx(-0.7404793547));
 			CHECK(data.G(0, 2) == Approx(-0.5845122102));
@@ -233,7 +233,7 @@ TEST_CASE("Data") {
 		}
 
 		SECTION("Ex1. Confirm calc_dxteex() reorders properly") {
-			data.params.dxteex_file = "data/io_test/n50_p100_dxteex_low_mem.txt";
+			data.p.dxteex_file = "data/io_test/n50_p100_dxteex_low_mem.txt";
 			data.read_external_dxteex();
 			data.calc_dxteex();
 			CHECK(data.dXtEEX(0, 0) == Approx(38.9610805993));
@@ -259,8 +259,8 @@ TEST_CASE("Data") {
 		data.read_full_bgen();
 		SECTION("Ex1. bgen read in & standardised correctly") {
 			CHECK(data.G.low_mem);
-			CHECK(data.params.low_mem);
-			CHECK(!data.params.flip_high_maf_variants);
+			CHECK(data.p.low_mem);
+			CHECK(!data.p.flip_high_maf_variants);
 			CHECK(data.G(0, 0) == Approx(0.7105269065));
 			CHECK(data.G(0, 1) == Approx(0.6480740698));
 			CHECK(data.G(0, 2) == Approx(0.7105195023));
@@ -289,8 +289,8 @@ TEST_CASE("Data") {
 		data.read_full_bgen();
 		SECTION("Ex1. bgen read in & standardised correctly") {
 			CHECK(data.G.low_mem);
-			CHECK(data.params.low_mem);
-			CHECK(!data.params.flip_high_maf_variants);
+			CHECK(data.p.low_mem);
+			CHECK(!data.p.flip_high_maf_variants);
 			CHECK(data.G(0, 0) == Approx(0.7105269065));
 			CHECK(data.G(0, 1) == Approx(0.6480740698));
 			CHECK(data.G(0, 2) == Approx(0.7105195023));
@@ -353,9 +353,9 @@ TEST_CASE( "Example 4: multi-env + mog + covars + emp_bayes" ){
 		data.read_non_genetic_data();
 		data.standardise_non_genetic_data();
 		SECTION( "Ex4. Non genetic data standardised + covars regressed"){
-			CHECK(data.params.scale_pheno);
-			CHECK(data.params.use_vb_on_covars);
-			CHECK(data.params.covar_file == "NULL");
+			CHECK(data.p.scale_pheno);
+			CHECK(data.p.use_vb_on_covars);
+			CHECK(data.p.covar_file == "NULL");
 //			CHECK(data.Y(0,0) == Approx(-3.6676363273605137)); Centered
 			CHECK(data.Y(0,0) == Approx(-1.5800573524786081));
 			CHECK(data.Y2(0,0) == Approx(-1.5567970303));

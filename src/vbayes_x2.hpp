@@ -124,8 +124,8 @@ public:
 		C(dat.C),
 		dXtEEX(dat.dXtEEX),
 		snpstats(dat.snpstats),
-		p(dat.params),
-		GLOBAL_map_vp(dat.params),
+		p(dat.p),
+		GLOBAL_map_vp(dat.p),
 		hyps_inits(dat.hyps_inits),
 		vp_init(dat.vp_init){
 		std::cout << "Initialising vbayes object" << std::endl;
