@@ -1,3 +1,8 @@
+# Version 0.10.8
+
+- Testing accelerated CAVI for main effects only
+- Option to run CAVI for a few iterations before starting CAVI
+
 # Version 0.10.7
 
 - Using Eigen dev branch
