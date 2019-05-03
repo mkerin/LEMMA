@@ -7,6 +7,7 @@ Changes:
 - bugfix; set default initialisation for elbo_tol
 - bugfix; output max change in gammas as well as betas
 - bugfix; set s_x when n_env == 1
+- bugfix; covars must have column variance 1
 
 Commandline:
 - SQUAREM on by default

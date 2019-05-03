@@ -279,9 +279,9 @@ Eigen::MatrixXd EigenUtils::solve(const Eigen::MatrixXd &A, const Eigen::MatrixX
 }
 
 template <typename EigenMat>
-void EigenUtils::scale_matrix_and_remove_constant_cols(EigenMat& M,
-                                                       unsigned long& n_cols,
-                                                       std::vector< std::string >& col_names){
+void EigenUtils::scale_matrix_and_remove_constant_cols(EigenMat &M,
+													   long &n_cols,
+													   std::vector<std::string> &col_names){
 	// Scale eigen matrix passed by reference.
 	// Removes columns with zero variance + updates col_names.
 	// Only call on matrixes which have been reduced to complete cases,
@@ -365,6 +365,6 @@ template void EigenUtils::read_matrix(const std::string&, const long&,
 template void EigenUtils::center_matrix(Eigen::MatrixXd&);
 template void EigenUtils::center_matrix(Eigen::MatrixXf&);
 template void EigenUtils::scale_matrix_and_remove_constant_cols(Eigen::MatrixXf&,
-                                                                unsigned long&, std::vector<std::string>&);
+                                                                long&, std::vector<std::string>&);
 template void EigenUtils::scale_matrix_and_remove_constant_cols(Eigen::MatrixXd&,
-                                                                unsigned long&, std::vector<std::string>&);
+                                                                long&, std::vector<std::string>&);

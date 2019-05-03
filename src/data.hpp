@@ -50,9 +50,9 @@ public:
 	parameters p;
 
 
-	unsigned long n_pheno;                 // number of phenotypes
-	unsigned long n_covar;                 // number of covariates
-	unsigned long n_env;                 // number of env variables
+	long n_pheno;                 // number of phenotypes
+	long n_covar;                 // number of covariates
+	long n_env;                 // number of env variables
 	int n_effects;                   // number of environmental interactions
 	long n_samples;                 // number of samples
 	long n_var;
@@ -324,17 +324,21 @@ public:
 				}
 			}
 			if (n_signif_envs_sq > 0) {
-				std::cout << "Projecting out squared dependance from: " << std::endl;
-				for (int ee : cols_to_remove) {
-					std::cout << env_names[ee] << std::endl;
+				Eigen::MatrixXd E_sq(n_samples, n_signif_envs_sq);
+				std::vector<std::string> env_sq_names;
+				for (int nn = 0; nn < n_signif_envs_sq; nn++) {
+					E_sq.col(nn) = E.col(cols_to_remove[nn]).array().square();
+					env_sq_names.push_back(env_names[cols_to_remove[nn]] + "_sq");
 				}
+
 				if (p.mode_incl_squared_envs) {
-					Eigen::MatrixXd E_sq(n_samples, n_signif_envs_sq);
-					std::vector<std::string> env_sq_names;
-					for (int nn = 0; nn < n_signif_envs_sq; nn++) {
-						E_sq.col(nn) = E.col(cols_to_remove[nn]).array().square();
-						env_sq_names.push_back(env_names[cols_to_remove[nn]] + "_sq");
+					std::cout << "Including squared env effects from: " << std::endl;
+					for (int ee : cols_to_remove) {
+						std::cout << env_names[ee] << std::endl;
 					}
+
+					EigenUtils::center_matrix(E_sq);
+					EigenUtils::scale_matrix_and_remove_constant_cols(E_sq, n_signif_envs_sq, env_sq_names);
 
 					EigenDataMatrix tmp(n_samples, n_covar + n_signif_envs_sq);
 					tmp << C, E_sq;
@@ -345,13 +349,13 @@ public:
 					assert(n_covar == covar_names.size());
 					assert(n_covar == C.cols());
 				} else if (p.mode_remove_squared_envs) {
-					Eigen::MatrixXd E_sq(n_samples, n_signif_envs_sq);
-					for (int nn = 0; nn < n_signif_envs_sq; nn++) {
-						E_sq.col(nn) = E.col(cols_to_remove[nn]).array().square();
+					std::cout << "Projecting out squared dependance from: " << std::endl;
+					for (int ee : cols_to_remove) {
+						std::cout << env_names[ee] << std::endl;
 					}
+
 					Eigen::MatrixXd H(n_samples, n_covar + n_signif_envs_sq);
 					H << E_sq, C;
-					// std::cout << "formed H" << std::endl;
 
 					Eigen::MatrixXd HtH = H.transpose() * H;
 					Eigen::MatrixXd Hty = H.transpose() * Y;
@@ -359,7 +363,11 @@ public:
 
 					Y -= E_sq * beta.block(0, 0, n_signif_envs_sq, 1);
 				} else {
-					std::cout << "Warning: Projection of significant square envs suppressed" << std::endl;
+					std::cout << "Warning: Projection of significant square envs (";
+					for (auto env_sq_name : env_sq_names) {
+						std::cout << env_sq_name << ", ";
+					}
+					std::cout << ") suppressed" << std::endl;
 				}
 			}
 
