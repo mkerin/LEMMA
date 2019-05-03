@@ -388,7 +388,7 @@ public:
 		if(p.hyps_grid_file == "NULL") {
 			std::cout << "Initialising hyper-parameters with default settings" << std::endl;
 			Hyps hyps(p);
-			hyps.use_default_init(2, 1000);
+			hyps.use_default_init(n_effects, n_var);
 			hyps_inits.push_back(hyps);
 		}
 	}
