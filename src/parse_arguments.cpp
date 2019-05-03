@@ -138,7 +138,8 @@ void parse_arguments(parameters &p, int argc, char **argv) {
 		"--gamma_prior_gaussian",
 		"--env_momentum_coeff",
 		"--DEBUG_mode_vb_accelerated",
-		"--mode_vb_accelerated"
+		"--mode_vb_accelerated",
+		"--delay_acceleration"
 	};
 
 	std::set<std::string>::iterator set_it;
@@ -342,6 +343,13 @@ void parse_arguments(parameters &p, int argc, char **argv) {
 				p.mode_vb_accelerated = true;
 			}
 
+			if(strcmp(in_str, "--delay_acceleration") == 0) {
+				p.mode_vb = true;
+				p.mode_vb_accelerated = true;
+				p.mode_vb_accelerated_delay = std::stol(argv[i + 1]);
+				i += 1;
+			}
+
 			if(strcmp(in_str, "--DEBUG_mode_vb_accelerated") == 0) {
 				p.mode_vb = true;
 				p.mode_vb_accelerated = true;
@@ -482,7 +490,7 @@ void parse_arguments(parameters &p, int argc, char **argv) {
 			// Data inputs
 			if(strcmp(in_str, "--bgen") == 0) {
 				check_counts(in_str, i, 1, argc);
-				p.bgen_file = argv[i + 1];                                                                                                                                                                 // bgen file
+				p.bgen_file = argv[i + 1];                                                                                                                                                                                 // bgen file
 				p.bgi_file = p.bgen_file + ".bgi";
 
 				check_file_exists(p.bgen_file);
@@ -492,14 +500,14 @@ void parse_arguments(parameters &p, int argc, char **argv) {
 
 			if(strcmp(in_str, "--pheno") == 0) {
 				check_counts(in_str, i, 1, argc);
-				p.pheno_file = argv[i + 1];                                                                                                                                                                 // pheno file
+				p.pheno_file = argv[i + 1];                                                                                                                                                                                 // pheno file
 				check_file_exists(p.pheno_file);
 				i += 1;
 			}
 
 			if(strcmp(in_str, "--recombination_map") == 0) {
 				check_counts(in_str, i, 1, argc);
-				p.recombination_file = argv[i + 1];                                                                                                                                                                 // pheno file
+				p.recombination_file = argv[i + 1];                                                                                                                                                                                 // pheno file
 				check_file_exists(p.recombination_file);
 				i += 1;
 			}
@@ -566,42 +574,42 @@ void parse_arguments(parameters &p, int argc, char **argv) {
 
 			if(strcmp(in_str, "--hyps_grid") == 0) {
 				check_counts(in_str, i, 1, argc);
-				p.hyps_grid_file = argv[i + 1];                                                                                                                                                                 // covar file
+				p.hyps_grid_file = argv[i + 1];                                                                                                                                                                                 // covar file
 				check_file_exists(p.hyps_grid_file);
 				i += 1;
 			}
 
 			if(strcmp(in_str, "--r1_hyps_grid") == 0) {
 				check_counts(in_str, i, 1, argc);
-				p.r1_hyps_grid_file = argv[i + 1];                                                                                                                                                                 // covar file
+				p.r1_hyps_grid_file = argv[i + 1];                                                                                                                                                                                 // covar file
 				check_file_exists(p.r1_hyps_grid_file);
 				i += 1;
 			}
 
 			if(strcmp(in_str, "--r1_probs_grid") == 0) {
 				check_counts(in_str, i, 1, argc);
-				p.r1_probs_grid_file = argv[i + 1];                                                                                                                                                                 // covar file
+				p.r1_probs_grid_file = argv[i + 1];                                                                                                                                                                                 // covar file
 				check_file_exists(p.r1_probs_grid_file);
 				i += 1;
 			}
 
 			if(strcmp(in_str, "--hyps_probs") == 0) {
 				check_counts(in_str, i, 1, argc);
-				p.hyps_probs_file = argv[i + 1];                                                                                                                                                                 // covar file
+				p.hyps_probs_file = argv[i + 1];                                                                                                                                                                                 // covar file
 				check_file_exists(p.hyps_probs_file);
 				i += 1;
 			}
 
 			if(strcmp(in_str, "--vb_init") == 0) {
 				check_counts(in_str, i, 1, argc);
-				p.vb_init_file = argv[i + 1];                                                                                                                                                                 // covar file
+				p.vb_init_file = argv[i + 1];                                                                                                                                                                                 // covar file
 				check_file_exists(p.vb_init_file);
 				i += 1;
 			}
 
 			if(strcmp(in_str, "--dxteex") == 0) {
 				check_counts(in_str, i, 1, argc);
-				p.dxteex_file = argv[i + 1];                                                                                                                                                                 // covar file
+				p.dxteex_file = argv[i + 1];                                                                                                                                                                                 // covar file
 				check_file_exists(p.dxteex_file);
 				i += 1;
 			}
@@ -610,14 +618,14 @@ void parse_arguments(parameters &p, int argc, char **argv) {
 			if(strcmp(in_str, "--maf") == 0) {
 				check_counts(in_str, i, 1, argc);
 				p.maf_lim = true;
-				p.min_maf = std::stod(argv[i + 1]);                                                                                                                                                                 // bgen file
+				p.min_maf = std::stod(argv[i + 1]);                                                                                                                                                                                 // bgen file
 				i += 1;
 			}
 
 			if(strcmp(in_str, "--info") == 0) {
 				check_counts(in_str, i, 1, argc);
 				p.info_lim = true;
-				p.min_info = std::stod(argv[i + 1]);                                                                                                                                                                 // bgen file
+				p.min_info = std::stod(argv[i + 1]);                                                                                                                                                                                 // bgen file
 				i += 1;
 			}
 
@@ -664,7 +672,7 @@ void parse_arguments(parameters &p, int argc, char **argv) {
 
 			if(strcmp(in_str, "--incl_sample_ids") == 0) {
 				check_counts(in_str, i, 1, argc);
-				p.incl_sids_file = argv[i + 1];                                                                                                                                                                 // include sample ids file
+				p.incl_sids_file = argv[i + 1];                                                                                                                                                                                 // include sample ids file
 				check_file_exists(p.incl_sids_file);
 				i += 1;
 			}
@@ -672,7 +680,7 @@ void parse_arguments(parameters &p, int argc, char **argv) {
 			if(strcmp(in_str, "--incl_rsids") == 0) {
 				check_counts(in_str, i, 1, argc);
 				p.select_snps = true;
-				p.incl_rsids_file = argv[i + 1];                                                                                                                                                                 // include variant ids file
+				p.incl_rsids_file = argv[i + 1];                                                                                                                                                                                 // include variant ids file
 				check_file_exists(p.incl_rsids_file);
 				i += 1;
 			}
@@ -698,7 +706,7 @@ void parse_arguments(parameters &p, int argc, char **argv) {
 
 			if(strcmp(in_str, "--chunk") == 0) {
 				check_counts(in_str, i, 1, argc);
-				p.chunk_size = std::stoi(argv[i + 1]);                                                                                                                                                                 // bgen file
+				p.chunk_size = std::stoi(argv[i + 1]);                                                                                                                                                                                 // bgen file
 				i += 1;
 			}
 

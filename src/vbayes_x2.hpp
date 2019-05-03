@@ -46,14 +46,14 @@ public:
 		                                           "lambda_b", "lambda_g"};
 
 // sizes
-	int n_effects;                                                                                                                                                            // no. interaction variables + 1
+	int n_effects;                                                                                                                                                                // no. interaction variables + 1
 	std::uint32_t n_samples;
 	unsigned long n_covar;
 	unsigned long n_env;
 	std::uint32_t n_var;
 	std::uint32_t n_var2;
 	bool run_round1;
-	double N;                                                                                                                                                             // (double) n_samples
+	double N;                                                                                                                                                                 // (double) n_samples
 
 // Chromosomes in data
 	int n_chrs;
@@ -71,17 +71,17 @@ public:
 	std::vector< std::vector < std::uint32_t > > main_back_pass_chunks, gxe_back_pass_chunks;
 	std::vector< int > env_fwd_pass;
 	std::vector< int > env_back_pass;
-	std::map<long, Eigen::MatrixXd> D_correlations;                                                                                                                                                             //We can keep D^t D for the main effects
+	std::map<long, Eigen::MatrixXd> D_correlations;                                                                                                                                                                 //We can keep D^t D for the main effects
 
 // Data
 	GenotypeMatrix&  X;
-	EigenDataVector Y;                                                                                                                                                                       // residual phenotype matrix
-	EigenDataArrayX Cty;                                                                                                                                                                      // vector of C^T x y where C the matrix of covariates
-	EigenDataArrayXX E;                                                                                                                                                                      // matrix of variables used for GxE interactions
-	EigenDataMatrix& C;                                                                                                                                                                      // matrix of covariates (superset of GxE variables)
-	Eigen::MatrixXd XtE;                                                                                                                                                                      // matrix of covariates (superset of GxE variables)
+	EigenDataVector Y;                                                                                                                                                                           // residual phenotype matrix
+	EigenDataArrayX Cty;                                                                                                                                                                          // vector of C^T x y where C the matrix of covariates
+	EigenDataArrayXX E;                                                                                                                                                                          // matrix of variables used for GxE interactions
+	EigenDataMatrix& C;                                                                                                                                                                          // matrix of covariates (superset of GxE variables)
+	Eigen::MatrixXd XtE;                                                                                                                                                                          // matrix of covariates (superset of GxE variables)
 
-	Eigen::ArrayXXd& dXtEEX;                                                                                                                                                                 // P x n_env^2; col (l * n_env + m) is the diagonal of X^T * diag(E_l * E_m) * X
+	Eigen::ArrayXXd& dXtEEX;                                                                                                                                                                     // P x n_env^2; col (l * n_env + m) is the diagonal of X^T * diag(E_l * E_m) * X
 
 // genome wide scan computed upstream
 	Eigen::ArrayXXd& snpstats;
@@ -402,6 +402,9 @@ public:
 		std::vector<Hyps> theta2 = all_hyps;
 
 		// Allow more flexible start point so that we can resume previous inference run
+		bool mode_vb_accelerated = p.mode_vb_accelerated;
+		p.mode_vb_accelerated = false;
+
 		long count = p.vb_iter_start;
 		while(!all_converged && count < p.vb_iter_max) {
 			for (int nn = 0; nn < n_grid; nn++) {
@@ -409,6 +412,10 @@ public:
 			}
 			std::vector<double> logw_prev = i_logw;
 			std::vector<double> alpha_diff(n_grid);
+
+			if (mode_vb_accelerated && count >= p.mode_vb_accelerated_delay) {
+				p.mode_vb_accelerated = true;
+			}
 
 			updateAllParams(count, round_index, all_vp, all_hyps, logw_prev);
 
@@ -623,7 +630,6 @@ public:
 					}
 				}
 
-
 				// Momentum update
 				if (p.mode_env_momentum) {
 					if(count > 1) {
@@ -745,7 +751,6 @@ public:
 						gradf = D.col(ii).transpose() * (Y - (vp.ym + vp.theta_sq() * vp.ym_u));
 					}
 
-					// Or use; vp.betas->get_var_hyps();
 					double t = s_sq / vp.sigma * gradf(0, 0) - old_mean * s_sq / vp.betas->get_hyps_var();
 
 					double mean = vp.betas->mean(jj) + t;
@@ -1409,7 +1414,7 @@ public:
 		return res;
 	}
 
-	int getValueRAM(){                                                                                                                                                             //Note: this value is in KB!
+	int getValueRAM(){                                                                                                                                                                 //Note: this value is in KB!
 #ifndef OSX
 		FILE* file = fopen("/proc/self/status", "r");
 		int result = -1;

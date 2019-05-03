@@ -16,7 +16,7 @@ public:
 	std::string beta_prior, gamma_prior;
 	std::vector< std::string > rsid;
 	unsigned int random_seed;
-	long int chunk_size, vb_iter_max, vb_iter_start, param_dump_interval;
+	long int chunk_size, vb_iter_max, vb_iter_start, param_dump_interval, mode_vb_accelerated_delay;
 	int missing_code, env_update_repeats, n_gconf, n_bgen_thread, n_pve_samples;
 	unsigned int n_thread, main_chunk_size, gxe_chunk_size;
 	std::uint32_t range_start, range_end;
@@ -80,6 +80,7 @@ public:
 		// Initial diff in variance of spike & slab
 		beta_spike_diff_factor = 10000.0;
 		gam_spike_diff_factor = 10000.0;
+		mode_vb_accelerated_delay = 0;
 		param_dump_interval = -1;
 		range = false;
 		min_spike_diff_set = false;
