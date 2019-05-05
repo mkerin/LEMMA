@@ -81,7 +81,7 @@ TEST_CASE("Resume from multi-env + mog + emp_bayes"){
 			CHECK(VB.ETA_SQ.squaredNorm() == Approx(294.9017799794));
 
 			VbTracker tracker(p);
-			tracker.init_interim_output(0,2, VB.n_effects, VB.n_env, VB.env_names, vp);
+			tracker.init_interim_output(0,2, VB.n_effects, VB.n_covar, VB.n_env, VB.env_names, vp);
 			tracker.dump_state(2, VB.n_samples, VB.n_covar, VB.n_var, VB.n_env,
 							   VB.n_effects, vp, hyps, VB.Y, VB.C, VB.X,
 							   VB.covar_names, VB.env_names);
@@ -215,7 +215,7 @@ TEST_CASE("Resume from multi-env + mog + squarem"){
 			CHECK(VB.ETA_SQ.squaredNorm() == Approx(294.9017821007));
 
 			VbTracker tracker(p);
-			tracker.init_interim_output(0,2, VB.n_effects, VB.n_env, VB.env_names, vp);
+			tracker.init_interim_output(0,2, VB.n_effects, VB.n_covar, VB.n_env, VB.env_names, vp);
 			tracker.dump_state(2, VB.n_samples, VB.n_covar, VB.n_var, VB.n_env,
 							   VB.n_effects, vp, hyps, VB.Y, VB.C, VB.X,
 							   VB.covar_names, VB.env_names);

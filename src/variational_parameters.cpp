@@ -98,6 +98,10 @@ void VariationalParamsBase::dump_snps_to_file(boost_io::filtering_ostream& outf,
 	}
 }
 
+Eigen::VectorXd VariationalParamsBase::mean_covars() const {
+	return muc;
+}
+
 Eigen::VectorXd VariationalParamsBase::mean_beta() const {
 	Eigen::VectorXd rr_beta;
 	if(p.mode_mog_prior_beta) {
@@ -116,6 +120,10 @@ Eigen::VectorXd VariationalParamsBase::mean_gam() const {
 		rr_gam = alpha_gam * mu1_gam;
 	}
 	return rr_gam;
+}
+
+Eigen::VectorXd VariationalParamsBase::mean_weights() const {
+	return muw;
 }
 
 double VariationalParamsBase::mean_beta(std::uint32_t jj) const {

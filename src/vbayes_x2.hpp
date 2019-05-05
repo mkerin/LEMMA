@@ -61,7 +61,7 @@ public:
 		                                           "lambda_b", "lambda_g"};
 
 // sizes
-	int n_effects;                // no. interaction variables + 1
+	int n_effects;                                                    // no. interaction variables + 1
 	std::uint32_t n_samples;
 	unsigned long n_covar;
 	unsigned long n_env;
@@ -69,7 +69,7 @@ public:
 	std::uint32_t n_var2;
 	bool random_params_init;
 	bool run_round1;
-	double N;                 // (double) n_samples
+	double N;                                                     // (double) n_samples
 
 // Chromosomes in data
 	int n_chrs;
@@ -87,17 +87,17 @@ public:
 	std::vector< std::vector < std::uint32_t > > main_back_pass_chunks, gxe_back_pass_chunks;
 	std::vector< int > env_fwd_pass;
 	std::vector< int > env_back_pass;
-	std::map<unsigned long, Eigen::MatrixXd> D_correlations;                 //We can keep D^t D for the main effects
+	std::map<unsigned long, Eigen::MatrixXd> D_correlations;                                                     //We can keep D^t D for the main effects
 
 // Data
 	GenotypeMatrix&  X;
-	EigenDataVector Y;                           // residual phenotype matrix
-	EigenDataArrayX Cty;                          // vector of C^T x y where C the matrix of covariates
-	EigenDataArrayXX E;                          // matrix of variables used for GxE interactions
-	EigenDataMatrix& C;                          // matrix of covariates (superset of GxE variables)
-	Eigen::MatrixXd XtE;                          // matrix of covariates (superset of GxE variables)
+	EigenDataVector Y;                                                               // residual phenotype matrix
+	EigenDataArrayX Cty;                                                              // vector of C^T x y where C the matrix of covariates
+	EigenDataArrayXX E;                                                              // matrix of variables used for GxE interactions
+	EigenDataMatrix& C;                                                              // matrix of covariates (superset of GxE variables)
+	Eigen::MatrixXd XtE;                                                              // matrix of covariates (superset of GxE variables)
 
-	Eigen::ArrayXXd& dXtEEX;                     // P x n_env^2; col (l * n_env + m) is the diagonal of X^T * diag(E_l * E_m) * X
+	Eigen::ArrayXXd& dXtEEX;                                                         // P x n_env^2; col (l * n_env + m) is the diagonal of X^T * diag(E_l * E_m) * X
 
 // Global location of y_m = E[X beta] and y_x = E[X gamma]
 	EigenDataMatrix YY, YX, YM, ETA, ETA_SQ;
@@ -151,8 +151,8 @@ public:
 		assert(n_env == env_names.size());
 
 		// When n_env > 1 this gets set when in updateEnvWeights
-		if(n_env == 1){
-			for (auto &hyps : hyps_inits){
+		if(n_env == 1) {
+			for (auto &hyps : hyps_inits) {
 				hyps.s_x << n_var, dXtEEX.col(0).sum() / (n_samples - 1.0);
 			}
 		}
@@ -415,11 +415,11 @@ public:
 		// Run inner loop until convergence
 		std::vector<int> converged(n_grid, 0);
 		bool all_converged = false;
-		std::vector<Eigen::ArrayXd> alpha_prev(n_grid), beta_prev(n_grid), gam_prev(n_grid);
+		std::vector<Eigen::ArrayXd> w_prev(n_grid), beta_prev(n_grid), gam_prev(n_grid), covar_prev(n_grid);
 		std::vector<double> i_logw(n_grid, -1*std::numeric_limits<double>::max());
 
 		for (int nn = 0; nn < n_grid; nn++) {
-			all_tracker[nn].init_interim_output(nn, round_index, n_effects, n_env, env_names, all_vp[nn]);
+			all_tracker[nn].init_interim_output(nn, round_index, n_effects, n_covar, n_env, env_names, all_vp[nn]);
 		}
 
 		// SQUAREM objects
@@ -431,9 +431,10 @@ public:
 		int count = p.vb_iter_start;
 		while(!all_converged && count < p.vb_iter_max) {
 			for (int nn = 0; nn < n_grid; nn++) {
-				alpha_prev[nn] = all_vp[nn].alpha_beta;
+				if(n_covar > 0) covar_prev[nn] = all_vp[nn].mean_covars().array();
 				beta_prev[nn] = all_vp[nn].mean_beta().array();
 				if(n_env > 0) gam_prev[nn] = all_vp[nn].mean_gam().array();
+				if(n_env > 1) w_prev[nn] = all_vp[nn].mean_weights().array();
 			}
 			std::vector<double> logw_prev = i_logw;
 
@@ -470,20 +471,21 @@ public:
 			}
 
 			// update elbo
-			std::vector<double> alpha_diff(n_grid), beta_diff(n_grid), gam_diff(n_grid);
+			std::vector<double> alpha_diff(n_grid), beta_diff(n_grid), gam_diff(n_grid), covar_diff(n_grid), w_diff(n_grid);;
 			for (int nn = 0; nn < n_grid; nn++) {
 				i_logw[nn]     = calc_logw(all_hyps[nn], all_vp[nn]);
-				alpha_diff[nn] = (alpha_prev[nn] - all_vp[nn].alpha_beta).abs().maxCoeff();
+				if(n_covar > 0) covar_diff[nn] = (covar_prev[nn] - all_vp[nn].mean_covars().array()).abs().maxCoeff();
 				beta_diff[nn] = (beta_prev[nn] - all_vp[nn].mean_beta().array()).abs().maxCoeff();
 				if(n_env > 0) gam_diff[nn] = (gam_prev[nn] - all_vp[nn].mean_gam().array()).abs().maxCoeff();
+				if(n_env > 1) w_diff[nn] = (w_prev[nn] - all_vp[nn].mean_weights().array()).abs().maxCoeff();
 			}
 
 			// Interim output
 			for (int nn = 0; nn < n_grid; nn++) {
 				all_hyps[nn].update_pve();
 				all_tracker[nn].push_interim_hyps(count, all_hyps[nn], i_logw[nn],
-				                                  alpha_diff[nn], beta_diff[nn], gam_diff[nn], n_effects,
-				                                  n_var, n_env, all_vp[nn]);
+				                                  covar_diff[nn], beta_diff[nn], gam_diff[nn], w_diff[nn], n_effects,
+				                                  n_var, n_covar, n_env, all_vp[nn]);
 				if (p.param_dump_interval > 0 && count % p.param_dump_interval == 0) {
 					all_tracker[nn].dump_state(count, n_samples, n_covar, n_var,
 					                           n_env, n_effects,
@@ -1837,7 +1839,7 @@ public:
 		return res;
 	}
 
-	int getValueRAM(){                 //Note: this value is in KB!
+	int getValueRAM(){                                                     //Note: this value is in KB!
 #ifndef OSX
 		FILE* file = fopen("/proc/self/status", "r");
 		int result = -1;

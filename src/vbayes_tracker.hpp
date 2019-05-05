@@ -34,10 +34,10 @@ namespace boost_io = boost::iostreams;
 
 class VbTracker {
 public:
-	int count;                                // Number of iterations to convergence at each step
-	VariationalParametersLite vp;                 // best mu at each ii
-	double logw;                                 // best logw at each ii
-	Hyps hyps;                                  // hyps values at end of VB inference.
+	int count;                                            // Number of iterations to convergence at each step
+	VariationalParametersLite vp;                             // best mu at each ii
+	double logw;                                             // best logw at each ii
+	Hyps hyps;                                              // hyps values at end of VB inference.
 
 	parameters p;
 
@@ -70,6 +70,7 @@ public:
 	void init_interim_output(const int ii,
 	                         const int round_index,
 	                         const int n_effects,
+	                         const int n_covar,
 	                         const int n_env,
 	                         std::vector< std::string > env_names,
 	                         const VariationalParameters& vp){
@@ -115,20 +116,24 @@ public:
 		}
 		outf_iter << "\ts_x";
 		if(n_effects > 1) outf_iter << "\ts_z";
-		outf_iter << "\tvar_covar";
-		outf_iter << "\telbo\tmax_alpha_diff\tmax_beta_diff";
+		outf_iter << "\tvar_covar\telbo";
+		if (n_covar > 0) outf_iter << "\tmax_covar_diff";
+		outf_iter << "\tmax_beta_diff";
 		if (n_env > 0) outf_iter << "\tmax_gam_diff";
+		if (n_env > 1) outf_iter << "\tmax_w_diff";
 		outf_iter << "\tsecs" << std::endl;
 	}
 
 	void push_interim_hyps(const int& cnt,
 	                       const Hyps& i_hyps,
 	                       const double& c_logw,
-	                       const double& alpha_diff,
+	                       const double& covar_diff,
 	                       const double& beta_diff,
 	                       const double& gam_diff,
+	                       const double& w_diff,
 	                       const int& n_effects,
 	                       const unsigned long& n_var,
+	                       const unsigned long& n_covar,
 	                       const unsigned long& n_env,
 	                       const VariationalParameters& vp) {
 		// Diagnostics + env-weights from latest vb iteration
@@ -163,9 +168,10 @@ public:
 		}
 		outf_iter << vp.muc.square().sum() << "\t";
 		outf_iter << c_logw << "\t";
-		outf_iter << alpha_diff << "\t";
+		if (n_covar > 0) outf_iter << covar_diff << "\t";
 		outf_iter << beta_diff << "\t";
 		if (n_env > 0) outf_iter << gam_diff << "\t";
+		if (n_env > 1) outf_iter << w_diff << "\t";
 		outf_iter << lapsecs.count() << std::endl;
 
 		if(n_effects > 1) {
