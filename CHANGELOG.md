@@ -2,6 +2,9 @@
 
 - Testing accelerated CAVI for main effects only
 - Option to run CAVI for a few iterations before starting CAVI
+- bugfix; set default alpha_tol
+- set initial s_x when n_env=0, 1, >1
+- Option to pass hyps grid of the form "h_b h_g" etc
 
 # Version 0.10.7
 

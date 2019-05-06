@@ -22,12 +22,16 @@ double Hyps::normL2() const {
 }
 
 bool Hyps::domain_is_valid() const {
+	assert((p.beta_prior == "MixOfGaussian" && p.gamma_prior == "MixOfGaussian") ||
+				   (!(p.beta_prior == "MixOfGaussian") && !(p.gamma_prior == "MixOfGaussian")));
 	bool res = true;
 	if (sigma <= 0) res = false;
-	if (slab_relative_var.minCoeff() <= 0) res = false;
 	if (slab_var.minCoeff() <= 0) res = false;
-	if (lambda.minCoeff() <= 0) res = false;
-	if (lambda.maxCoeff() >= 1) res = false;
+	if (p.beta_prior == "MixOfGaussian" || p.gamma_prior == "MixOfGaussian") {
+		if (slab_relative_var.minCoeff() <= 0) res = false;
+		if (lambda.minCoeff() <= 0) res = false;
+		if (lambda.maxCoeff() >= 1) res = false;
+	}
 	return res;
 }
 
@@ -75,15 +79,8 @@ void Hyps::init_from_grid(int my_n_effects, int ii, int n_var, const Eigen::Ref<
 	double my_lam_b = hyps_grid(ii, lam_b_ind);
 	double my_lam_g = hyps_grid(ii, lam_g_ind);
 
-	// Resize
-	slab_var.resize(n_effects);
-	spike_var.resize(n_effects);
-	slab_relative_var.resize(n_effects);
-	spike_relative_var.resize(n_effects);
-	lambda.resize(n_effects);
-	s_x.resize(n_effects);
-
 	// Assign initial hyps
+	resize(my_n_effects);
 	if(n_effects == 1) {
 		sigma = my_sigma;
 		slab_var << my_sigma * my_sigma_b;

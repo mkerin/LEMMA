@@ -46,14 +46,14 @@ public:
 		                                           "lambda_b", "lambda_g"};
 
 // sizes
-	int n_effects;                                                                                                                                                                // no. interaction variables + 1
+	int n_effects;                                                                                                                                                                        // no. interaction variables + 1
 	std::uint32_t n_samples;
 	unsigned long n_covar;
 	unsigned long n_env;
 	std::uint32_t n_var;
 	std::uint32_t n_var2;
 	bool run_round1;
-	double N;                                                                                                                                                                 // (double) n_samples
+	double N;                                                                                                                                                                         // (double) n_samples
 
 // Chromosomes in data
 	int n_chrs;
@@ -71,17 +71,17 @@ public:
 	std::vector< std::vector < std::uint32_t > > main_back_pass_chunks, gxe_back_pass_chunks;
 	std::vector< int > env_fwd_pass;
 	std::vector< int > env_back_pass;
-	std::map<long, Eigen::MatrixXd> D_correlations;                                                                                                                                                                 //We can keep D^t D for the main effects
+	std::map<long, Eigen::MatrixXd> D_correlations;                                                                                                                                                                         //We can keep D^t D for the main effects
 
 // Data
 	GenotypeMatrix&  X;
-	EigenDataVector Y;                                                                                                                                                                           // residual phenotype matrix
-	EigenDataArrayX Cty;                                                                                                                                                                          // vector of C^T x y where C the matrix of covariates
-	EigenDataArrayXX E;                                                                                                                                                                          // matrix of variables used for GxE interactions
-	EigenDataMatrix& C;                                                                                                                                                                          // matrix of covariates (superset of GxE variables)
-	Eigen::MatrixXd XtE;                                                                                                                                                                          // matrix of covariates (superset of GxE variables)
+	EigenDataVector Y;                                                                                                                                                                                   // residual phenotype matrix
+	EigenDataArrayX Cty;                                                                                                                                                                                  // vector of C^T x y where C the matrix of covariates
+	EigenDataArrayXX E;                                                                                                                                                                                  // matrix of variables used for GxE interactions
+	EigenDataMatrix& C;                                                                                                                                                                                  // matrix of covariates (superset of GxE variables)
+	Eigen::MatrixXd XtE;                                                                                                                                                                                  // matrix of covariates (superset of GxE variables)
 
-	Eigen::ArrayXXd& dXtEEX;                                                                                                                                                                     // P x n_env^2; col (l * n_env + m) is the diagonal of X^T * diag(E_l * E_m) * X
+	Eigen::ArrayXXd& dXtEEX;                                                                                                                                                                             // P x n_env^2; col (l * n_env + m) is the diagonal of X^T * diag(E_l * E_m) * X
 
 // genome wide scan computed upstream
 	Eigen::ArrayXXd& snpstats;
@@ -105,8 +105,8 @@ public:
 		C(dat.C),
 		dXtEEX(dat.dXtEEX),
 		snpstats(dat.snpstats),
-		p(dat.params),
-		GLOBAL_map_vp(dat.params),
+		p(dat.p),
+		GLOBAL_map_vp(dat.p),
 		hyps_inits(dat.hyps_inits),
 		vp_init(dat.vp_init){
 		std::cout << "Initialising vbayes object" << std::endl;
@@ -133,7 +133,6 @@ public:
 
 		X.calc_scaled_values();
 
-
 		if(p.user_requests_round1) {
 			run_round1     = true;
 		} else {
@@ -155,6 +154,32 @@ public:
 			std::cout << "Computing XtE" << std::endl;
 			XtE = X.transpose_multiply(E);
 			std::cout << "XtE computed" << std::endl;
+		}
+
+		// When n_env > 1 this gets set when in updateEnvWeights
+		if(n_env == 0) {
+			for (auto &hyps : hyps_inits) {
+				hyps.s_x << n_var;
+			}
+		} else if(n_env == 1) {
+			for (auto &hyps : hyps_inits) {
+				hyps.s_x << n_var, n_var;
+				// hyps.s_x << n_var, dXtEEX.col(0).sum() / (n_samples - 1.0);
+			}
+		} else {
+			// Eigen::ArrayXd muw_sq(n_env * n_env);
+			// for (int ll = 0; ll < n_env; ll++) {
+			//  for (int mm = 0; mm < n_env; mm++) {
+			//      muw_sq(mm*n_env + ll) = vp_init.mean_weights(mm) * vp_init.mean_weights(ll);
+			//  }
+			// }
+
+			for (auto &hyps : hyps_inits) {
+				hyps.s_x << n_var, n_var;
+				// hyps.s_x[0] = n_var;
+				// hyps.s_x(1) = (dXtEEX.rowwise() * muw_sq.transpose()).sum() / (N - 1.0);
+				// hyps.s_x(1) -= (XtE * vp_init.mean_weights().matrix()).array().square().sum() / N / (N - 1.0);
+			}
 		}
 
 		// Allocate memory - fwd/back pass vectors
@@ -552,6 +577,8 @@ public:
 		for (int nn = 0; nn < n_grid; nn++) {
 			VariationalParameters vp = vp_init;
 			vp.set_hyps(all_hyps[nn]);
+			vp.update_pve(n_env);
+
 			if(n_effects > 1) {
 				vp.calcEdZtZ(dXtEEX, n_env);
 			}
@@ -1414,7 +1441,7 @@ public:
 		return res;
 	}
 
-	int getValueRAM(){                                                                                                                                                                 //Note: this value is in KB!
+	int getValueRAM(){                                                                                                                                                                         //Note: this value is in KB!
 #ifndef OSX
 		FILE* file = fopen("/proc/self/status", "r");
 		int result = -1;

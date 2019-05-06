@@ -137,15 +137,30 @@ void VariationalParameters::check_nan(const double& alpha,
 	}
 }
 
-void VariationalParameters::set_hyps(Hyps hyps){
+void VariationalParameters::set_hyps(const Hyps& hyps){
+	s_x = hyps.s_x;
 	sigma = hyps.sigma;
-	Eigen::ArrayXd tmp(3);
-	tmp << hyps.lambda(0), hyps.slab_var(0), hyps.spike_var(0);
-	betas->set_hyps(tmp);
+	Eigen::ArrayXd tmp;
+	if(p.beta_prior == "MixOfGaussian") {
+		tmp.resize(3);
+		tmp << hyps.lambda(0), hyps.slab_var(0), hyps.spike_var(0);
+		betas->set_hyps(tmp);
+	} else {
+		tmp.resize(1);
+		tmp << hyps.slab_var(0);
+		betas->set_hyps(tmp);
+	}
 
-	if(hyps.lambda.size() > 1) {
-		tmp << hyps.lambda(1), hyps.slab_var(1), hyps.spike_var(1);
-		gammas->set_hyps(tmp);
+	if(hyps.slab_var.size() > 1) {
+		if(p.gamma_prior == "MixOfGaussian") {
+			tmp.resize(3);
+			tmp << hyps.lambda(1), hyps.slab_var(1), hyps.spike_var(1);
+			gammas->set_hyps(tmp);
+		} else {
+			tmp.resize(1);
+			tmp << hyps.slab_var(1);
+			gammas->set_hyps(tmp);
+		}
 
 		tmp.resize(1);
 		tmp << hyps.sigma_w;

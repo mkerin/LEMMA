@@ -111,6 +111,7 @@ public:
 		alpha_tol_set_by_user = false;
 		elbo_tol_set_by_user = false;
 		elbo_tol = 0.01;
+		alpha_tol = 0.001;
 		keep_constant_variants = false;
 		user_requests_round1 = false;
 		scale_pheno = true;

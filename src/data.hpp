@@ -47,39 +47,39 @@ inline void read_file_header(const std::string& filename,
 class Data
 {
 public:
-	parameters params;
+	parameters p;
 
 
-	long n_pheno;                                     // number of phenotypes
-	long n_covar;                                     // number of covariates
-	long n_env;                                     // number of env variables
-	int n_effects;                                       // number of environmental interactions
-	long n_samples;                                     // number of samples
+	long n_pheno;                                                                             // number of phenotypes
+	long n_covar;                                                                             // number of covariates
+	long n_env;                                                                             // number of env variables
+	int n_effects;                                                                               // number of environmental interactions
+	long n_samples;                                                                             // number of samples
 	long n_var;
-	long n_var_parsed;                                     // Track progress through IndexQuery
+	long n_var_parsed;                                                                             // Track progress through IndexQuery
 	long int n_dxteex_computed;
 	long int n_snpstats_computed;
 
-	bool Y_reduced;                                       // Variables to track whether we have already
-	bool W_reduced;                                       // reduced to complete cases or not.
+	bool Y_reduced;                                                                               // Variables to track whether we have already
+	bool W_reduced;                                                                               // reduced to complete cases or not.
 	bool E_reduced;
 
 	std::vector< std::string > external_dXtEEX_SNPID;
 	std::vector< std::string > rsid_list;
 
-	std::map<int, bool> missing_envs;                                       // set of subjects missing >= 1 env variables
-	std::map<int, bool> missing_covars;                                     // set of subjects missing >= 1 covariate
-	std::map<int, bool> missing_phenos;                                     // set of subjects missing >= phenotype
-	std::map< std::size_t, bool > incomplete_cases;                                     // union of samples missing data
+	std::map<int, bool> missing_envs;                                                                               // set of subjects missing >= 1 env variables
+	std::map<int, bool> missing_covars;                                                                             // set of subjects missing >= 1 covariate
+	std::map<int, bool> missing_phenos;                                                                             // set of subjects missing >= phenotype
+	std::map< std::size_t, bool > incomplete_cases;                                                                             // union of samples missing data
 
 	std::vector< std::string > pheno_names;
 	std::vector< std::string > covar_names;
 	std::vector< std::string > env_names;
 
 	GenotypeMatrix G;
-	EigenDataMatrix Y, Y2;                                     // phenotype matrix (#2 always has covars regressed)
-	EigenDataMatrix C;                                     // covariate matrix
-	EigenDataMatrix E;                                     // env matrix
+	EigenDataMatrix Y, Y2;                                                                             // phenotype matrix (#2 always has covars regressed)
+	EigenDataMatrix C;                                                                             // covariate matrix
+	EigenDataMatrix E;                                                                             // env matrix
 	Eigen::ArrayXXd dXtEEX;
 	Eigen::ArrayXXd external_dXtEEX;
 
@@ -107,15 +107,15 @@ public:
 	Eigen::MatrixXd r1_hyps_grid, hyps_grid;
 	Eigen::ArrayXXd alpha_init, mu_init;
 
-	explicit Data( const parameters& p ) : params(p), G(p), vp_init(p) {
-		Eigen::setNbThreads(params.n_thread);
+	explicit Data( const parameters& p ) : p(p), G(p), vp_init(p) {
+		Eigen::setNbThreads(p.n_thread);
 		int n = Eigen::nbThreads( );
 		std::cout << "Threads used by eigen: " << n << std::endl;
 
 
 		// Create vector of bgen views for mutlithreading
 		bgenView = genfile::bgen::View::create(p.bgen_file);
-		for (int nn = 0; nn < params.n_bgen_thread; nn++) {
+		for (int nn = 0; nn < p.n_bgen_thread; nn++) {
 			genfile::bgen::View::UniquePtr bgenView = genfile::bgen::View::create(p.bgen_file);
 			bgenViews.push_back(std::move(bgenView));
 		}
@@ -130,7 +130,7 @@ public:
 		n_effects = -1;
 		n_covar   = 0;
 		n_env     = 0;
-		n_var     = 0;
+		n_var     = bgenView->number_of_variants();
 		Y_reduced = false;
 		W_reduced = false;
 	}
@@ -141,63 +141,63 @@ public:
 
 	void apply_filters(){
 		// filter - incl sample ids
-		if(params.incl_sids_file != "NULL") {
+		if(p.incl_sids_file != "NULL") {
 			read_incl_sids();
 		}
 
 		// filter - init queries
-		genfile::bgen::IndexQuery::UniquePtr query = genfile::bgen::IndexQuery::create(params.bgi_file);
+		genfile::bgen::IndexQuery::UniquePtr query = genfile::bgen::IndexQuery::create(p.bgi_file);
 		std::vector<genfile::bgen::IndexQuery::UniquePtr> queries;
-		for (int nn = 0; nn < params.n_bgen_thread; nn++) {
-			genfile::bgen::IndexQuery::UniquePtr my_query = genfile::bgen::IndexQuery::create(params.bgi_file);
+		for (int nn = 0; nn < p.n_bgen_thread; nn++) {
+			genfile::bgen::IndexQuery::UniquePtr my_query = genfile::bgen::IndexQuery::create(p.bgi_file);
 			queries.push_back(move(my_query));
 		}
 
 		// filter - range
-		if (params.range) {
+		if (p.range) {
 			std::cout << "Selecting range..." << std::endl;
-			genfile::bgen::IndexQuery::GenomicRange rr1(params.chr, params.range_start, params.range_end);
+			genfile::bgen::IndexQuery::GenomicRange rr1(p.chr, p.range_start, p.range_end);
 			query->include_range( rr1 );
 
-			for (int nn = 0; nn < params.n_bgen_thread; nn++) {
+			for (int nn = 0; nn < p.n_bgen_thread; nn++) {
 				queries[nn]->include_range( rr1 );
 			}
 		}
 
 		// filter - incl rsids
-		if(params.select_snps) {
+		if(p.select_snps) {
 			read_incl_rsids();
 			std::cout << "Filtering SNPs by rsid..." << std::endl;
 			query->include_rsids( rsid_list );
 
-			for (int nn = 0; nn < params.n_bgen_thread; nn++) {
+			for (int nn = 0; nn < p.n_bgen_thread; nn++) {
 				queries[nn]->include_rsids( rsid_list );
 			}
 		}
 
 		// filter - select single rsid
-		if(params.select_rsid) {
-			std::sort(params.rsid.begin(), params.rsid.end());
+		if(p.select_rsid) {
+			std::sort(p.rsid.begin(), p.rsid.end());
 			std::cout << "Filtering to rsids:" << std::endl;
-			long int n_rsids = params.rsid.size();
+			long int n_rsids = p.rsid.size();
 			for (long int kk = 0; kk < n_rsids; kk++) {
-				std::cout << params.rsid[kk]<< std::endl;
+				std::cout << p.rsid[kk]<< std::endl;
 			}
-			query->include_rsids( params.rsid );
+			query->include_rsids( p.rsid );
 
-			for (int nn = 0; nn < params.n_bgen_thread; nn++) {
-				queries[nn]->include_rsids( params.rsid );
+			for (int nn = 0; nn < p.n_bgen_thread; nn++) {
+				queries[nn]->include_rsids( p.rsid );
 			}
 		}
 
 		// filter - apply queries
 		query->initialise();
-		for (int nn = 0; nn < params.n_bgen_thread; nn++) {
+		for (int nn = 0; nn < p.n_bgen_thread; nn++) {
 			queries[nn]->initialise();
 		}
 
 		bgenView->set_query( query );
-		for (int nn = 0; nn < params.n_bgen_thread; nn++) {
+		for (int nn = 0; nn < p.n_bgen_thread; nn++) {
 			bgenViews[nn]->set_query( queries[nn] );
 		}
 
@@ -217,16 +217,17 @@ public:
 		read_pheno();
 
 		// Read in covariates if present
-		if(params.covar_file != "NULL") {
+		if(p.covar_file != "NULL") {
 			read_covar();
 		}
 
 		// Environmental vars - subset of covars
-		if(params.env_file != "NULL") {
+		if(p.env_file != "NULL") {
 			read_environment();
+			p.interaction_analysis = true;
 		}
 
-		if(!params.mode_no_gxe && params.interaction_analysis) {
+		if(!p.mode_no_gxe && p.interaction_analysis) {
 			n_effects = 2;
 		} else {
 			n_effects = 1;
@@ -236,15 +237,15 @@ public:
 		reduce_to_complete_cases();
 
 		// Read in hyperparameter values
-		if(params.hyps_grid_file != "NULL") {
+		if(p.hyps_grid_file != "NULL") {
 			read_hyps();
 		}
 
-		if(n_env > 1 && params.dxteex_file != "NULL") {
+		if(n_env > 1 && p.dxteex_file != "NULL") {
 			read_external_dxteex();
 		}
 
-		if(params.snpstats_file != "NULL") {
+		if(p.snpstats_file != "NULL") {
 			read_external_snpstats();
 		}
 	}
@@ -252,7 +253,7 @@ public:
 	void standardise_non_genetic_data(){
 		// Step 3; Center phenos, normalise covars
 		EigenUtils::center_matrix(Y);
-		if(params.scale_pheno) {
+		if(p.scale_pheno) {
 			std::cout << "Scaling phenotype" << std::endl;
 			EigenUtils::scale_matrix_and_remove_constant_cols( Y, n_pheno, pheno_names );
 		}
@@ -276,7 +277,7 @@ public:
 		 */
 
 		if (n_env > 0) {
-			if (params.use_vb_on_covars) {
+			if (p.use_vb_on_covars) {
 				if (n_covar > 0) {
 					regress_first_mat_from_second(C, "covars", covar_names, Y, "pheno");
 					regress_first_mat_from_second(C, "covars", covar_names, E, "env");
@@ -332,7 +333,7 @@ public:
 					env_sq_names.push_back(env_names[cols_to_remove[nn]] + "_sq");
 				}
 
-				if (params.mode_incl_squared_envs) {
+				if (p.mode_incl_squared_envs) {
 					std::cout << "Including squared env effects from: " << std::endl;
 					for (int ee : cols_to_remove) {
 						std::cout << env_names[ee] << std::endl;
@@ -349,7 +350,7 @@ public:
 
 					assert(n_covar == covar_names.size());
 					assert(n_covar == C.cols());
-				} else if (params.mode_remove_squared_envs) {
+				} else if (p.mode_remove_squared_envs) {
 					std::cout << "Projecting out squared dependance from: " << std::endl;
 					for (int ee : cols_to_remove) {
 						std::cout << env_names[ee] << std::endl;
@@ -382,16 +383,28 @@ public:
 
 	void read_full_bgen(){
 		std::cout << "Reading in BGEN" << std::endl;
-		params.chunk_size = bgenView->number_of_variants();
+		p.chunk_size = bgenView->number_of_variants();
 		MyTimer t_readFullBgen("BGEN parsed in %ts \n");
 
-		if(params.flip_high_maf_variants) {
+		if(p.flip_high_maf_variants) {
 			std::cout << "Flipping variants with MAF > 0.5" << std::endl;
 		}
 		t_readFullBgen.resume();
 		read_bgen_chunk();
 		t_readFullBgen.stop();
 		std::cout << "BGEN contained " << n_var << " variants." << std::endl;
+
+		// Set default hyper-parameters if not read from file
+		// Run read_hyps twice as some settings depend on n_var
+		// which changes depending on how many variants excluded due to maf etc.
+		if(p.hyps_grid_file != "NULL") {
+			read_hyps();
+		} else if(p.hyps_grid_file == "NULL") {
+			std::cout << "Initialising hyper-parameters with default settings" << std::endl;
+			Hyps hyps(p);
+			hyps.use_default_init(n_effects, n_var);
+			hyps_inits.push_back(hyps);
+		}
 	}
 
 	bool read_bgen_chunk() {
@@ -420,11 +433,11 @@ public:
 		int n_var_incomplete = 0;
 
 		// Resize genotype matrix
-		G.resize(n_samples, params.chunk_size);
+		G.resize(n_samples, p.chunk_size);
 
 		long int n_constant_variance = 0;
 		std::uint32_t jj = 0;
-		while ( jj < params.chunk_size && bgen_pass ) {
+		while ( jj < p.chunk_size && bgen_pass ) {
 			bgen_pass = bgenView->read_variant( &SNPID_j, &rsid_j, &chr_j, &pos_j, &alleles_j );
 			if (!bgen_pass) break;
 			n_var_parsed++;
@@ -464,7 +477,7 @@ public:
 			double maf_j = d1 / (2.0 * valid_count);
 
 			// Flip dosage vector if maf > 0.5
-			if(params.flip_high_maf_variants && maf_j > 0.5) {
+			if(p.flip_high_maf_variants && maf_j > 0.5) {
 				dosage_j = (2.0 - dosage_j);
 				for (std::uint32_t ii = 0; ii < n_samples; ii++) {
 					if (missing_genos.count(ii) > 0) {
@@ -488,17 +501,17 @@ public:
 			sigma = std::sqrt(sigma/(valid_count - 1.0));
 
 			// Filters
-			if (params.maf_lim && (maf_j < params.min_maf || maf_j > 1 - params.min_maf)) {
+			if (p.maf_lim && (maf_j < p.min_maf || maf_j > 1 - p.min_maf)) {
 				continue;
 			}
-			if (params.info_lim && info_j < params.min_info) {
+			if (p.info_lim && info_j < p.min_info) {
 				continue;
 			}
-			if(!params.keep_constant_variants && d1 < 5.0) {
+			if(!p.keep_constant_variants && d1 < 5.0) {
 				n_constant_variance++;
 				continue;
 			}
-			if(!params.keep_constant_variants && sigma <= 1e-12) {
+			if(!p.keep_constant_variants && sigma <= 1e-12) {
 				n_constant_variance++;
 				continue;
 			}
@@ -566,12 +579,12 @@ public:
 	void read_incl_rsids(){
 		boost_io::filtering_istream fg;
 		std::string gz_str = ".gz";
-		if (params.incl_rsids_file.find(gz_str) != std::string::npos) {
+		if (p.incl_rsids_file.find(gz_str) != std::string::npos) {
 			fg.push(boost_io::gzip_decompressor());
 		}
-		fg.push(boost_io::file_source(params.incl_rsids_file));
+		fg.push(boost_io::file_source(p.incl_rsids_file));
 		if (!fg) {
-			std::cout << "ERROR: " << params.incl_rsids_file << " not opened." << std::endl;
+			std::cout << "ERROR: " << p.incl_rsids_file << " not opened." << std::endl;
 			std::exit(EXIT_FAILURE);
 		}
 
@@ -593,12 +606,12 @@ public:
 	void read_incl_sids(){
 		boost_io::filtering_istream fg;
 		std::string gz_str = ".gz";
-		if (params.incl_sids_file.find(gz_str) != std::string::npos) {
+		if (p.incl_sids_file.find(gz_str) != std::string::npos) {
 			fg.push(boost_io::gzip_decompressor());
 		}
-		fg.push(boost_io::file_source(params.incl_sids_file));
+		fg.push(boost_io::file_source(p.incl_sids_file));
 		if (!fg) {
-			std::cout << "ERROR: " << params.incl_sids_file << " not opened." << std::endl;
+			std::cout << "ERROR: " << p.incl_sids_file << " not opened." << std::endl;
 			std::exit(EXIT_FAILURE);
 		}
 
@@ -722,7 +735,7 @@ public:
 
 	void read_pheno( ){
 		// Read phenotypes to Eigen matrix Y
-		EigenUtils::read_matrix(params.pheno_file, n_samples, Y, pheno_names, missing_phenos);
+		EigenUtils::read_matrix(p.pheno_file, n_samples, Y, pheno_names, missing_phenos);
 		n_pheno = Y.cols();
 		if(n_pheno != 1) {
 			std::cout << "ERROR: Only expecting one phenotype at a time." << std::endl;
@@ -732,21 +745,21 @@ public:
 
 	void read_covar( ){
 		// Read covariates to Eigen matrix C
-		EigenUtils::read_matrix(params.covar_file, n_samples, C, covar_names, missing_covars);
+		EigenUtils::read_matrix(p.covar_file, n_samples, C, covar_names, missing_covars);
 		n_covar = C.cols();
 		W_reduced = false;
 	}
 
 	void read_environment( ){
 		// Read covariates to Eigen matrix C
-		EigenUtils::read_matrix(params.env_file, n_samples, E, env_names, missing_envs);
+		EigenUtils::read_matrix(p.env_file, n_samples, E, env_names, missing_envs);
 		n_env = E.cols();
 		E_reduced = false;
 	}
 
 	void read_external_dxteex( ){
 		std::vector< std::string > col_names;
-		read_txt_file_w_context( params.dxteex_file, 6, external_dXtEEX,
+		read_txt_file_w_context( p.dxteex_file, 6, external_dXtEEX,
 		                         external_dXtEEX_SNPID, col_names);
 
 		if(external_dXtEEX.cols() != n_env * n_env) {
@@ -758,7 +771,7 @@ public:
 
 	void read_external_snpstats( ){
 		std::vector< std::string > col_names;
-		read_txt_file_w_context( params.snpstats_file, 8, external_snpstats,
+		read_txt_file_w_context( p.snpstats_file, 8, external_snpstats,
 		                         external_snpstats_SNPID, col_names);
 
 		if(external_snpstats.cols() != n_env + 3) {
@@ -913,7 +926,7 @@ public:
 		std::cout << " (" << n_snpstats_computed << " computed from raw data, ";
 		std::cout << n_var - n_snpstats_computed << " read from file)" << std::endl;
 
-		if(params.snpstats_file == "NULL") {
+		if(p.snpstats_file == "NULL") {
 			std::string ofile_scan = fstream_init(outf_scan, "", "_snpwise_scan");
 			std::cout << "Writing snp-wise scan to file " << ofile_scan << std::endl;
 
@@ -972,7 +985,7 @@ public:
 				}
 			}
 		}
-		if(params.dxteex_file != "NULL" && n_dxteex_computed < n_var) {
+		if(p.dxteex_file != "NULL" && n_dxteex_computed < n_var) {
 			mean_ae /= (double) se_cnt;
 			std::cout << "Checking correlations from first 100 SNPs" << std::endl;
 			std::cout << " - max absolute error = " << max_ae << std::endl;
@@ -983,22 +996,29 @@ public:
 
 	void read_hyps(){
 		// For use in vbayes object
+		hyps_inits.clear();
+		hyps_names.clear();
+
 
 		std::vector< std::string > case1 = {"sigma", "sigma_b", "lambda_b"};
 		std::vector< std::string > case2 = {"sigma", "sigma_b", "sigma_g", "lambda_b", "lambda_g"};
 		std::vector< std::string > case3 = {"hyp", "value"};
+		std::vector< std::string > case4a = {"h_b"};
+		std::vector< std::string > case4b = {"h_b", "h_g"};
+		std::vector< std::string > case4c = {"h_b", "lambda_b", "f1_b"};
+		std::vector< std::string > case4d = {"h_b", "lambda_b", "f1_b", "h_g", "lambda_g", "f1_g"};
 
-		read_file_header(params.hyps_grid_file, hyps_names);
+//		read_file_header(p.hyps_grid_file, hyps_names);
 		int n_hyps_removed = 0;
+		EigenUtils::read_matrix(p.hyps_grid_file, hyps_grid, hyps_names);
+		long n_grid = hyps_grid.rows();
 
 		if(std::includes(hyps_names.begin(), hyps_names.end(), case1.begin(), case1.end())) {
-			assert(params.interaction_analysis);
-			EigenUtils::read_matrix(params.hyps_grid_file, hyps_grid, hyps_names);
+			assert(p.interaction_analysis);
 
 			// Unpack from grid to hyps object
-			long n_grid = hyps_grid.rows();
 			for (int ii = 0; ii < n_grid; ii++) {
-				Hyps hyps(params);
+				Hyps hyps(p);
 				hyps.init_from_grid(n_effects, ii, n_var, hyps_grid);
 				if(hyps.domain_is_valid()) {
 					hyps_inits.push_back(hyps);
@@ -1007,9 +1027,8 @@ public:
 				}
 			}
 		} else if(std::includes(hyps_names.begin(), hyps_names.end(), case2.begin(), case2.end())) {
-			EigenUtils::read_matrix(params.hyps_grid_file, hyps_grid, hyps_names);
 			// If not interaction analysis check interaction hyps are zero
-			if(!params.interaction_analysis) {
+			if(!p.interaction_analysis) {
 				double sigma_g_sum  = hyps_grid.col(2).array().abs().sum();
 				double lambda_g_sum = hyps_grid.col(4).array().abs().sum();
 				if(sigma_g_sum > 1e-6 || lambda_g_sum > 1e-6) {
@@ -1019,9 +1038,8 @@ public:
 			}
 
 			// Unpack from grid to hyps object
-			long n_grid = hyps_grid.rows();
 			for (int ii = 0; ii < n_grid; ii++) {
-				Hyps hyps(params);
+				Hyps hyps(p);
 				hyps.init_from_grid(n_effects, ii, n_var, hyps_grid);
 				if(hyps.domain_is_valid()) {
 					hyps_inits.push_back(hyps);
@@ -1031,9 +1049,92 @@ public:
 			}
 		} else if(hyps_names == case3) {
 			// Reading from hyps dump
-			Hyps hyps(params);
-			hyps.read_from_dump(params.hyps_grid_file);
+			Hyps hyps(p);
+			hyps.read_from_dump(p.hyps_grid_file);
 			hyps_inits.push_back(hyps);
+		} else if(hyps_names == case4a) {
+			// h_b
+			assert(p.beta_prior == "Gaussian");
+
+			for (int ii = 0; ii < n_grid; ii++) {
+				Hyps hyps(p);
+				hyps.resize(1);
+				hyps.sigma = 1 - hyps_grid(ii, 0);
+				hyps.slab_var << hyps_grid(ii, 0) / n_var;
+				hyps.slab_relative_var << hyps.slab_var / hyps.sigma;
+				if(hyps.domain_is_valid()) {
+					hyps_inits.push_back(hyps);
+				} else {
+					n_hyps_removed++;
+				}
+			}
+		} else if(hyps_names == case4b) {
+			// h_b h_g
+			assert(p.interaction_analysis);
+			assert(p.beta_prior == "Gaussian");
+			assert(p.gamma_prior == "Gaussian");
+
+			for (int ii = 0; ii < n_grid; ii++) {
+				Hyps hyps(p);
+				hyps.resize(2);
+				hyps.sigma = 1 - hyps_grid(ii, 0) - hyps_grid(ii, 1);
+				hyps.slab_var << hyps_grid(ii, 0) / n_var, hyps_grid(ii, 1) / n_var;
+				hyps.slab_relative_var << hyps.slab_var / hyps.sigma;
+				if(hyps.domain_is_valid()) {
+					hyps_inits.push_back(hyps);
+				} else {
+					n_hyps_removed++;
+				}
+			}
+		} else if(hyps_names == case4c) {
+			// h_b lambda_b f1_b
+			assert(p.beta_prior == "MixOfGaussian");
+
+			for (int ii = 0; ii < n_grid; ii++) {
+				Hyps hyps(p);
+				hyps.resize(1);
+				hyps.sigma = 1 - hyps_grid(ii, 0);
+
+				Eigen::VectorXd soln = hyps.get_sigmas(hyps_grid(ii, 0), hyps_grid(ii, 1), hyps_grid(ii, 2), n_var);
+				hyps.slab_var << hyps.sigma * soln[0];
+				hyps.spike_var << hyps.sigma * soln[1];
+				hyps.lambda << hyps_grid(ii, 1);
+				hyps.s_x << n_var;
+
+				hyps.slab_relative_var << hyps.slab_var / hyps.sigma;
+				hyps.spike_relative_var << hyps.spike_var / hyps.sigma;
+				if(hyps.domain_is_valid()) {
+					hyps_inits.push_back(hyps);
+				} else {
+					n_hyps_removed++;
+				}
+			}
+		} else if(hyps_names == case4d) {
+			// h_b lambda_b f1_b h_g lambda_g f1_g
+			assert(p.interaction_analysis);
+			assert(p.beta_prior == "MixOfGaussian");
+			assert(p.gamma_prior == "MixOfGaussian");
+
+			for (int ii = 0; ii < n_grid; ii++) {
+				Hyps hyps(p);
+				hyps.resize(2);
+				hyps.sigma = 1 - hyps_grid(ii, 0) - hyps_grid(ii, 3);
+
+				Eigen::VectorXd soln = hyps.get_sigmas(hyps_grid(ii, 0), hyps_grid(ii, 3), hyps_grid(ii, 1),
+				                                  hyps_grid(ii, 4), hyps_grid(ii, 2), hyps_grid(ii, 5), n_var);
+				hyps.slab_var << hyps.sigma * soln[0], hyps.sigma * soln[2];
+				hyps.spike_var << hyps.sigma * soln[1], hyps.sigma * soln[3];
+				hyps.lambda << hyps_grid(ii, 1), hyps_grid(ii, 4);
+				hyps.s_x << n_var, n_var;
+
+				hyps.slab_relative_var << hyps.slab_var / hyps.sigma;
+				hyps.spike_relative_var << hyps.spike_var / hyps.sigma;
+				if(hyps.domain_is_valid()) {
+					hyps_inits.push_back(hyps);
+				} else {
+					n_hyps_removed++;
+				}
+			}
 		}
 
 		if(n_hyps_removed > 0) {
@@ -1086,12 +1187,12 @@ public:
 		case3.insert(case3.end(),latents2.begin(),latents2.end());
 
 		std::vector<std::string> vb_init_colnames;
-		read_file_header(params.vb_init_file, vb_init_colnames);
+		read_file_header(p.vb_init_file, vb_init_colnames);
 
 		Eigen::MatrixXd vb_init_mat;
 		std::vector< std::string > init_key;
 		if(vb_init_colnames == case1) {
-			EigenUtils::read_matrix(params.vb_init_file, vb_init_mat, vb_init_colnames);
+			EigenUtils::read_matrix(p.vb_init_file, vb_init_mat, vb_init_colnames);
 			assert(vb_init_mat.rows() == 2 * n_var);
 
 			alpha_init = Eigen::Map<Eigen::ArrayXXd>(vb_init_mat.col(0).data(), n_var, n_effects);
@@ -1106,7 +1207,7 @@ public:
 //			vp_init.mu1_gam       = mu_init.col(1);
 			}
 		} else if (vb_init_colnames == case2) {
-			read_vb_init_file(params.vb_init_file, vb_init_mat, vb_init_colnames,
+			read_vb_init_file(p.vb_init_file, vb_init_mat, vb_init_colnames,
 			                  init_key);
 			std::cout << "--vb_init file with contextual information detected" << std::endl;
 			std::cout << "Warning: This will be O(PL) where L = " << vb_init_mat.rows();
@@ -1132,7 +1233,7 @@ public:
 				}
 			}
 		} else if(vb_init_colnames == case3) {
-			EigenUtils::read_matrix_and_skip_cols(params.vb_init_file, 1, vb_init_mat, vb_init_colnames);
+			EigenUtils::read_matrix_and_skip_cols(p.vb_init_file, 1, vb_init_mat, vb_init_colnames);
 			assert(vb_init_mat.rows() == n_var);
 
 			vp_init.betas->read_from_grid(vb_init_mat.block(0, 0, n_var, 5));
@@ -1150,7 +1251,7 @@ public:
 //		vp_init.s2_gam_sq = vb_init_mat.col(9);
 		} else {
 			// Unknown header
-			std::cout << "Unknown header in " << params.vb_init_file << std::endl;
+			std::cout << "Unknown header in " << p.vb_init_file << std::endl;
 			std::cout << "Expected headers are:" << std::endl;
 			for (auto ss : case1) std::cout << ss << " ";
 			std::cout << std::endl;
@@ -1166,38 +1267,38 @@ public:
 		vp_init.run_default_init(n_var, n_covar, n_env);
 
 		// Manually set env coeffs
-		if(params.env_coeffs_file != "NULL") {
+		if(p.env_coeffs_file != "NULL") {
 			std::vector<std::string> col_names;
 			std::vector<std::string> case1 = {"env", "mu", "s_sq"};
-			read_file_header(params.env_coeffs_file, col_names);
+			read_file_header(p.env_coeffs_file, col_names);
 
 			Eigen::MatrixXd coeffs;
 			if(col_names == case1) {
-				EigenUtils::read_matrix_and_skip_cols(params.env_coeffs_file, 1, coeffs, col_names);
+				EigenUtils::read_matrix_and_skip_cols(p.env_coeffs_file, 1, coeffs, col_names);
 				vp_init.weights.read_from_grid(coeffs);
 			} else if(col_names.size() == 1) {
-				EigenUtils::read_matrix(params.env_coeffs_file, coeffs, col_names);
+				EigenUtils::read_matrix(p.env_coeffs_file, coeffs, col_names);
 				vp_init.weights.set_mean(coeffs.col(0));
 			} else {
 				throw std::runtime_error("Unexpected file to --environment_weights");
 			}
-		} else if (n_env > 1 && params.init_weights_with_snpwise_scan) {
+		} else if (n_env > 1 && p.init_weights_with_snpwise_scan) {
 			assert(false);
 			// calc_snpwise_regression(vp_init);
 		}
 
 		// Manually set covar coeffs
-		if(params.covar_coeffs_file != "NULL") {
+		if(p.covar_coeffs_file != "NULL") {
 			std::vector<std::string> col_names;
 			std::vector<std::string> case1 = {"covar", "mu", "s_sq"};
-			read_file_header(params.covar_coeffs_file, col_names);
+			read_file_header(p.covar_coeffs_file, col_names);
 
 			Eigen::MatrixXd coeffs;
 			if(col_names == case1) {
-				EigenUtils::read_matrix_and_skip_cols(params.covar_coeffs_file, 1, coeffs, col_names);
+				EigenUtils::read_matrix_and_skip_cols(p.covar_coeffs_file, 1, coeffs, col_names);
 				vp_init.covars.read_from_grid(coeffs);
 			} else if(col_names.size() == 1) {
-				EigenUtils::read_matrix(params.covar_coeffs_file, coeffs, col_names);
+				EigenUtils::read_matrix(p.covar_coeffs_file, coeffs, col_names);
 				vp_init.covars.set_mean(coeffs.col(0));
 			} else {
 				throw std::runtime_error("Unexpected file to --environment_weights");
@@ -1213,7 +1314,7 @@ public:
 		}
 
 		// Manually set coeffs for SNP latent variables
-		if(params.vb_init_file != "NULL") {
+		if(p.vb_init_file != "NULL") {
 			assign_vb_init_from_file(vp_init);
 		}
 	}
@@ -1324,7 +1425,7 @@ public:
 
 		std::cout << "Reduced to " << n_samples << " samples with complete data";
 		std::cout << " across covariates";
-		if(params.env_file != "NULL") std::cout << ", env-variables" << std::endl;
+		if(p.env_file != "NULL") std::cout << ", env-variables" << std::endl;
 		std::cout << " and phenotype." << std::endl;
 	}
 
@@ -1332,7 +1433,7 @@ public:
 	                         const std::string& file_prefix,
 	                         const std::string& file_suffix){
 
-		std::string filepath   = params.out_file;
+		std::string filepath   = p.out_file;
 		std::string dir        = filepath.substr(0, filepath.rfind('/')+1);
 		std::string stem_w_dir = filepath.substr(0, filepath.find('.'));
 		std::string stem       = stem_w_dir.substr(stem_w_dir.rfind('/')+1, stem_w_dir.size());
@@ -1342,7 +1443,7 @@ public:
 
 		my_outf.reset();
 		std::string gz_str = ".gz";
-		if (params.out_file.find(gz_str) != std::string::npos) {
+		if (p.out_file.find(gz_str) != std::string::npos) {
 			my_outf.push(boost_io::gzip_compressor());
 		}
 		my_outf.push(boost_io::file_sink(ofile));

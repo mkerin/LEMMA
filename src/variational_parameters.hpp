@@ -202,7 +202,7 @@ public:
 			eta_sq += my_E(index, ":").array().square().matrix() * weights.var().matrix();
 		}
 	}
-	void set_hyps(Hyps hyps);
+	void set_hyps(const Hyps& hyps);
 	void check_nan(const double& alpha, const std::uint32_t& ii);
 	void write_ith_beta_to_stream(long ii, std::ostream& outf) const {
 		betas->write_ith_distn_to_stream(ii, outf);
@@ -217,6 +217,11 @@ public:
 		return gammas->header(prefix);
 	}
 	void update_pve(long n_env){
+		if(n_env == 0) {
+			pve.resize(1);
+		} else {
+			pve.resize(2);
+		}
 		pve[0] = betas->get_hyps_var() * s_x[0];
 		if (n_env > 0) {
 			pve[1] = gammas->get_hyps_var() * s_x[1];
