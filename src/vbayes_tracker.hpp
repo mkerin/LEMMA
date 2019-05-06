@@ -226,11 +226,19 @@ public:
 		if(n_covar > 0) {
 			Ealpha += (C.matrix() * vp.muc.matrix().cast<scalarData>()).cast<double>();
 		}
-		outf_inits << "Y Ealpha Xbeta eta Xgamma";
+		outf_inits << "Y";
+		if (n_covar > 0) outf_inits << " Ealpha";
+		outf_inits << " Xbeta";
+		if (n_env > 0) outf_inits << " eta Xgamma";
 		outf_inits << std::endl;
 		for (std::uint32_t ii = 0; ii < n_samples; ii++) {
-			outf_inits << Y(ii) << " " << Ealpha(ii) << " " << vp.ym(ii) - Ealpha(ii);
-			outf_inits << " " << vp.eta(ii) << " " << vp.yx(ii);
+			outf_inits << Y(ii);
+			if (n_covar > 0){
+				outf_inits << " " << Ealpha(ii) << " " << vp.ym(ii) - Ealpha(ii);
+			} else {
+				outf_inits << " " << vp.ym(ii);
+			}
+			if (n_env > 0) outf_inits << " " << vp.eta(ii) << " " << vp.yx(ii);
 			outf_inits << std::endl;
 		}
 		boost_io::close(outf_inits);

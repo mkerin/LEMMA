@@ -50,36 +50,36 @@ public:
 	parameters p;
 
 
-	long n_pheno;                 // number of phenotypes
-	long n_covar;                 // number of covariates
-	long n_env;                 // number of env variables
-	int n_effects;                   // number of environmental interactions
-	long n_samples;                 // number of samples
+	long n_pheno;                                                                             // number of phenotypes
+	long n_covar;                                                                             // number of covariates
+	long n_env;                                                                             // number of env variables
+	int n_effects;                                                                               // number of environmental interactions
+	long n_samples;                                                                             // number of samples
 	long n_var;
-	long n_var_parsed;                 // Track progress through IndexQuery
+	long n_var_parsed;                                                                             // Track progress through IndexQuery
 	long int n_dxteex_computed;
 	long int n_snpstats_computed;
 
-	bool Y_reduced;                   // Variables to track whether we have already
-	bool W_reduced;                   // reduced to complete cases or not.
+	bool Y_reduced;                                                                               // Variables to track whether we have already
+	bool W_reduced;                                                                               // reduced to complete cases or not.
 	bool E_reduced;
 
 	std::vector< std::string > external_dXtEEX_SNPID;
 	std::vector< std::string > rsid_list;
 
-	std::map<int, bool> missing_envs;                   // set of subjects missing >= 1 env variables
-	std::map<int, bool> missing_covars;                 // set of subjects missing >= 1 covariate
-	std::map<int, bool> missing_phenos;                 // set of subjects missing >= phenotype
-	std::map< std::size_t, bool > incomplete_cases;                 // union of samples missing data
+	std::map<int, bool> missing_envs;                                                                               // set of subjects missing >= 1 env variables
+	std::map<int, bool> missing_covars;                                                                             // set of subjects missing >= 1 covariate
+	std::map<int, bool> missing_phenos;                                                                             // set of subjects missing >= phenotype
+	std::map< std::size_t, bool > incomplete_cases;                                                                             // union of samples missing data
 
 	std::vector< std::string > pheno_names;
 	std::vector< std::string > covar_names;
 	std::vector< std::string > env_names;
 
 	GenotypeMatrix G;
-	EigenDataMatrix Y, Y2;                 // phenotype matrix (#2 always has covars regressed)
-	EigenDataMatrix C;                 // covariate matrix
-	EigenDataMatrix E;                 // env matrix
+	EigenDataMatrix Y, Y2;                                                                             // phenotype matrix (#2 always has covars regressed)
+	EigenDataMatrix C;                                                                             // covariate matrix
+	EigenDataMatrix E;                                                                             // env matrix
 	Eigen::ArrayXXd dXtEEX;
 	Eigen::ArrayXXd external_dXtEEX;
 
@@ -129,7 +129,7 @@ public:
 		n_effects = -1;
 		n_covar   = 0;
 		n_env     = 0;
-		n_var     = 0;
+		n_var     = bgenView->number_of_variants();
 		Y_reduced = false;
 		W_reduced = false;
 	}
@@ -223,6 +223,7 @@ public:
 		// Environmental vars - subset of covars
 		if(p.env_file != "NULL") {
 			read_environment();
+			p.interaction_analysis = true;
 		}
 
 		if(!p.mode_no_gxe && p.interaction_analysis) {
@@ -393,7 +394,11 @@ public:
 		std::cout << "BGEN contained " << n_var << " variants." << std::endl;
 
 		// Set default hyper-parameters if not read from file
-		if(p.hyps_grid_file == "NULL") {
+		// Run read_hyps twice as some settings depend on n_var
+		// which changes depending on how many variants excluded due to maf etc.
+		if(p.hyps_grid_file != "NULL") {
+			read_hyps();
+		} else if(p.hyps_grid_file == "NULL") {
 			std::cout << "Initialising hyper-parameters with default settings" << std::endl;
 			Hyps hyps(p);
 			hyps.use_default_init(n_effects, n_var);
@@ -994,20 +999,25 @@ public:
 
 	void read_hyps(){
 		// For use in vbayes object
+		hyps_inits.clear();
+		hyps_names.clear();
+
 
 		std::vector< std::string > case1 = {"sigma", "sigma_b", "lambda_b"};
 		std::vector< std::string > case2 = {"sigma", "sigma_b", "sigma_g", "lambda_b", "lambda_g"};
 		std::vector< std::string > case3 = {"hyp", "value"};
+		std::vector< std::string > case4c = {"h_b", "lambda_b", "f1_b"};
+		std::vector< std::string > case4d = {"h_b", "lambda_b", "f1_b", "h_g", "lambda_g", "f1_g"};
 
 		read_file_header(p.hyps_grid_file, hyps_names);
 		int n_hyps_removed = 0;
 
-		if (std::includes(hyps_names.begin(), hyps_names.end(), case1.begin(), case1.end())) {
+		if(std::includes(hyps_names.begin(), hyps_names.end(), case1.begin(), case1.end())) {
 			assert(p.interaction_analysis);
 			EigenUtils::read_matrix(p.hyps_grid_file, hyps_grid, hyps_names);
+			long n_grid = hyps_grid.rows();
 
 			// Unpack from grid to hyps object
-			long n_grid = hyps_grid.rows();
 			for (int ii = 0; ii < n_grid; ii++) {
 				Hyps hyps(p);
 				hyps.init_from_grid(n_effects, ii, n_var, hyps_grid);
@@ -1017,11 +1027,13 @@ public:
 					n_hyps_removed++;
 				}
 			}
-		} else if (std::includes(hyps_names.begin(), hyps_names.end(), case2.begin(), case2.end())) {
-			EigenUtils::read_matrix(p.hyps_grid_file, hyps_grid, hyps_names);
+		} else if(std::includes(hyps_names.begin(), hyps_names.end(), case2.begin(), case2.end())) {
 			// If not interaction analysis check interaction hyps are zero
-			if (!p.interaction_analysis) {
-				double sigma_g_sum = hyps_grid.col(2).array().abs().sum();
+			EigenUtils::read_matrix(p.hyps_grid_file, hyps_grid, hyps_names);
+			long n_grid = hyps_grid.rows();
+
+			if(!p.interaction_analysis) {
+				double sigma_g_sum  = hyps_grid.col(2).array().abs().sum();
 				double lambda_g_sum = hyps_grid.col(4).array().abs().sum();
 				if (sigma_g_sum > 1e-6 || lambda_g_sum > 1e-6) {
 					std::cout << "WARNING: You have non-zero hyperparameters for interaction effects,";
@@ -1030,7 +1042,6 @@ public:
 			}
 
 			// Unpack from grid to hyps object
-			long n_grid = hyps_grid.rows();
 			for (int ii = 0; ii < n_grid; ii++) {
 				Hyps hyps(p);
 				hyps.init_from_grid(n_effects, ii, n_var, hyps_grid);
@@ -1045,6 +1056,56 @@ public:
 			Hyps hyps(p);
 			hyps.read_from_dump(p.hyps_grid_file);
 			hyps_inits.push_back(hyps);
+		} else if(hyps_names == case4c) {
+			// h_b lambda_b f1_b
+			EigenUtils::read_matrix(p.hyps_grid_file, hyps_grid, hyps_names);
+			long n_grid = hyps_grid.rows();
+
+			for (int ii = 0; ii < n_grid; ii++) {
+				Hyps hyps(p);
+				hyps.resize(1);
+				hyps.sigma = 1 - hyps_grid(ii, 0);
+
+				Eigen::VectorXd soln = hyps.get_sigmas(hyps_grid(ii, 0), hyps_grid(ii, 1), hyps_grid(ii, 2), n_var);
+				hyps.slab_var << hyps.sigma * soln[0];
+				hyps.spike_var << hyps.sigma * soln[1];
+				hyps.lambda << hyps_grid(ii, 1);
+				hyps.s_x << n_var;
+
+				hyps.slab_relative_var << hyps.slab_var / hyps.sigma;
+				hyps.spike_relative_var << hyps.spike_var / hyps.sigma;
+				if(hyps.domain_is_valid()) {
+					hyps_inits.push_back(hyps);
+				} else {
+					n_hyps_removed++;
+				}
+			}
+		} else if(hyps_names == case4d) {
+			// h_b lambda_b f1_b h_g lambda_g f1_g
+			assert(p.interaction_analysis);
+			EigenUtils::read_matrix(p.hyps_grid_file, hyps_grid, hyps_names);
+			long n_grid = hyps_grid.rows();
+
+			for (int ii = 0; ii < n_grid; ii++) {
+				Hyps hyps(p);
+				hyps.resize(2);
+				hyps.sigma = 1 - hyps_grid(ii, 0) - hyps_grid(ii, 3);
+
+				Eigen::VectorXd soln = hyps.get_sigmas(hyps_grid(ii, 0), hyps_grid(ii, 3), hyps_grid(ii, 1),
+				                                  hyps_grid(ii, 4), hyps_grid(ii, 2), hyps_grid(ii, 5), n_var);
+				hyps.slab_var << hyps.sigma * soln[0], hyps.sigma * soln[2];
+				hyps.spike_var << hyps.sigma * soln[1], hyps.sigma * soln[3];
+				hyps.lambda << hyps_grid(ii, 1), hyps_grid(ii, 4);
+				hyps.s_x << n_var, n_var;
+
+				hyps.slab_relative_var << hyps.slab_var / hyps.sigma;
+				hyps.spike_relative_var << hyps.spike_var / hyps.sigma;
+				if(hyps.domain_is_valid()) {
+					hyps_inits.push_back(hyps);
+				} else {
+					n_hyps_removed++;
+				}
+			}
 		}
 
 		if(n_hyps_removed > 0) {

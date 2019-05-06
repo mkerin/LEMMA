@@ -59,15 +59,15 @@ public:
 	double normL2() const;
 	bool domain_is_valid() const;
 	Eigen::VectorXd get_sigmas(double h_b, double h_g, double lam_b, double lam_g,
-	                           double f1_b, double f1_g, long n_var) const {
+							   double f1_b, double f1_g, long n_var) const {
 		Eigen::MatrixXd tmp(4, 4);
 		Eigen::VectorXd rhs(4);
 
 		double P = n_var;
 		tmp << P * lam_b * (1 - h_b), P * (1 - lam_b) * (1 - h_b), -P * h_b * lam_g, -P * h_b * (1 - lam_g),
-		    lam_b * (f1_b - 1), f1_b * (1 - lam_b), 0, 0,
-		    -P * h_g * lam_b, -P * h_g * (1 - lam_b), P * lam_g * (1 - h_g), P * (1 - lam_g) * (1 - h_g),
-		    0, 0, lam_g * (f1_g - 1), f1_g * (1 - lam_g);
+				lam_b * (f1_b - 1), f1_b * (1 - lam_b), 0, 0,
+				-P * h_g * lam_b, -P * h_g * (1 - lam_b), P * lam_g * (1 - h_g), P * (1 - lam_g) * (1 - h_g),
+				0, 0, lam_g * (f1_g - 1), f1_g * (1 - lam_g);
 		rhs << h_b, 0, h_g, 0;
 		Eigen::VectorXd soln = tmp.inverse() * rhs;
 		return soln;
@@ -78,7 +78,7 @@ public:
 
 		double P = n_var;
 		tmp << P * lam_b * (1 - h_b), P * (1 - lam_b) * (1 - h_b),
-		    lam_b * (f1_b - 1), f1_b * (1 - lam_b);
+				lam_b * (f1_b - 1), f1_b * (1 - lam_b);
 		rhs << h_b, 0;
 		Eigen::VectorXd soln = tmp.inverse() * rhs;
 		return soln;

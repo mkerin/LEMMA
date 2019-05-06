@@ -3,16 +3,32 @@
 //
 
 // tests-main.cpp
-#include "../src/hyps.hpp"
+//#define EIGEN_USE_MKL_ALL
+//
+//#include "../src/hyps.hpp"
+//#include "../src/variational_parameters.hpp"
+////#include "../src/vbayes_x2.hpp"
+////#include "../src/data.hpp"
+//
+//#include "catch.hpp"
+//#include "../src/tools/Eigen/Dense"
+//
+//#include <vector>
 
+#define EIGEN_USE_MKL_ALL
 #include "catch.hpp"
 
 #include <vector>
+#include "../src/tools/Eigen/Dense"
+#include "../src/parse_arguments.hpp"
+#include "../src/vbayes_x2.hpp"
+#include "../src/data.hpp"
+#include "../src/hyps.hpp"
 
 TEST_CASE("Hyps"){
 	parameters p;
-	SECTION("Copy constructor in vectors"){
 
+	SECTION("Copy constructor in vectors"){
 		Hyps hyps(p);
 		hyps.sigma = 1;
 		hyps.pve.resize(1);
@@ -53,5 +69,36 @@ TEST_CASE("Hyps"){
 		CHECK(hyps.spike_relative_var[0] == Approx(0.0001128936));
 		CHECK(hyps.slab_relative_var[1] == Approx(0.0002941176));
 		CHECK(hyps.spike_relative_var[1] == Approx(0.0000564468));
+	}
+
+	SECTION("derived initial hyps"){
+		p.bgen_file = "data/io_test/n50_p100.bgen";
+		p.bgi_file = "data/io_test/n50_p100.bgen.bgi";
+		p.pheno_file = "data/io_test/pheno.txt";
+
+
+		SECTION("Joint effects, MixOfGaussian prior"){
+			p.env_file = "data/io_test/n50_p100_env.txt";
+			p.hyps_grid_file = "data/io_test/hyps_caseD.txt";
+
+			Data data(p);
+			data.read_non_genetic_data();
+			data.standardise_non_genetic_data();
+			data.read_full_bgen();
+			data.calc_dxteex();
+			data.set_vb_init();
+
+			VBayesX2 VB(data);
+			std::vector<Hyps> all_hyps = VB.hyps_inits;
+			std::vector<VariationalParameters> all_vp;
+			VB.setup_variational_params(all_hyps, all_vp);
+
+			CHECK(all_vp.size() > 0);
+			CHECK(VB.n_var == 67);
+			CHECK(all_hyps[0].spike_var(0) == Approx(0.0029850746));
+			CHECK(all_hyps[0].slab_var(0) == Approx(0.0029850746));
+			CHECK(all_hyps[0].spike_var(1) == Approx(0.0014925373));
+			CHECK(all_hyps[0].slab_var(1) == Approx(0.0014925373));
+		}
 	}
 }
