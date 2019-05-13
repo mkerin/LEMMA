@@ -61,7 +61,7 @@ public:
 		                                           "lambda_b", "lambda_g"};
 
 // sizes
-	int n_effects;                                                    // no. interaction variables + 1
+	int n_effects;                                                        // no. interaction variables + 1
 	std::uint32_t n_samples;
 	unsigned long n_covar;
 	unsigned long n_env;
@@ -69,7 +69,7 @@ public:
 	std::uint32_t n_var2;
 	bool random_params_init;
 	bool run_round1;
-	double N;                                                     // (double) n_samples
+	double N;                                                         // (double) n_samples
 
 // Chromosomes in data
 	int n_chrs;
@@ -87,17 +87,17 @@ public:
 	std::vector< std::vector < std::uint32_t > > main_back_pass_chunks, gxe_back_pass_chunks;
 	std::vector< int > env_fwd_pass;
 	std::vector< int > env_back_pass;
-	std::map<unsigned long, Eigen::MatrixXd> D_correlations;                                                     //We can keep D^t D for the main effects
+	std::map<unsigned long, Eigen::MatrixXd> D_correlations;                                                         //We can keep D^t D for the main effects
 
 // Data
 	GenotypeMatrix&  X;
-	EigenDataVector Y;                                                               // residual phenotype matrix
-	EigenDataArrayX Cty;                                                              // vector of C^T x y where C the matrix of covariates
-	EigenDataArrayXX E;                                                              // matrix of variables used for GxE interactions
-	EigenDataMatrix& C;                                                              // matrix of covariates (superset of GxE variables)
-	Eigen::MatrixXd XtE;                                                              // matrix of covariates (superset of GxE variables)
+	EigenDataVector Y;                                                                   // residual phenotype matrix
+	EigenDataArrayX Cty;                                                                  // vector of C^T x y where C the matrix of covariates
+	EigenDataArrayXX E;                                                                  // matrix of variables used for GxE interactions
+	EigenDataMatrix& C;                                                                  // matrix of covariates (superset of GxE variables)
+	Eigen::MatrixXd XtE;                                                                  // matrix of covariates (superset of GxE variables)
 
-	Eigen::ArrayXXd& dXtEEX;                                                         // P x n_env^2; col (l * n_env + m) is the diagonal of X^T * diag(E_l * E_m) * X
+	Eigen::ArrayXXd& dXtEEX;                                                             // P x n_env^2; col (l * n_env + m) is the diagonal of X^T * diag(E_l * E_m) * X
 
 // Global location of y_m = E[X beta] and y_x = E[X gamma]
 	EigenDataMatrix YY, YX, YM, ETA, ETA_SQ;
@@ -1501,13 +1501,20 @@ public:
 		}
 
 		// Compute mean-centered residuals for each chromosome
-		for (auto cc : chrs_index) {
-			if (n_effects > 1) {
-				chr_residuals[cc] = map_residuals + pred_main[cc] + pred_int[cc].cwiseProduct(vp.eta.cast<double>());
-			} else {
-				chr_residuals[cc] = map_residuals + pred_main[cc];
+		if(p.drop_loco) {
+			for (auto cc : chrs_index) {
+				if (n_effects > 1) {
+					chr_residuals[cc] = map_residuals + pred_main[cc] + pred_int[cc].cwiseProduct(vp.eta.cast<double>());
+				} else {
+					chr_residuals[cc] = map_residuals + pred_main[cc];
+				}
+				chr_residuals[cc].array() -= chr_residuals[cc].mean();
 			}
-			chr_residuals[cc].array() -= chr_residuals[cc].mean();
+		} else {
+			for (auto cc : chrs_index) {
+				chr_residuals[cc] = map_residuals;
+				chr_residuals[cc].array() -= chr_residuals[cc].mean();
+			}
 		}
 	}
 
@@ -1839,7 +1846,7 @@ public:
 		return res;
 	}
 
-	int getValueRAM(){                                                     //Note: this value is in KB!
+	int getValueRAM(){                                                         //Note: this value is in KB!
 #ifndef OSX
 		FILE* file = fopen("/proc/self/status", "r");
 		int result = -1;
