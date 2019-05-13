@@ -9,6 +9,7 @@ Changes:
 - bugfix; set s_x when n_env == 1
 - bugfix; covars must have column variance 1
 - feature; Added ability to drop LOCO strategy for snp-level hypothesis testing
+- bugfix; center and scale eta when running PVE estimation
 
 Commandline:
 - SQUAREM on by default
