@@ -1527,7 +1527,7 @@ public:
 		}
 
 		// Compute mean-centered residuals for each chromosome
-		if(p.drop_loco) {
+		if(!p.drop_loco) {
 			for (auto cc : chrs_index) {
 				if (n_effects > 1) {
 					chr_residuals[cc] = map_residuals + pred_main[cc] + pred_int[cc].cwiseProduct(vp.eta.cast<double>());
