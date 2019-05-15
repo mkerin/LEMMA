@@ -133,7 +133,8 @@ void parse_arguments(parameters &p, int argc, char **argv) {
 		"--beta_spike_diff_factor",
 		"--gam_spike_diff_factor",
 		"--min_spike_diff_factor",
-		"--n_pve_samples"
+		"--n_pve_samples",
+		"--loso_window_size"
 	};
 
 	std::set<std::string>::iterator set_it;
@@ -349,6 +350,12 @@ void parse_arguments(parameters &p, int argc, char **argv) {
 
 			if(strcmp(in_str, "--drop_loco") == 0) {
 				p.drop_loco = true;
+			}
+
+			if(strcmp(in_str, "--loso_window_size") == 0) {
+				p.LOSO_window = std::stol(argv[i + 1]);
+				std::cout << "Leave out segment size: " << p.LOSO_window << std::endl;
+				i += 1;
 			}
 
 			if(strcmp(in_str, "--suppress_squared_env_removal") == 0) {

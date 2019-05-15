@@ -205,8 +205,8 @@ void write_snp_stats_to_file(boost_io::filtering_ostream &ofile, const int &n_ef
 				ofile << " " << vp.mu2_gam(kk);
 				ofile << " " << vp.s2_gam_sq(kk);
 			}
-			ofile << " " << test_stat_gam(kk);
-			ofile << " " << neglogp_gam(kk);
+			if (neglogp_gam.size() > 0) ofile << " " << test_stat_gam(kk);
+			if (neglogp_gam.size() > 0) ofile << " " << neglogp_gam(kk);
 			ofile << " " << test_stat_rgam(kk);
 			ofile << " " << neglogp_rgam(kk);
 			ofile << " " << test_stat_joint(kk);

@@ -11,6 +11,7 @@ Changes:
 - feature; Added ability to drop LOCO strategy for snp-level hypothesis testing
 - bugfix; center and scale eta when running PVE estimation
 - feature; Option to pass hyps grid of the form "h_b h_g" etc
+- feature; Ability to leave out segment of custom size instead of LOCO
 
 Commandline:
 - SQUAREM on by default

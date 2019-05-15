@@ -31,6 +31,7 @@ public:
 	bool mode_remove_squared_envs, mode_squarem, mode_incl_squared_envs, drop_loco;
 	double min_maf, min_info, elbo_tol, alpha_tol, gamma_updates_thresh;
 	double beta_spike_diff_factor, gam_spike_diff_factor, min_spike_diff_factor;
+	long LOSO_window;
 	std::vector < std::string > incl_sample_ids, gconf;
 
 // constructors/destructors
@@ -72,7 +73,8 @@ public:
 		missing_code = -999;
 		vb_iter_max = 10000;
 		vb_iter_start = 0;
-		n_pve_samples = 100;
+		n_pve_samples = 50;
+		LOSO_window = -1;
 		// Initial difference in variance of spike & slab
 		beta_spike_diff_factor = 1000;
 		gam_spike_diff_factor = 1000;
