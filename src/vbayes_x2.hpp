@@ -1666,7 +1666,7 @@ public:
 				front++;
 			}
 
-			while (X.position[back] < X.position[jj] - p.LOSO_window && X.chromosome[back] == X.chromosome[jj]){
+			while (X.position[back] < X.position[jj] - p.LOSO_window || X.chromosome[back] != X.chromosome[jj]){
 				y_resid += vp.mean_beta(back) * X.col(back);
 				if (n_env > 0) y_resid += vp.mean_gam(back) * vp.eta.cwiseProduct(X.col(back));
 				back++;
