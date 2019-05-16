@@ -490,6 +490,7 @@ public:
 						// Copy s_x and pve from theta2
 						theta.s_x = theta2[nn].s_x;
 						theta.pve = theta2[nn].pve;
+						theta.n_effects = theta2[nn].n_effects;
 						theta.pve_large = theta2[nn].pve_large;
 
 						all_hyps[nn] = theta;
@@ -1661,13 +1662,13 @@ public:
 
 			while (front < n_var && X.position[front] < X.position[jj] + p.LOSO_window && X.chromosome[front] == X.chromosome[jj]){
 				y_resid -= vp.mean_beta(front) * X.col(front);
-				y_resid -= vp.mean_gam(front) * vp.eta.cwiseProduct(X.col(front));
+				if (n_env > 0) y_resid -= vp.mean_gam(front) * vp.eta.cwiseProduct(X.col(front));
 				front++;
 			}
 
 			while (X.position[back] < X.position[jj] - p.LOSO_window && X.chromosome[back] == X.chromosome[jj]){
 				y_resid += vp.mean_beta(back) * X.col(back);
-				y_resid += vp.mean_gam(back) * vp.eta.cwiseProduct(X.col(back));
+				if (n_env > 0) y_resid += vp.mean_gam(back) * vp.eta.cwiseProduct(X.col(back));
 				back++;
 			}
 
