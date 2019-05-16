@@ -1661,14 +1661,14 @@ public:
 			int chr1 = X.chromosome[jj];
 
 			while (front < n_var && X.position[front] < X.position[jj] + p.LOSO_window && X.chromosome[front] == X.chromosome[jj]){
-				y_resid -= vp.mean_beta(front) * X.col(front);
-				if (n_env > 0) y_resid -= vp.mean_gam(front) * vp.eta.cwiseProduct(X.col(front));
+				y_resid += vp.mean_beta(front) * X.col(front);
+				if (n_env > 0) y_resid += vp.mean_gam(front) * vp.eta.cwiseProduct(X.col(front));
 				front++;
 			}
 
 			while (X.position[back] < X.position[jj] - p.LOSO_window || X.chromosome[back] != X.chromosome[jj]){
-				y_resid += vp.mean_beta(back) * X.col(back);
-				if (n_env > 0) y_resid += vp.mean_gam(back) * vp.eta.cwiseProduct(X.col(back));
+				y_resid -= vp.mean_beta(back) * X.col(back);
+				if (n_env > 0) y_resid -= vp.mean_gam(back) * vp.eta.cwiseProduct(X.col(back));
 				back++;
 			}
 
