@@ -1153,9 +1153,10 @@ public:
 		std::vector<std::string> case2 = {"chr", "rsid", "pos", "a0", "a1", "beta", "gamma"};
 		std::vector<std::string> latents1 = {"alpha_beta", "mu1_beta", "s1_beta", "mu2_beta", "s2_beta"};
 		std::vector<std::string> latents2 = {"alpha_gam", "mu1_gam", "s1_gam", "mu2_gam", "s2_gam"};
-		std::vector<std::string> case3 = {"SNPID"};
-		case3.insert(case3.end(),latents1.begin(),latents1.end());
-		case3.insert(case3.end(),latents2.begin(),latents2.end());
+		std::vector<std::string> case3a = {"SNPID"}, case3b = {"SNPID"};
+		case3b.insert(case3b.end(),latents1.begin(),latents1.end());
+		case3b.insert(case3b.end(),latents2.begin(),latents2.end());
+		case3a.insert(case3a.end(),latents1.begin(),latents1.end());
 
 		std::vector<std::string> vb_init_colnames;
 		read_file_header(p.vb_init_file, vb_init_colnames);
@@ -1199,7 +1200,16 @@ public:
 					}
 				}
 			}
-		} else if(vb_init_colnames == case3) {
+		} else if(vb_init_colnames == case3a) {
+			EigenUtils::read_matrix_and_skip_cols(p.vb_init_file, 1, vb_init_mat, vb_init_colnames);
+			assert(vb_init_mat.rows() == n_var);
+
+			vp_init.alpha_beta = vb_init_mat.col(0);
+			vp_init.mu1_beta = vb_init_mat.col(1);
+			vp_init.s1_beta_sq = vb_init_mat.col(2);
+			vp_init.mu2_beta = vb_init_mat.col(3);
+			vp_init.s2_beta_sq = vb_init_mat.col(4);
+		} else if(vb_init_colnames == case3b) {
 			EigenUtils::read_matrix_and_skip_cols(p.vb_init_file, 1, vb_init_mat, vb_init_colnames);
 			assert(vb_init_mat.rows() == n_var);
 
@@ -1221,7 +1231,7 @@ public:
 			std::cout << std::endl;
 			for (auto ss : case2) std::cout << ss << " ";
 			std::cout << std::endl;
-			for (auto ss : case3) std::cout << ss << " ";
+			for (auto ss : case3b) std::cout << ss << " ";
 			std::cout << std::endl;
 			throw std::runtime_error("Unexpected header");
 		}
