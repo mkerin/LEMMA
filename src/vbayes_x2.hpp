@@ -149,13 +149,6 @@ public:
 		assert(n_env == E.cols());
 		assert(n_env == env_names.size());
 
-		// When n_env > 1 this gets set when in updateEnvWeights
-		if(n_env == 1) {
-			for (auto &hyps : hyps_inits) {
-				hyps.s_x << n_var, dXtEEX.col(0).sum() / (n_samples - 1.0);
-			}
-		}
-
 		random_params_init = false;
 		if(p.user_requests_round1) {
 			run_round1     = true;

@@ -167,33 +167,56 @@ void Hyps::read_from_dump(const std::string& filename){
 
 	// Read file twice to acertain number of lines
 	std::string line, header, case1 = "hyp value";
+	std::vector<std::string> variables;
+	std::vector<double> values;
+
 	getline(fg, header);
 	assert(header == case1);
 	std::stringstream ss;
-	std::string s;
-	std::vector<double> values;
 	while (getline(fg, line)) {
+		std::string s1, s2;
 		ss.clear();
 		ss.str(line);
 		// skip variable name
-		ss >> s;
-		ss >> s;
-		values.push_back(stod(s));
+		ss >> s1;
+		ss >> s2;
+		std::cout << s1 << std::endl;
+
+		if(s1 != "") {
+			variables.push_back(s1);
+			values.push_back(stod(s2));
+		}
 	}
 
-	n_effects = 2;
-	lambda.resize(n_effects);
-	slab_relative_var.resize(n_effects);
-	spike_relative_var.resize(n_effects);
-	sigma = values[0];
-	lambda[0] = values[1];
-	lambda[1] = values[2];
-	slab_relative_var[0] = values[3];
-	slab_relative_var[1] = values[4];
-	spike_relative_var[0] = values[5];
-	spike_relative_var[1] = values[6];
+	std::vector< std::string > case_g = {"sigma", "lambda1", "sigma_beta0", "sigma_beta1"};
+	std::vector< std::string > case_gxe = {"sigma", "lambda1", "lambda2", "sigma_beta0", "sigma_gam0",
+										"sigma_beta1", "sigma_gam1"};
 
-	slab_var = slab_relative_var * sigma;
-	spike_var = spike_relative_var * sigma;
-	s_x.resize(n_effects);
+	if(variables == case_gxe){
+		resize(2);
+
+		sigma = values[0];
+		lambda[0] = values[1];
+		lambda[1] = values[2];
+		slab_relative_var[0] = values[3];
+		slab_relative_var[1] = values[4];
+		spike_relative_var[0] = values[5];
+		spike_relative_var[1] = values[6];
+
+		slab_var = slab_relative_var * sigma;
+		spike_var = spike_relative_var * sigma;
+	} else if (variables == case_g){
+		resize(1);
+
+		sigma = values[0];
+		lambda[0] = values[1];
+		slab_relative_var[0] = values[2];
+		spike_relative_var[0] = values[3];
+	} else {
+		std::cout << "Unrecognised hyps header:" << std::endl;
+		for (auto sss : variables){
+			std::cout << sss << std::endl;
+		}
+		throw std::runtime_error("Unrecognised hyps header");
+	}
 }

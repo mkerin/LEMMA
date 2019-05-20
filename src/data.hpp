@@ -993,10 +993,6 @@ public:
 		std::cout << " (" << n_dxteex_computed << " computed from raw data, " << n_var - n_dxteex_computed << " read from file)" << std::endl;
 	}
 
-	void set_default_hyps(){
-
-	}
-
 	void read_hyps(){
 		// For use in vbayes object
 		hyps_inits.clear();
