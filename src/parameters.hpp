@@ -12,7 +12,7 @@ public:
 	std::string incl_sids_file, incl_rsids_file, recombination_file;
 	std::string r1_hyps_grid_file, r1_probs_grid_file, hyps_grid_file;
 	std::string env_coeffs_file, covar_coeffs_file, hyps_probs_file, vb_init_file;
-	std::string dxteex_file, snpstats_file, mog_weights_file;
+	std::string dxteex_file, snpstats_file, mog_weights_file, resume_prefix;
 	std::vector< std::string > rsid;
 	unsigned int random_seed;
 	long int chunk_size, vb_iter_max, vb_iter_start, param_dump_interval;
@@ -27,7 +27,7 @@ public:
 	bool mode_alternating_updates, mode_pve_est;
 	bool restrict_gamma_updates, mode_no_gxe, mode_debug;
 	bool init_weights_with_snpwise_scan, flip_high_maf_variants, min_spike_diff_set;
-	bool mode_mog_prior_beta, mode_mog_prior_gam, mode_random_start;
+	bool mode_mog_prior_beta, mode_mog_prior_gam, mode_random_start, mode_calc_snpstats;
 	bool mode_remove_squared_envs, mode_squarem, mode_incl_squared_envs, drop_loco;
 	double min_maf, min_info, elbo_tol, alpha_tol, gamma_updates_thresh;
 	double beta_spike_diff_factor, gam_spike_diff_factor, min_spike_diff_factor;
@@ -53,6 +53,7 @@ public:
 		dxteex_file("NULL"),
 		mog_weights_file("NULL"),
 		covar_coeffs_file("NULL"),
+		resume_prefix("NULL"),
 		env_coeffs_file("NULL") {
 		flip_high_maf_variants = false;
 		init_weights_with_snpwise_scan = false;
@@ -91,6 +92,7 @@ public:
 		low_mem = true;
 		mode_vb = false;
 		mode_no_gxe = false;
+		mode_calc_snpstats = false;
 		mode_mog_prior_beta = true;
 		mode_mog_prior_gam = true;
 		mode_debug = false;

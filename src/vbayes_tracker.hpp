@@ -44,17 +44,20 @@ public:
 // For writing interim output
 	boost::filesystem::path dir;
 	boost_io::filtering_ostream outf_elbo, outf_alpha_diff, outf_inits, outf_iter, outf_alpha;
-	boost_io::filtering_ostream outf_weights, outf_rescan;
+	boost_io::filtering_ostream outf_weights;
 	std::string main_out_file;
 
 	std::chrono::system_clock::time_point time_check;
+	long count_to_convergence;
 
 	VbTracker(parameters my_params) : p(my_params), vp(my_params), hyps(my_params) {
 		main_out_file = p.out_file;
+		count_to_convergence = 0;
 	}
 
 	VbTracker(const VbTracker& tracker) : p(tracker.p), vp(tracker.p), hyps(tracker.p) {
 		main_out_file = p.out_file;
+		count_to_convergence = 0;
 	}
 
 	~VbTracker(){
@@ -64,7 +67,6 @@ public:
 		boost_io::close(outf_iter);
 		boost_io::close(outf_alpha);
 		boost_io::close(outf_weights);
-		boost_io::close(outf_rescan);
 	};
 
 	void init_interim_output(const int ii,
@@ -196,16 +198,6 @@ public:
 	}
 
 
-	void push_interim_param_values(const int& cnt,
-	                               const int& n_effects,
-	                               const unsigned long& n_var,
-	                               const VariationalParameters& vp,
-	                               const GenotypeMatrix& X){
-		fstream_init(outf_inits, dir, "_params_iter" + std::to_string(cnt), true);
-		write_snp_stats_to_file(outf_inits, n_effects, n_var, vp, X, p, true);
-		boost_io::close(outf_inits);
-	}
-
 	void dump_state(const int& cnt,
 	                const long& n_samples,
 	                const long& n_covar,
@@ -278,38 +270,6 @@ public:
 		fstream_init(outf_inits, dir, "_dump_it" + std::to_string(cnt) + "_hyps", true);
 		outf_inits << hyps << std::endl;
 		boost_io::close(outf_inits);
-	}
-
-	void push_interim_covar_values(const int& cnt,
-	                               const long& n_covar,
-	                               const VariationalParameters& vp,
-	                               const std::vector< std::string >& covar_names){
-		fstream_init(outf_inits, dir, "_covars_iter" + std::to_string(cnt), true);
-
-		outf_inits << "covar_name mu_covar s_sq_covar";
-		outf_inits << std::endl;
-		for (int cc = 0; cc < n_covar; cc++) {
-			outf_inits << covar_names[cc] << " " << vp.muc(cc);
-			outf_inits << " " << vp.sc_sq(cc);
-			outf_inits << std::endl;
-		}
-		boost_io::close(outf_inits);
-	}
-
-	void push_rescan_gwas(const GenotypeMatrix& X,
-	                      const std::uint32_t n_var,
-	                      const Eigen::Ref<const Eigen::VectorXd>& neglogp){
-		// Assumes that information for all measures that we track have between
-		// added to VbTracker at index ii.
-
-		fstream_init(outf_rescan, dir, "_rescan", true);
-		outf_rescan << "chr rsid pos a0 a1 maf info neglogp" << std::endl;
-		for (std::uint32_t kk = 0; kk < n_var; kk++) {
-			outf_rescan << X.chromosome[kk] << " " << X.rsid[kk]<< " " << X.position[kk];
-			outf_rescan << " " << X.al_0[kk] << " " << X.al_1[kk] << " ";
-			outf_rescan << X.maf[kk] << " " << X.info[kk] << " " << neglogp(kk);
-			outf_rescan << std::endl;
-		}
 	}
 
 	void fstream_init(boost_io::filtering_ostream& my_outf,

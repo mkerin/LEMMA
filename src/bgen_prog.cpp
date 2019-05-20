@@ -51,27 +51,28 @@ int main( int argc, char** argv ) {
 			eta = data.E.col(0);
 		}
 
-		if(p.mode_vb) {
+		if(p.mode_vb || p.mode_calc_snpstats) {
+			data.set_vb_init();
+		}
+
+		VBayesX2 VB(data);
+		if(p.mode_vb){
 			if (data.n_effects > 1) {
 				data.calc_dxteex();
 			}
 			if (p.env_coeffs_file == "NULL" && p.init_weights_with_snpwise_scan) {
 				data.calc_snpstats();
 			}
-			data.set_vb_init();
 
 			auto data_end = std::chrono::system_clock::now();
 			std::chrono::duration<double> elapsed_reading_data = data_end - data_start;
-
-			// Pass data to VBayes object
-			VBayesX2 VB(data);
 
 			// Run inference
 			auto vb_start = std::chrono::system_clock::now();
 			VB.run();
 			auto vb_end = std::chrono::system_clock::now();
 			std::chrono::duration<double> elapsed_vb = vb_end - vb_start;
-			eta = VB.GLOBAL_map_vp.eta.cast<double>();
+			eta = VB.vp_init.eta.cast<double>();
 
 			std::cout << std::endl << "Time expenditure:" << std::endl;
 			std::cout << "Reading data: " << elapsed_reading_data.count() << " secs" << std::endl;
@@ -87,8 +88,11 @@ int main( int argc, char** argv ) {
 			outf_time << "vb_outer_loop " << VB.elapsed_innerLoop.count() << std::endl;
 		}
 
+		if(p.mode_calc_snpstats){
+			VB.write_map_stats_to_file("");
+		}
+
 		if(p.mode_pve_est) {
-			// Random seed
 			if(p.random_seed == -1) {
 				std::random_device rd;
 				p.random_seed = rd();

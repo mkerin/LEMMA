@@ -22,7 +22,7 @@ char* case1a[] = { (char*) "--mode_vb",
 				 (char*) "--pheno", (char*) "data/io_test/pheno.txt",
 				 (char*) "--environment", (char*) "data/io_test/n50_p100_env.txt",
 				 (char*) "--bgen", (char*) "data/io_test/n50_p100.bgen",
-				 (char*) "--out", (char*) "data/io_test/test1a.out.gz"};
+				 (char*) "--out", (char*) "data/io_test/test1a.out"};
 
 char* case1b[] = { (char*) "--mode_vb",
 				   (char*) "--mode_empirical_bayes",
@@ -35,6 +35,14 @@ char* case1b[] = { (char*) "--mode_vb",
 				   (char*) "--environment", (char*) "data/io_test/n50_p100_env.txt",
 				   (char*) "--bgen", (char*) "data/io_test/n50_p100.bgen",
 				   (char*) "--out", (char*) "data/io_test/test1b.out"};
+
+char* case1c[] = { (char*) "--mode_calc_snpstats",
+				   (char*) "--resume_from_param_dump",
+				   (char*) "data/io_test/r2_interim_files/grid_point_0/test1a_dump_it10",
+				   (char*) "--pheno", (char*) "data/io_test/pheno.txt",
+				   (char*) "--environment", (char*) "data/io_test/n50_p100_env.txt",
+				   (char*) "--bgen", (char*) "data/io_test/n50_p100.bgen",
+				   (char*) "--out", (char*) "data/io_test/test1c.out"};
 
 
 
@@ -95,10 +103,30 @@ TEST_CASE("Resume from multi-env + mog + emp_bayes"){
 		}
 
 		VB.run_inference(VB.hyps_inits, false, 2, trackers);
-		SECTION("Ex3. Vbayes_X2 inference correct"){
+		SECTION("Check converged inference"){
 			CHECK(trackers[0].count == 10);
 			CHECK(trackers[0].logw == Approx(-86.8131749627));
 		}
+
+		SECTION("Check converged snp-stats"){
+			// Compute snp-stats
+			long n_var = VB.n_var;
+			long n_chrs = VB.n_chrs;
+			VariationalParametersLite& vp_init = VB.vp_init;
+
+			std::vector<Eigen::VectorXd> map_residuals_by_chr(n_chrs), pred_main(n_chrs), pred_int(n_chrs);
+			Eigen::VectorXd neglogp_beta(n_var), neglogp_gam(n_var), neglogp_rgam(n_var), neglogp_joint(n_var);
+			Eigen::VectorXd test_stat_beta(n_var), test_stat_gam(n_var), test_stat_rgam(n_var), test_stat_joint(n_var);
+
+			VB.compute_residuals_per_chr(vp_init, pred_main, pred_int, map_residuals_by_chr);
+			VB.LOCO_pvals(vp_init, map_residuals_by_chr, neglogp_beta, neglogp_gam, neglogp_rgam, neglogp_joint,
+						  test_stat_beta, test_stat_gam, test_stat_rgam, test_stat_joint);
+
+			CHECK(map_residuals_by_chr[0](0) == Approx(-1.5520966012));
+			CHECK(neglogp_beta(0) == Approx(0.2697970087));
+			CHECK(neglogp_gam(0) == Approx(1.6834605272));
+		}
+
 	}
 
 	SECTION("Resume from iter 2"){
@@ -146,6 +174,36 @@ TEST_CASE("Resume from multi-env + mog + emp_bayes"){
 			CHECK(trackers[0].logw == Approx(-86.8131749627));
 		}
 	}
+
+	SECTION("Compute snp-stats from dump of converged params"){
+		int argc = sizeof(case1c)/sizeof(case1c[0]);
+		parse_arguments(p, argc, case1c);
+
+		Data data(p);
+		data.read_non_genetic_data();
+		data.standardise_non_genetic_data();
+		data.read_full_bgen();
+		data.set_vb_init();
+
+		VBayesX2 VB(data);
+
+		// Compute snp-stats
+		long n_var = VB.n_var;
+		long n_chrs = VB.n_chrs;
+		VariationalParametersLite& vp_init = VB.vp_init;
+
+		std::vector<Eigen::VectorXd> map_residuals_by_chr(n_chrs), pred_main(n_chrs), pred_int(n_chrs);
+		Eigen::VectorXd neglogp_beta(n_var), neglogp_gam(n_var), neglogp_rgam(n_var), neglogp_joint(n_var);
+		Eigen::VectorXd test_stat_beta(n_var), test_stat_gam(n_var), test_stat_rgam(n_var), test_stat_joint(n_var);
+
+		VB.compute_residuals_per_chr(vp_init, pred_main, pred_int, map_residuals_by_chr);
+		VB.LOCO_pvals(vp_init, map_residuals_by_chr, neglogp_beta, neglogp_gam, neglogp_rgam, neglogp_joint,
+					   test_stat_beta, test_stat_gam, test_stat_rgam, test_stat_joint);
+
+		CHECK(map_residuals_by_chr[0](0) == Approx(-1.5520966012));
+		CHECK(neglogp_beta(0) == Approx(0.2697970087));
+		CHECK(neglogp_gam(0) == Approx(1.6834605272));
+	}
 }
 
 
@@ -169,7 +227,7 @@ char* case2b[] = { (char*) "--mode_vb",
 				   (char*) "--pheno", (char*) "data/io_test/pheno.txt",
 				   (char*) "--environment", (char*) "data/io_test/n50_p100_env.txt",
 				   (char*) "--bgen", (char*) "data/io_test/n50_p100.bgen",
-				   (char*) "--out", (char*) "data/io_test/test2b.out"};
+				   (char*) "--out", (char*) "data/io_test/test2b.out.gz"};
 
 TEST_CASE("Resume from multi-env + mog + squarem"){
 	parameters p;
@@ -287,5 +345,103 @@ TEST_CASE("Resume from multi-env + mog + squarem"){
 			// CHECK(trackers[0].logw == Approx(-86.6456071112));
 			CHECK(trackers[0].logw == Approx(-86.533162843));
 		}
+	}
+}
+
+
+// Scenarios
+char* case3a[] = { (char*) "--mode_vb",
+				   (char*) "--mode_empirical_bayes",
+				   (char*) "--use_vb_on_covars",
+				   (char*) "--vb_iter_max", (char*) "10",
+				   (char*) "--pheno", (char*) "data/io_test/pheno.txt",
+				   (char*) "--environment", (char*) "data/io_test/n50_p100_env.txt",
+				   (char*) "--bgen", (char*) "data/io_test/n50_p100.bgen",
+				   (char*) "--out", (char*) "data/io_test/test3a.out"};
+
+char* case3c[] = { (char*) "--mode_calc_snpstats", (char*) "--use_vb_on_covars",
+				   (char*) "--resume_from_param_dump",
+				   (char*) "data/io_test/r2_interim_files/grid_point_0/test3a_dump_it10",
+				   (char*) "--pheno", (char*) "data/io_test/pheno.txt",
+				   (char*) "--environment", (char*) "data/io_test/n50_p100_env.txt",
+				   (char*) "--bgen", (char*) "data/io_test/n50_p100.bgen",
+				   (char*) "--out", (char*) "data/io_test/test3c.out"};
+
+
+TEST_CASE("Resume from multi-env + mog + emp_bayes + incl_covars"){
+	parameters p;
+
+	SECTION("Run to iter 10"){
+		int argc = sizeof(case3a)/sizeof(case3a[0]);
+		parse_arguments(p, argc, case3a);
+
+		Data data(p);
+		data.read_non_genetic_data();
+		data.standardise_non_genetic_data();
+		data.read_full_bgen();
+		data.calc_dxteex();
+		data.set_vb_init();
+
+		VBayesX2 VB(data);
+
+		std::vector< VbTracker > trackers(VB.hyps_inits.size(), p);
+		VB.run_inference(VB.hyps_inits, false, 2, trackers);
+		SECTION("Check converged inference"){
+			CHECK(trackers[0].count == 10);
+			CHECK(trackers[0].logw == Approx(-88.8466020959));
+		}
+
+		SECTION("Check converged snp-stats"){
+			// Compute snp-stats
+			long n_var = VB.n_var;
+			long n_chrs = VB.n_chrs;
+			VariationalParametersLite& vp_init = VB.vp_init;
+
+			std::vector<Eigen::VectorXd> map_residuals_by_chr(n_chrs), pred_main(n_chrs), pred_int(n_chrs);
+			Eigen::VectorXd neglogp_beta(n_var), neglogp_gam(n_var), neglogp_rgam(n_var), neglogp_joint(n_var);
+			Eigen::VectorXd test_stat_beta(n_var), test_stat_gam(n_var), test_stat_rgam(n_var), test_stat_joint(n_var);
+
+			VB.compute_residuals_per_chr(vp_init, pred_main, pred_int, map_residuals_by_chr);
+			VB.LOCO_pvals(vp_init, map_residuals_by_chr, neglogp_beta, neglogp_gam, neglogp_rgam, neglogp_joint,
+						  test_stat_beta, test_stat_gam, test_stat_rgam, test_stat_joint);
+
+			CHECK(map_residuals_by_chr[0](0) == Approx(-1.5468266922));
+			CHECK(neglogp_beta(0) == Approx(0.2859132953));
+			CHECK(neglogp_gam(0) == Approx(1.62452219));
+			CHECK(neglogp_rgam(0) == Approx(2.9858778387));
+		}
+		VB.write_map_stats_to_file("");
+	}
+
+
+	SECTION("Compute snp-stats from dump of converged params"){
+		int argc = sizeof(case3c)/sizeof(case3c[0]);
+		parse_arguments(p, argc, case3c);
+
+		Data data(p);
+		data.read_non_genetic_data();
+		data.standardise_non_genetic_data();
+		data.read_full_bgen();
+		data.set_vb_init();
+
+		VBayesX2 VB(data);
+
+		// Compute snp-stats
+		long n_var = VB.n_var;
+		long n_chrs = VB.n_chrs;
+		VariationalParametersLite& vp_init = VB.vp_init;
+
+		std::vector<Eigen::VectorXd> map_residuals_by_chr(n_chrs), pred_main(n_chrs), pred_int(n_chrs);
+		Eigen::VectorXd neglogp_beta(n_var), neglogp_gam(n_var), neglogp_rgam(n_var), neglogp_joint(n_var);
+		Eigen::VectorXd test_stat_beta(n_var), test_stat_gam(n_var), test_stat_rgam(n_var), test_stat_joint(n_var);
+
+		VB.compute_residuals_per_chr(vp_init, pred_main, pred_int, map_residuals_by_chr);
+		VB.LOCO_pvals(vp_init, map_residuals_by_chr, neglogp_beta, neglogp_gam, neglogp_rgam, neglogp_joint,
+					  test_stat_beta, test_stat_gam, test_stat_rgam, test_stat_joint);
+
+		CHECK(map_residuals_by_chr[0](0) == Approx(-1.5468266922));
+		CHECK(neglogp_beta(0) == Approx(0.2859132953));
+		CHECK(neglogp_gam(0) == Approx(1.62452219));
+		CHECK(neglogp_rgam(0) == Approx(2.9858778387));
 	}
 }

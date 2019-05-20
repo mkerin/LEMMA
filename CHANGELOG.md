@@ -12,6 +12,7 @@ Changes:
 - bugfix; center and scale eta when running PVE estimation
 - feature; Option to pass hyps grid of the form "h_b h_g" etc
 - feature; Ability to leave out segment of custom size instead of LOCO
+- feature; ability to recompute snp-stats given a param dump from previous run
 
 Commandline:
 - SQUAREM on by default

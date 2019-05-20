@@ -62,7 +62,7 @@ public:
 		                                           "lambda_b", "lambda_g"};
 
 // sizes
-	int n_effects;                                                                                                                                                                        // no. interaction variables + 1
+	int n_effects;
 	std::uint32_t n_samples;
 	unsigned long n_covar;
 	unsigned long n_env;
@@ -70,7 +70,7 @@ public:
 	std::uint32_t n_var2;
 	bool random_params_init;
 	bool run_round1;
-	double N;                                                                                                                                                                         // (double) n_samples
+	double N;
 
 // Chromosomes in data
 	int n_chrs;
@@ -88,17 +88,17 @@ public:
 	std::vector< std::vector < std::uint32_t > > main_back_pass_chunks, gxe_back_pass_chunks;
 	std::vector< int > env_fwd_pass;
 	std::vector< int > env_back_pass;
-	std::map<long, Eigen::MatrixXd> D_correlations;                                                                                                                                                                         //We can keep D^t D for the main effects
+	std::map<long, Eigen::MatrixXd> D_correlations;
 
 // Data
 	GenotypeMatrix&  X;
-	EigenDataVector Y;                                                                                                                                                                                   // residual phenotype matrix
-	EigenDataArrayX Cty;                                                                                                                                                                                  // vector of C^T x y where C the matrix of covariates
-	EigenDataArrayXX E;                                                                                                                                                                                  // matrix of variables used for GxE interactions
-	EigenDataMatrix& C;                                                                                                                                                                                  // matrix of covariates (superset of GxE variables)
-	Eigen::MatrixXd XtE;                                                                                                                                                                                  // matrix of covariates (superset of GxE variables)
+	EigenDataVector Y;
+	EigenDataArrayX Cty;
+	EigenDataArrayXX E;
+	EigenDataMatrix& C;
+	Eigen::MatrixXd XtE;
 
-	Eigen::ArrayXXd& dXtEEX;                                                                                                                                                                             // P x n_env^2; col (l * n_env + m) is the diagonal of X^T * diag(E_l * E_m) * X
+	Eigen::ArrayXXd& dXtEEX;
 
 // Global location of y_m = E[X beta] and y_x = E[X gamma]
 	EigenDataMatrix YY, YX, YM, ETA, ETA_SQ;
@@ -111,14 +111,13 @@ public:
 	std::vector<Hyps> hyps_inits;
 
 // boost fstreams
-	boost_io::filtering_ostream outf, outf_map, outf_wmean, outf_nmean, outf_inits;
+	boost_io::filtering_ostream outf, outf_map, outf_inits;
 	boost_io::filtering_ostream outf_elbo, outf_alpha_diff, outf_map_pred, outf_weights;
-	boost_io::filtering_ostream outf_rescan, outf_map_covar;
+	boost_io::filtering_ostream outf_map_covar;
 
 // Monitoring
 	std::chrono::system_clock::time_point time_check;
 	std::chrono::duration<double> elapsed_innerLoop;
-	VariationalParametersLite GLOBAL_map_vp;
 
 	explicit VBayesX2(Data& dat) : X(dat.G),
 		Y(Eigen::Map<EigenDataVector>(dat.Y.data(), dat.Y.rows())),
@@ -126,7 +125,6 @@ public:
 		dXtEEX(dat.dXtEEX),
 		snpstats(dat.snpstats),
 		p(dat.p),
-		GLOBAL_map_vp(dat.p),
 		hyps_inits(dat.hyps_inits),
 		vp_init(dat.vp_init){
 		std::cout << "Initialising vbayes object" << std::endl;
@@ -318,12 +316,9 @@ public:
 		// Close all ostreams
 		boost_io::close(outf);
 		boost_io::close(outf_map);
-		boost_io::close(outf_wmean);
-		boost_io::close(outf_nmean);
 		boost_io::close(outf_elbo);
 		boost_io::close(outf_alpha_diff);
 		boost_io::close(outf_inits);
-		boost_io::close(outf_rescan);
 		boost_io::close(outf_map_covar);
 	}
 
@@ -340,26 +335,6 @@ public:
 			long n_grid = hyps_inits.size();
 			run_inference(hyps_inits, true, 1, trackers);
 
-			if(p.verbose) {
-				write_trackers_to_file("round1_", trackers, n_grid);
-			}
-
-			// Find best init
-			double logw_best = -std::numeric_limits<double>::max();
-			bool init_not_set = true;
-			for (int ii = 0; ii < n_grid; ii++) {
-				double logw      = trackers[ii].logw;
-				if(std::isfinite(logw) && logw > logw_best) {
-					vp_init      = trackers[ii].vp;
-					logw_best    = logw;
-					init_not_set = false;
-				}
-			}
-
-			if(init_not_set) {
-				throw std::runtime_error("No valid start points found (elbo estimates all non-finite?).");
-			}
-
 			// gen initial predicted effects
 			calcPredEffects(vp_init);
 
@@ -367,16 +342,18 @@ public:
 		}
 
 		// Write inits to file - exclude covar values
-		std::string ofile_inits = fstream_init(outf_inits, "", "_inits");
-		std::cout << "Writing start points for alpha and mu to " << ofile_inits << std::endl;
-		write_snp_stats_to_file(outf_inits, n_effects, n_var, vp_init, X, p, false);
-		boost_io::close(outf_inits);
+		if(p.verbose) {
+			std::string ofile_inits = fstream_init(outf_inits, "", "_inits");
+			std::cout << "Writing start points for alpha and mu to " << ofile_inits << std::endl;
+			write_snp_stats_to_file(outf_inits, n_effects, n_var, vp_init, X, p, false);
+			boost_io::close(outf_inits);
+		}
 
 		long n_grid = hyps_inits.size();
 		std::vector< VbTracker > trackers(n_grid, p);
 		run_inference(hyps_inits, false, 2, trackers);
+		write_converged_hyperparams_to_file("", trackers, n_grid);
 
-		write_trackers_to_file("", trackers, n_grid);
 		std::cout << "Variational inference finished" << std::endl;
 	}
 
@@ -398,6 +375,21 @@ public:
 		}
 
 		runOuterLoop(round_index, hyps_inits, n_grid, chunks[0], random_init, trackers);
+
+		// Set run with best ELBO to vp_init
+		std::vector< double > weights(n_grid);
+		if(n_grid > 1) {
+			for (int ii = 0; ii <n_grid; ii++) {
+				weights[ii] = trackers[ii].logw;
+			}
+			normaliseLogWeights(weights);
+		} else {
+			weights[0] = 1;
+		}
+
+		long ii_map = std::distance(weights.begin(), std::max_element(weights.begin(), weights.end()));
+		vp_init = trackers[ii_map].vp;
+
 	}
 
 	void runOuterLoop(const int round_index,
@@ -412,15 +404,6 @@ public:
 		runInnerLoop(random_init, round_index, all_hyps, all_tracker);
 		auto innerLoop_end = std::chrono::system_clock::now();
 		elapsed_innerLoop = innerLoop_end - innerLoop_start;
-
-		// 'rescan' GWAS of Z on y-ym
-		if(n_effects > 1) {
-			for (int nn = 0; nn < n_grid; nn++) {
-				Eigen::VectorXd gam_neglogp(n_var);
-				rescanGWAS(all_tracker[nn].vp, gam_neglogp);
-				all_tracker[nn].push_rescan_gwas(X, n_var, gam_neglogp);
-			}
-		}
 	}
 
 	void runInnerLoop(const bool random_init,
@@ -530,34 +513,18 @@ public:
 					if (p.alpha_tol_set_by_user && p.elbo_tol_set_by_user) {
 						if (alpha_diff[nn] < p.alpha_tol && logw_diff < p.elbo_tol) {
 							converged[nn] = 1;
-							all_tracker[nn].dump_state(count, n_samples, n_covar, n_var,
-							                           n_env, n_effects,
-							                           all_vp[nn], all_hyps[nn], Y, C,
-							                           X, covar_names, env_names);
 						}
 					} else if (p.alpha_tol_set_by_user) {
 						if (alpha_diff[nn] < p.alpha_tol) {
 							converged[nn] = 1;
-							all_tracker[nn].dump_state(count, n_samples, n_covar, n_var,
-							                           n_env, n_effects,
-							                           all_vp[nn], all_hyps[nn], Y, C,
-							                           X, covar_names, env_names);
 						}
 					} else if (p.elbo_tol_set_by_user) {
 						if (logw_diff < p.elbo_tol) {
 							converged[nn] = 1;
-							all_tracker[nn].dump_state(count, n_samples, n_covar, n_var,
-							                           n_env, n_effects,
-							                           all_vp[nn], all_hyps[nn], Y, C,
-							                           X, covar_names, env_names);
 						}
 					} else {
 						if (alpha_diff[nn] < alpha_tol && logw_diff < logw_tol) {
 							converged[nn] = 1;
-							all_tracker[nn].dump_state(count, n_samples, n_covar, n_var,
-							                           n_env, n_effects,
-							                           all_vp[nn], all_hyps[nn], Y, C,
-							                           X, covar_names, env_names);
 						}
 					}
 				}
@@ -568,6 +535,11 @@ public:
 				all_converged = true;
 			}
 			count++;
+			for (int nn = 0; nn < n_grid; nn++) {
+				if(!converged[nn]) {
+					all_tracker[nn].count_to_convergence++;
+				}
+			}
 
 			// Report progress to std::cout
 			if((count + 1) % print_interval == 0) {
@@ -585,6 +557,14 @@ public:
 			return !std::isfinite(x);
 		})) {
 			std::cout << "WARNING: non-finite elbo estimate produced" << std::endl;
+		}
+
+		// Dump converged state
+		for (int nn = 0; nn < n_grid; nn++) {
+			all_tracker[nn].dump_state(all_tracker[nn].count_to_convergence, n_samples, n_covar, n_var,
+									   n_env, n_effects,
+									   all_vp[nn], all_hyps[nn], Y, C,
+									   X, covar_names, env_names);
 		}
 
 		// Log all things that we want to track
@@ -1635,12 +1615,12 @@ public:
 
 
 	void LOCO_pvals_v2(const VariationalParametersLite& vp,
-					Eigen::Ref<Eigen::VectorXd> neglogp_beta,
-					Eigen::Ref<Eigen::VectorXd> neglogp_gam_robust,
-					Eigen::Ref<Eigen::VectorXd> neglogp_joint,
-					Eigen::Ref<Eigen::VectorXd> test_stat_beta,
-					Eigen::Ref<Eigen::VectorXd> test_stat_gam_robust,
-					Eigen::Ref<Eigen::VectorXd> test_stat_joint){
+	                   Eigen::Ref<Eigen::VectorXd> neglogp_beta,
+	                   Eigen::Ref<Eigen::VectorXd> neglogp_gam_robust,
+	                   Eigen::Ref<Eigen::VectorXd> neglogp_joint,
+	                   Eigen::Ref<Eigen::VectorXd> test_stat_beta,
+	                   Eigen::Ref<Eigen::VectorXd> test_stat_gam_robust,
+	                   Eigen::Ref<Eigen::VectorXd> test_stat_joint){
 		assert(neglogp_beta.rows()  == n_var);
 		assert(neglogp_joint.rows() == n_var);
 		assert(test_stat_beta.rows()  == n_var);
@@ -1648,7 +1628,7 @@ public:
 		assert(n_effects == 1 || n_effects == 2);
 
 		Eigen::VectorXd y_resid = (Y - vp.ym).cast<double>();
-		if(n_env > 0){
+		if(n_env > 0) {
 			y_resid -= vp.yx.cwiseProduct(vp.eta).cast<double>();
 		}
 		long front = 0, back = 0;
@@ -1660,13 +1640,13 @@ public:
 		for(std::uint32_t jj = 0; jj < n_var; jj++ ) {
 			int chr1 = X.chromosome[jj];
 
-			while (front < n_var && X.position[front] < X.position[jj] + p.LOSO_window && X.chromosome[front] == X.chromosome[jj]){
+			while (front < n_var && X.position[front] < X.position[jj] + p.LOSO_window && X.chromosome[front] == X.chromosome[jj]) {
 				y_resid += vp.mean_beta(front) * X.col(front);
 				if (n_env > 0) y_resid += vp.mean_gam(front) * vp.eta.cwiseProduct(X.col(front));
 				front++;
 			}
 
-			while (X.position[back] < X.position[jj] - p.LOSO_window || X.chromosome[back] != X.chromosome[jj]){
+			while (X.position[back] < X.position[jj] - p.LOSO_window || X.chromosome[back] != X.chromosome[jj]) {
 				y_resid -= vp.mean_beta(back) * X.col(back);
 				if (n_env > 0) y_resid -= vp.mean_gam(back) * vp.eta.cwiseProduct(X.col(back));
 				back++;
@@ -1722,52 +1702,11 @@ public:
 	}
 
 /********** Output functions ************/
-	void write_trackers_to_file(const std::string& file_prefix,
-	                            const std::vector< VbTracker >& trackers,
-	                            const long& my_n_grid){
-		// Stitch trackers back together if using multithreading
-		// Parrallel starts swapped for multithreaded inference
-		output_init(file_prefix);
-		output_results(trackers, my_n_grid);
-	}
-
-	void output_init(const std::string& file_prefix){
-		// Initialise files ready to write;
-
+	void write_converged_hyperparams_to_file(const std::string& file_prefix,
+											 const std::vector< VbTracker >& trackers,
+											 const long& my_n_grid){
 		std::string ofile       = fstream_init(outf, file_prefix, "");
-		std::string ofile_map   = fstream_init(outf_map, file_prefix, "_map_snp_stats");
-		std::string ofile_wmean = fstream_init(outf_wmean, file_prefix, "_weighted_mean_snp_stats");
-		std::string ofile_nmean = fstream_init(outf_nmean, file_prefix, "_niave_mean_snp_stats");
-		std::string ofile_map_yhat = fstream_init(outf_map_pred, file_prefix, "_map_yhat");
-		std::string ofile_w = fstream_init(outf_weights, file_prefix, "_env_weights");
-		std::string ofile_rescan = fstream_init(outf_rescan, file_prefix, "_map_rescan");
-		std::string ofile_map_covar = fstream_init(outf_map_covar, file_prefix, "_map_covar");
 		std::cout << "Writing converged hyperparameter values to " << ofile << std::endl;
-		std::cout << "Writing MAP snp stats to " << ofile_map << std::endl;
-		std::cout << "Writing MAP covar coefficients to " << ofile_map_covar << std::endl;
-		std::cout << "Writing (weighted) average snp stats to " << ofile_wmean << std::endl;
-		std::cout << "Writing (niave) average snp stats to " << ofile_nmean << std::endl;
-		std::cout << "Writing yhat from map to " << ofile_map_yhat << std::endl;
-		std::cout << "Writing env weights to " << ofile_w << std::endl;
-		std::cout << "Writing 'rescan' p-values of MAP to " << ofile_rescan << std::endl;
-
-		if(p.verbose) {
-			std::string ofile_elbo = fstream_init(outf_elbo, file_prefix, "_elbo");
-			std::cout << "Writing ELBO from each VB iteration to " << ofile_elbo << std::endl;
-
-			std::string ofile_alpha_diff = fstream_init(outf_alpha_diff, file_prefix, "_alpha_diff");
-			std::cout << "Writing max change in alpha from each VB iteration to " << ofile_alpha_diff << std::endl;
-		}
-	}
-
-	void output_results(const std::vector<VbTracker>& trackers, const long& my_n_grid){
-		// Write;
-		// main output; weights logw converged_hyps counts time (currently no prior)
-		// snps;
-		// - map (outf_map) / elbo weighted mean (outf_wmean) / niave mean + sds (outf_nmean)
-		// (verbose);
-		// - elbo trajectories (inside the interim files?)
-		// - hyp trajectories (inside the interim files)
 
 		// Compute normalised weights using finite elbo
 		std::vector< double > weights(my_n_grid);
@@ -1834,19 +1773,45 @@ public:
 			}
 			outf << std::endl;
 		}
+	}
+
+	void write_map_stats_to_file(const std::string &file_prefix) {
+		output_init(file_prefix);
+		output_results();
+	}
+
+	void output_init(const std::string& file_prefix){
+		// Initialise files ready to write;
+
+		std::string ofile_map   = fstream_init(outf_map, file_prefix, "_map_snp_stats");
+		std::string ofile_map_yhat = fstream_init(outf_map_pred, file_prefix, "_map_yhat");
+		std::string ofile_w = fstream_init(outf_weights, file_prefix, "_env_weights");
+		std::string ofile_map_covar = fstream_init(outf_map_covar, file_prefix, "_map_covar");
+		std::cout << "Writing MAP snp stats to " << ofile_map << std::endl;
+		std::cout << "Writing MAP covar coefficients to " << ofile_map_covar << std::endl;
+		std::cout << "Writing yhat from map to " << ofile_map_yhat << std::endl;
+		std::cout << "Writing env weights to " << ofile_w << std::endl;
+
+		if(p.verbose) {
+			std::string ofile_elbo = fstream_init(outf_elbo, file_prefix, "_elbo");
+			std::cout << "Writing ELBO from each VB iteration to " << ofile_elbo << std::endl;
+
+			std::string ofile_alpha_diff = fstream_init(outf_alpha_diff, file_prefix, "_alpha_diff");
+			std::cout << "Writing max change in alpha from each VB iteration to " << ofile_alpha_diff << std::endl;
+		}
+	}
+
+	void output_results(){
 
 		/*********** Stats from MAP to file ************/
 		std::vector<Eigen::VectorXd> map_residuals_by_chr(n_chrs), pred_main(n_chrs), pred_int(n_chrs);
-		long int ii_map = std::distance(weights.begin(), std::max_element(weights.begin(), weights.end()));
-		VariationalParametersLite vp_map = trackers[ii_map].vp;
-		GLOBAL_map_vp = trackers[ii_map].vp;
 
 		// Predicted effects to file
-		calcPredEffects(vp_map);
-		compute_residuals_per_chr(vp_map, pred_main, pred_int, map_residuals_by_chr);
+		calcPredEffects(vp_init);
+		compute_residuals_per_chr(vp_init, pred_main, pred_int, map_residuals_by_chr);
 		Eigen::VectorXd Ealpha = Eigen::VectorXd::Zero(n_samples);
 		if(n_covar > 0) {
-			Ealpha += (C * vp_map.muc.matrix().cast<scalarData>()).cast<double>();
+			Ealpha += (C * vp_init.muc.matrix().cast<scalarData>()).cast<double>();
 		}
 		if(n_effects == 1) {
 			outf_map_pred << "Y Ealpha Xbeta";
@@ -1856,7 +1821,7 @@ public:
 			outf_map_pred << std::endl;
 
 			for (std::uint32_t ii = 0; ii < n_samples; ii++) {
-				outf_map_pred << Y(ii) << " " << Ealpha(ii) << " " << vp_map.ym(ii) - Ealpha(ii);
+				outf_map_pred << Y(ii) << " " << Ealpha(ii) << " " << vp_init.ym(ii) - Ealpha(ii);
 				for(auto cc : chrs_index) {
 					outf_map_pred << " " << map_residuals_by_chr[cc](ii);
 				}
@@ -1869,8 +1834,8 @@ public:
 			}
 			outf_map_pred << std::endl;
 			for (std::uint32_t ii = 0; ii < n_samples; ii++) {
-				outf_map_pred << Y(ii) << " " << Ealpha(ii) << " " << vp_map.ym(ii) - Ealpha(ii);
-				outf_map_pred << " " << vp_map.eta(ii) << " " << vp_map.yx(ii);
+				outf_map_pred << Y(ii) << " " << Ealpha(ii) << " " << vp_init.ym(ii) - Ealpha(ii);
+				outf_map_pred << " " << vp_init.eta(ii) << " " << vp_init.yx(ii);
 				for(auto cc : chrs_index) {
 					outf_map_pred << " " << map_residuals_by_chr[cc](ii);
 				}
@@ -1886,7 +1851,7 @@ public:
 			}
 			outf_weights << std::endl;
 			for (int ll = 0; ll < n_env; ll++) {
-				outf_weights << vp_map.muw(ll);
+				outf_weights << vp_init.muw(ll);
 				if (ll + 1 < n_env) outf_weights << " ";
 			}
 			outf_weights << std::endl;
@@ -1896,30 +1861,17 @@ public:
 		Eigen::VectorXd neglogp_beta(n_var), neglogp_gam(n_var), neglogp_rgam(n_var), neglogp_joint(n_var);
 		Eigen::VectorXd test_stat_beta(n_var), test_stat_gam(n_var), test_stat_rgam(n_var), test_stat_joint(n_var);
 		if(p.LOSO_window == -1) {
-			LOCO_pvals(vp_map, map_residuals_by_chr, neglogp_beta, neglogp_gam, neglogp_rgam, neglogp_joint,
-					   test_stat_beta, test_stat_gam, test_stat_rgam, test_stat_joint);
+			LOCO_pvals(vp_init, map_residuals_by_chr, neglogp_beta, neglogp_gam, neglogp_rgam, neglogp_joint,
+			           test_stat_beta, test_stat_gam, test_stat_rgam, test_stat_joint);
 		} else {
-			LOCO_pvals_v2(vp_map, neglogp_beta, neglogp_rgam, neglogp_joint,
-					   test_stat_beta, test_stat_rgam, test_stat_joint);
+			LOCO_pvals_v2(vp_init, neglogp_beta, neglogp_rgam, neglogp_joint,
+			              test_stat_beta, test_stat_rgam, test_stat_joint);
 		}
 
 		// MAP snp-stats to file
-		write_snp_stats_to_file(outf_map, n_effects, n_var, vp_map, X, p, true, neglogp_beta, neglogp_gam, neglogp_rgam, neglogp_joint, test_stat_beta, test_stat_gam, test_stat_rgam, test_stat_joint);
+		write_snp_stats_to_file(outf_map, n_effects, n_var, vp_init, X, p, true, neglogp_beta, neglogp_gam, neglogp_rgam, neglogp_joint, test_stat_beta, test_stat_gam, test_stat_rgam, test_stat_joint);
 		if(n_covar > 0) {
-			write_covars_to_file(outf_map_covar, vp_map);
-		}
-
-		// Rescan of map
-		if(n_effects > 1) {
-			Eigen::VectorXd gam_neglogp(n_var);
-			rescanGWAS(trackers[ii_map].vp, gam_neglogp);
-			outf_rescan << "chr rsid pos a0 a1 maf info neglogp" << std::endl;
-			for (std::uint32_t kk = 0; kk < n_var; kk++) {
-				outf_rescan << X.chromosome[kk] << " " << X.rsid[kk] << " " << X.position[kk];
-				outf_rescan << " " << X.al_0[kk] << " " << X.al_1[kk] << " ";
-				outf_rescan << X.maf[kk] << " " << X.info[kk] << " " << gam_neglogp(kk);
-				outf_rescan << std::endl;
-			}
+			write_covars_to_file(outf_map_covar, vp_init);
 		}
 	}
 
@@ -1968,7 +1920,7 @@ public:
 		return res;
 	}
 
-	int getValueRAM(){                                                                                                                                                                         //Note: this value is in KB!
+	int getValueRAM(){
 #ifndef OSX
 		FILE* file = fopen("/proc/self/status", "r");
 		int result = -1;

@@ -134,7 +134,8 @@ void parse_arguments(parameters &p, int argc, char **argv) {
 		"--gam_spike_diff_factor",
 		"--min_spike_diff_factor",
 		"--n_pve_samples",
-		"--loso_window_size"
+		"--loso_window_size",
+		"--mode_calc_snpstats"
 	};
 
 	std::set<std::string>::iterator set_it;
@@ -323,7 +324,11 @@ void parse_arguments(parameters &p, int argc, char **argv) {
 
 			if(strcmp(in_str, "--mode_vb") == 0) {
 				p.mode_vb = true;
-				i += 0;
+				p.mode_calc_snpstats = true;
+			}
+
+			if(strcmp(in_str, "--mode_calc_snpstats") == 0) {
+				p.mode_calc_snpstats = true;
 			}
 
 			if(strcmp(in_str, "--random_seed") == 0) {
@@ -514,15 +519,7 @@ void parse_arguments(parameters &p, int argc, char **argv) {
 
 			if(strcmp(in_str, "--resume_from_param_dump") == 0) {
 				check_counts(in_str, i, 1, argc);
-				std::string prefix(argv[i + 1]);
-				p.env_coeffs_file = prefix + "_env.out.gz";
-				p.covar_coeffs_file = prefix + "_covars.out.gz";
-				p.vb_init_file = prefix + "_latent_snps.out.gz";
-				p.hyps_grid_file = prefix + "_hyps.out.gz";
-				check_file_exists(p.env_coeffs_file);
-				check_file_exists(p.covar_coeffs_file);
-				check_file_exists(p.vb_init_file);
-				check_file_exists(p.hyps_grid_file);
+				p.resume_prefix = argv[i + 1];
 				i += 1;
 			}
 
@@ -702,6 +699,19 @@ void parse_arguments(parameters &p, int argc, char **argv) {
 				i += 1;
 			}
 		}
+	}
+
+	if(p.resume_prefix != "NULL"){
+		std::string file_ext = p.out_file.substr(p.out_file.find('.'), p.out_file.size());
+
+			p.env_coeffs_file = p.resume_prefix + "_env" + file_ext;
+			p.covar_coeffs_file = p.resume_prefix + "_covars" + file_ext;
+			p.vb_init_file = p.resume_prefix + "_latent_snps" + file_ext;
+			p.hyps_grid_file = p.resume_prefix + "_hyps" + file_ext;
+			check_file_exists(p.env_coeffs_file);
+			check_file_exists(p.covar_coeffs_file);
+			check_file_exists(p.vb_init_file);
+			check_file_exists(p.hyps_grid_file);
 	}
 
 	// mode_vb specific options
