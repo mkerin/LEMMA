@@ -34,10 +34,10 @@ namespace boost_io = boost::iostreams;
 
 class VbTracker {
 public:
-	int count;                                            // Number of iterations to convergence at each step
-	VariationalParametersLite vp;                             // best mu at each ii
-	double logw;                                             // best logw at each ii
-	Hyps hyps;                                              // hyps values at end of VB inference.
+	int count;                                                    // Number of iterations to convergence at each step
+	VariationalParametersLite vp;                                     // best mu at each ii
+	double logw;                                                     // best logw at each ii
+	Hyps hyps;                                                      // hyps values at end of VB inference.
 
 	parameters p;
 
@@ -198,7 +198,7 @@ public:
 	}
 
 
-	void dump_state(const int& cnt,
+	void dump_state(const std::string& count,
 	                const long& n_samples,
 	                const long& n_covar,
 	                const long& n_var,
@@ -213,7 +213,7 @@ public:
 	                const std::vector< std::string >& env_names){
 
 		// Aggregate effects
-		fstream_init(outf_inits, dir, "_dump_it" + std::to_string(cnt) + "_aggregate", true);
+		fstream_init(outf_inits, dir, "_dump_it" + count + "_aggregate", true);
 		Eigen::VectorXd Ealpha = Eigen::VectorXd::Zero(n_samples);
 		if(n_covar > 0) {
 			Ealpha += (C.matrix() * vp.muc.matrix().cast<scalarData>()).cast<double>();
@@ -225,7 +225,7 @@ public:
 		outf_inits << std::endl;
 		for (std::uint32_t ii = 0; ii < n_samples; ii++) {
 			outf_inits << Y(ii);
-			if (n_covar > 0){
+			if (n_covar > 0) {
 				outf_inits << " " << Ealpha(ii) << " " << vp.ym(ii) - Ealpha(ii);
 			} else {
 				outf_inits << " " << vp.ym(ii);
@@ -236,13 +236,13 @@ public:
 		boost_io::close(outf_inits);
 
 		// Snp-stats
-		fstream_init(outf_inits, dir, "_dump_it" + std::to_string(cnt) + "_latent_snps", true);
+		fstream_init(outf_inits, dir, "_dump_it" + count + "_latent_snps", true);
 		vp.dump_snps_to_file(outf_inits, X, n_env);
 		boost_io::close(outf_inits);
 
 		// Covars
 		if(n_covar > 0) {
-			fstream_init(outf_inits, dir, "_dump_it" + std::to_string(cnt) + "_covars", true);
+			fstream_init(outf_inits, dir, "_dump_it" + count + "_covars", true);
 			outf_inits << std::scientific << std::setprecision(7);
 			outf_inits << "covar mu s_sq" << std::endl;
 			for (int cc = 0; cc < n_covar; cc++) {
@@ -255,7 +255,7 @@ public:
 
 		// Env-weights
 		if(n_env > 0) {
-			fstream_init(outf_inits, dir, "_dump_it" + std::to_string(cnt) + "_env", true);
+			fstream_init(outf_inits, dir, "_dump_it" + count + "_env", true);
 			outf_inits << std::scientific << std::setprecision(7);
 			outf_inits << "env mu s_sq" << std::endl;
 			for (int ll = 0; ll < n_env; ll++) {
@@ -267,7 +267,7 @@ public:
 		}
 
 		// Hyps
-		fstream_init(outf_inits, dir, "_dump_it" + std::to_string(cnt) + "_hyps", true);
+		fstream_init(outf_inits, dir, "_dump_it" + count + "_hyps", true);
 		outf_inits << hyps << std::endl;
 		boost_io::close(outf_inits);
 	}

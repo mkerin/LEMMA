@@ -498,7 +498,7 @@ public:
 				                                  covar_diff[nn], beta_diff[nn], gam_diff[nn], w_diff[nn], n_effects,
 				                                  n_var, n_covar, n_env, all_vp[nn]);
 				if (p.param_dump_interval > 0 && count % p.param_dump_interval == 0) {
-					all_tracker[nn].dump_state(count, n_samples, n_covar, n_var,
+					all_tracker[nn].dump_state(std::to_string(count), n_samples, n_covar, n_var,
 					                           n_env, n_effects,
 					                           all_vp[nn], all_hyps[nn], Y, C,
 					                           X, covar_names, env_names);
@@ -561,10 +561,10 @@ public:
 
 		// Dump converged state
 		for (int nn = 0; nn < n_grid; nn++) {
-			all_tracker[nn].dump_state(all_tracker[nn].count_to_convergence, n_samples, n_covar, n_var,
-									   n_env, n_effects,
-									   all_vp[nn], all_hyps[nn], Y, C,
-									   X, covar_names, env_names);
+			all_tracker[nn].dump_state("_converged", n_samples, n_covar, n_var,
+			                           n_env, n_effects,
+			                           all_vp[nn], all_hyps[nn], Y, C,
+			                           X, covar_names, env_names);
 		}
 
 		// Log all things that we want to track
@@ -1703,8 +1703,8 @@ public:
 
 /********** Output functions ************/
 	void write_converged_hyperparams_to_file(const std::string& file_prefix,
-											 const std::vector< VbTracker >& trackers,
-											 const long& my_n_grid){
+	                                         const std::vector< VbTracker >& trackers,
+	                                         const long& my_n_grid){
 		std::string ofile       = fstream_init(outf, file_prefix, "");
 		std::cout << "Writing converged hyperparameter values to " << ofile << std::endl;
 

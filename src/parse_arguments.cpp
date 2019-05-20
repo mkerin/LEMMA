@@ -701,17 +701,24 @@ void parse_arguments(parameters &p, int argc, char **argv) {
 		}
 	}
 
-	if(p.resume_prefix != "NULL"){
+	if(p.resume_prefix != "NULL") {
+		assert(p.out_file != "NULL");
 		std::string file_ext = p.out_file.substr(p.out_file.find('.'), p.out_file.size());
 
-			p.env_coeffs_file = p.resume_prefix + "_env" + file_ext;
-			p.covar_coeffs_file = p.resume_prefix + "_covars" + file_ext;
-			p.vb_init_file = p.resume_prefix + "_latent_snps" + file_ext;
-			p.hyps_grid_file = p.resume_prefix + "_hyps" + file_ext;
-			check_file_exists(p.env_coeffs_file);
-			check_file_exists(p.covar_coeffs_file);
-			check_file_exists(p.vb_init_file);
-			check_file_exists(p.hyps_grid_file);
+		p.vb_init_file = p.resume_prefix + "_latent_snps" + file_ext;
+		p.hyps_grid_file = p.resume_prefix + "_hyps" + file_ext;
+		check_file_exists(p.vb_init_file);
+		check_file_exists(p.hyps_grid_file);
+
+		p.env_coeffs_file = p.resume_prefix + "_env" + file_ext;
+		if(!boost::filesystem::exists(p.env_coeffs_file)) {
+			p.env_coeffs_file = "NULL";
+		}
+
+		p.covar_coeffs_file = p.resume_prefix + "_covars" + file_ext;
+		if(!boost::filesystem::exists(p.covar_coeffs_file)) {
+			p.covar_coeffs_file = "NULL";
+		}
 	}
 
 	// mode_vb specific options
@@ -738,7 +745,7 @@ void check_file_exists(const std::string &filename) {
 //		std::cout << "File " << filename << " does not exist" << std::endl;
 //		throw std::runtime_error("ERROR: file does not exist");
 //	}
-	if(!boost::filesystem::exists( filename )) {
+	if(!boost::filesystem::exists(filename)) {
 		std::cout << "File " << filename << " does not exist" << std::endl;
 		throw std::runtime_error("ERROR: file does not exist");
 	}
