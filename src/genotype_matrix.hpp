@@ -61,7 +61,6 @@ public:
 	Eigen::VectorXd compressed_dosage_means;
 	Eigen::VectorXd compressed_dosage_sds;
 	Eigen::VectorXd compressed_dosage_inv_sds;  // 1 / col-wise sd
-	// Eigen::VectorXd aa;  // vector of ages
 	std::size_t nn, pp;
 
 	// Interface type of Eigen indices -> see eigen3/Eigen/src/Core/EigenBase.h
@@ -269,8 +268,8 @@ public:
 	}
 
 	/********** Compression/Decompression ************/
-	inline std::uint8_t CompressDosage(double dosage)
-	{
+	inline std::uint8_t CompressDosage(double dosage){
+//		assert(dosage < 2.0);
 		dosage = std::min(dosage, L - 1e-6);
 		return static_cast<std::uint8_t>(std::floor(dosage * invIntervalWidth));
 	}

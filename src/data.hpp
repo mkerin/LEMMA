@@ -427,6 +427,12 @@ public:
 		std::vector< std::vector< double > > probs;
 		ProbSetter setter( &probs );
 
+		std::set<long> invalid_sample_ids;
+		for (auto my_case : incomplete_cases){
+			invalid_sample_ids.insert(my_case.first);
+		}
+		ProbSetter_v2 setter_v2(invalid_sample_ids);
+
 		double x, dosage, check, info_j, f1, chunk_missingness;
 		double dosage_mean, dosage_sigma, missing_calls = 0.0;
 		int n_var_incomplete = 0;
@@ -442,6 +448,7 @@ public:
 			n_var_parsed++;
 
 			// Read probs + check maf filter
+			if(false){
 			bgenView->read_genotype_data_block( setter );
 
 			// maf + info filters; computed on valid sample_ids & variants whose alleles
@@ -540,8 +547,49 @@ public:
 				}
 			}
 
-			for (std::uint32_t ii = 0; ii < n_samples; ii++) {
-				G.assign_index(ii, jj, dosage_j[ii]);
+				for (std::uint32_t ii = 0; ii < n_samples; ii++) {
+					G.assign_index(ii, jj, dosage_j[ii]);
+				}
+			} else {
+				bgenView->read_genotype_data_block( setter_v2 );
+
+				double d1    = setter_v2.m_sum_eij;
+				double maf_j = setter_v2.m_maf;
+				double info_j= setter_v2.m_info;
+				double mu    = setter_v2.m_mean;
+				double sigma = std::sqrt(setter_v2.m_sigma2);
+
+				// Filters
+				if (p.maf_lim && (maf_j < p.min_maf || maf_j > 1 - p.min_maf)) {
+					continue;
+				}
+				if (p.info_lim && info_j < p.min_info) {
+					continue;
+				}
+				if(!p.keep_constant_variants && d1 < 5.0) {
+					n_constant_variance++;
+					continue;
+				}
+				if(!p.keep_constant_variants && sigma <= 1e-12) {
+					n_constant_variance++;
+					continue;
+				}
+
+				// filters passed; write contextual info
+				G.al_0[jj]     = alleles_j[0];
+				G.al_1[jj]     = alleles_j[1];
+				G.maf[jj]      = maf_j;
+				G.info[jj]     = info_j;
+				G.rsid[jj]     = rsid_j;
+				G.chromosome[jj] = std::stoi(chr_j);
+				G.position[jj] = pos_j;
+				std::string key_j = chr_j + "~" + std::to_string(pos_j) + "~" + alleles_j[0] + "~" + alleles_j[1];
+				G.SNPKEY[jj]   = key_j;
+				G.SNPID[jj] = SNPID_j;
+
+				for (std::uint32_t ii = 0; ii < n_samples; ii++) {
+					G.assign_index(ii, jj, setter_v2.m_dosage[ii]);
+				}
 			}
 			// G.compressed_dosage_sds[jj] = sigma;
 			// G.compressed_dosage_means[jj] = mu;

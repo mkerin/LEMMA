@@ -197,7 +197,6 @@ void GenotypeMatrix::compute_means_and_sd() {
 
 	// Column standard deviation
 	double val, sigma;
-	Eigen::VectorXd compressed_dosage_sds(pp);
 	for (Index jj = 0; jj < pp; jj++){
 		sigma = 0;
 		for (Index ii = 0; ii < nn; ii++){
