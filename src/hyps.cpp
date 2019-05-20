@@ -180,7 +180,6 @@ void Hyps::read_from_dump(const std::string& filename){
 		// skip variable name
 		ss >> s1;
 		ss >> s2;
-		std::cout << s1 << std::endl;
 
 		if(s1 != "") {
 			variables.push_back(s1);
