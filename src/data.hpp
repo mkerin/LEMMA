@@ -50,36 +50,36 @@ public:
 	parameters p;
 
 
-	long n_pheno;                                                                             // number of phenotypes
-	long n_covar;                                                                             // number of covariates
-	long n_env;                                                                             // number of env variables
-	int n_effects;                                                                               // number of environmental interactions
-	long n_samples;                                                                             // number of samples
+	long n_pheno;                                                                                     // number of phenotypes
+	long n_covar;                                                                                     // number of covariates
+	long n_env;                                                                                     // number of env variables
+	int n_effects;                                                                                       // number of environmental interactions
+	long n_samples;                                                                                     // number of samples
 	long n_var;
-	long n_var_parsed;                                                                             // Track progress through IndexQuery
+	long n_var_parsed;                                                                                     // Track progress through IndexQuery
 	long int n_dxteex_computed;
 	long int n_snpstats_computed;
 
-	bool Y_reduced;                                                                               // Variables to track whether we have already
-	bool W_reduced;                                                                               // reduced to complete cases or not.
+	bool Y_reduced;                                                                                       // Variables to track whether we have already
+	bool W_reduced;                                                                                       // reduced to complete cases or not.
 	bool E_reduced;
 
 	std::vector< std::string > external_dXtEEX_SNPID;
 	std::vector< std::string > rsid_list;
 
-	std::map<int, bool> missing_envs;                                                                               // set of subjects missing >= 1 env variables
-	std::map<int, bool> missing_covars;                                                                             // set of subjects missing >= 1 covariate
-	std::map<int, bool> missing_phenos;                                                                             // set of subjects missing >= phenotype
-	std::map< std::size_t, bool > incomplete_cases;                                                                             // union of samples missing data
+	std::map<int, bool> missing_envs;                                                                                       // set of subjects missing >= 1 env variables
+	std::map<int, bool> missing_covars;                                                                                     // set of subjects missing >= 1 covariate
+	std::map<int, bool> missing_phenos;                                                                                     // set of subjects missing >= phenotype
+	std::map< std::size_t, bool > incomplete_cases;                                                                                     // union of samples missing data
 
 	std::vector< std::string > pheno_names;
 	std::vector< std::string > covar_names;
 	std::vector< std::string > env_names;
 
 	GenotypeMatrix G;
-	EigenDataMatrix Y, Y2;                                                                             // phenotype matrix (#2 always has covars regressed)
-	EigenDataMatrix C;                                                                             // covariate matrix
-	EigenDataMatrix E;                                                                             // env matrix
+	EigenDataMatrix Y, Y2;                                                                                     // phenotype matrix (#2 always has covars regressed)
+	EigenDataMatrix C;                                                                                     // covariate matrix
+	EigenDataMatrix E;                                                                                     // env matrix
 	Eigen::ArrayXXd dXtEEX;
 	Eigen::ArrayXXd external_dXtEEX;
 
@@ -422,19 +422,15 @@ public:
 		std::uint32_t pos_j;
 		std::string rsid_j;
 		std::vector< std::string > alleles_j;
-		// read but ignored
 		std::string SNPID_j;
-		std::vector< std::vector< double > > probs;
-		ProbSetter setter( &probs );
 
 		std::set<long> invalid_sample_indexes;
-		for (auto my_case : incomplete_cases){
+		for (auto my_case : incomplete_cases) {
 			invalid_sample_indexes.insert(my_case.first);
 		}
-		ProbSetter_v2 setter_v2(invalid_sample_indexes);
+		DosageSetter setter_v2(invalid_sample_indexes);
 
-		double x, dosage, check, info_j, f1, chunk_missingness;
-		double dosage_mean, dosage_sigma, missing_calls = 0.0;
+		double chunk_missingness = 0;
 		int n_var_incomplete = 0;
 
 		// Resize genotype matrix
@@ -448,63 +444,14 @@ public:
 			n_var_parsed++;
 
 			// Read probs + check maf filter
-			if(false){
-			bgenView->read_genotype_data_block( setter );
+			bgenView->read_genotype_data_block( setter_v2 );
 
-			// maf + info filters; computed on valid sample_ids & variants whose alleles
-			// sum to 1
-			std::map<int, bool> missing_genos;
-			Eigen::ArrayXd dosage_j(n_samples);
-			double f2 = 0.0, valid_count = 0.0;
-			std::uint32_t ii_obs = 0;
-			for( std::size_t ii = 0; ii < probs.size(); ii++ ) {
-				if (incomplete_cases.count(ii) == 0) {
-					f1 = dosage = check = 0.0;
-					for( std::size_t kk = 0; kk < probs[ii].size(); kk++ ) {
-						x = probs[ii][kk];
-						dosage += x * kk;
-						f1 += x * kk * kk;
-						check += x;
-					}
-					if(check > 0.9999 && check < 1.0001) {
-						dosage_j[ii_obs] = dosage;
-						f2 += (f1 - dosage * dosage);
-						valid_count++;
-					} else {
-						missing_genos[ii_obs] = true;
-						dosage_j[ii_obs] = 0.0;
-					}
-					ii_obs++;
-				}
-			}
-			assert(ii_obs == n_samples);
-
-			double d1    = dosage_j.sum();
-			double maf_j = d1 / (2.0 * valid_count);
-
-			// Flip dosage vector if maf > 0.5
-			if(p.flip_high_maf_variants && maf_j > 0.5) {
-				dosage_j = (2.0 - dosage_j);
-				for (std::uint32_t ii = 0; ii < n_samples; ii++) {
-					if (missing_genos.count(ii) > 0) {
-						dosage_j[ii] = 0.0;
-					}
-				}
-
-				f2       = 4.0 * valid_count - 4.0 * d1 + f2;
-				d1       = dosage_j.sum();
-				maf_j    = d1 / (2.0 * valid_count);
-			}
-
-			double mu    = d1 / valid_count;
-			info_j       = 1.0;
-			if(maf_j > 1e-10 && maf_j < 0.9999999999) {
-				info_j -= f2 / (2.0 * valid_count * maf_j * (1.0 - maf_j));
-			}
-
-			// Compute sd
-			double sigma = (dosage_j - mu).square().sum();
-			sigma = std::sqrt(sigma/(valid_count - 1.0));
+			double d1     = setter_v2.m_sum_eij;
+			double maf_j  = setter_v2.m_maf;
+			double info_j = setter_v2.m_info;
+			double mu     = setter_v2.m_mean;
+			double missingness_j    = setter_v2.m_missingness;
+			double sigma = std::sqrt(setter_v2.m_sigma2);
 
 			// Filters
 			if (p.maf_lim && (maf_j < p.min_maf || maf_j > 1 - p.min_maf)) {
@@ -513,6 +460,9 @@ public:
 			if (p.info_lim && info_j < p.min_info) {
 				continue;
 			}
+			// if (p.missingness_lim && missingness_j > p.max_missingness) {
+			//  continue;
+			// }
 			if(!p.keep_constant_variants && d1 < 5.0) {
 				n_constant_variance++;
 				continue;
@@ -523,6 +473,9 @@ public:
 			}
 
 			// filters passed; write contextual info
+			chunk_missingness += missingness_j;
+			if(missingness_j > 0) n_var_incomplete++;
+
 			G.al_0[jj]     = alleles_j[0];
 			G.al_1[jj]     = alleles_j[1];
 			G.maf[jj]      = maf_j;
@@ -534,62 +487,8 @@ public:
 			G.SNPKEY[jj]   = key_j;
 			G.SNPID[jj] = SNPID_j;
 
-			// filters passed; write dosage to G
-			// Note that we only write dosage for valid sample ids
-			// Scale + center dosage, set missing to mean
-			if(!missing_genos.empty()) {
-				n_var_incomplete += 1;
-				missing_calls += (double) missing_genos.size();
-				for (std::uint32_t ii = 0; ii < n_samples; ii++) {
-					if (missing_genos.count(ii) > 0) {
-						dosage_j[ii] = mu;
-					}
-				}
-			}
-
-				for (std::uint32_t ii = 0; ii < n_samples; ii++) {
-					G.assign_index(ii, jj, dosage_j[ii]);
-				}
-			} else {
-				bgenView->read_genotype_data_block( setter_v2 );
-
-				double d1    = setter_v2.m_sum_eij;
-				double maf_j = setter_v2.m_maf;
-				double info_j= setter_v2.m_info;
-				double mu    = setter_v2.m_mean;
-				double sigma = std::sqrt(setter_v2.m_sigma2);
-
-				// Filters
-				if (p.maf_lim && (maf_j < p.min_maf || maf_j > 1 - p.min_maf)) {
-					continue;
-				}
-				if (p.info_lim && info_j < p.min_info) {
-					continue;
-				}
-				if(!p.keep_constant_variants && d1 < 5.0) {
-					n_constant_variance++;
-					continue;
-				}
-				if(!p.keep_constant_variants && sigma <= 1e-12) {
-					n_constant_variance++;
-					continue;
-				}
-
-				// filters passed; write contextual info
-				G.al_0[jj]     = alleles_j[0];
-				G.al_1[jj]     = alleles_j[1];
-				G.maf[jj]      = maf_j;
-				G.info[jj]     = info_j;
-				G.rsid[jj]     = rsid_j;
-				G.chromosome[jj] = std::stoi(chr_j);
-				G.position[jj] = pos_j;
-				std::string key_j = chr_j + "~" + std::to_string(pos_j) + "~" + alleles_j[0] + "~" + alleles_j[1];
-				G.SNPKEY[jj]   = key_j;
-				G.SNPID[jj] = SNPID_j;
-
-				for (std::uint32_t ii = 0; ii < n_samples; ii++) {
-					G.assign_index(ii, jj, setter_v2.m_dosage[ii]);
-				}
+			for (std::uint32_t ii = 0; ii < n_samples; ii++) {
+				G.assign_index(ii, jj, setter_v2.m_dosage[ii]);
 			}
 			// G.compressed_dosage_sds[jj] = sigma;
 			// G.compressed_dosage_means[jj] = mu;
@@ -603,9 +502,9 @@ public:
 		assert( G.rsid.size() == jj );
 		n_var = jj;
 
-		chunk_missingness = missing_calls / (double) (n_var * n_samples);
+		chunk_missingness /= n_samples;
 		if(chunk_missingness > 0.0) {
-			std::cout << "Chunk missingness " << chunk_missingness << "(";
+			std::cout << "Average chunk missingness " << chunk_missingness << "(";
 			std::cout << n_var_incomplete << "/" << n_var;
 			std::cout << " variants incomplete)" << std::endl;
 		}
@@ -1136,7 +1035,7 @@ public:
 				hyps.sigma = 1 - hyps_grid(ii, 0) - hyps_grid(ii, 3);
 
 				Eigen::VectorXd soln = hyps.get_sigmas(hyps_grid(ii, 0), hyps_grid(ii, 3), hyps_grid(ii, 1),
-				                                  hyps_grid(ii, 4), hyps_grid(ii, 2), hyps_grid(ii, 5), n_var);
+				                                       hyps_grid(ii, 4), hyps_grid(ii, 2), hyps_grid(ii, 5), n_var);
 				hyps.slab_var << hyps.sigma * soln[0], hyps.sigma * soln[2];
 				hyps.spike_var << hyps.sigma * soln[1], hyps.sigma * soln[3];
 				hyps.lambda << hyps_grid(ii, 1), hyps_grid(ii, 4);
