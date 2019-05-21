@@ -269,7 +269,10 @@ public:
 
 	/********** Compression/Decompression ************/
 	inline std::uint8_t CompressDosage(double dosage){
-//		assert(dosage < 2.0);
+		assert(dosage <= 2.0);
+		if(dosage > 2){
+			std::cout << "WARNING: dosage = " << dosage << std::endl;
+		}
 		dosage = std::min(dosage, L - 1e-6);
 		return static_cast<std::uint8_t>(std::floor(dosage * invIntervalWidth));
 	}

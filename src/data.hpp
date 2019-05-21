@@ -427,11 +427,11 @@ public:
 		std::vector< std::vector< double > > probs;
 		ProbSetter setter( &probs );
 
-		std::set<long> invalid_sample_ids;
+		std::set<long> invalid_sample_indexes;
 		for (auto my_case : incomplete_cases){
-			invalid_sample_ids.insert(my_case.first);
+			invalid_sample_indexes.insert(my_case.first);
 		}
-		ProbSetter_v2 setter_v2(invalid_sample_ids);
+		ProbSetter_v2 setter_v2(invalid_sample_indexes);
 
 		double x, dosage, check, info_j, f1, chunk_missingness;
 		double dosage_mean, dosage_sigma, missing_calls = 0.0;

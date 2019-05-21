@@ -124,11 +124,24 @@ TEST_CASE("Data") {
 		CHECK(data.E(0, 0) == Approx(0.9959851422));
 
 		data.read_full_bgen();
-		SECTION("Ex1. bgen read in & standardised correctly") {
+		SECTION("bgen read in & standardised correctly") {
+			data.G.calc_scaled_values();
 			CHECK(data.G.low_mem);
 			CHECK(data.p.low_mem);
 			CHECK(!data.p.flip_high_maf_variants);
 			CHECK(data.G(0, 0) == Approx(-1.8575040711));
+			CHECK(data.G.M(0, 0) == 1);
+			int entry;
+			entry = data.G.M(0, 1); CHECK(entry == 128);
+			entry = data.G.M(0, 2); CHECK(entry == 128);
+			entry = data.G.M(1, 0); CHECK(entry == 251);
+			entry = data.G.M(1, 1); CHECK(entry == 250);
+			entry = data.G.M(2, 0); CHECK(entry == 253);
+			entry = data.G.M(2, 1); CHECK(entry == 213);
+
+			CHECK(data.G.compressed_dosage_means(0) == Approx(1.27453125));
+			CHECK(data.G.compressed_dosage_inv_sds(0) == Approx(1.4709262627));
+			CHECK(data.G.compressed_dosage_sds(0) == Approx(0.679843732));
 			CHECK(data.G(0, 1) == Approx(-0.7404793547));
 			CHECK(data.G(0, 2) == Approx(-0.5845122102));
 			CHECK(data.G(0, 3) == Approx(-0.6633007506));
@@ -166,6 +179,15 @@ TEST_CASE("Data") {
 		CHECK(data.E(0, 0) == Approx(0.8123860763));
 
 		data.read_full_bgen();
+		SECTION("Ex1. bgen read in & standardised correctly") {
+			data.G.calc_scaled_values();
+			CHECK(data.G.low_mem);
+			CHECK(data.p.low_mem);
+			CHECK(!data.p.flip_high_maf_variants);
+			CHECK(data.G.compressed_dosage_means(0) == Approx(1.2979910714));
+			CHECK(data.G.compressed_dosage_means(50) == Approx(0.3610491071));
+			CHECK(data.n_var == 54);
+		}
 
 		SECTION("dXtEEX computed correctly") {
 			data.calc_dxteex();
@@ -446,7 +468,7 @@ TEST_CASE( "Example 4: multi-env + mog + covars + emp_bayes" ){
 			CHECK(VB.calc_logw(hyps, vp) == Approx(-88.4914916475));
 			VbTracker tracker(p);
 			tracker.init_interim_output(0,2, VB.n_effects, VB.n_covar, VB.n_env, VB.env_names, vp);
-			tracker.dump_state(2, VB.n_samples, VB.n_covar, VB.n_var, VB.n_env,
+			tracker.dump_state("2", VB.n_samples, VB.n_covar, VB.n_var, VB.n_env,
 							   VB.n_effects, vp, hyps, VB.Y, VB.C, VB.X,
 							   VB.covar_names, VB.env_names);
 
@@ -532,6 +554,7 @@ TEST_CASE( "Example 4: multi-env + mog + covars + emp_bayes + sample subset" ){
 		VBayesX2 VB(data);
 		SECTION("Ex4. Vbayes_X2 initialised correctly"){
 			CHECK(VB.n_samples == 29);
+			CHECK(VB.n_var == 54);
 		}
 
 		std::vector< VbTracker > trackers(VB.hyps_inits.size(), p);

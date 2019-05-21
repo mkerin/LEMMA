@@ -90,16 +90,17 @@ struct ProbSetter_v2 {
 	typedef EigenDataVector Data;
 
 	ProbSetter_v2(std::set<long> invalid_sample_ids):
-			m_invalid_sample_ids(invalid_sample_ids)
+			m_invalid_sample_indexes(invalid_sample_ids)
 	{}
 
 	// Called once allowing us to set storage.
 	void initialise( std::size_t number_of_samples, std::size_t number_of_alleles ) {
-		m_dosage.resize(number_of_samples);
+		m_dosage.resize(number_of_samples - m_invalid_sample_indexes.size());
 		m_samples_skipped = 0;
 		m_missing_entries.clear();
 
 		m_sum_eij = 0;
+		m_sum_eij2 = 0;
 		m_sum_fij_minus_eij2 = 0;
 		m_fij = 0;
 		m_eij = 0;
@@ -115,7 +116,7 @@ struct ProbSetter_v2 {
 	// Called once per sample to determine whether we want data for this sample
 	bool set_sample( std::size_t i ) {
 		// Only want data from samples with complete data across pheno/covar/env
-		if (m_invalid_sample_ids.find(i) != m_invalid_sample_ids.end()){
+		if (m_invalid_sample_indexes.find(i) != m_invalid_sample_indexes.end()){
 			m_samples_skipped++;
 			return false;
 		} else {
@@ -136,7 +137,7 @@ struct ProbSetter_v2 {
 	}
 
 	// Called once for each genotype (or haplotype) probability per sample.
-	void set_value( uint32_t gg, double value ) {
+	void set_value(const uint32_t& gg, const double& value ) {
 		if(gg == 0){
 			m_dosage(m_sample_i) = 0;
 		} else {
@@ -156,7 +157,7 @@ struct ProbSetter_v2 {
 	}
 
 	// Ditto, but called if data is missing for this sample.
-	void set_value( uint32_t, genfile::MissingValue value ) {
+	void set_value(const uint32_t&, const genfile::MissingValue& value){
 		m_missing_entries.push_back(m_sample_i);
 	}
 
@@ -179,6 +180,7 @@ struct ProbSetter_v2 {
 		for (auto ii : m_missing_entries){
 			m_dosage(ii) = m_mean;
 		}
+		assert(m_samples_skipped == m_invalid_sample_indexes.size());
 	}
 
 	Data m_dosage;
@@ -190,7 +192,7 @@ struct ProbSetter_v2 {
 	double m_sum_eij;
 
 private:
-	std::set<long> m_invalid_sample_ids;
+	std::set<long> m_invalid_sample_indexes;
 	std::size_t m_samples_skipped;
 	std::size_t m_sample_i;
 
