@@ -12,6 +12,7 @@
 #include <cassert>
 #include <stdexcept>
 #include <memory>
+#include <set>
 
 // DosageSetter is a callback object appropriate for passing to bgen::read_genotype_data_block() or
 // the synonymous method of genfile::bgen::View. See the comment in bgen.hpp above

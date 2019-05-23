@@ -11,7 +11,7 @@
 #include "parameters.hpp"
 #include "genotype_matrix.hpp"
 #include "hyps.hpp"
-#include "file_streaming.hpp"
+#include "file_utils.hpp"
 #include "variational_parameters.hpp"
 #include "tools/eigen3.3/Dense"
 
@@ -34,10 +34,10 @@ namespace boost_io = boost::iostreams;
 
 class VbTracker {
 public:
-	int count;                                                    // Number of iterations to convergence at each step
-	VariationalParametersLite vp;                                     // best mu at each ii
-	double logw;                                                     // best logw at each ii
-	Hyps hyps;                                                      // hyps values at end of VB inference.
+	int count;                                                        // Number of iterations to convergence at each step
+	VariationalParametersLite vp;                                         // best mu at each ii
+	double logw;                                                         // best logw at each ii
+	Hyps hyps;                                                          // hyps values at end of VB inference.
 
 	parameters p;
 
@@ -193,7 +193,7 @@ public:
 
 		// Converged snp-stats to file
 		fstream_init(outf_inits, dir, "_converged", true);
-		write_snp_stats_to_file(outf_inits, n_effects, n_var, vp, X, p, true);
+		fileUtils::write_snp_stats_to_file(outf_inits, n_effects, n_var, vp, X, p, true);
 		boost_io::close(outf_inits);
 	}
 

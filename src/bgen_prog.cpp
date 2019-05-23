@@ -3,6 +3,13 @@
 
 #define EIGEN_USE_MKL_ALL
 
+#include "parse_arguments.hpp"
+#include "parameters.hpp"
+#include "data.hpp"
+#include "vbayes_x2.hpp"
+#include "pve.hpp"
+#include "genotype_matrix.hpp"
+
 #include <boost/algorithm/string/predicate.hpp>
 #include <boost/lexical_cast.hpp>
 #include <algorithm>
@@ -14,11 +21,6 @@
 #include <cstdlib>
 #include <stdexcept>
 #include <memory>
-#include "parse_arguments.hpp"
-#include "parameters.hpp"
-#include "data.hpp"
-#include "vbayes_x2.hpp"
-#include "pve.hpp"
 
 
 int main( int argc, char** argv ) {
@@ -90,6 +92,48 @@ int main( int argc, char** argv ) {
 
 		if(p.mode_calc_snpstats){
 			VB.write_map_stats_to_file("");
+		}
+
+		if(p.streamBgenFile != "NULL"){
+			GenotypeMatrix Xstream(false);
+			bool bgen_pass = true;
+			long n_var_parsed = 0;
+
+			genfile::bgen::IndexQuery::UniquePtr query = genfile::bgen::IndexQuery::create(p.bgi_file);
+			genfile::bgen::View::UniquePtr bgenView;
+			query->initialise();
+
+			bgenView->set_query(query);
+			bgenView->summarise(std::cout);
+
+			Eigen::VectorXd neglogp_beta(VB.n_var);
+			Eigen::VectorXd neglogp_rgam(VB.n_var);
+			Eigen::VectorXd neglogp_gam;
+			Eigen::VectorXd neglogp_joint(VB.n_var);
+			Eigen::VectorXd test_stat_beta(VB.n_var);
+			Eigen::VectorXd test_stat_rgam(VB.n_var);
+			Eigen::VectorXd test_stat_gam;
+			Eigen::VectorXd test_stat_joint(VB.n_var);
+			bool append = false;
+
+			boost_io::filtering_ostream outf;
+			fileUtils::fstream_init(outf, p.streamBgenOutFile);
+
+			while (fileUtils::read_bgen_chunk(bgenView, Xstream, data.incomplete_cases,
+					data.n_samples, 128, p, bgen_pass, n_var_parsed)){
+				VB.LOCO_pvals_v2(Xstream,
+				VB.vp_init,
+				p.LOSO_window, neglogp_beta, neglogp_rgam,
+				neglogp_joint,
+				test_stat_beta,
+				test_stat_rgam,
+				test_stat_joint);
+
+				fileUtils::write_snp_stats_to_file(outf, VB.n_effects, Xstream, append, neglogp_beta, neglogp_gam,
+												   neglogp_rgam, neglogp_joint, test_stat_beta, test_stat_gam,
+												   test_stat_rgam, test_stat_joint);
+				append = true;
+			}
 		}
 
 		if(p.mode_pve_est) {

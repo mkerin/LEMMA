@@ -6,7 +6,7 @@
 #define BGEN_PROG_PVE_HPP
 
 #include "genotype_matrix.hpp"
-#include "file_streaming.hpp"
+#include "file_utils.hpp"
 #include "parameters.hpp"
 
 #include <boost/iostreams/filtering_stream.hpp>
@@ -19,7 +19,7 @@ class PVE {
 public:
 	// constants
 	long B;
-	long n_samples;     // number of samples
+	long n_samples;         // number of samples
 	long n_var;
 	const bool mode_gxe;
 	const int n_components;
@@ -97,7 +97,7 @@ public:
 
 	void to_file(const std::string& file){
 		boost_io::filtering_ostream outf;
-		auto filename = fstream_init(outf, file, "", "_pve");
+		auto filename = fileUtils::fstream_init(outf, file, "", "_pve");
 
 		std::cout << "Writing PVE results to " << filename << std::endl;
 		outf << "component sigmas h2" << std::endl;
@@ -111,7 +111,7 @@ public:
 	}
 
 	void init_interim_results(const std::string& file){
-		auto filename = fstream_init(outf, file, "pve_interim/", "");
+		auto filename = fileUtils::fstream_init(outf, file, "pve_interim/", "");
 		std::cout << "Writing interim results to " << filename << std::endl;
 
 		if(mode_gxe) {

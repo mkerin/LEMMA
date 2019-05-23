@@ -15,6 +15,50 @@
 namespace boost_m  = boost::math;
 
 template <typename Derived1, typename Derived2>
+void prep_lm(const Eigen::MatrixBase<Derived1>& H,
+			 const Eigen::MatrixBase<Derived2>& y,
+			 EigenRefDataMatrix HtH,
+			 EigenRefDataMatrix HtH_inv,
+			 EigenRefDataMatrix tau,
+			 EigenRefDataMatrix Hty,
+			 double& rss,
+			 EigenRefDataMatrix HtVH){
+	/*** All of the heavy lifting for linear hypothesis tests.
+	 * Easier to have in one place if we go down the MPI route.
+	 */
+
+	HtH     = H.transpose() * H;
+	Hty     = H.transpose() * y;
+	tau     = HtH_inv * Hty;
+
+	EigenDataVector resid = y - H * tau;
+	HtVH = H.transpose() * resid.cwiseProduct(resid).asDiagonal() * H;
+	HtH_inv = HtH.inverse();
+	rss = resid.squaredNorm();
+}
+
+template <typename Derived1, typename Derived2>
+void prep_lm(const Eigen::MatrixBase<Derived1>& H,
+			 const Eigen::MatrixBase<Derived2>& y,
+			 EigenRefDataMatrix HtH,
+			 EigenRefDataMatrix HtH_inv,
+			 EigenRefDataMatrix tau,
+			 EigenRefDataMatrix Hty,
+			 double& rss){
+	/*** All of the heavy lifting for linear hypothesis tests.
+	 * Easier to have in one place if we go down the MPI route.
+	 */
+
+	HtH     = H.transpose() * H;
+	Hty     = H.transpose() * y;
+	tau     = HtH_inv * Hty;
+
+	EigenDataVector resid = y - H * tau;
+	HtH_inv = HtH.inverse();
+	rss = resid.squaredNorm();
+}
+
+template <typename Derived1, typename Derived2>
 void student_t_test(long nn,
                       const Eigen::MatrixBase<Derived1>& HtH_inv,
                       const Eigen::MatrixBase<Derived2>& Hty,

@@ -67,7 +67,7 @@ public:
 	typedef Eigen::Index Index;
 
 	// Constructors
-	GenotypeMatrix() : low_mem(false){
+	GenotypeMatrix(const bool& use_low_mem) : low_mem(use_low_mem){
 		scaling_performed = false;
 		nn = 0;
 		pp = 0;

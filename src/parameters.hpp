@@ -13,6 +13,7 @@ public:
 	std::string r1_hyps_grid_file, r1_probs_grid_file, hyps_grid_file;
 	std::string env_coeffs_file, covar_coeffs_file, hyps_probs_file, vb_init_file;
 	std::string dxteex_file, snpstats_file, mog_weights_file, resume_prefix;
+	std::string streamBgenFile, streamBgiFile, streamBgenOutFile;
 	std::vector< std::string > rsid;
 	unsigned int random_seed;
 	long int chunk_size, vb_iter_max, vb_iter_start, param_dump_interval;
@@ -54,7 +55,10 @@ public:
 		mog_weights_file("NULL"),
 		covar_coeffs_file("NULL"),
 		resume_prefix("NULL"),
-		env_coeffs_file("NULL") {
+		env_coeffs_file("NULL"),
+		streamBgenFile("NULL"),
+		streamBgiFile("NULL"),
+		streamBgenOutFile("NULL") {
 		flip_high_maf_variants = false;
 		init_weights_with_snpwise_scan = false;
 		restrict_gamma_updates = false;

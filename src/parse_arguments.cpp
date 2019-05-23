@@ -135,7 +135,9 @@ void parse_arguments(parameters &p, int argc, char **argv) {
 		"--min_spike_diff_factor",
 		"--n_pve_samples",
 		"--loso_window_size",
-		"--mode_calc_snpstats"
+		"--mode_calc_snpstats",
+		"--streamBgen",
+		"--streamOut"
 	};
 
 	std::set<std::string>::iterator set_it;
@@ -479,6 +481,22 @@ void parse_arguments(parameters &p, int argc, char **argv) {
 
 				check_file_exists(p.bgen_file);
 				check_file_exists(p.bgi_file);
+				i += 1;
+			}
+
+			if(strcmp(in_str, "--streamBgen") == 0) {
+				check_counts(in_str, i, 1, argc);
+				p.streamBgenFile = argv[i + 1];
+				p.streamBgiFile = p.streamBgenFile + ".bgi";
+
+				check_file_exists(p.streamBgenFile);
+				check_file_exists(p.streamBgiFile);
+				i += 1;
+			}
+
+			if(strcmp(in_str, "--streamOut") == 0) {
+				check_counts(in_str, i, 1, argc);
+				p.streamBgenOutFile = argv[i + 1];
 				i += 1;
 			}
 

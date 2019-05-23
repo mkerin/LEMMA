@@ -429,6 +429,8 @@ TEST_CASE("Resume from multi-env + mog + emp_bayes + incl_covars"){
 		// Compute snp-stats
 		long n_var = VB.n_var;
 		long n_chrs = VB.n_chrs;
+		long n_samples = VB.n_samples;
+		long n_env = VB.n_env;
 		VariationalParametersLite& vp_init = VB.vp_init;
 
 		std::vector<Eigen::VectorXd> map_residuals_by_chr(n_chrs), pred_main(n_chrs), pred_int(n_chrs);
@@ -443,5 +445,16 @@ TEST_CASE("Resume from multi-env + mog + emp_bayes + incl_covars"){
 		CHECK(neglogp_beta(0) == Approx(0.2859132953));
 		CHECK(neglogp_gam(0) == Approx(1.62452219));
 		CHECK(neglogp_rgam(0) == Approx(2.9858778387));
+
+		VB.p.LOSO_window = 10;
+		VB.LOCO_pvals_v2(VB.X, vp_init, VB.p.LOSO_window, neglogp_beta,
+								neglogp_rgam,
+								neglogp_joint,
+								test_stat_beta,
+								test_stat_rgam,
+								test_stat_joint);
+
+		CHECK(neglogp_beta(0) == Approx(0.2739696266));
+		CHECK(neglogp_rgam(0) == Approx(3.3699459279));
 	}
 }

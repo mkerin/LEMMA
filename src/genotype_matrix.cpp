@@ -369,7 +369,7 @@ EigenDataMatrix GenotypeMatrix::operator*(EigenRefDataMatrix rhs) {
 void TemporaryFunctionGenotypeMatrix (){
 	std::vector< std::uint32_t> chunk;
 	EigenDataMatrix mat;
-	GenotypeMatrix X;
+	GenotypeMatrix X(false);
 
 	X.col_block3(chunk, mat);
 }

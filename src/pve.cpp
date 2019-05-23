@@ -4,7 +4,7 @@
 #include "pve.hpp"
 #include "genotype_matrix.hpp"
 #include "typedefs.hpp"
-#include "file_streaming.hpp"
+#include "file_utils.hpp"
 #include "parameters.hpp"
 
 #include "tools/eigen3.3/Dense"
