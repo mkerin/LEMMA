@@ -1547,6 +1547,115 @@ public:
 		}
 	}
 
+	void write_map_stats_to_file(const std::string &file_prefix) {
+		output_init(file_prefix);
+		output_results();
+	}
+
+	void output_init(const std::string& file_prefix){
+		// Initialise files ready to write;
+		std::string ofile_w, ofile_map_covar;
+
+		std::string ofile_map   = fstream_init(outf_map, file_prefix, "_map_snp_stats");
+		std::string ofile_map_yhat = fstream_init(outf_map_pred, file_prefix, "_map_yhat");
+		if (n_env > 0) ofile_w = fstream_init(outf_weights, file_prefix, "_env_weights");
+		if (n_covar > 0) ofile_map_covar = fstream_init(outf_map_covar, file_prefix, "_map_covar");
+		std::cout << "Writing MAP snp stats to " << ofile_map << std::endl;
+		if (n_covar > 0) std::cout << "Writing MAP covar coefficients to " << ofile_map_covar << std::endl;
+		std::cout << "Writing yhat from map to " << ofile_map_yhat << std::endl;
+		if (n_env > 0) std::cout << "Writing env weights to " << ofile_w << std::endl;
+
+		if(p.verbose) {
+			std::string ofile_elbo = fstream_init(outf_elbo, file_prefix, "_elbo");
+			std::cout << "Writing ELBO from each VB iteration to " << ofile_elbo << std::endl;
+
+			std::string ofile_alpha_diff = fstream_init(outf_alpha_diff, file_prefix, "_alpha_diff");
+			std::cout << "Writing max change in alpha from each VB iteration to " << ofile_alpha_diff << std::endl;
+		}
+	}
+
+	void output_results(){
+
+		/*********** Stats from MAP to file ************/
+		std::vector<Eigen::VectorXd> map_residuals_by_chr(n_chrs), pred_main(n_chrs), pred_int(n_chrs);
+
+		// Predicted effects to file
+		calcPredEffects(vp_init);
+		compute_residuals_per_chr(vp_init, pred_main, pred_int, map_residuals_by_chr);
+		Eigen::VectorXd Ealpha = Eigen::VectorXd::Zero(n_samples);
+		if(n_covar > 0) {
+			Ealpha += (C * vp_init.muc.matrix().cast<scalarData>()).cast<double>();
+		}
+		if(n_effects == 1) {
+			outf_map_pred << "Y Ealpha Xbeta";
+			for(auto cc : chrs_index) {
+				outf_map_pred << " residuals_excl_chr" << chrs_present[cc];
+			}
+			outf_map_pred << std::endl;
+
+			for (std::uint32_t ii = 0; ii < n_samples; ii++) {
+				outf_map_pred << Y(ii) << " " << Ealpha(ii) << " " << vp_init.ym(ii) - Ealpha(ii);
+				for(auto cc : chrs_index) {
+					outf_map_pred << " " << map_residuals_by_chr[cc](ii);
+				}
+				outf_map_pred << std::endl;
+			}
+		} else {
+			outf_map_pred << "Y Ealpha Xbeta eta Xgamma";
+			for(auto cc : chrs_index) {
+				outf_map_pred << " residuals_excl_chr" << chrs_present[cc];
+			}
+			outf_map_pred << std::endl;
+			for (std::uint32_t ii = 0; ii < n_samples; ii++) {
+				outf_map_pred << Y(ii) << " " << Ealpha(ii) << " " << vp_init.ym(ii) - Ealpha(ii);
+				outf_map_pred << " " << vp_init.eta(ii) << " " << vp_init.yx(ii);
+				for(auto cc : chrs_index) {
+					outf_map_pred << " " << map_residuals_by_chr[cc](ii);
+				}
+				outf_map_pred << std::endl;
+			}
+		}
+
+		// weights to file
+		if(n_effects > 1) {
+			for (int ll = 0; ll < n_env; ll++) {
+				outf_weights << env_names[ll];
+				if (ll + 1 < n_env) outf_weights << " ";
+			}
+			outf_weights << std::endl;
+			for (int ll = 0; ll < n_env; ll++) {
+				outf_weights << vp_init.muw(ll);
+				if (ll + 1 < n_env) outf_weights << " ";
+			}
+			outf_weights << std::endl;
+		}
+
+		// Compute LOCO p-values
+		Eigen::VectorXd neglogp_beta(n_var), neglogp_gam(n_var), neglogp_rgam(n_var), neglogp_joint(n_var);
+		Eigen::VectorXd test_stat_beta(n_var), test_stat_gam(n_var), test_stat_rgam(n_var), test_stat_joint(n_var);
+		if(p.LOSO_window == -1) {
+			LOCO_pvals(vp_init, map_residuals_by_chr, neglogp_beta, neglogp_gam, neglogp_rgam, neglogp_joint,
+			           test_stat_beta, test_stat_gam, test_stat_rgam, test_stat_joint);
+		} else {
+			LOCO_pvals_v2(X, vp_init, p.LOSO_window, neglogp_beta,
+			              neglogp_rgam,
+			              neglogp_joint,
+			              test_stat_beta,
+			              test_stat_rgam,
+			              test_stat_joint);
+			neglogp_gam.resize(0);
+			test_stat_gam.resize(0);
+		}
+
+		// MAP snp-stats to file
+		fileUtils::write_snp_stats_to_file(outf_map, n_effects, n_var, vp_init, X, p, true, neglogp_beta, neglogp_gam,
+		                                   neglogp_rgam, neglogp_joint, test_stat_beta, test_stat_gam, test_stat_rgam,
+		                                   test_stat_joint);
+		if(n_covar > 0) {
+			write_covars_to_file(outf_map_covar, vp_init);
+		}
+	}
+
 	void write_covars_to_file(boost_io::filtering_ostream& ofile,
 	                          VariationalParametersLite vp) {
 		// Assumes ofile has been initialised.
