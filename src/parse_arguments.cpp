@@ -719,6 +719,19 @@ void parse_arguments(parameters &p, int argc, char **argv) {
 		if(!boost::filesystem::exists(p.covar_coeffs_file)) {
 			p.covar_coeffs_file = "NULL";
 		}
+
+		std::string index = std::regex_replace(
+			p.resume_prefix,
+			std::regex(".*it([0-9]+).*"),
+			std::string("$1"));
+		std::cout << "Resuming from previously saved state" << std::endl;
+		if (p.vb_iter_start == 0) {
+			try {
+				p.vb_iter_start = std::stol(index) + 1;
+				std::cout << "Incrementing vb counter to " << p.vb_iter_start << std::endl;
+			} catch (const std::invalid_argument& ia) {
+			}
+		}
 	}
 
 	// mode_vb specific options

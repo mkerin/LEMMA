@@ -1775,15 +1775,16 @@ public:
 
 	void output_init(const std::string& file_prefix){
 		// Initialise files ready to write;
+		std::string ofile_w, ofile_map_covar;
 
 		std::string ofile_map   = fstream_init(outf_map, file_prefix, "_map_snp_stats");
 		std::string ofile_map_yhat = fstream_init(outf_map_pred, file_prefix, "_map_yhat");
-		std::string ofile_w = fstream_init(outf_weights, file_prefix, "_env_weights");
-		std::string ofile_map_covar = fstream_init(outf_map_covar, file_prefix, "_map_covar");
+		if (n_env > 0) ofile_w = fstream_init(outf_weights, file_prefix, "_env_weights");
+		if (n_covar > 0) ofile_map_covar = fstream_init(outf_map_covar, file_prefix, "_map_covar");
 		std::cout << "Writing MAP snp stats to " << ofile_map << std::endl;
-		std::cout << "Writing MAP covar coefficients to " << ofile_map_covar << std::endl;
+		if (n_covar > 0) std::cout << "Writing MAP covar coefficients to " << ofile_map_covar << std::endl;
 		std::cout << "Writing yhat from map to " << ofile_map_yhat << std::endl;
-		std::cout << "Writing env weights to " << ofile_w << std::endl;
+		if (n_env > 0) std::cout << "Writing env weights to " << ofile_w << std::endl;
 
 		if(p.verbose) {
 			std::string ofile_elbo = fstream_init(outf_elbo, file_prefix, "_elbo");
