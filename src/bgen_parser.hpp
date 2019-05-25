@@ -7,6 +7,7 @@
 #include <iostream>
 #include "genfile/bgen/bgen.hpp"
 #include "typedefs.hpp"
+#include "mpi_utils.hpp"
 
 #include <fstream>
 #include <cassert>
@@ -97,8 +98,17 @@ struct DosageSetter {
 
 	// If present with this signature, called once after all data has been set.
 	void finalise() {
-		double Nvalid = m_dosage.rows() - m_missing_entries.size();
-		m_missingness = (double) m_missing_entries.size() / (double) m_dosage.rows();
+		double Ngeno = m_dosage.rows();
+		double Nmissing = m_missing_entries.size();
+
+		Ngeno = mpiUtils::mpiReduce_inplace(&Ngeno);
+		Nmissing = mpiUtils::mpiReduce_inplace(&Nmissing);
+		m_sum_eij = mpiUtils::mpiReduce_inplace(&m_sum_eij);
+		m_sum_eij2 = mpiUtils::mpiReduce_inplace(&m_sum_eij2);
+		m_sum_fij_minus_eij2 = mpiUtils::mpiReduce_inplace(&m_sum_fij_minus_eij2);
+
+		double Nvalid = Ngeno - Nmissing;
+		m_missingness = Nmissing / Ngeno;
 
 		m_maf = 0.5 * m_sum_eij / Nvalid;
 		m_info = 1.0;

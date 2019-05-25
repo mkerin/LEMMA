@@ -9,6 +9,7 @@
 #include "vbayes_x2.hpp"
 #include "pve.hpp"
 #include "genotype_matrix.hpp"
+#include "mpi_utils.hpp"
 
 #include <boost/algorithm/string/predicate.hpp>
 #include <boost/lexical_cast.hpp>
@@ -25,6 +26,8 @@
 
 int main( int argc, char** argv ) {
 	parameters p;
+	MPI_Init(NULL, NULL);
+	mpiUtils::sanitise_cout();
 
 	std::cout << "============="<< std::endl;
 	std::cout << "LEMMA v" << VERSION_MAJOR << "." << VERSION_MINOR << "." << VERSION_PATCH << std::endl;
@@ -58,7 +61,7 @@ int main( int argc, char** argv ) {
 		}
 
 		VBayesX2 VB(data);
-		if(p.mode_vb){
+		if(p.mode_vb) {
 			if (data.n_effects > 1) {
 				data.calc_dxteex();
 			}
@@ -89,12 +92,15 @@ int main( int argc, char** argv ) {
 			outf_time << "full_inference " << elapsed_vb.count() << std::endl;
 			outf_time << "vb_outer_loop " << VB.elapsed_innerLoop.count() << std::endl;
 		}
+		// ONLY IMPLEMENT MPI FOR VARIATIONAL BAYES
+		MPI_Finalize();
+		return 0;
 
-		if(p.mode_calc_snpstats){
-			VB.write_map_stats_to_file("");
+		if(p.mode_calc_snpstats) {
+			// VB.write_map_stats_to_file("");
 		}
 
-		if(p.streamBgenFile != "NULL"){
+		if(p.streamBgenFile != "NULL") {
 			GenotypeMatrix Xstream(false);
 			bool bgen_pass = true;
 			long n_var_parsed = 0;
@@ -120,18 +126,18 @@ int main( int argc, char** argv ) {
 			fileUtils::fstream_init(outf, p.streamBgenOutFile);
 
 			while (fileUtils::read_bgen_chunk(bgenView, Xstream, data.incomplete_cases,
-					data.n_samples, 128, p, bgen_pass, n_var_parsed)){
+			                                  data.n_samples, 128, p, bgen_pass, n_var_parsed)) {
 				VB.LOCO_pvals_v2(Xstream,
-				VB.vp_init,
-				p.LOSO_window, neglogp_beta, neglogp_rgam,
-				neglogp_joint,
-				test_stat_beta,
-				test_stat_rgam,
-				test_stat_joint);
+				                 VB.vp_init,
+				                 p.LOSO_window, neglogp_beta, neglogp_rgam,
+				                 neglogp_joint,
+				                 test_stat_beta,
+				                 test_stat_rgam,
+				                 test_stat_joint);
 
 				fileUtils::write_snp_stats_to_file(outf, VB.n_effects, Xstream, append, neglogp_beta, neglogp_gam,
-												   neglogp_rgam, neglogp_joint, test_stat_beta, test_stat_gam,
-												   test_stat_rgam, test_stat_joint);
+				                                   neglogp_rgam, neglogp_joint, test_stat_beta, test_stat_gam,
+				                                   test_stat_rgam, test_stat_joint);
 				append = true;
 			}
 		}

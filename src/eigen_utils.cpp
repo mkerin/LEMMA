@@ -3,6 +3,7 @@
 //
 
 #include "eigen_utils.hpp"
+#include "mpi_utils.hpp"
 
 #include "tools/eigen3.3/Dense"
 #include <boost/iostreams/filtering_stream.hpp>
@@ -286,25 +287,30 @@ void EigenUtils::scale_matrix_and_remove_constant_cols(EigenMat &M,
 	// Removes columns with zero variance + updates col_names.
 	// Only call on matrixes which have been reduced to complete cases,
 	// as no check for incomplete rows.
-	long n_rows = M.rows();
+	double Nlocal = M.rows();
+	double Nglobal = mpiUtils::mpiReduce_inplace(&Nlocal);
 
 	std::vector<std::size_t> keep;
 	std::vector<std::string> keep_names;
 	std::vector<std::string> reject_names;
 	for (std::size_t k = 0; k < n_cols; k++) {
-		double sigma = 0.0;
-		double count = 0;
-		for (int i = 0; i < n_rows; i++) {
-			double val = M(i, k);
-			sigma += val * val;
-			count += 1;
-		}
+		double sum_mik2 = M.col(k).array().square().sum();
+		sum_mik2 = mpiUtils::mpiReduce_inplace(&sum_mik2);
+//		double sigma = 0.0;
+//		double count = 0;
+//		for (int i = 0; i < n_rows; i++) {
+//			double val = M(i, k);
+//			sigma += val * val;
+//			count += 1;
+//		}
+		double sigma = std::sqrt(sum_mik2 / (Nglobal - 1));
 
-		sigma = sqrt(sigma/(count - 1));
+//		sigma = sqrt(sigma/(count - 1));
 		if (sigma > 1e-12) {
-			for (int i = 0; i < n_rows; i++) {
-				M(i, k) /= sigma;
-			}
+			M.col(k).array() /= sigma;
+//			for (int i = 0; i < n_rows; i++) {
+//				M(i, k) /= sigma;
+//			}
 			keep.push_back(k);
 			keep_names.push_back(col_names[k]);
 		} else {
@@ -339,16 +345,17 @@ void EigenUtils::center_matrix(EigenMat& M){
 	// as no check for incomplete rows.
 	long n_cols = M.cols();
 	long n_rows = M.rows();
+	double Nlocal = M.rows();
+	double Nglobal = mpiUtils::mpiReduce_inplace(&Nlocal);
 
 	for (int k = 0; k < n_cols; k++) {
-		double mu = 0.0;
-		double count = 0;
+		double sum_mik = 0.0;
 		for (int i = 0; i < n_rows; i++) {
-			mu += M(i, k);
-			count += 1;
+			sum_mik += M(i, k);
 		}
 
-		mu = mu / count;
+		sum_mik = mpiUtils::mpiReduce_inplace(&sum_mik);
+		double mu = sum_mik / Nglobal;
 		for (int i = 0; i < n_rows; i++) {
 			M(i, k) -= mu;
 		}

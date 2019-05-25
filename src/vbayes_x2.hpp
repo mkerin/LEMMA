@@ -18,6 +18,7 @@
 #include "variational_parameters.hpp"
 #include "vbayes_tracker.hpp"
 #include "hyps.hpp"
+#include "mpi_utils.hpp"
 
 #include <algorithm>
 #include <chrono>     // start/end time info
@@ -70,7 +71,7 @@ public:
 	std::uint32_t n_var2;
 	bool random_params_init;
 	bool run_round1;
-	double N;
+	double Nglobal;
 
 // Chromosomes in data
 	int n_chrs;
@@ -139,7 +140,8 @@ public:
 		n_covar        = dat.n_covar;
 		covar_names    = dat.covar_names;
 		env_names      = dat.env_names;
-		N              = (double) n_samples;
+		double Nlocal  = (double) n_samples;
+		Nglobal        = mpiUtils::mpiReduce_inplace(&Nlocal);
 		E = dat.E;
 
 		assert(Y.rows() == n_samples);
@@ -168,9 +170,12 @@ public:
 
 		// Read environmental variables
 		if(n_env > 0) {
+			Eigen::MatrixXd XtElocal;
 			std::cout << "Computing XtE" << std::endl;
-			XtE = X.transpose_multiply(E);
+			XtElocal = X.transpose_multiply(E);
 			std::cout << "XtE computed" << std::endl;
+			XtE.resize(XtElocal.rows(), XtElocal.cols());
+			mpiUtils::mpiReduce_double(XtElocal.data(), XtE.data(), XtElocal.size());
 		}
 
 		// When n_env > 1 this gets set when in updateEnvWeights
@@ -301,7 +306,10 @@ public:
 		calcPredEffects(vp_init);
 
 		if(n_covar > 0) {
-			Cty = C.transpose() * Y;
+			EigenDataArrayX Ctylocal;
+			Ctylocal = C.transpose() * Y;
+			Cty.resize(Ctylocal.rows(), Ctylocal.cols());
+			mpiUtils::mpiReduce_double(Ctylocal.data(), Cty.data(), Ctylocal.size());
 		}
 	}
 
@@ -382,7 +390,6 @@ public:
 
 		long ii_map = std::distance(weights.begin(), std::max_element(weights.begin(), weights.end()));
 		vp_init = trackers[ii_map].vp;
-
 	}
 
 	void runOuterLoop(const int round_index,
@@ -645,35 +652,6 @@ public:
 		}
 		for (int nn = 0; nn < n_grid; nn++) {
 			check_monotonic_elbo(all_hyps[nn], all_vp[nn], count, logw_prev[nn], ms);
-			if(p.mode_debug) {
-				EigenDataVector aa, bb;
-				Eigen::VectorXd rr_beta = all_vp[nn].mean_beta();
-				EigenDataVector ym = (X * rr_beta).template cast<scalarData>();
-				if(n_covar > 0) {
-					ym += C * all_vp[nn].muc.matrix().cast<scalarData>();
-				}
-				aa = (ym.array() - ym.array().sum() / (double) n_samples);
-				bb = all_vp[nn].ym.array() - all_vp[nn].ym.array().sum() / (double) n_samples;
-				double aa_sig = std::sqrt(aa.squaredNorm() / (double) n_samples);
-				double bb_sig = std::sqrt(bb.squaredNorm() / (double) n_samples);
-				double corr = aa.dot(bb) / aa_sig / bb_sig;
-				if(corr < 1 - 1e-6) {
-					std::cout << "Cor(ym, vp.ym) = " << corr << " at " << count << std::endl;
-				}
-			}
-			if(p.mode_debug && n_effects > 1) {
-				EigenDataVector aa, bb;
-				Eigen::VectorXd rr_gam = all_vp[nn].mean_gam();
-				EigenDataVector yx = (X * rr_gam).template cast<scalarData>();
-				aa = (yx.array() - yx.array().sum() / (double) n_samples);
-				bb = all_vp[nn].yx.array() - all_vp[nn].yx.array().sum() / (double) n_samples;
-				double aa_sig = std::sqrt(aa.squaredNorm() / (double) n_samples);
-				double bb_sig = std::sqrt(bb.squaredNorm() / (double) n_samples);
-				double corr = aa.dot(bb) / aa_sig / bb_sig;
-				if(corr < 1 - 1e-6) {
-					std::cout << "Cor(yx, vp.yx) = " << corr << " at " << count << std::endl;
-				}
-			}
 		}
 
 		// Update env-weights
@@ -695,8 +673,6 @@ public:
 			}
 		}
 
-
-
 		// Update PVE
 		for (int nn = 0; nn < n_grid; nn++) {
 			all_hyps[nn].update_pve();
@@ -710,11 +686,12 @@ public:
 			double rr_k = vp.muc(cc);
 
 			// Update s_sq
-			vp.sc_sq(cc) = hyps.sigma * sigma_c / (sigma_c * (N - 1.0) + 1.0);
+			vp.sc_sq(cc) = hyps.sigma * sigma_c / (sigma_c * (Nglobal - 1.0) + 1.0);
 
 			// Update mu
-			auto A = Cty(cc) - (vp.ym + vp.yx.cwiseProduct(vp.eta)).dot(C.col(cc));
-			vp.muc(cc) = vp.sc_sq(cc) * ( (double) A + rr_k * (N - 1.0)) / hyps.sigma;
+			double Alocal = (vp.ym + vp.yx.cwiseProduct(vp.eta)).dot(C.col(cc));
+			auto A = Cty(cc) - mpiUtils::mpiReduce_inplace(&Alocal);
+			vp.muc(cc) = vp.sc_sq(cc) * ( (double) A + rr_k * (Nglobal - 1.0)) / hyps.sigma;
 
 			// Update predicted effects
 			double rr_k_diff     = vp.muc(cc) - rr_k;
@@ -797,35 +774,28 @@ public:
 
 		int ee                 = chunk[0] / n_var;
 		unsigned long ch_len   = chunk.size();
+		Eigen::MatrixXd Dlocal(ch_len, ch_len), Dglobal(ch_len, ch_len);
 		if (ee == 0) {
-
-			// Update main effects
 			if (D_correlations.count(memoize_id) == 0) {
 				if(p.n_thread == 1) {
-					Eigen::MatrixXd D_corr(ch_len, ch_len);
-					// cast only used if DATA_AS_FLOAT
-					D_corr.triangularView<Eigen::StrictlyUpper>() = (D.transpose() * D).template cast<double>();
-					D_correlations[memoize_id] = D_corr;
+					Dlocal.triangularView<Eigen::StrictlyUpper>() = (D.transpose() * D).template cast<double>();
 				} else {
-					D_correlations[memoize_id] = (D.transpose() * D).template cast<double>();
+					Dlocal = (D.transpose() * D).template cast<double>();
 				}
+				MPI_Allreduce(Dlocal.data(), Dglobal.data(), Dlocal.size(), MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+				D_correlations[memoize_id] = Dglobal;
 			}
-
 			_internal_updateAlphaMu_beta(chunk, A, D_correlations[memoize_id], all_hyps[nn], all_vp[nn], rr_diff.col(nn));
 		} else {
-
-			// Update interaction effects
-			Eigen::MatrixXd D_corr(ch_len, ch_len);
 			if(p.gxe_chunk_size > 1) {
 				if(p.n_thread == 1) {
-					// cast only used if DATA_AS_FLOAT
-					D_corr.triangularView<Eigen::StrictlyUpper>() = (D.transpose() * all_vp[nn].eta_sq.asDiagonal() * D).template cast<double>();
+					Dlocal.triangularView<Eigen::StrictlyUpper>() = (D.transpose() * all_vp[nn].eta_sq.asDiagonal() * D).template cast<double>();
 				} else {
-					D_corr = (D.transpose() * all_vp[nn].eta_sq.asDiagonal() * D).template cast<double>();
+					Dlocal = (D.transpose() * all_vp[nn].eta_sq.asDiagonal() * D).template cast<double>();
 				}
 			}
-
-			_internal_updateAlphaMu_gam(chunk, A, D_corr, all_hyps[nn], all_vp[nn], rr_diff.col(nn));
+			MPI_Allreduce(Dlocal.data(), Dglobal.data(), Dlocal.size(), MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+			_internal_updateAlphaMu_gam(chunk, A, Dglobal, all_hyps[nn], all_vp[nn], rr_diff.col(nn));
 		}
 	}
 
@@ -834,22 +804,23 @@ public:
 	                                               const int& ee){
 		// Most work done here
 		// variant correlations with residuals
-		EigenMat res;
+		EigenMat resLocal;
 		if(n_effects == 1) {
 			// Main effects update in main effects only model
-			res.noalias() = (YY - YM).transpose() * D;
-			res.transposeInPlace();
+			resLocal.noalias() = (YY - YM).transpose() * D;
+			resLocal.transposeInPlace();
 		} else if (ee == 0) {
 			// Main effects update in interaction model
-			res.noalias() = (YY - YM - YX.cwiseProduct(ETA)).transpose() * D;
-			res.transposeInPlace();
+			resLocal.noalias() = (YY - YM - YX.cwiseProduct(ETA)).transpose() * D;
+			resLocal.transposeInPlace();
 		} else {
 			// Interaction effects
-			res.noalias() = D.transpose() * ((YY - YM).cwiseProduct(ETA) - YX.cwiseProduct(ETA_SQ));
+			resLocal.noalias() = D.transpose() * ((YY - YM).cwiseProduct(ETA) - YX.cwiseProduct(ETA_SQ));
 		}
-		// cast only used if DATA_AS_FLOAT
-		// n_grid x snp_batch
-		return(res.template cast<double>());
+		EigenMat resGlobal(resLocal.rows(), resLocal.cols());
+		// long P = resLocal.rows() * resLocal.cols();
+		mpiUtils::mpiReduce_double(resLocal.data(), resGlobal.data(), resLocal.size());
+		return(resGlobal.template cast<double>());
 	}
 
 	void _internal_updateAlphaMu_beta(const std::vector< std::uint32_t >& iter_chunk,
@@ -881,12 +852,12 @@ public:
 
 			// Update s_sq
 			vp.s1_beta_sq(jj)                        = hyps.slab_var(ee);
-			vp.s1_beta_sq(jj)                       /= (hyps.slab_relative_var(ee) * (N-1) + 1);
+			vp.s1_beta_sq(jj)                       /= (hyps.slab_relative_var(ee) * (Nglobal-1) + 1);
 			if(p.mode_mog_prior_beta) vp.s2_beta_sq(jj)  = hyps.spike_var(ee);
-			if(p.mode_mog_prior_beta) vp.s2_beta_sq(jj) /= (hyps.spike_relative_var(ee) * (N-1) + 1);
+			if(p.mode_mog_prior_beta) vp.s2_beta_sq(jj) /= (hyps.spike_relative_var(ee) * (Nglobal-1) + 1);
 
 			// Update mu
-			double offset = rr_k(ii) * (N-1.0);
+			double offset = rr_k(ii) * (Nglobal-1.0);
 			for (int mm = 0; mm < ii; mm++) {
 				offset -= rr_k_diff(mm, 0) * D_corr(mm, ii);
 			}
@@ -1001,9 +972,9 @@ public:
 		hyps.sigma  = calcExpLinear(hyps, vp);
 		if (n_covar > 0) {
 			hyps.sigma += (vp.sc_sq + vp.muc.square()).sum() / sigma_c;
-			hyps.sigma /= (N + (double) n_covar);
+			hyps.sigma /= (Nglobal + (double) n_covar);
 		} else {
-			hyps.sigma /= N;
+			hyps.sigma /= Nglobal;
 		}
 
 		// beta - max lambda
@@ -1087,9 +1058,11 @@ public:
 			double r_ll = vp.muw(ll);
 
 			// Update s_sq
-			double denom = hyps.sigma;
-			denom       += (vp.yx.array() * E.col(ll)).square().sum();
-			denom       += (varG * dXtEEX.col(ll*n_env + ll)).sum();
+			double denom;
+			denom = (vp.yx.array() * E.col(ll)).square().sum();
+			denom = mpiUtils::mpiReduce_inplace(&denom);
+			denom += (varG * dXtEEX.col(ll*n_env + ll)).sum();
+			denom += hyps.sigma;
 			vp.sw_sq(ll) = hyps.sigma / denom;
 
 			// Remove dependance on current weight
@@ -1105,6 +1078,7 @@ public:
 
 			double eff = ((Y - vp.ym).array() * E.col(ll) * vp.yx.array()).sum();
 			eff       -= (vp.yx.array() * E.col(ll) * vp.eta.array() * vp.yx.array()).sum();
+			eff        = mpiUtils::mpiReduce_inplace(&eff);
 			eff       -= (varG * env_vars).sum();
 			vp.muw(ll) = vp.sw_sq(ll) * eff / hyps.sigma;
 
@@ -1133,8 +1107,8 @@ public:
 		// WARNING: Hard coded limit!
 		// WARNING: Updates S_x in hyps
 		hyps.s_x(0) = (double) n_var;
-		hyps.s_x(1) = (dXtEEX.rowwise() * muw_sq.transpose()).sum() / (N - 1.0);
-		hyps.s_x(1) -= (XtE * vp.muw.matrix()).array().square().sum() / N / (N - 1.0);
+		hyps.s_x(1) = (dXtEEX.rowwise() * muw_sq.transpose()).sum() / (Nglobal - 1.0);
+		hyps.s_x(1) -= (XtE * vp.muw.matrix()).array().square().sum() / Nglobal / (Nglobal - 1.0);
 	}
 
 	double calc_logw(const Hyps& hyps,
@@ -1142,7 +1116,7 @@ public:
 
 		// Expectation of linear regression log-likelihood
 		double int_linear = -1.0 * calcExpLinear(hyps, vp) / 2.0 / hyps.sigma;
-		int_linear -= N * std::log(2.0 * PI * hyps.sigma) / 2.0;
+		int_linear -= Nglobal * std::log(2.0 * PI * hyps.sigma) / 2.0;
 
 		// kl-beta
 		double kl_beta = calcKLBeta(hyps, vp);
@@ -1335,26 +1309,27 @@ public:
 	double calcExpLinear(const Hyps& hyps,
 	                     const VariationalParameters& vp){
 		// Expectation of ||Y - C tau - X beta - Z gamma||^2
-		double int_linear = 0;
+		double int_linear = 0, resLocal = 0;
 
 		// Expectation of linear regression log-likelihood
-		int_linear  = (Y - vp.ym).squaredNorm();
+		resLocal  = (Y - vp.ym).squaredNorm();
 		if(n_effects > 1) {
-			int_linear -= 2.0 * (Y - vp.ym).cwiseProduct(vp.eta).dot(vp.yx);
+			resLocal -= 2.0 * (Y - vp.ym).cwiseProduct(vp.eta).dot(vp.yx);
 			if (n_env > 1) {
-				int_linear += vp.yx.cwiseProduct(vp.eta_sq).dot(vp.yx);
+				resLocal += vp.yx.cwiseProduct(vp.eta_sq).dot(vp.yx);
 			} else {
-				int_linear += vp.yx.cwiseProduct(vp.eta).squaredNorm();
+				resLocal += vp.yx.cwiseProduct(vp.eta).squaredNorm();
 			}
 		}
+		MPI_Allreduce(&resLocal, &int_linear, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
 
 		// variances
 		if(n_covar > 0) {
 			// covar main
-			int_linear += (N - 1.0) * vp.sc_sq.sum();
+			int_linear += (Nglobal - 1.0) * vp.sc_sq.sum();
 		}
 		// beta
-		int_linear += (N - 1.0) * vp.var_beta().sum();
+		int_linear += (Nglobal - 1.0) * vp.var_beta().sum();
 		if(n_effects > 1) {
 			// gamma
 			int_linear += (vp.EdZtZ * vp.var_gam()).sum();
@@ -1486,85 +1461,6 @@ public:
 		}
 	}
 
-	void LOCO_pvals(const VariationalParametersLite& vp,
-	                const std::vector<Eigen::VectorXd>& chr_residuals,
-	                Eigen::Ref<Eigen::VectorXd> neglogp_beta,
-	                Eigen::Ref<Eigen::VectorXd> neglogp_gam,
-	                Eigen::Ref<Eigen::VectorXd> neglogp_gam_robust,
-	                Eigen::Ref<Eigen::VectorXd> neglogp_joint,
-	                Eigen::Ref<Eigen::VectorXd> test_stat_beta,
-	                Eigen::Ref<Eigen::VectorXd> test_stat_gam,
-	                Eigen::Ref<Eigen::VectorXd> test_stat_gam_robust,
-	                Eigen::Ref<Eigen::VectorXd> test_stat_joint) const {
-		assert(neglogp_beta.rows()  == n_var);
-		assert(neglogp_gam.rows()   == n_var);
-		assert(neglogp_joint.rows() == n_var);
-		assert(test_stat_beta.rows()  == n_var);
-		assert(test_stat_gam.rows()   == n_var);
-		assert(test_stat_joint.rows() == n_var);
-		assert(n_effects == 1 || n_effects == 2);
-
-//		std::set<int> chrs(X.chromosome.begin(), X.chromosome.end());
-		assert(chr_residuals.size() == n_chrs);
-
-		// Compute p-vals per variant (p=3 as residuals mean centered)
-		Eigen::MatrixXd H(n_samples, n_effects);
-		boost_m::students_t t_dist(n_samples - n_effects - 1);
-		boost_m::fisher_f f_dist(n_effects, n_samples - n_effects - 1);
-		for(std::uint32_t jj = 0; jj < n_var; jj++ ) {
-			int chr1 = X.chromosome[jj];
-			int cc = std::find(chrs_present.begin(), chrs_present.end(), chr1) - chrs_present.begin();
-			H.col(0) = X.col(jj).cast<double>();
-
-			if(n_effects == 1) {
-				double ztz_inv = 1.0 / H.squaredNorm();
-				double tau = (H.transpose() * chr_residuals[cc])(0,0) * ztz_inv;
-				double rss_null = (chr_residuals[cc] - H * tau).squaredNorm();
-				// T-test of variant j
-				double main_se_j    = std::sqrt(rss_null / (N - 1.0) * ztz_inv);
-				double main_tstat_j = tau / main_se_j;
-				double main_pval_j  = 2 * boost_m::cdf(boost_m::complement(t_dist, fabs(main_tstat_j)));
-
-				neglogp_beta(jj) = -1 * std::log10(main_pval_j);
-				test_stat_beta(jj) = main_tstat_j;
-			} else if (n_effects > 1) {
-				H.col(1) = H.col(0).cwiseProduct(vp.eta.cast<double>());
-
-				// Model Fitting
-				Eigen::Matrix2d HtH     = H.transpose() * H;
-				Eigen::Matrix2d HtH_inv = HtH.inverse();
-				Eigen::Vector2d Hty     = H.transpose() * chr_residuals[cc];
-				Eigen::Vector2d tau     = HtH_inv * Hty;
-
-				Eigen::VectorXd resid_alt = chr_residuals[cc] - H * tau;
-				double rss_alt  = resid_alt.squaredNorm();
-				double rss_null = chr_residuals[cc].squaredNorm();
-
-				// Single-var tests
-				double beta_tstat, gam_tstat, rgam_stat, beta_pval, gam_pval, rgam_pval;
-				Eigen::Matrix2d HtVH = H.transpose() * resid_alt.cwiseProduct(resid_alt).asDiagonal() * H;
-				hetero_chi_sq(HtH_inv, Hty, HtVH, 1, rgam_stat, rgam_pval);
-				student_t_test(n_samples, HtH_inv, Hty, rss_alt, 1, gam_tstat, gam_pval);
-				student_t_test(n_samples, HtH_inv, Hty, rss_alt, 0, beta_tstat, beta_pval);
-
-				// F-test over main+int effects of snp_j
-				double joint_fstat, joint_pval;
-				joint_fstat       = (rss_null - rss_alt) / 2.0;
-				joint_fstat      /= rss_alt / (N - 3.0);
-				joint_pval        = 1.0 - boost_m::cdf(f_dist, joint_fstat);
-
-				neglogp_beta[jj]  = -1 * std::log10(beta_pval);
-				neglogp_gam[jj]   = -1 * std::log10(gam_pval);
-				neglogp_gam_robust[jj]   = -1 * std::log10(rgam_pval);
-				neglogp_joint[jj] = -1 * std::log10(joint_pval);
-				test_stat_beta[jj]  = beta_tstat;
-				test_stat_gam[jj]   = gam_tstat;
-				test_stat_gam_robust[jj]   = rgam_stat;
-				test_stat_joint[jj] = joint_fstat;
-			}
-		}
-	}
-
 	void LOCO_pvals_v2(GenotypeMatrix &Xtest,
 	                   const VariationalParametersLite &vp,
 	                   const long &LOSO_window,
@@ -1574,106 +1470,7 @@ public:
 	                   Eigen::Ref<Eigen::VectorXd> test_stat_beta,
 	                   Eigen::Ref<Eigen::VectorXd> test_stat_gam_robust,
 	                   Eigen::Ref<Eigen::VectorXd> test_stat_joint) const {
-		assert(neglogp_beta.rows()  == n_var);
-		assert(neglogp_joint.rows() == n_var);
-		assert(test_stat_beta.rows()  == n_var);
-		assert(test_stat_joint.rows() == n_var);
-		assert(LOSO_window >= 0);
-
-		int n_effects = (n_env > 0) ? 2 : 1;
-		double N = n_samples;
-
-		Eigen::VectorXd y_resid = (Y - vp.ym).cast<double>();
-		if(n_env > 0) {
-			y_resid -= vp.yx.cwiseProduct(vp.eta).cast<double>();
-		}
-		long front = 0, back = 0;
-
-		// Compute p-vals per variant (p=3 as residuals mean centered)
-		Eigen::MatrixXd H(n_samples, n_effects);
-		boost::math::students_t t_dist(n_samples - n_effects);
-		boost::math::fisher_f f_dist(n_effects, n_samples - n_effects);
-		for(uint32_t jj = 0; jj < n_var; jj++ ) {
-			int chr_test = Xtest.chromosome[jj];
-			long pos_test = Xtest.position[jj];
-
-
-			while (front < n_var && X.position[front] < pos_test + LOSO_window && X.chromosome[front] == chr_test) {
-				y_resid += vp.mean_beta(front) * X.col(front);
-				if (n_env > 0) y_resid += vp.mean_gam(front) * vp.eta.cwiseProduct(X.col(front));
-				front++;
-			}
-
-			while (X.position[back] < pos_test - LOSO_window || X.chromosome[back] != chr_test) {
-				y_resid -= vp.mean_beta(back) * X.col(back);
-				if (n_env > 0) y_resid -= vp.mean_gam(back) * vp.eta.cwiseProduct(X.col(back));
-				back++;
-			}
-
-			H.col(0) = Xtest.col(jj).cast<double>();
-
-			if(n_effects == 1) {
-				double rss;
-				Eigen::MatrixXd HtH, Hty, HtH_inv, tau;
-
-				HtH = H.transpose() * H;
-				HtH_inv = HtH.inverse();
-				Hty = H.transpose() * y_resid;
-				tau = HtH_inv * Hty;
-				rss = (y_resid - H * tau).squaredNorm();
-
-				// prep_lm(H, y_resid, HtH, HtH_inv, tau, Hty, rss);
-
-				// T-test of variant j
-//				double main_se_j    = ::std::sqrt(rss / (N - 1.0) * ztz_inv);
-//				double main_tstat_j = tau / main_se_j;
-//				double main_pval_j  = 2 * cdf(complement(t_dist, fabs(main_tstat_j)));
-
-				double beta_tstat, beta_pval;
-				student_t_test(n_samples, HtH_inv, Hty, rss, 0, beta_tstat, beta_pval);
-
-				neglogp_beta(jj) = -1 * log10(beta_pval);
-				test_stat_beta(jj) = beta_tstat;
-			} else if (n_effects > 1) {
-				H.col(1) = H.col(0).cwiseProduct(vp.eta.cast<double>());
-
-				// double rss_alt, rss_null;
-				// Eigen::MatrixXd HtH, Hty, HtH_inv, tau, HtVH;
-
-				// Model Fitting
-				Eigen::Matrix2d HtH     = H.transpose() * H;
-				Eigen::Matrix2d HtH_inv = HtH.inverse();
-				Eigen::Vector2d Hty     = H.transpose() * y_resid;
-				Eigen::Vector2d tau     = HtH_inv * Hty;
-
-				Eigen::VectorXd resid_alt = y_resid - H * tau;
-				double rss_alt  = resid_alt.squaredNorm();
-				double rss_null = y_resid.squaredNorm();
-				Eigen::Matrix2d HtVH = H.transpose() * resid_alt.cwiseProduct(resid_alt).asDiagonal() * H;
-
-				// prep_lm(H, y_resid, HtH, HtH_inv, tau, Hty, rss_alt, HtVH);
-				// rss_null = y_resid.squaredNorm();
-
-				// Single-var tests
-				double beta_tstat, gam_tstat, rgam_stat, beta_pval, gam_pval, rgam_pval;
-				hetero_chi_sq(HtH_inv, Hty, HtVH, 1, rgam_stat, rgam_pval);
-				student_t_test(n_samples, HtH_inv, Hty, rss_alt, 1, gam_tstat, gam_pval);
-				student_t_test(n_samples, HtH_inv, Hty, rss_alt, 0, beta_tstat, beta_pval);
-
-				// F-test over main+int effects of snp_j
-				double joint_fstat, joint_pval;
-				joint_fstat       = (rss_null - rss_alt) / 2.0;
-				joint_fstat      /= rss_alt / (N - 3.0);
-				joint_pval        = 1.0 - cdf(f_dist, joint_fstat);
-
-				neglogp_beta[jj]  = -1 * log10(beta_pval);
-				neglogp_gam_robust[jj]   = -1 * log10(rgam_pval);
-				neglogp_joint[jj] = -1 * log10(joint_pval);
-				test_stat_beta[jj]  = beta_tstat;
-				test_stat_gam_robust[jj]   = rgam_stat;
-				test_stat_joint[jj] = joint_fstat;
-			}
-		}
+//pass
 	}
 
 	/********** Output functions ************/
@@ -1747,114 +1544,6 @@ public:
 				outf << " " << trackers[ii].hyps.lambda(ee);
 			}
 			outf << std::endl;
-		}
-	}
-
-	void write_map_stats_to_file(const std::string &file_prefix) {
-		output_init(file_prefix);
-		output_results();
-	}
-
-	void output_init(const std::string& file_prefix){
-		// Initialise files ready to write;
-
-		std::string ofile_map   = fstream_init(outf_map, file_prefix, "_map_snp_stats");
-		std::string ofile_map_yhat = fstream_init(outf_map_pred, file_prefix, "_map_yhat");
-		std::string ofile_w = fstream_init(outf_weights, file_prefix, "_env_weights");
-		std::string ofile_map_covar = fstream_init(outf_map_covar, file_prefix, "_map_covar");
-		std::cout << "Writing MAP snp stats to " << ofile_map << std::endl;
-		std::cout << "Writing MAP covar coefficients to " << ofile_map_covar << std::endl;
-		std::cout << "Writing yhat from map to " << ofile_map_yhat << std::endl;
-		std::cout << "Writing env weights to " << ofile_w << std::endl;
-
-		if(p.verbose) {
-			std::string ofile_elbo = fstream_init(outf_elbo, file_prefix, "_elbo");
-			std::cout << "Writing ELBO from each VB iteration to " << ofile_elbo << std::endl;
-
-			std::string ofile_alpha_diff = fstream_init(outf_alpha_diff, file_prefix, "_alpha_diff");
-			std::cout << "Writing max change in alpha from each VB iteration to " << ofile_alpha_diff << std::endl;
-		}
-	}
-
-	void output_results(){
-
-		/*********** Stats from MAP to file ************/
-		std::vector<Eigen::VectorXd> map_residuals_by_chr(n_chrs), pred_main(n_chrs), pred_int(n_chrs);
-
-		// Predicted effects to file
-		calcPredEffects(vp_init);
-		compute_residuals_per_chr(vp_init, pred_main, pred_int, map_residuals_by_chr);
-		Eigen::VectorXd Ealpha = Eigen::VectorXd::Zero(n_samples);
-		if(n_covar > 0) {
-			Ealpha += (C * vp_init.muc.matrix().cast<scalarData>()).cast<double>();
-		}
-		if(n_effects == 1) {
-			outf_map_pred << "Y Ealpha Xbeta";
-			for(auto cc : chrs_index) {
-				outf_map_pred << " residuals_excl_chr" << chrs_present[cc];
-			}
-			outf_map_pred << std::endl;
-
-			for (std::uint32_t ii = 0; ii < n_samples; ii++) {
-				outf_map_pred << Y(ii) << " " << Ealpha(ii) << " " << vp_init.ym(ii) - Ealpha(ii);
-				for(auto cc : chrs_index) {
-					outf_map_pred << " " << map_residuals_by_chr[cc](ii);
-				}
-				outf_map_pred << std::endl;
-			}
-		} else {
-			outf_map_pred << "Y Ealpha Xbeta eta Xgamma";
-			for(auto cc : chrs_index) {
-				outf_map_pred << " residuals_excl_chr" << chrs_present[cc];
-			}
-			outf_map_pred << std::endl;
-			for (std::uint32_t ii = 0; ii < n_samples; ii++) {
-				outf_map_pred << Y(ii) << " " << Ealpha(ii) << " " << vp_init.ym(ii) - Ealpha(ii);
-				outf_map_pred << " " << vp_init.eta(ii) << " " << vp_init.yx(ii);
-				for(auto cc : chrs_index) {
-					outf_map_pred << " " << map_residuals_by_chr[cc](ii);
-				}
-				outf_map_pred << std::endl;
-			}
-		}
-
-		// weights to file
-		if(n_effects > 1) {
-			for (int ll = 0; ll < n_env; ll++) {
-				outf_weights << env_names[ll];
-				if (ll + 1 < n_env) outf_weights << " ";
-			}
-			outf_weights << std::endl;
-			for (int ll = 0; ll < n_env; ll++) {
-				outf_weights << vp_init.muw(ll);
-				if (ll + 1 < n_env) outf_weights << " ";
-			}
-			outf_weights << std::endl;
-		}
-
-		// Compute LOCO p-values
-		Eigen::VectorXd neglogp_beta(n_var), neglogp_gam(n_var), neglogp_rgam(n_var), neglogp_joint(n_var);
-		Eigen::VectorXd test_stat_beta(n_var), test_stat_gam(n_var), test_stat_rgam(n_var), test_stat_joint(n_var);
-		if(p.LOSO_window == -1) {
-			LOCO_pvals(vp_init, map_residuals_by_chr, neglogp_beta, neglogp_gam, neglogp_rgam, neglogp_joint,
-			           test_stat_beta, test_stat_gam, test_stat_rgam, test_stat_joint);
-		} else {
-			LOCO_pvals_v2(X, vp_init, p.LOSO_window, neglogp_beta,
-			              neglogp_rgam,
-			              neglogp_joint,
-			              test_stat_beta,
-			              test_stat_rgam,
-			              test_stat_joint);
-			neglogp_gam.resize(0);
-			test_stat_gam.resize(0);
-		}
-
-		// MAP snp-stats to file
-		fileUtils::write_snp_stats_to_file(outf_map, n_effects, n_var, vp_init, X, p, true, neglogp_beta, neglogp_gam,
-		                                   neglogp_rgam, neglogp_joint, test_stat_beta, test_stat_gam, test_stat_rgam,
-		                                   test_stat_joint);
-		if(n_covar > 0) {
-			write_covars_to_file(outf_map_covar, vp_init);
 		}
 	}
 

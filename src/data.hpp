@@ -10,6 +10,7 @@
 #include "eigen_utils.hpp"
 #include "variational_parameters.hpp"
 #include "file_utils.hpp"
+#include "mpi_utils.hpp"
 
 #include "tools/eigen3.3/Dense"
 #include "tools/eigen3.3/Eigenvalues"
@@ -50,36 +51,36 @@ public:
 	parameters p;
 
 
-	long n_pheno;                                                                                         // number of phenotypes
-	long n_covar;                                                                                         // number of covariates
-	long n_env;                                                                                         // number of env variables
-	int n_effects;                                                                                           // number of environmental interactions
-	long n_samples;                                                                                         // number of samples
+	long n_pheno;
+	long n_covar;
+	long n_env;
+	int n_effects;
+	long n_samples;
 	long n_var;
-	long n_var_parsed;                                                                                         // Track progress through IndexQuery
+	long n_var_parsed;
 	long int n_dxteex_computed;
 	long int n_snpstats_computed;
 
-	bool Y_reduced;                                                                                           // Variables to track whether we have already
-	bool W_reduced;                                                                                           // reduced to complete cases or not.
+	bool Y_reduced;
+	bool W_reduced;
 	bool E_reduced;
 
 	std::vector< std::string > external_dXtEEX_SNPID;
 	std::vector< std::string > rsid_list;
 
-	std::map<int, bool> missing_envs;                                                                                           // set of subjects missing >= 1 env variables
-	std::map<int, bool> missing_covars;                                                                                         // set of subjects missing >= 1 covariate
-	std::map<int, bool> missing_phenos;                                                                                         // set of subjects missing >= phenotype
-	std::map< std::size_t, bool > incomplete_cases;                                                                                         // union of samples missing data
+	std::map<int, bool> missing_envs;
+	std::map<int, bool> missing_covars;
+	std::map<int, bool> missing_phenos;
+	std::map< std::size_t, bool > incomplete_cases;
 
 	std::vector< std::string > pheno_names;
 	std::vector< std::string > covar_names;
 	std::vector< std::string > env_names;
 
 	GenotypeMatrix G;
-	EigenDataMatrix Y, Y2;                                                                                         // phenotype matrix (#2 always has covars regressed)
-	EigenDataMatrix C;                                                                                         // covariate matrix
-	EigenDataMatrix E;                                                                                         // env matrix
+	EigenDataMatrix Y, Y2;
+	EigenDataMatrix C;
+	EigenDataMatrix E;
 	Eigen::ArrayXXd dXtEEX;
 	Eigen::ArrayXXd external_dXtEEX;
 
@@ -779,7 +780,7 @@ public:
 		MyTimer t_calcDXtEEX("dXtEEX array constructed in %ts \n");
 		t_calcDXtEEX.resume();
 		EigenDataArrayX cl_j;
-		scalarData dztz_lmj;
+		scalarData dztz_lmj, dztzLocal;
 		dXtEEX.resize(n_var, n_env * n_env);
 		n_dxteex_computed = 0;
 		int dxteex_check = 0, se_cnt = 0;
@@ -791,7 +792,8 @@ public:
 				cl_j = G.col(jj);
 				for (int ll = 0; ll < n_env; ll++) {
 					for (int mm = 0; mm <= ll; mm++) {
-						dztz_lmj = (cl_j * E.array().col(ll) * E.array().col(mm) * cl_j).sum();
+						dztzLocal = (cl_j * E.array().col(ll) * E.array().col(mm) * cl_j).sum();
+						MPI_Allreduce(&dztzLocal, &dztz_lmj, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
 						dXtEEX(jj, ll*n_env + mm) = dztz_lmj;
 						dXtEEX(jj, mm*n_env + ll) = dztz_lmj;
 					}
@@ -803,7 +805,8 @@ public:
 					cl_j = G.col(jj);
 					for (int ll = 0; ll < n_env; ll++) {
 						for (int mm = 0; mm <= ll; mm++) {
-							dztz_lmj = (cl_j * E.array().col(ll) * E.array().col(mm) * cl_j).sum();
+							dztzLocal = (cl_j * E.array().col(ll) * E.array().col(mm) * cl_j).sum();
+							MPI_Allreduce(&dztzLocal, &dztz_lmj, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
 							double x1 = std::abs(dXtEEX(jj, ll*n_env + mm) - dztz_lmj);
 							double x2 = std::abs(dXtEEX(jj, mm*n_env + ll) - dztz_lmj);
 							max_ae = std::max(x1, max_ae);
@@ -1111,7 +1114,9 @@ public:
 			// Start covars at least squared solution
 			std::cout << "Starting covars at least squares fit" << std::endl;
 			Eigen::MatrixXd CtC = C.transpose() * C;
+			CtC = mpiUtils::mpiReduce_inplace(CtC);
 			Eigen::MatrixXd Cty = C.transpose() * Y;
+			Cty = mpiUtils::mpiReduce_inplace(Cty);
 			vp_init.muc = CtC.colPivHouseholderQr().solve(Cty);
 		}
 
@@ -1210,6 +1215,8 @@ public:
 		incomplete_cases.insert(missing_covars.begin(), missing_covars.end());
 		incomplete_cases.insert(missing_phenos.begin(), missing_phenos.end());
 		incomplete_cases.insert(missing_envs.begin(), missing_envs.end());
+
+		mpiUtils::partition_valid_samples_across_ranks(n_samples, incomplete_cases);
 
 		if(n_pheno > 0) {
 			Y = reduce_mat_to_complete_cases( Y, Y_reduced, n_pheno, incomplete_cases );

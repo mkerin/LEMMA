@@ -7,6 +7,8 @@
 #include "my_timer.hpp"
 #include "parameters.hpp"
 #include "typedefs.hpp"
+#include "mpi_utils.hpp"
+
 #include "tools/eigen3.3/Dense"
 #include <algorithm>
 #include <iostream>
@@ -186,14 +188,20 @@ void GenotypeMatrix::calc_scaled_values() {
 }
 
 void GenotypeMatrix::compute_means_and_sd() {
+	double Nlocal = nn;
+	double Nglobal = mpiUtils::mpiReduce_inplace(&Nlocal);
+
 	// Column means
 	for (Index jj = 0; jj < pp; jj++){
+		double sum_mij = 0;
 		compressed_dosage_means[jj] = 0;
 		for (Index ii = 0; ii < nn; ii++){
-			compressed_dosage_means[jj] += DecompressDosage(M(ii, jj));
+			sum_mij += DecompressDosage(M(ii, jj));
 		}
+		sum_mij = mpiUtils::mpiReduce_inplace(&sum_mij);
+		compressed_dosage_means[jj] = sum_mij / Nglobal;
 	}
-	compressed_dosage_means /= (double) nn;
+
 
 	// Column standard deviation
 	double val, sigma;
@@ -203,11 +211,12 @@ void GenotypeMatrix::compute_means_and_sd() {
 			val = DecompressDosage(M(ii, jj)) - compressed_dosage_means[jj];
 			sigma += val * val;
 		}
-		compressed_dosage_sds[jj] = sigma;
+		sigma = mpiUtils::mpiReduce_inplace(&sigma);
+		compressed_dosage_sds[jj] = std::sqrt(sigma / (Nglobal - 1));
 	}
 
-	compressed_dosage_sds /= ((double) nn - 1.0);
-	compressed_dosage_sds = compressed_dosage_sds.array().sqrt().matrix();
+//	compressed_dosage_sds /= ((double) nn - 1.0);
+//	compressed_dosage_sds = compressed_dosage_sds.array().sqrt().matrix();
 
 	for (Index jj = 0; jj < pp; jj++){
 		sigma = compressed_dosage_sds[jj];

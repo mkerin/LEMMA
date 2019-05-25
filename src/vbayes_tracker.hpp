@@ -218,21 +218,41 @@ public:
 		if(n_covar > 0) {
 			Ealpha += (C.matrix() * vp.muc.matrix().cast<scalarData>()).cast<double>();
 		}
-		outf_inits << "Y";
-		if (n_covar > 0) outf_inits << " Ealpha";
-		outf_inits << " Xbeta";
-		if (n_env > 0) outf_inits << " eta Xgamma";
-		outf_inits << std::endl;
-		for (std::uint32_t ii = 0; ii < n_samples; ii++) {
-			outf_inits << Y(ii);
-			if (n_covar > 0) {
-				outf_inits << " " << Ealpha(ii) << " " << vp.ym(ii) - Ealpha(ii);
-			} else {
-				outf_inits << " " << vp.ym(ii);
+
+		int world_size, rank;
+		MPI_Comm_size(MPI_COMM_WORLD, &world_size);
+		MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+
+		for (int rnk = 0; rnk < world_size; rnk++){
+			MPI_Barrier(MPI_COMM_WORLD);
+
+			if(rank == rnk && rnk == 0){
+				outf_inits << "Y";
+				if (n_covar > 0) outf_inits << " Ealpha";
+				outf_inits << " Xbeta";
+				if (n_env > 0) outf_inits << " eta Xgamma";
+				outf_inits << std::endl;
 			}
-			if (n_env > 0) outf_inits << " " << vp.eta(ii) << " " << vp.yx(ii);
-			outf_inits << std::endl;
+
+			if(rank == rnk){
+				for (std::uint32_t ii = 0; ii < n_samples; ii++) {
+					outf_inits << Y(ii);
+					if (n_covar > 0) {
+						outf_inits << " " << Ealpha(ii) << " " << vp.ym(ii) - Ealpha(ii);
+					} else {
+						outf_inits << " " << vp.ym(ii);
+					}
+					if (n_env > 0) outf_inits << " " << vp.eta(ii) << " " << vp.yx(ii);
+					outf_inits << std::endl;
+				}
+				boost_io::close(outf_inits);
+			}
+//
+//			if(rank == world_size - 1){
+//				boost_io::close(outf_inits);
+//			}
 		}
+
 		boost_io::close(outf_inits);
 
 		// Snp-stats
@@ -291,7 +311,14 @@ public:
 		if (ext.find(".gz") != std::string::npos) {
 			my_outf.push(boost_io::gzip_compressor());
 		}
-		my_outf.push(boost_io::file_sink(ofile));
+
+		int rank;
+		MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+		if(rank == 0){
+			my_outf.push(boost_io::file_sink(ofile));
+		} else {
+			my_outf.push(boost_io::file_sink(ofile, std::ios_base::app));
+		}
 	}
 };
 

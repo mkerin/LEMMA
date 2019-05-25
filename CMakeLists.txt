@@ -62,9 +62,13 @@ list(APPEND LOC_COMPILE_OPTS -DVERSION_MAJOR=${PROJECT_VERSION_MAJOR})
 list(APPEND LOC_COMPILE_OPTS -DVERSION_MINOR=${PROJECT_VERSION_MINOR})
 list(APPEND LOC_COMPILE_OPTS -DVERSION_PATCH=${PROJECT_VERSION_PATCH})
 
-set(SOURCES src/hyps.cpp src/variational_parameters.cpp src/genotype_matrix.cpp src/parse_arguments.cpp src/file_streaming.cpp src/eigen_utils.cpp)
+set(SOURCES src/hyps.cpp src/variational_parameters.cpp src/genotype_matrix.cpp src/parse_arguments.cpp src/file_utils.cpp src/eigen_utils.cpp src/mpi_utils.cpp)
 set(BGEN_INCL_DIRS ${BGEN}/genfile/include ${BGEN}/3rd_party/zstd-1.1.0/lib ${BGEN}/db/include ${BGEN}/3rd_party/sqlite3 ${BGEN}/3rd_party/boost_1_55_0)
 
+find_package(MPI REQUIRED)
+INCLUDE_DIRECTORIES(${MPI_INCLUDE_PATH})
+#list(APPEND LOC_COMPILE_OPTS ${MPI_COMPILE_FLAGS})
+#list(APPEND LIB-DIRS ${MPI_LINK_FLAGS})
 
 ##Platform invariant variables
 find_library(BGEN_LIB bgen HINTS ${BGEN}/build)
@@ -72,7 +76,7 @@ find_library(DB_LIB db HINTS ${BGEN}/build/db)
 find_library(SQLITE_LIB sqlite3 HINTS ${BGEN}/build/3rd_party/sqlite3)
 find_library(ZSTD_LIB zstd HINTS ${BGEN}/build/3rd_party/zstd-1.1.0)
 
-set(LIBS boost dl pthread boost_iostreams z ${LIBS})
+set(LIBS boost dl pthread boost_iostreams z ${MPI_LIBRARIES} ${LIBS})
 
 ##Defining compilation commands
 #set(TARGET bgen_prog)

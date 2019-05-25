@@ -393,7 +393,7 @@ TEST_CASE( "Example 4: multi-env + mog + covars + emp_bayes" ){
 		VBayesX2 VB(data);
 		SECTION("Ex4. Vbayes_X2 initialised correctly"){
 			CHECK(VB.n_samples == 50);
-			CHECK(VB.N == 50.0);
+			CHECK(VB.Nglobal == 50.0);
 			CHECK(VB.n_env == 4);
 			CHECK(VB.n_var == 67);
 			CHECK(VB.n_effects == 2);
@@ -474,7 +474,7 @@ TEST_CASE( "Example 4: multi-env + mog + covars + emp_bayes" ){
 
 			// Checking logw
 			double int_linear = -1.0 * VB.calcExpLinear(hyps, vp) / 2.0 / hyps.sigma;
-			int_linear -= VB.N * std::log(2.0 * VB.PI * hyps.sigma) / 2.0;
+			int_linear -= VB.Nglobal * std::log(2.0 * VB.PI * hyps.sigma) / 2.0;
 			// CHECK(int_linear  == Approx(-58.5936502834));
 
 			// CHECK(VB.calcExpLinear(hyps, vp)  == Approx(30.4124788103));
