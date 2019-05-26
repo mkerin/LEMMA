@@ -22,7 +22,6 @@
 #include <stdexcept>
 #include <memory>
 
-
 int main( int argc, char** argv ) {
 	parameters p;
 
@@ -39,7 +38,7 @@ int main( int argc, char** argv ) {
 		std::time_t start_time = std::chrono::system_clock::to_time_t(start);
 		std::cout << "Starting analysis at " << std::ctime(&start_time) << std::endl;
 
-		Data data( p );
+		Data data(p);
 		data.apply_filters();
 		data.read_non_genetic_data();
 
@@ -53,86 +52,87 @@ int main( int argc, char** argv ) {
 			eta = data.E.col(0);
 		}
 
-		if(p.mode_vb || p.mode_calc_snpstats) {
+		if (p.mode_vb || p.mode_calc_snpstats || p.streamBgenFile != "NULL") {
 			data.set_vb_init();
-		}
 
-		VBayesX2 VB(data);
-		if(p.mode_vb){
-			if (data.n_effects > 1) {
-				data.calc_dxteex();
+
+			VBayesX2 VB(data);
+			if (p.mode_vb) {
+				if (data.n_effects > 1) {
+					data.calc_dxteex();
+				}
+				if (p.env_coeffs_file == "NULL" && p.init_weights_with_snpwise_scan) {
+					data.calc_snpstats();
+				}
+
+				auto data_end = std::chrono::system_clock::now();
+				std::chrono::duration<double> elapsed_reading_data = data_end - data_start;
+
+				// Run inference
+				auto vb_start = std::chrono::system_clock::now();
+				VB.run();
+				auto vb_end = std::chrono::system_clock::now();
+				std::chrono::duration<double> elapsed_vb = vb_end - vb_start;
+				eta = VB.vp_init.eta.cast<double>();
+
+				std::cout << std::endl << "Time expenditure:" << std::endl;
+				std::cout << "Reading data: " << elapsed_reading_data.count() << " secs" << std::endl;
+				std::cout << "VB inference: " << elapsed_vb.count() << " secs" << std::endl;
+				std::cout << "runInnerLoop: " << VB.elapsed_innerLoop.count() << " secs" << std::endl;
+
+				// Write time log to file
+				boost_io::filtering_ostream outf_time;
+				std::string ofile_map = VB.fstream_init(outf_time, "", "_time_elapsed");
+				outf_time << "function time" << std::endl;
+				outf_time << "read_data " << elapsed_reading_data.count() << std::endl;
+				outf_time << "full_inference " << elapsed_vb.count() << std::endl;
+				outf_time << "vb_outer_loop " << VB.elapsed_innerLoop.count() << std::endl;
 			}
-			if (p.env_coeffs_file == "NULL" && p.init_weights_with_snpwise_scan) {
-				data.calc_snpstats();
+
+			if (p.mode_calc_snpstats) {
+				VB.write_map_stats_to_file("");
 			}
 
-			auto data_end = std::chrono::system_clock::now();
-			std::chrono::duration<double> elapsed_reading_data = data_end - data_start;
+			if (p.streamBgenFile != "NULL") {
+				GenotypeMatrix Xstream(false);
+				bool bgen_pass = true;
+				long n_var_parsed = 0;
 
-			// Run inference
-			auto vb_start = std::chrono::system_clock::now();
-			VB.run();
-			auto vb_end = std::chrono::system_clock::now();
-			std::chrono::duration<double> elapsed_vb = vb_end - vb_start;
-			eta = VB.vp_init.eta.cast<double>();
+				genfile::bgen::IndexQuery::UniquePtr query = genfile::bgen::IndexQuery::create(p.bgi_file);
+				genfile::bgen::View::UniquePtr bgenView;
+				query->initialise();
 
-			std::cout << std::endl << "Time expenditure:" << std::endl;
-			std::cout << "Reading data: " << elapsed_reading_data.count() << " secs" << std::endl;
-			std::cout << "VB inference: " << elapsed_vb.count() << " secs" << std::endl;
-			std::cout << "runInnerLoop: " << VB.elapsed_innerLoop.count() << " secs" << std::endl;
+				bgenView->set_query(query);
+				bgenView->summarise(std::cout);
 
-			// Write time log to file
-			boost_io::filtering_ostream outf_time;
-			std::string ofile_map = VB.fstream_init(outf_time, "", "_time_elapsed");
-			outf_time << "function time" << std::endl;
-			outf_time << "read_data " << elapsed_reading_data.count() << std::endl;
-			outf_time << "full_inference " << elapsed_vb.count() << std::endl;
-			outf_time << "vb_outer_loop " << VB.elapsed_innerLoop.count() << std::endl;
-		}
+				Eigen::VectorXd neglogp_beta(VB.n_var);
+				Eigen::VectorXd neglogp_rgam(VB.n_var);
+				Eigen::VectorXd neglogp_gam;
+				Eigen::VectorXd neglogp_joint(VB.n_var);
+				Eigen::VectorXd test_stat_beta(VB.n_var);
+				Eigen::VectorXd test_stat_rgam(VB.n_var);
+				Eigen::VectorXd test_stat_gam;
+				Eigen::VectorXd test_stat_joint(VB.n_var);
+				bool append = false;
 
-		if(p.mode_calc_snpstats){
-			VB.write_map_stats_to_file("");
-		}
+				boost_io::filtering_ostream outf;
+				fileUtils::fstream_init(outf, p.streamBgenOutFile);
 
-		if(p.streamBgenFile != "NULL"){
-			GenotypeMatrix Xstream(false);
-			bool bgen_pass = true;
-			long n_var_parsed = 0;
+				while (fileUtils::read_bgen_chunk(bgenView, Xstream, data.incomplete_cases,
+				                                  data.n_samples, 128, p, bgen_pass, n_var_parsed)) {
+					VB.LOCO_pvals_v2(Xstream,
+					                 VB.vp_init,
+					                 p.LOSO_window, neglogp_beta, neglogp_rgam,
+					                 neglogp_joint,
+					                 test_stat_beta,
+					                 test_stat_rgam,
+					                 test_stat_joint);
 
-			genfile::bgen::IndexQuery::UniquePtr query = genfile::bgen::IndexQuery::create(p.bgi_file);
-			genfile::bgen::View::UniquePtr bgenView;
-			query->initialise();
-
-			bgenView->set_query(query);
-			bgenView->summarise(std::cout);
-
-			Eigen::VectorXd neglogp_beta(VB.n_var);
-			Eigen::VectorXd neglogp_rgam(VB.n_var);
-			Eigen::VectorXd neglogp_gam;
-			Eigen::VectorXd neglogp_joint(VB.n_var);
-			Eigen::VectorXd test_stat_beta(VB.n_var);
-			Eigen::VectorXd test_stat_rgam(VB.n_var);
-			Eigen::VectorXd test_stat_gam;
-			Eigen::VectorXd test_stat_joint(VB.n_var);
-			bool append = false;
-
-			boost_io::filtering_ostream outf;
-			fileUtils::fstream_init(outf, p.streamBgenOutFile);
-
-			while (fileUtils::read_bgen_chunk(bgenView, Xstream, data.incomplete_cases,
-					data.n_samples, 128, p, bgen_pass, n_var_parsed)){
-				VB.LOCO_pvals_v2(Xstream,
-				VB.vp_init,
-				p.LOSO_window, neglogp_beta, neglogp_rgam,
-				neglogp_joint,
-				test_stat_beta,
-				test_stat_rgam,
-				test_stat_joint);
-
-				fileUtils::write_snp_stats_to_file(outf, VB.n_effects, Xstream, append, neglogp_beta, neglogp_gam,
-												   neglogp_rgam, neglogp_joint, test_stat_beta, test_stat_gam,
-												   test_stat_rgam, test_stat_joint);
-				append = true;
+					fileUtils::write_snp_stats_to_file(outf, VB.n_effects, Xstream, append, neglogp_beta, neglogp_gam,
+					                                   neglogp_rgam, neglogp_joint, test_stat_beta, test_stat_gam,
+					                                   test_stat_rgam, test_stat_joint);
+					append = true;
+				}
 			}
 		}
 
