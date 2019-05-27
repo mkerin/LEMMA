@@ -26,7 +26,15 @@
 int main( int argc, char** argv ) {
 	parameters p;
 	MPI_Init(NULL, NULL);
-	mpiUtils::sanitise_cout();
+
+	// Sanitise std::cout
+	int rank;
+	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+	std::ofstream sink("/dev/null");
+	std::streambuf *coutbuf = std::cout.rdbuf();
+	if (rank != 0) {
+		std::cout.rdbuf(sink.rdbuf());
+	}
 
 	std::cout << "============="<< std::endl;
 	std::cout << "LEMMA v" << VERSION_MAJOR << "." << VERSION_MINOR << "." << VERSION_PATCH << std::endl;
@@ -92,6 +100,10 @@ int main( int argc, char** argv ) {
 				outf_time << "vb_outer_loop " << VB.elapsed_innerLoop.count() << std::endl;
 			}
 			// ONLY IMPLEMENT MPI FOR VARIATIONAL BAYES
+
+			if (rank != 0) {
+				std::cout.rdbuf(coutbuf);
+			}
 			MPI_Finalize();
 			return 0;
 
