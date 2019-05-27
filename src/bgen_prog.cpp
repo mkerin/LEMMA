@@ -118,7 +118,7 @@ int main( int argc, char** argv ) {
 				boost_io::filtering_ostream outf;
 				fileUtils::fstream_init(outf, p.streamBgenOutFile);
 
-				while (fileUtils::read_bgen_chunk(bgenView, Xstream, data.incomplete_cases,
+				while (fileUtils::read_bgen_chunk(bgenView, Xstream, data.sample_is_invalid,
 				                                  data.n_samples, 128, p, bgen_pass, n_var_parsed)) {
 					VB.LOCO_pvals_v2(Xstream,
 					                 VB.vp_init,
