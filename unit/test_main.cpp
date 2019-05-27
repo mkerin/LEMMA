@@ -166,7 +166,7 @@ TEST_CASE("Data") {
 		p.covar_file = "data/io_test/age.txt";
 		p.bgen_file = "data/io_test/n50_p100.bgen";
 		p.bgi_file = "data/io_test/n50_p100.bgen.bgi";
-		p.incl_sids_file = "data/io_test/sample_ids.txt";
+		p.incl_sids_file = "data/io_test/sample_ids_head28.txt";
 		p.low_mem = true;
 		Data data(p);
 
@@ -470,7 +470,7 @@ TEST_CASE( "Example 4: multi-env + mog + covars + emp_bayes" ){
 			tracker.init_interim_output(0,2, VB.n_effects, VB.n_covar, VB.n_env, VB.env_names, vp);
 			tracker.dump_state("2", VB.n_samples, VB.n_covar, VB.n_var, VB.n_env,
 							   VB.n_effects, vp, hyps, VB.Y, VB.C, VB.X,
-							   VB.covar_names, VB.env_names);
+							   VB.covar_names, VB.env_names, VB.sample_is_invalid);
 
 			// Checking logw
 			double int_linear = -1.0 * VB.calcExpLinear(hyps, vp) / 2.0 / hyps.sigma;
@@ -532,11 +532,11 @@ TEST_CASE( "Example 4: multi-env + mog + covars + emp_bayes + sample subset" ){
 						 (char*) "--use_vb_on_covars", (char*) "--mode_empirical_bayes",
 						 (char*) "--spike_diff_factor", (char*) "10000",
 						 (char*) "--effects_prior_mog",
-						 (char*) "--incl_sample_ids", (char*) "data/io_test/sample_ids.txt",
+						 (char*) "--incl_sample_ids", (char*) "data/io_test/sample_ids_head28.txt",
 						 (char*) "--vb_iter_max", (char*) "10",
 						 (char*) "--environment", (char*) "data/io_test/n50_p100_env.txt",
 						 (char*) "--bgen", (char*) "data/io_test/n50_p100.bgen",
-						 (char*) "--out", (char*) "data/io_test/config4.out",
+						 (char*) "--out", (char*) "data/io_test/config4_subset.out",
 						 (char*) "--pheno", (char*) "data/io_test/pheno.txt",
 						 (char*) "--hyps_grid", (char*) "data/io_test/single_hyps_gxage.txt",
 						 (char*) "--hyps_probs", (char*) "data/io_test/single_hyps_gxage_probs.txt"};
@@ -553,12 +553,13 @@ TEST_CASE( "Example 4: multi-env + mog + covars + emp_bayes + sample subset" ){
 		data.set_vb_init();
 		VBayesX2 VB(data);
 		SECTION("Ex4. Vbayes_X2 initialised correctly"){
-			CHECK(VB.n_samples == 29);
+			CHECK(VB.n_samples == 28);
 			CHECK(VB.n_var == 54);
 		}
 
 		std::vector< VbTracker > trackers(VB.hyps_inits.size(), p);
 		VB.run_inference(VB.hyps_inits, false, 2, trackers);
+		VB.write_map_stats_to_file("");
 		SECTION("Ex3. Vbayes_X2 inference correct"){
 			CHECK(trackers[0].count == 10);
 			CHECK(trackers[0].logw == Approx(-57.0634650324));

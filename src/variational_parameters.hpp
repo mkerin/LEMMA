@@ -116,7 +116,7 @@ public:
 
 	void init_from_lite(const VariationalParametersLite& init);
 
-	VariationalParametersLite convert_to_lite();
+	VariationalParametersLite convert_to_lite() const;
 
 	void calcEdZtZ(const Eigen::Ref<const Eigen::ArrayXXd>& dXtEEX, const int& n_env);
 };

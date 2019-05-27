@@ -29,6 +29,7 @@
 #include <set>
 #include <stdexcept>
 #include <thread>
+#include <unordered_map>
 
 #include <boost/math/distributions/chi_squared.hpp>
 #include <boost/math/distributions/fisher_f.hpp>
@@ -100,6 +101,7 @@ public:
 	boost_io::filtering_ostream outf_scan;
 
 	bool filters_applied;
+	std::unordered_map<long, bool> sample_is_invalid;
 
 // grid things for vbayes
 	std::vector< std::string > hyps_names;
@@ -389,7 +391,7 @@ public:
 			std::cout << "Flipping variants with MAF > 0.5" << std::endl;
 		}
 		t_readFullBgen.resume();
-		fileUtils::read_bgen_chunk(bgenView, G, incomplete_cases, n_samples, p.chunk_size, p, bgen_pass, n_var_parsed);
+		fileUtils::read_bgen_chunk(bgenView, G, sample_is_invalid, n_samples, p.chunk_size, p, bgen_pass, n_var_parsed);
 		n_var = G.cols();
 		t_readFullBgen.stop();
 		std::cout << "BGEN contained " << n_var << " variants." << std::endl;
@@ -1211,6 +1213,15 @@ public:
 		incomplete_cases.insert(missing_phenos.begin(), missing_phenos.end());
 		incomplete_cases.insert(missing_envs.begin(), missing_envs.end());
 
+		sample_is_invalid.clear();
+		for (long ii = 0; ii < n_samples; ii++){
+			if (incomplete_cases.find(ii) == incomplete_cases.end()){
+				sample_is_invalid[ii] = false;
+			} else {
+				sample_is_invalid[ii] = true;
+			}
+		}
+
 		if(n_pheno > 0) {
 			Y = reduce_mat_to_complete_cases( Y, Y_reduced, n_pheno, incomplete_cases );
 		}
@@ -1229,6 +1240,8 @@ public:
 		std::cout << " across covariates";
 		if(p.env_file != "NULL") std::cout << ", env-variables" << std::endl;
 		std::cout << " and phenotype." << std::endl;
+		std::cout << "Load factor for sample_is_invalid map: ";
+		std::cout << sample_is_invalid.load_factor() << std::endl;
 	}
 
 	std::string fstream_init(boost_io::filtering_ostream& my_outf,

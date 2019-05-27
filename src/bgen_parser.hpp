@@ -13,6 +13,7 @@
 #include <stdexcept>
 #include <memory>
 #include <set>
+#include <unordered_map>
 
 // DosageSetter is a callback object appropriate for passing to bgen::read_genotype_data_block() or
 // the synonymous method of genfile::bgen::View. See the comment in bgen.hpp above
@@ -22,14 +23,14 @@
 struct DosageSetter {
 	typedef EigenDataVector Data;
 
-	DosageSetter(std::set<long> invalid_sample_ids) :
-		m_invalid_sample_indexes(invalid_sample_ids)
+	DosageSetter(std::unordered_map<long, bool> invalid_sample_ids, long nInvalid) :
+		m_sample_is_invalid(invalid_sample_ids), m_nInvalid(nInvalid)
 	{
 	}
 
 	// Called once allowing us to set storage.
 	void initialise( std::size_t number_of_samples, std::size_t number_of_alleles ) {
-		m_dosage.resize(number_of_samples - m_invalid_sample_indexes.size());
+		m_dosage.resize(number_of_samples - m_nInvalid);
 		m_samples_skipped = 0;
 		m_missing_entries.clear();
 
@@ -50,7 +51,7 @@ struct DosageSetter {
 	// Called once per sample to determine whether we want data for this sample
 	bool set_sample( std::size_t i ) {
 		// Only want data from samples with complete data across pheno/covar/env
-		if (m_invalid_sample_indexes.find(i) != m_invalid_sample_indexes.end()) {
+		if (m_sample_is_invalid[i]){
 			m_samples_skipped++;
 			return false;
 		} else {
@@ -114,7 +115,7 @@ struct DosageSetter {
 		for (auto ii : m_missing_entries) {
 			m_dosage(ii) = m_mean;
 		}
-		assert(m_samples_skipped == m_invalid_sample_indexes.size());
+		assert(m_samples_skipped == m_nInvalid);
 	}
 
 	Data m_dosage;
@@ -126,9 +127,10 @@ struct DosageSetter {
 	double m_sum_eij;
 
 private:
-	std::set<long> m_invalid_sample_indexes;
+	std::unordered_map<long, bool> m_sample_is_invalid;
 	std::size_t m_samples_skipped;
 	std::size_t m_sample_i;
+	long m_nInvalid;
 
 	std::vector<long> m_missing_entries;
 	double m_sum_eij2;

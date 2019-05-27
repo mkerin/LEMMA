@@ -20,7 +20,7 @@
 #include <iomanip>
 #include <string>
 #include <vector>
-#include <map>
+#include <unordered_map>
 
 namespace boost_io = boost::iostreams;
 
@@ -78,12 +78,36 @@ void write_snp_stats_to_file(boost_io::filtering_ostream &ofile, const int &n_ef
 
 bool read_bgen_chunk(genfile::bgen::View::UniquePtr &bgenView,
                      GenotypeMatrix &G,
-                     const std::map<std::size_t, bool> &incomplete_cases,
+                     const std::unordered_map<long, bool> &sample_is_invalid,
                      const long &n_samples,
                      const long &chunk_size,
                      const parameters &p,
                      bool &bgen_pass,
                      long &n_var_parsed);
+
+void dump_yhat_to_file(boost_io::filtering_ostream &outf,
+					   const long &n_samples,
+					   const long &n_covar,
+					   const long &n_var,
+					   const int &n_env,
+					   const EigenDataVector &Y,
+					   const VariationalParametersLite &vp,
+					   const Eigen::Ref<const Eigen::VectorXd> &Ealpha,
+					   std::unordered_map<long, bool> sample_is_invalid,
+					   const std::vector<Eigen::VectorXd> &resid_loco,
+					   std::vector<int> chrs_present);
+
+	void dump_yhat_to_file(boost_io::filtering_ostream &outf,
+						   const long &n_samples,
+						   const long &n_covar,
+						   const long &n_var,
+						   const int &n_env,
+						   const EigenDataVector &Y,
+						   const VariationalParametersLite &vp,
+						   const Eigen::Ref<const Eigen::VectorXd> &Ealpha,
+						   std::unordered_map<long, bool> sample_is_invalid);
+
+
 }
 
 #endif //FILE_UTILS_HPP
