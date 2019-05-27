@@ -206,7 +206,7 @@ void VariationalParameters::init_from_lite(const VariationalParametersLite &init
 	sw_sq   = init.sw_sq;
 }
 
-VariationalParametersLite VariationalParameters::convert_to_lite() {
+VariationalParametersLite VariationalParameters::convert_to_lite() const {
 	VariationalParametersLite vplite(p);
 	vplite.ym         = ym;
 	vplite.yx         = yx;

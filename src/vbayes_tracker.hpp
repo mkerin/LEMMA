@@ -210,7 +210,8 @@ public:
 	                const EigenDataArrayXX& C,
 	                const GenotypeMatrix& X,
 	                const std::vector< std::string >& covar_names,
-	                const std::vector< std::string >& env_names){
+	                const std::vector< std::string >& env_names,
+					const std::unordered_map<long, bool>& sample_is_invalid){
 
 		// Aggregate effects
 		fstream_init(outf_inits, dir, "_dump_it" + count + "_aggregate", true);
@@ -219,41 +220,36 @@ public:
 			Ealpha += (C.matrix() * vp.muc.matrix().cast<scalarData>()).cast<double>();
 		}
 
-		int world_size, rank;
-		MPI_Comm_size(MPI_COMM_WORLD, &world_size);
-		MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+		VariationalParametersLite vp_lite = vp.convert_to_lite();
 
-		for (int rnk = 0; rnk < world_size; rnk++){
-			MPI_Barrier(MPI_COMM_WORLD);
+		fileUtils::dump_yhat_to_file(outf_inits, n_samples, n_covar, n_var,
+				n_env,Y,vp_lite,Ealpha, sample_is_invalid);
 
-			if(rank == rnk && rnk == 0){
-				outf_inits << "Y";
-				if (n_covar > 0) outf_inits << " Ealpha";
-				outf_inits << " Xbeta";
-				if (n_env > 0) outf_inits << " eta Xgamma";
-				outf_inits << std::endl;
-			}
 
-			if(rank == rnk){
-				for (std::uint32_t ii = 0; ii < n_samples; ii++) {
-					outf_inits << Y(ii);
-					if (n_covar > 0) {
-						outf_inits << " " << Ealpha(ii) << " " << vp.ym(ii) - Ealpha(ii);
-					} else {
-						outf_inits << " " << vp.ym(ii);
-					}
-					if (n_env > 0) outf_inits << " " << vp.eta(ii) << " " << vp.yx(ii);
-					outf_inits << std::endl;
-				}
-				boost_io::close(outf_inits);
-			}
-//
-//			if(rank == world_size - 1){
-//				boost_io::close(outf_inits);
+//		outf_inits << "Y";
+//		if (n_covar > 0) outf_inits << " Ealpha";
+//		outf_inits << " Xbeta";
+//		if (n_env > 0) outf_inits << " eta Xgamma";
+//		outf_inits << std::endl;
+//		for (long ii = 0; ii < n_samples; ii++) {
+//			if(sample_is_invalid[ii]){
+//				for (int jj = 0; jj < n_cols; jj++){
+//					outf_inits << "NA";
+//					if(jj < n_cols - 1) outf_inits << " ";
+//				}
+//				outf_inits << std::endl;
+//			} else {
+//				outf_inits << Y(ii);
+//				if (n_covar > 0) {
+//					outf_inits << " " << Ealpha(ii) << " " << vp.ym(ii) - Ealpha(ii);
+//				} else {
+//					outf_inits << " " << vp.ym(ii);
+//				}
+//				if (n_env > 0) outf_inits << " " << vp.eta(ii) << " " << vp.yx(ii);
+//				outf_inits << std::endl;
 //			}
-		}
-
-		boost_io::close(outf_inits);
+//		}
+//		boost_io::close(outf_inits);
 
 		// Snp-stats
 		fstream_init(outf_inits, dir, "_dump_it" + count + "_latent_snps", true);

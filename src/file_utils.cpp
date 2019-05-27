@@ -294,7 +294,7 @@ void fileUtils::write_snp_stats_to_file(boost_io::filtering_ostream &ofile, cons
 
 bool fileUtils::read_bgen_chunk(genfile::bgen::View::UniquePtr &bgenView,
                                 GenotypeMatrix &G,
-                                const std::map<std::size_t, bool> &incomplete_cases,
+                                const std::unordered_map<long, bool> &sample_is_invalid,
                                 const long &n_samples,
                                 const long &chunk_size,
                                 const parameters &p,
@@ -317,11 +317,8 @@ bool fileUtils::read_bgen_chunk(genfile::bgen::View::UniquePtr &bgenView,
 	std::vector< std::string > alleles_j;
 	std::string SNPID_j;
 
-	std::set<long> invalid_sample_indexes;
-	for (auto my_case : incomplete_cases) {
-		invalid_sample_indexes.insert(my_case.first);
-	}
-	DosageSetter setter_v2(invalid_sample_indexes);
+	long nInvalid = sample_is_invalid.size() - n_samples;
+	DosageSetter setter_v2(sample_is_invalid, nInvalid);
 
 	double chunk_missingness = 0;
 	int n_var_incomplete = 0;
@@ -411,5 +408,107 @@ bool fileUtils::read_bgen_chunk(genfile::bgen::View::UniquePtr &bgenView,
 		return false;
 	} else {
 		return true;
+	}
+}
+
+void fileUtils::dump_yhat_to_file(boost_io::filtering_ostream &outf,
+                                  const long &n_samples,
+                                  const long &n_covar,
+                                  const long &n_var,
+                                  const int &n_env,
+                                  const EigenDataVector &Y,
+                                  const VariationalParametersLite &vp,
+                                  const Eigen::Ref<const Eigen::VectorXd> &Ealpha,
+                                  std::unordered_map<long, bool> sample_is_invalid){
+	std::vector<Eigen::VectorXd> resid_loco;
+	std::vector<int> chrs_present;
+
+	fileUtils::dump_yhat_to_file(outf, n_samples, n_covar,
+	                             n_var, n_env, Y,
+	                             vp, Ealpha,
+	                             sample_is_invalid,
+	                             resid_loco, chrs_present);
+}
+
+void fileUtils::dump_yhat_to_file(boost_io::filtering_ostream &outf,
+                                  const long &n_samples,
+                                  const long &n_covar,
+                                  const long &n_var,
+                                  const int &n_env,
+                                  const EigenDataVector &Y,
+                                  const VariationalParametersLite &vp,
+                                  const Eigen::Ref<const Eigen::VectorXd> &Ealpha,
+                                  std::unordered_map<long, bool> sample_is_invalid,
+                                  const std::vector<Eigen::VectorXd> &resid_loco,
+                                  std::vector<int> chrs_present) {
+	assert(chrs_present.size() == resid_loco.size() || resid_loco.empty());
+
+	int world_size, rank;
+	MPI_Comm_size(MPI_COMM_WORLD, &world_size);
+	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+
+	for (int rnk = 0; rnk < world_size; rnk++) {
+		MPI_Barrier(MPI_COMM_WORLD);
+
+		// header
+		if(rank == rnk && rnk == 0) {
+			long n_cols = 0, n_chrs = resid_loco.size();
+			outf << "Y"; n_cols++;
+			if (n_covar > 0) outf << " Ealpha"; n_cols++;
+			outf << " Xbeta"; n_cols++;
+			if (n_env > 0) outf << " eta Xgamma"; n_cols += 2;
+			if(n_chrs > 0) {
+				for(auto cc : chrs_present) {
+					outf << " residuals_excl_chr" << cc;
+				}
+				n_cols += n_chrs;
+			}
+			outf << std::endl;
+		}
+
+		if(rank == rnk) {
+			// n_cols
+			long n_cols = 0, n_chrs = resid_loco.size();
+			n_cols++;
+			if (n_covar > 0) n_cols++;
+			n_cols++;
+			if (n_env > 0) n_cols += 2;
+			if(n_chrs > 0) {
+				n_cols += n_chrs;
+			}
+
+			// body
+			long iiValid = 0;
+			for (long ii = 0; ii < sample_is_invalid.size(); ii++) {
+				if(sample_is_invalid[ii]) {
+					// NA for incomplete sample
+					for (int jj = 0; jj < n_cols; jj++) {
+						outf << "NA";
+						if(jj < n_cols - 1) outf << " ";
+					}
+					outf << std::endl;
+				} else {
+					// sample info
+					outf << Y(iiValid);
+					if (n_covar > 0) {
+						outf << " " << Ealpha(iiValid) << " " << vp.ym(iiValid) - Ealpha(iiValid);
+					} else {
+						outf << " " << vp.ym(iiValid);
+					}
+					if (n_env > 0) {
+						outf << " " << vp.eta(iiValid) << " " << vp.yx(iiValid);
+					}
+					if (n_chrs > 0) {
+						for (int cc = 0; cc < n_chrs; cc++) {
+							outf << " " << resid_loco[cc](iiValid);
+						}
+					}
+					outf << std::endl;
+					iiValid++;
+				}
+			}
+			assert(iiValid == n_samples);
+			boost_io::close(outf);
+		}
 	}
 }

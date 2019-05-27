@@ -92,7 +92,7 @@ TEST_CASE("Resume from multi-env + mog + emp_bayes"){
 			tracker.init_interim_output(0,2, VB.n_effects, VB.n_covar, VB.n_env, VB.env_names, vp);
 			tracker.dump_state("2", VB.n_samples, VB.n_covar, VB.n_var, VB.n_env,
 			                   VB.n_effects, vp, hyps, VB.Y, VB.C, VB.X,
-			                   VB.covar_names, VB.env_names);
+			                   VB.covar_names, VB.env_names, VB.sample_is_invalid);
 
 			VB.updateAllParams(3, round_index, all_vp, all_hyps, logw_prev);
 			CHECK(VB.calc_logw(hyps, vp) == Approx(-87.8880225449));
@@ -276,7 +276,7 @@ TEST_CASE("Resume from multi-env + mog + squarem"){
 			tracker.init_interim_output(0,2, VB.n_effects, VB.n_covar, VB.n_env, VB.env_names, vp);
 			tracker.dump_state("2", VB.n_samples, VB.n_covar, VB.n_var, VB.n_env,
 			                   VB.n_effects, vp, hyps, VB.Y, VB.C, VB.X,
-			                   VB.covar_names, VB.env_names);
+			                   VB.covar_names, VB.env_names, VB.sample_is_invalid);
 
 			VB.updateAllParams(3, round_index, all_vp, all_hyps, logw_prev);
 			CHECK(VB.calc_logw(hyps, vp) == Approx(-87.8880225449));

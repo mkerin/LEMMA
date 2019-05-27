@@ -100,6 +100,7 @@ public:
 	Eigen::MatrixXd XtE;
 
 	Eigen::ArrayXXd& dXtEEX;
+	std::unordered_map<long, bool> sample_is_invalid;
 
 // Global location of y_m = E[X beta] and y_x = E[X gamma]
 	EigenDataMatrix YY, YX, YM, ETA, ETA_SQ;
@@ -127,6 +128,7 @@ public:
 		snpstats(dat.snpstats),
 		p(dat.p),
 		hyps_inits(dat.hyps_inits),
+								   sample_is_invalid(dat.sample_is_invalid),
 		vp_init(dat.vp_init){
 		std::cout << "Initialising vbayes object" << std::endl;
 		mkl_set_num_threads_local(p.n_thread);
@@ -501,7 +503,7 @@ public:
 					all_tracker[nn].dump_state(std::to_string(count), n_samples, n_covar, n_var,
 					                           n_env, n_effects,
 					                           all_vp[nn], all_hyps[nn], Y, C,
-					                           X, covar_names, env_names);
+					                           X, covar_names, env_names, sample_is_invalid);
 				}
 			}
 
@@ -564,7 +566,7 @@ public:
 			all_tracker[nn].dump_state("_converged", n_samples, n_covar, n_var,
 			                           n_env, n_effects,
 			                           all_vp[nn], all_hyps[nn], Y, C,
-			                           X, covar_names, env_names);
+			                           X, covar_names, env_names, sample_is_invalid);
 		}
 
 		// Log all things that we want to track
@@ -1740,44 +1742,47 @@ public:
 	void output_results(){
 
 		/*********** Stats from MAP to file ************/
-		std::vector<Eigen::VectorXd> map_residuals_by_chr(n_chrs), pred_main(n_chrs), pred_int(n_chrs);
+		std::vector<Eigen::VectorXd> resid_loco(n_chrs), pred_main(n_chrs), pred_int(n_chrs);
 
 		// Predicted effects to file
 		calcPredEffects(vp_init);
-		compute_residuals_per_chr(vp_init, pred_main, pred_int, map_residuals_by_chr);
+		compute_residuals_per_chr(vp_init, pred_main, pred_int, resid_loco);
 		Eigen::VectorXd Ealpha = Eigen::VectorXd::Zero(n_samples);
 		if(n_covar > 0) {
 			Ealpha += (C * vp_init.muc.matrix().cast<scalarData>()).cast<double>();
 		}
-		if(n_effects == 1) {
-			outf_map_pred << "Y Ealpha Xbeta";
-			for(auto cc : chrs_index) {
-				outf_map_pred << " residuals_excl_chr" << chrs_present[cc];
-			}
-			outf_map_pred << std::endl;
-
-			for (std::uint32_t ii = 0; ii < n_samples; ii++) {
-				outf_map_pred << Y(ii) << " " << Ealpha(ii) << " " << vp_init.ym(ii) - Ealpha(ii);
-				for(auto cc : chrs_index) {
-					outf_map_pred << " " << map_residuals_by_chr[cc](ii);
-				}
-				outf_map_pred << std::endl;
-			}
-		} else {
-			outf_map_pred << "Y Ealpha Xbeta eta Xgamma";
-			for(auto cc : chrs_index) {
-				outf_map_pred << " residuals_excl_chr" << chrs_present[cc];
-			}
-			outf_map_pred << std::endl;
-			for (std::uint32_t ii = 0; ii < n_samples; ii++) {
-				outf_map_pred << Y(ii) << " " << Ealpha(ii) << " " << vp_init.ym(ii) - Ealpha(ii);
-				outf_map_pred << " " << vp_init.eta(ii) << " " << vp_init.yx(ii);
-				for(auto cc : chrs_index) {
-					outf_map_pred << " " << map_residuals_by_chr[cc](ii);
-				}
-				outf_map_pred << std::endl;
-			}
-		}
+//		if(n_effects == 1) {
+//			outf_map_pred << "Y Ealpha Xbeta";
+//			for(auto cc : chrs_index) {
+//				outf_map_pred << " residuals_excl_chr" << chrs_present[cc];
+//			}
+//			outf_map_pred << std::endl;
+//
+//			for (std::uint32_t ii = 0; ii < n_samples; ii++) {
+//				outf_map_pred << Y(ii) << " " << Ealpha(ii) << " " << vp_init.ym(ii) - Ealpha(ii);
+//				for(auto cc : chrs_index) {
+//					outf_map_pred << " " << resid_loco[cc](ii);
+//				}
+//				outf_map_pred << std::endl;
+//			}
+//		} else {
+//			outf_map_pred << "Y Ealpha Xbeta eta Xgamma";
+//			for(auto cc : chrs_index) {
+//				outf_map_pred << " residuals_excl_chr" << chrs_present[cc];
+//			}
+//			outf_map_pred << std::endl;
+//			for (std::uint32_t ii = 0; ii < n_samples; ii++) {
+//				outf_map_pred << Y(ii) << " " << Ealpha(ii) << " " << vp_init.ym(ii) - Ealpha(ii);
+//				outf_map_pred << " " << vp_init.eta(ii) << " " << vp_init.yx(ii);
+//				for(auto cc : chrs_index) {
+//					outf_map_pred << " " << resid_loco[cc](ii);
+//				}
+//				outf_map_pred << std::endl;
+//			}
+//		}
+		fileUtils::dump_yhat_to_file(outf_map_pred, n_samples, n_covar, n_var,
+									 n_env, Y, vp_init, Ealpha, sample_is_invalid,
+									 resid_loco, chrs_present);
 
 		// weights to file
 		if(n_effects > 1) {
@@ -1797,7 +1802,7 @@ public:
 		Eigen::VectorXd neglogp_beta(n_var), neglogp_gam(n_var), neglogp_rgam(n_var), neglogp_joint(n_var);
 		Eigen::VectorXd test_stat_beta(n_var), test_stat_gam(n_var), test_stat_rgam(n_var), test_stat_joint(n_var);
 		if(p.LOSO_window == -1) {
-			LOCO_pvals(vp_init, map_residuals_by_chr, neglogp_beta, neglogp_gam, neglogp_rgam, neglogp_joint,
+			LOCO_pvals(vp_init, resid_loco, neglogp_beta, neglogp_gam, neglogp_rgam, neglogp_joint,
 			           test_stat_beta, test_stat_gam, test_stat_rgam, test_stat_joint);
 		} else {
 			LOCO_pvals_v2(vp_init, neglogp_beta, neglogp_rgam, neglogp_joint,
