@@ -75,7 +75,8 @@ void mpiUtils::sanitise_cout() {
 	 MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 	 // Mute std::cout except on rank zero
 	 std::ofstream sink("/dev/null");
-//	 if (rank != 0) {
-//	  std::cout.rdbuf(sink.rdbuf());
-//	 }
+	 if (rank != 0) {
+		 std::cout << "Muting rank " << rank << "..." << std::endl;
+		 std::cout.rdbuf(sink.rdbuf());
+	 }
 }

@@ -1551,18 +1551,23 @@ public:
 	}
 
 
-	void LOCO_pvals_v2(const VariationalParametersLite& vp,
-	                   Eigen::Ref<Eigen::VectorXd> neglogp_beta,
-	                   Eigen::Ref<Eigen::VectorXd> neglogp_gam_robust,
-	                   Eigen::Ref<Eigen::VectorXd> neglogp_joint,
-	                   Eigen::Ref<Eigen::VectorXd> test_stat_beta,
-	                   Eigen::Ref<Eigen::VectorXd> test_stat_gam_robust,
-	                   Eigen::Ref<Eigen::VectorXd> test_stat_joint){
+	void LOCO_pvals_v2(GenotypeMatrix &Xtest,
+					   const VariationalParametersLite &vp,
+					   const long &LOSO_window,
+					   Eigen::Ref<Eigen::VectorXd> neglogp_beta,
+					   Eigen::Ref<Eigen::VectorXd> neglogp_gam_robust,
+					   Eigen::Ref<Eigen::VectorXd> neglogp_joint,
+					   Eigen::Ref<Eigen::VectorXd> test_stat_beta,
+					   Eigen::Ref<Eigen::VectorXd> test_stat_gam_robust,
+					   Eigen::Ref<Eigen::VectorXd> test_stat_joint) const {
 		assert(neglogp_beta.rows()  == n_var);
 		assert(neglogp_joint.rows() == n_var);
 		assert(test_stat_beta.rows()  == n_var);
 		assert(test_stat_joint.rows() == n_var);
-		assert(n_effects == 1 || n_effects == 2);
+		assert(LOSO_window >= 0);
+
+		int n_effects = (n_env > 0) ? 2 : 1;
+		double N = n_samples;
 
 		Eigen::VectorXd y_resid = (Y - vp.ym).cast<double>();
 		if(n_env > 0) {
@@ -1572,38 +1577,54 @@ public:
 
 		// Compute p-vals per variant (p=3 as residuals mean centered)
 		Eigen::MatrixXd H(n_samples, n_effects);
-		boost_m::students_t t_dist(n_samples - n_effects);
-		boost_m::fisher_f f_dist(n_effects, n_samples - n_effects);
-		for(std::uint32_t jj = 0; jj < n_var; jj++ ) {
-			int chr1 = X.chromosome[jj];
+		boost::math::students_t t_dist(n_samples - n_effects);
+		boost::math::fisher_f f_dist(n_effects, n_samples - n_effects);
+		for(uint32_t jj = 0; jj < n_var; jj++ ) {
+			int chr_test = Xtest.chromosome[jj];
+			long pos_test = Xtest.position[jj];
 
-			while (front < n_var && X.position[front] < X.position[jj] + p.LOSO_window && X.chromosome[front] == X.chromosome[jj]) {
+
+			while (front < n_var && X.position[front] < pos_test + LOSO_window && X.chromosome[front] == chr_test) {
 				y_resid += vp.mean_beta(front) * X.col(front);
 				if (n_env > 0) y_resid += vp.mean_gam(front) * vp.eta.cwiseProduct(X.col(front));
 				front++;
 			}
 
-			while (X.position[back] < X.position[jj] - p.LOSO_window || X.chromosome[back] != X.chromosome[jj]) {
+			while (X.position[back] < pos_test - LOSO_window || X.chromosome[back] != chr_test) {
 				y_resid -= vp.mean_beta(back) * X.col(back);
 				if (n_env > 0) y_resid -= vp.mean_gam(back) * vp.eta.cwiseProduct(X.col(back));
 				back++;
 			}
 
-			H.col(0) = X.col(jj).cast<double>();
+			H.col(0) = Xtest.col(jj).cast<double>();
 
 			if(n_effects == 1) {
-				double ztz_inv = 1.0 / H.squaredNorm();
-				double tau = (H.transpose() * y_resid)(0,0) * ztz_inv;
-				double rss_null = (y_resid - H * tau).squaredNorm();
-				// T-test of variant j
-				double main_se_j    = std::sqrt(rss_null / (Nglobal - 1.0) * ztz_inv);
-				double main_tstat_j = tau / main_se_j;
-				double main_pval_j  = 2 * boost_m::cdf(boost_m::complement(t_dist, fabs(main_tstat_j)));
+				double rss;
+				Eigen::MatrixXd HtH, Hty, HtH_inv, tau;
 
-				neglogp_beta(jj) = -1 * std::log10(main_pval_j);
-				test_stat_beta(jj) = main_tstat_j;
+				HtH = H.transpose() * H;
+				HtH_inv = HtH.inverse();
+				Hty = H.transpose() * y_resid;
+				tau = HtH_inv * Hty;
+				rss = (y_resid - H * tau).squaredNorm();
+
+				// prep_lm(H, y_resid, HtH, HtH_inv, tau, Hty, rss);
+
+				// T-test of variant j
+//				double main_se_j    = ::std::sqrt(rss / (N - 1.0) * ztz_inv);
+//				double main_tstat_j = tau / main_se_j;
+//				double main_pval_j  = 2 * cdf(complement(t_dist, fabs(main_tstat_j)));
+
+				double beta_tstat, beta_pval;
+				student_t_test(n_samples, HtH_inv, Hty, rss, 0, beta_tstat, beta_pval);
+
+				neglogp_beta(jj) = -1 * log10(beta_pval);
+				test_stat_beta(jj) = beta_tstat;
 			} else if (n_effects > 1) {
 				H.col(1) = H.col(0).cwiseProduct(vp.eta.cast<double>());
+
+				// double rss_alt, rss_null;
+				// Eigen::MatrixXd HtH, Hty, HtH_inv, tau, HtVH;
 
 				// Model Fitting
 				Eigen::Matrix2d HtH     = H.transpose() * H;
@@ -1614,10 +1635,13 @@ public:
 				Eigen::VectorXd resid_alt = y_resid - H * tau;
 				double rss_alt  = resid_alt.squaredNorm();
 				double rss_null = y_resid.squaredNorm();
+				Eigen::Matrix2d HtVH = H.transpose() * resid_alt.cwiseProduct(resid_alt).asDiagonal() * H;
+
+				// prep_lm(H, y_resid, HtH, HtH_inv, tau, Hty, rss_alt, HtVH);
+				// rss_null = y_resid.squaredNorm();
 
 				// Single-var tests
 				double beta_tstat, gam_tstat, rgam_stat, beta_pval, gam_pval, rgam_pval;
-				Eigen::Matrix2d HtVH = H.transpose() * resid_alt.cwiseProduct(resid_alt).asDiagonal() * H;
 				hetero_chi_sq(HtH_inv, Hty, HtVH, 1, rgam_stat, rgam_pval);
 				student_t_test(n_samples, HtH_inv, Hty, rss_alt, 1, gam_tstat, gam_pval);
 				student_t_test(n_samples, HtH_inv, Hty, rss_alt, 0, beta_tstat, beta_pval);
@@ -1625,12 +1649,12 @@ public:
 				// F-test over main+int effects of snp_j
 				double joint_fstat, joint_pval;
 				joint_fstat       = (rss_null - rss_alt) / 2.0;
-				joint_fstat      /= rss_alt / (Nglobal - 3.0);
-				joint_pval        = 1.0 - boost_m::cdf(f_dist, joint_fstat);
+				joint_fstat      /= rss_alt / (N - 3.0);
+				joint_pval        = 1.0 - cdf(f_dist, joint_fstat);
 
-				neglogp_beta[jj]  = -1 * std::log10(beta_pval);
-				neglogp_gam_robust[jj]   = -1 * std::log10(rgam_pval);
-				neglogp_joint[jj] = -1 * std::log10(joint_pval);
+				neglogp_beta[jj]  = -1 * log10(beta_pval);
+				neglogp_gam_robust[jj]   = -1 * log10(rgam_pval);
+				neglogp_joint[jj] = -1 * log10(joint_pval);
 				test_stat_beta[jj]  = beta_tstat;
 				test_stat_gam_robust[jj]   = rgam_stat;
 				test_stat_joint[jj] = joint_fstat;
@@ -1805,8 +1829,12 @@ public:
 			LOCO_pvals(vp_init, resid_loco, neglogp_beta, neglogp_gam, neglogp_rgam, neglogp_joint,
 			           test_stat_beta, test_stat_gam, test_stat_rgam, test_stat_joint);
 		} else {
-			LOCO_pvals_v2(vp_init, neglogp_beta, neglogp_rgam, neglogp_joint,
-						  test_stat_beta, test_stat_rgam, test_stat_joint);
+			LOCO_pvals_v2(X, vp_init, p.LOSO_window, neglogp_beta,
+						  neglogp_rgam,
+						  neglogp_joint,
+						  test_stat_beta,
+						  test_stat_rgam,
+						  test_stat_joint);
 			neglogp_gam.resize(0);
 			test_stat_gam.resize(0);
 		}

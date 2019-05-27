@@ -54,7 +54,6 @@ elseif(CMAKE_CURRENT_SOURCE_DIR MATCHES /homes/kerin)
 else()
     message( FATAL_ERROR "Unexpected root directory structure. Where is the MKL lib located?")
 endif()
-message(${LOC_COMPILE_OPTS})
 message(${LINKER_OPTS})
 
 ##Add project version number to preprocessor macros
@@ -67,10 +66,11 @@ set(BGEN_INCL_DIRS ${BGEN}/genfile/include ${BGEN}/3rd_party/zstd-1.1.0/lib ${BG
 
 find_package(MPI REQUIRED)
 INCLUDE_DIRECTORIES(${MPI_INCLUDE_PATH})
-#list(APPEND LOC_COMPILE_OPTS ${MPI_COMPILE_FLAGS})
-#list(APPEND LIB-DIRS ${MPI_LINK_FLAGS})
+list(APPEND LOC_COMPILE_OPTS "${MPI_COMPILE_FLAGS}")
+string(APPEND LIB-DIRS " ${MPI_LINK_FLAGS}")
 
-##Platform invariant variables
+
+###Platform invariant variassbles
 find_library(BGEN_LIB bgen HINTS ${BGEN}/build)
 find_library(DB_LIB db HINTS ${BGEN}/build/db)
 find_library(SQLITE_LIB sqlite3 HINTS ${BGEN}/build/3rd_party/sqlite3)
@@ -81,6 +81,12 @@ set(LIBS boost dl pthread boost_iostreams z ${MPI_LIBRARIES} ${LIBS})
 ##Defining compilation commands
 #set(TARGET bgen_prog)
 set(TARGET bgen_prog_${PROJECT_VERSION_MAJOR}_${PROJECT_VERSION_MINOR}_${PROJECT_VERSION_PATCH})
+
+message("Compile options:")
+message(${LOC_COMPILE_OPTS})
+message("Lib-dirs: ")
+message(${LIB-DIRS})
+
 
 include_directories(${PROJECT_SOURCE_DIR})
 add_executable(${TARGET} src/bgen_prog.cpp ${SOURCES})
