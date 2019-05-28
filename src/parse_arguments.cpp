@@ -126,6 +126,7 @@ void parse_arguments(parameters &p, int argc, char **argv) {
 	    ("high_mem", "", cxxopts::value<bool>())
 	    ("low_mem", "", cxxopts::value<bool>())
 	    ("verbose", "", cxxopts::value<bool>(p.verbose))
+			("xtra_verbose", "")
 	    ("mode_squarem", "", cxxopts::value<bool>(p.mode_squarem))
 	    ("mode_constant_hyps", "")
 	    ("mode_debug", "")
