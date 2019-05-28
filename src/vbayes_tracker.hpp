@@ -34,10 +34,10 @@ namespace boost_io = boost::iostreams;
 
 class VbTracker {
 public:
-	int count;                                                        // Number of iterations to convergence at each step
-	VariationalParametersLite vp;                                         // best mu at each ii
-	double logw;                                                         // best logw at each ii
-	Hyps hyps;                                                          // hyps values at end of VB inference.
+	int count;                                                            // Number of iterations to convergence at each step
+	VariationalParametersLite vp;                                             // best mu at each ii
+	double logw;                                                             // best logw at each ii
+	Hyps hyps;                                                              // hyps values at end of VB inference.
 
 	parameters p;
 
@@ -104,26 +104,26 @@ public:
 		}
 
 		// Diagnostics - add header
-		outf_iter << "count\tsigma";
+		outf_iter << "count sigma";
 		for (int ee = 0; ee < n_effects; ee++) {
-			outf_iter << "\tpve" << ee;
+			outf_iter << " pve" << ee;
 			if((ee == 0 && p.mode_mog_prior_beta) || (ee == 1 && p.mode_mog_prior_gam)) {
-				outf_iter << "\tpve_large" << ee;
+				outf_iter << " pve_large" << ee;
 			}
-			outf_iter << "\tsigma" << ee;
+			outf_iter << " sigma" << ee;
 			if((ee == 0 && p.mode_mog_prior_beta) || (ee == 1 && p.mode_mog_prior_gam)) {
-				outf_iter << "\tsigma_spike" << ee;
+				outf_iter << " sigma_spike" << ee;
 			}
-			outf_iter << "\tlambda" << ee;
+			outf_iter << " lambda" << ee;
 		}
-		outf_iter << "\ts_x";
-		if(n_effects > 1) outf_iter << "\ts_z";
-		outf_iter << "\tvar_covar\telbo";
-		if (n_covar > 0) outf_iter << "\tmax_covar_diff";
-		outf_iter << "\tmax_beta_diff";
-		if (n_env > 0) outf_iter << "\tmax_gam_diff";
-		if (n_env > 1) outf_iter << "\tmax_w_diff";
-		outf_iter << "\tsecs" << std::endl;
+		outf_iter << " s_x";
+		if(n_effects > 1) outf_iter << " s_z";
+		outf_iter << " var_covar elbo";
+		if (n_covar > 0) outf_iter << " max_covar_diff";
+		outf_iter << " max_beta_diff";
+		if (n_env > 0) outf_iter << " max_gam_diff";
+		if (n_env > 1) outf_iter << " max_w_diff";
+		outf_iter << " secs" << std::endl;
 	}
 
 	void push_interim_hyps(const int& cnt,
@@ -141,45 +141,45 @@ public:
 		// Diagnostics + env-weights from latest vb iteration
 		std::chrono::duration<double> lapsecs = std::chrono::system_clock::now() - time_check;
 
-		outf_iter << cnt << "\t";
+		outf_iter << cnt << " ";
 		outf_iter << std::setprecision(6) << std::fixed;
-		outf_iter << i_hyps.sigma << "\t";
+		outf_iter << i_hyps.sigma << " ";
 
 		for (int ee = 0; ee < n_effects; ee++) {
 			// PVE
 			outf_iter << std::setprecision(6) << std::fixed;
-			outf_iter << i_hyps.pve(ee) << "\t";
+			outf_iter << i_hyps.pve(ee) << " ";
 			if ((ee == 0 && p.mode_mog_prior_beta) || (ee == 1 && p.mode_mog_prior_gam)) {
-				outf_iter << i_hyps.pve_large(ee) << "\t";
+				outf_iter << i_hyps.pve_large(ee) << " ";
 			}
 
 			// Relative variance
 			outf_iter << std::setprecision(12) << std::fixed;
-			outf_iter << i_hyps.slab_relative_var(ee) << "\t";
+			outf_iter << i_hyps.slab_relative_var(ee) << " ";
 			if ((ee == 0 && p.mode_mog_prior_beta) || (ee == 1 && p.mode_mog_prior_gam)) {
-				outf_iter << i_hyps.spike_relative_var(ee) << "\t";
+				outf_iter << i_hyps.spike_relative_var(ee) << " ";
 			}
 
 			// Lambda
-			outf_iter << i_hyps.lambda(ee) << "\t";
+			outf_iter << i_hyps.lambda(ee) << " ";
 		}
 
 		outf_iter << std::setprecision(6) << std::fixed;
 		for (int ee = 0; ee < n_effects; ee++) {
-			outf_iter << i_hyps.s_x(ee) << "\t";
+			outf_iter << i_hyps.s_x(ee) << " ";
 		}
-		outf_iter << vp.muc.square().sum() << "\t";
-		outf_iter << c_logw << "\t";
-		if (n_covar > 0) outf_iter << covar_diff << "\t";
-		outf_iter << beta_diff << "\t";
-		if (n_env > 0) outf_iter << gam_diff << "\t";
-		if (n_env > 1) outf_iter << w_diff << "\t";
+		outf_iter << vp.muc.square().sum() << " ";
+		outf_iter << c_logw << " ";
+		if (n_covar > 0) outf_iter << covar_diff << " ";
+		outf_iter << beta_diff << " ";
+		if (n_env > 0) outf_iter << gam_diff << " ";
+		if (n_env > 1) outf_iter << w_diff << " ";
 		outf_iter << lapsecs.count() << std::endl;
 
 		if(n_effects > 1) {
 			for (int ll = 0; ll < n_env; ll++) {
 				outf_weights << vp.muw(ll);
-				if (ll < n_env - 1) outf_weights << "\t";
+				if (ll < n_env - 1) outf_weights << " ";
 			}
 			outf_weights << std::endl;
 		}
@@ -211,7 +211,7 @@ public:
 	                const GenotypeMatrix& X,
 	                const std::vector< std::string >& covar_names,
 	                const std::vector< std::string >& env_names,
-					const std::unordered_map<long, bool>& sample_is_invalid){
+	                const std::unordered_map<long, bool>& sample_is_invalid){
 
 		// Aggregate effects
 		fstream_init(outf_inits, dir, "_dump_it" + count + "_aggregate", true);
@@ -223,7 +223,7 @@ public:
 		VariationalParametersLite vp_lite = vp.convert_to_lite();
 
 		fileUtils::dump_yhat_to_file(outf_inits, n_samples, n_covar, n_var,
-				n_env,Y,vp_lite,Ealpha, sample_is_invalid);
+		                             n_env,Y,vp_lite,Ealpha, sample_is_invalid);
 
 
 //		outf_inits << "Y";
