@@ -54,6 +54,12 @@ double mpiUtils::mpiReduce_inplace(double *local) {
 	return global;
 }
 
+long mpiUtils::mpiReduce_inplace(long *local) {
+	long global;
+	MPI_Allreduce(local, &global, 1, MPI_LONG, MPI_SUM, MPI_COMM_WORLD);
+	return global;
+}
+
 Eigen::MatrixXd mpiUtils::mpiReduce_inplace(Eigen::Ref<Eigen::MatrixXd> local){
 	Eigen::MatrixXd global(local.rows(), local.cols());
 	long size = local.rows() * local.cols();

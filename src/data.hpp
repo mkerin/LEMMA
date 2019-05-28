@@ -1243,10 +1243,14 @@ public:
 		missing_covars.clear();
 		missing_envs.clear();
 
-		std::cout << "Reduced to " << n_samples << " samples with complete data";
+		long Nglobal = mpiUtils::mpiReduce_inplace(&n_samples);
+
+		std::cout << "Reduced to " << Nglobal << " samples with complete data";
 		std::cout << " across covariates";
 		if(p.env_file != "NULL") std::cout << ", env-variables" << std::endl;
-		std::cout << " and phenotype." << std::endl;
+		std::cout << " and phenotype";
+		std::cout << " (" << n_samples << " on rank 0)." << std::endl;
+
 		std::cout << "Load factor for sample_is_invalid map: ";
 		std::cout << sample_is_invalid.load_factor() << std::endl;
 	}

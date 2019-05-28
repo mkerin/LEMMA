@@ -52,6 +52,7 @@ void partition_valid_samples_across_ranks(const long& n_samples, std::map<std::s
 void mpiReduce_double(void* local, void* global, long size);
 
 double mpiReduce_inplace(double* local);
+long mpiReduce_inplace(long* local);
 
 Eigen::MatrixXd mpiReduce_inplace(Eigen::Ref<Eigen::MatrixXd> local);
 

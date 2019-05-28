@@ -72,6 +72,7 @@ public:
 	bool random_params_init;
 	bool run_round1;
 	double Nglobal;
+	int world_rank;
 
 // Chromosomes in data
 	int n_chrs;
@@ -132,6 +133,7 @@ public:
 		vp_init(dat.vp_init){
 		std::cout << "Initialising vbayes object" << std::endl;
 		mkl_set_num_threads_local(p.n_thread);
+		MPI_Comm_rank(MPI_COMM_WORLD, &world_rank);
 
 		// Data size params
 		n_effects      = dat.n_effects;
@@ -496,9 +498,12 @@ public:
 			// Interim output
 			for (int nn = 0; nn < n_grid; nn++) {
 				all_hyps[nn].update_pve();
-				all_tracker[nn].push_interim_hyps(count, all_hyps[nn], i_logw[nn],
-				                                  covar_diff[nn], beta_diff[nn], gam_diff[nn], w_diff[nn], n_effects,
-				                                  n_var, n_covar, n_env, all_vp[nn]);
+				if(world_rank == 0) {
+					all_tracker[nn].push_interim_hyps(count, all_hyps[nn], i_logw[nn],
+													  covar_diff[nn], beta_diff[nn], gam_diff[nn], w_diff[nn],
+													  n_effects,
+													  n_var, n_covar, n_env, all_vp[nn]);
+				}
 				if (p.param_dump_interval > 0 && count % p.param_dump_interval == 0) {
 					all_tracker[nn].dump_state(std::to_string(count), n_samples, n_covar, n_var,
 					                           n_env, n_effects,
