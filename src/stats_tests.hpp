@@ -19,7 +19,6 @@ void prep_lm(const Eigen::MatrixBase<Derived1>& H,
 			 const Eigen::MatrixBase<Derived2>& y,
 			 EigenRefDataMatrix HtH,
 			 EigenRefDataMatrix HtH_inv,
-			 EigenRefDataMatrix tau,
 			 EigenRefDataMatrix Hty,
 			 double& rss,
 			 EigenRefDataMatrix HtVH){
@@ -28,12 +27,11 @@ void prep_lm(const Eigen::MatrixBase<Derived1>& H,
 	 */
 
 	HtH     = H.transpose() * H;
-	Hty     = H.transpose() * y;
-	tau     = HtH_inv * Hty;
-
-	EigenDataVector resid = y - H * tau;
-	HtVH = H.transpose() * resid.cwiseProduct(resid).asDiagonal() * H;
 	HtH_inv = HtH.inverse();
+	Hty     = H.transpose() * y;
+
+	EigenDataVector resid = y - H * HtH_inv * Hty;
+	HtVH = H.transpose() * resid.cwiseProduct(resid).asDiagonal() * H;
 	rss = resid.squaredNorm();
 }
 
@@ -42,7 +40,6 @@ void prep_lm(const Eigen::MatrixBase<Derived1>& H,
 			 const Eigen::MatrixBase<Derived2>& y,
 			 EigenRefDataMatrix HtH,
 			 EigenRefDataMatrix HtH_inv,
-			 EigenRefDataMatrix tau,
 			 EigenRefDataMatrix Hty,
 			 double& rss){
 	/*** All of the heavy lifting for linear hypothesis tests.
@@ -50,11 +47,10 @@ void prep_lm(const Eigen::MatrixBase<Derived1>& H,
 	 */
 
 	HtH     = H.transpose() * H;
-	Hty     = H.transpose() * y;
-	tau     = HtH_inv * Hty;
-
-	EigenDataVector resid = y - H * tau;
 	HtH_inv = HtH.inverse();
+	Hty     = H.transpose() * y;
+
+	EigenDataVector resid = y - H * HtH_inv * Hty;
 	rss = resid.squaredNorm();
 }
 
@@ -69,7 +65,7 @@ void student_t_test(long nn,
 	/* 2-sided Student t-test on regression output
 	H0: beta[jj] != 0
  	*/
-	int pp = HtH_inv.rows();
+	long pp = HtH_inv.rows();
 	assert(jj <= pp);
 
 	auto beta = HtH_inv * Hty;
@@ -102,7 +98,7 @@ void hetero_chi_sq(const Eigen::MatrixBase<Derived1>& HtH_inv,
 	https://en.wikipedia.org/wiki/Heteroscedasticity-consistent_standard_errors
 	HtVH = (H.transpose() * resid_sq.asDiagonal() * H)
 	*/
-	int pp = HtH_inv.rows();
+	long pp = HtH_inv.rows();
 	assert(jj <= pp);
 
 	auto beta = HtH_inv * Hty;

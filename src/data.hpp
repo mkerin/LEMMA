@@ -312,11 +312,11 @@ public:
 				// H.col(0) = E.col(ee);
 				H.col(0) = E.col(ee).array().square().matrix();
 
-				Eigen::MatrixXd HtH_inv = (H.transpose() * H).inverse();
-				Eigen::MatrixXd Hty = H.transpose() * Y;
-				double rss = (Y - H * HtH_inv * Hty).squaredNorm();
+				double rss_alt;
+				Eigen::MatrixXd HtH(H.cols(), H.cols()), Hty(H.cols(), 1), HtH_inv(H.cols(), H.cols());
+				prep_lm(H, Y, HtH, HtH_inv, Hty, rss_alt);
 
-				double pval = student_t_test(n_samples, HtH_inv, Hty, rss, 0);
+				double pval = student_t_test(n_samples, HtH_inv, Hty, rss_alt, 0);
 
 				std::cout << env_names[ee] << "\t";
 				std::cout << -1 * std::log10(pval) << std::endl;
@@ -367,7 +367,7 @@ public:
 					Y -= E_sq * beta.block(0, 0, n_signif_envs_sq, 1);
 				} else {
 					std::cout << "Warning: Projection of significant square envs (";
-					for (auto env_sq_name : env_sq_names) {
+					for (const auto& env_sq_name : env_sq_names) {
 						std::cout << env_sq_name << ", ";
 					}
 					std::cout << ") suppressed" << std::endl;
@@ -1146,7 +1146,7 @@ public:
 	template <typename EigenMat>
 	EigenMat reduce_mat_to_complete_cases( EigenMat& M,
 	                                       bool& matrix_reduced,
-	                                       const unsigned long& n_cols,
+	                                       const long& n_cols,
 	                                       const std::map< std::size_t, bool >& incomplete_cases ) {
 		// Remove rows contained in incomplete_cases
 		EigenMat M_tmp;
