@@ -321,7 +321,7 @@ bool fileUtils::read_bgen_chunk(genfile::bgen::View::UniquePtr &bgenView,
 	DosageSetter setter_v2(sample_is_invalid, nInvalid);
 
 	double chunk_missingness = 0;
-	int n_var_incomplete = 0;
+	long n_var_incomplete = 0;
 
 	// Resize genotype matrix
 	G.resize(n_samples, chunk_size);
@@ -391,11 +391,11 @@ bool fileUtils::read_bgen_chunk(genfile::bgen::View::UniquePtr &bgenView,
 	G.conservativeResize(n_samples, jj);
 	assert( G.rsid.size() == jj );
 
-	chunk_missingness /= n_samples;
+	chunk_missingness /= jj;
 	if(chunk_missingness > 0.0) {
 		std::cout << "Average chunk missingness " << chunk_missingness << "(";
 		std::cout << n_var_incomplete << "/" << G.cols();
-		std::cout << " variants incomplete)" << std::endl;
+		std::cout << " variants contain >=1 imputed entry)" << std::endl;
 	}
 
 	if(n_constant_variance > 0) {

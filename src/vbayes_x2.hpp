@@ -100,7 +100,7 @@ public:
 	EigenDataMatrix& C;
 	Eigen::MatrixXd XtE;
 
-	Eigen::ArrayXXd& dXtEEX;
+	Eigen::ArrayXXd& dXtEEX_lowertri;
 	std::unordered_map<long, bool> sample_is_invalid;
 
 // Global location of y_m = E[X beta] and y_x = E[X gamma]
@@ -125,11 +125,11 @@ public:
 	explicit VBayesX2(Data& dat) : X(dat.G),
 		Y(Eigen::Map<EigenDataVector>(dat.Y.data(), dat.Y.rows())),
 		C(dat.C),
-		dXtEEX(dat.dXtEEX),
+		dXtEEX_lowertri(dat.dXtEEX_lowertri),
 		snpstats(dat.snpstats),
 		p(dat.p),
 		hyps_inits(dat.hyps_inits),
-								   sample_is_invalid(dat.sample_is_invalid),
+		sample_is_invalid(dat.sample_is_invalid),
 		vp_init(dat.vp_init){
 		std::cout << "Initialising vbayes object" << std::endl;
 		mkl_set_num_threads_local(p.n_thread);
@@ -611,7 +611,7 @@ public:
 			VariationalParameters vp(p, YM.col(nn), YX.col(nn), ETA.col(nn), ETA_SQ.col(nn));
 			vp.init_from_lite(vp_init);
 			if(n_effects > 1) {
-				vp.calcEdZtZ(dXtEEX, n_env);
+				vp.calcEdZtZ(dXtEEX_lowertri, n_env);
 			}
 			all_vp.push_back(vp);
 		}
@@ -1065,11 +1065,10 @@ public:
 			double r_ll = vp.muw(ll);
 
 			// Update s_sq
-			double denom;
-			denom = (vp.yx.array() * E.col(ll)).square().sum();
-			denom = mpiUtils::mpiReduce_inplace(&denom);
-			denom += (varG * dXtEEX.col(ll*n_env + ll)).sum();
-			denom += hyps.sigma;
+			double denom = hyps.sigma;
+			denom += (vp.yx.array() * E.col(ll)).square().sum();
+			denom  = mpiUtils::mpiReduce_inplace(&denom);
+			denom += (varG * dXtEEX_lowertri.col(dXtEEX_col_ind(ll, ll, n_env))).sum();
 			vp.sw_sq(ll) = hyps.sigma / denom;
 
 			// Remove dependance on current weight
@@ -1079,7 +1078,7 @@ public:
 			Eigen::ArrayXd env_vars = Eigen::ArrayXd::Zero(n_var);
 			for (int mm = 0; mm < n_env; mm++) {
 				if(mm != ll) {
-					env_vars += vp.muw(mm) * dXtEEX.col(ll*n_env + mm);
+					env_vars += vp.muw(mm) * dXtEEX_lowertri.col(dXtEEX_col_ind(ll, mm, n_env));
 				}
 			}
 
@@ -1102,20 +1101,26 @@ public:
 #endif
 
 		// Recompute expected value of diagonal of ZtZ
-		vp.calcEdZtZ(dXtEEX, n_env);
+		vp.calcEdZtZ(dXtEEX_lowertri, n_env);
 
-		// Compute s_x; sum of column variances of Z
-		Eigen::ArrayXd muw_sq(n_env * n_env);
+		Eigen::ArrayXd muw_sq_combos(n_env * (n_env + 1) / 2);
 		for (int ll = 0; ll < n_env; ll++) {
 			for (int mm = 0; mm < n_env; mm++) {
-				muw_sq(mm*n_env + ll) = vp.muw(mm) * vp.muw(ll);
+				muw_sq_combos(dXtEEX_col_ind(ll, mm, n_env)) = vp.muw(mm) * vp.muw(ll);
 			}
 		}
-		// WARNING: Hard coded limit!
+
+		double colVarZ = 2 * (dXtEEX_lowertri.rowwise() * muw_sq_combos.transpose()).sum();
+		for (int ll = 0; ll < n_env; ll++) {
+			colVarZ -= (vp.muw(ll) * vp.muw(ll) * dXtEEX_lowertri.col(dXtEEX_col_ind(ll, ll, n_env))).sum();
+		}
+		colVarZ /= (Nglobal - 1.0);
+		colVarZ -= (XtE * vp.muw.matrix()).array().square().sum() / Nglobal / (Nglobal - 1.0);
+
+		// WARNING: Hard coded index
 		// WARNING: Updates S_x in hyps
 		hyps.s_x(0) = (double) n_var;
-		hyps.s_x(1) = (dXtEEX.rowwise() * muw_sq.transpose()).sum() / (Nglobal - 1.0);
-		hyps.s_x(1) -= (XtE * vp.muw.matrix()).array().square().sum() / Nglobal / (Nglobal - 1.0);
+		hyps.s_x(1) = colVarZ;
 	}
 
 	double calc_logw(const Hyps& hyps,
@@ -1156,30 +1161,7 @@ public:
 		return res;
 	}
 
-	void calc_snpwise_regression(VariationalParametersLite& vp){
-		/*
-		   Genome-wide gxe scan now computed upstream
-		   Eigen::ArrayXXd snpstats contains results
-
-		   cols:
-		   neglogp-main, neglogp-gxe, coeff-gxe-main, coeff-gxe-env..
-		 */
-
-		// Keep values from point with highest p-val
-		vp.muw = Eigen::ArrayXd::Zero(n_env);
-		double vv = 0.0;
-		for (long int jj = 0; jj < n_var; jj++) {
-			if (snpstats(jj, 1) > vv) {
-				vv = snpstats(jj, 1);
-				vp.muw = snpstats.block(jj, 2, 1, n_env).transpose();
-
-				std::cout << "neglogp at variant " << jj << ": " << vv;
-				std::cout << std::endl << vp.muw.transpose() << std::endl;
-			}
-		}
-	}
-
-/********** Helper functions ************/
+	/********** Helper functions ************/
 	void print_time_check(){
 		auto now = std::chrono::system_clock::now();
 		std::chrono::duration<double> elapsed_seconds = now-time_check;
@@ -1235,7 +1217,7 @@ public:
 		vp.muw     = 1.0 / (double) n_env;
 		vp.eta     = E.matrix() * vp.muw.matrix().cast<scalarData>();
 		vp.eta_sq  = vp.eta.array().square().matrix();
-		vp.calcEdZtZ(dXtEEX, n_env);
+		vp.calcEdZtZ(dXtEEX_lowertri, n_env);
 	}
 
 	void calcPredEffects(VariationalParameters& vp){
@@ -1498,33 +1480,26 @@ public:
 			int cc = std::find(chrs_present.begin(), chrs_present.end(), chr1) - chrs_present.begin();
 			H.col(0) = X.col(jj).cast<double>();
 
+			double rss_alt, rss_null;
+			Eigen::MatrixXd HtH(H.cols(), H.cols()), Hty(H.cols(), 1);
+			Eigen::MatrixXd HtH_inv(H.cols(), H.cols()), HtVH(H.cols(), H.cols());
 			if(n_effects == 1) {
-				double ztz_inv = 1.0 / H.squaredNorm();
-				double tau = (H.transpose() * chr_residuals[cc])(0,0) * ztz_inv;
-				double rss_null = (chr_residuals[cc] - H * tau).squaredNorm();
-				// T-test of variant j
-				double main_se_j    = std::sqrt(rss_null / (Nglobal - 1.0) * ztz_inv);
-				double main_tstat_j = tau / main_se_j;
-				double main_pval_j  = 2 * boost_m::cdf(boost_m::complement(t_dist, fabs(main_tstat_j)));
 
-				neglogp_beta(jj) = -1 * std::log10(main_pval_j);
-				test_stat_beta(jj) = main_tstat_j;
+				prep_lm(H, chr_residuals[cc], HtH, HtH_inv, Hty, rss_alt);
+
+				double beta_tstat, beta_pval;
+				student_t_test(n_samples, HtH_inv, Hty, rss_alt, 0, beta_tstat, beta_pval);
+
+				neglogp_beta(jj) = -1 * log10(beta_pval);
+				test_stat_beta(jj) = beta_tstat;
 			} else if (n_effects > 1) {
 				H.col(1) = H.col(0).cwiseProduct(vp.eta.cast<double>());
 
-				// Model Fitting
-				Eigen::Matrix2d HtH     = H.transpose() * H;
-				Eigen::Matrix2d HtH_inv = HtH.inverse();
-				Eigen::Vector2d Hty     = H.transpose() * chr_residuals[cc];
-				Eigen::Vector2d tau     = HtH_inv * Hty;
-
-				Eigen::VectorXd resid_alt = chr_residuals[cc] - H * tau;
-				double rss_alt  = resid_alt.squaredNorm();
-				double rss_null = chr_residuals[cc].squaredNorm();
+				prep_lm(H, chr_residuals[cc], HtH, HtH_inv, Hty, rss_alt, HtVH);
+				rss_null = chr_residuals[cc].squaredNorm();
 
 				// Single-var tests
 				double beta_tstat, gam_tstat, rgam_stat, beta_pval, gam_pval, rgam_pval;
-				Eigen::Matrix2d HtVH = H.transpose() * resid_alt.cwiseProduct(resid_alt).asDiagonal() * H;
 				hetero_chi_sq(HtH_inv, Hty, HtVH, 1, rgam_stat, rgam_pval);
 				student_t_test(n_samples, HtH_inv, Hty, rss_alt, 1, gam_tstat, gam_pval);
 				student_t_test(n_samples, HtH_inv, Hty, rss_alt, 0, beta_tstat, beta_pval);
@@ -1603,47 +1578,23 @@ public:
 
 			H.col(0) = Xtest.col(jj).cast<double>();
 
+			double rss_alt, rss_null;
+			Eigen::MatrixXd HtH(H.cols(), H.cols()), Hty(H.cols(), 1);
+			Eigen::MatrixXd HtH_inv(H.cols(), H.cols()), HtVH(H.cols(), H.cols());
 			if(n_effects == 1) {
-				double rss;
-				Eigen::MatrixXd HtH, Hty, HtH_inv, tau;
 
-				HtH = H.transpose() * H;
-				HtH_inv = HtH.inverse();
-				Hty = H.transpose() * y_resid;
-				tau = HtH_inv * Hty;
-				rss = (y_resid - H * tau).squaredNorm();
-
-				// prep_lm(H, y_resid, HtH, HtH_inv, tau, Hty, rss);
-
-				// T-test of variant j
-//				double main_se_j    = ::std::sqrt(rss / (N - 1.0) * ztz_inv);
-//				double main_tstat_j = tau / main_se_j;
-//				double main_pval_j  = 2 * cdf(complement(t_dist, fabs(main_tstat_j)));
+				prep_lm(H, y_resid, HtH, HtH_inv, Hty, rss_alt);
 
 				double beta_tstat, beta_pval;
-				student_t_test(n_samples, HtH_inv, Hty, rss, 0, beta_tstat, beta_pval);
+				student_t_test(n_samples, HtH_inv, Hty, rss_alt, 0, beta_tstat, beta_pval);
 
 				neglogp_beta(jj) = -1 * log10(beta_pval);
 				test_stat_beta(jj) = beta_tstat;
 			} else if (n_effects > 1) {
 				H.col(1) = H.col(0).cwiseProduct(vp.eta.cast<double>());
 
-				// double rss_alt, rss_null;
-				// Eigen::MatrixXd HtH, Hty, HtH_inv, tau, HtVH;
-
-				// Model Fitting
-				Eigen::Matrix2d HtH     = H.transpose() * H;
-				Eigen::Matrix2d HtH_inv = HtH.inverse();
-				Eigen::Vector2d Hty     = H.transpose() * y_resid;
-				Eigen::Vector2d tau     = HtH_inv * Hty;
-
-				Eigen::VectorXd resid_alt = y_resid - H * tau;
-				double rss_alt  = resid_alt.squaredNorm();
-				double rss_null = y_resid.squaredNorm();
-				Eigen::Matrix2d HtVH = H.transpose() * resid_alt.cwiseProduct(resid_alt).asDiagonal() * H;
-
-				// prep_lm(H, y_resid, HtH, HtH_inv, tau, Hty, rss_alt, HtVH);
-				// rss_null = y_resid.squaredNorm();
+				prep_lm(H, y_resid, HtH, HtH_inv, Hty, rss_alt, HtVH);
+				rss_null = y_resid.squaredNorm();
 
 				// Single-var tests
 				double beta_tstat, gam_tstat, rgam_stat, beta_pval, gam_pval, rgam_pval;
@@ -1810,8 +1761,8 @@ public:
 //			}
 //		}
 		fileUtils::dump_yhat_to_file(outf_map_pred, n_samples, n_covar, n_var,
-									 n_env, Y, vp_init, Ealpha, sample_is_invalid,
-									 resid_loco, chrs_present);
+		                             n_env, Y, vp_init, Ealpha, sample_is_invalid,
+		                             resid_loco, chrs_present);
 
 		// weights to file
 		if(n_effects > 1) {

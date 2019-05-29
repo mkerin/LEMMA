@@ -228,18 +228,26 @@ VariationalParametersLite VariationalParameters::convert_to_lite() const {
 	return vplite;
 }
 
-void VariationalParameters::calcEdZtZ(const Eigen::Ref<const Eigen::ArrayXXd> &dXtEEX, const int &n_env) {
-	Eigen::ArrayXd muw_sq(n_env * n_env);
+void VariationalParameters::calcEdZtZ(const Eigen::Ref<const Eigen::ArrayXXd> &dXtEEX_lowertri, const int &n_env) {
+	Eigen::ArrayXd muw_sq_combos(n_env * (n_env + 1) / 2);
 	for (int ll = 0; ll < n_env; ll++) {
 		for (int mm = 0; mm < n_env; mm++) {
-			muw_sq(mm*n_env + ll) = muw(mm) * muw(ll);
+			muw_sq_combos(dXtEEX_col_ind(ll, mm, n_env)) = muw(mm) * muw(ll);
 		}
 	}
 
-	EdZtZ = (dXtEEX.rowwise() * muw_sq.transpose()).rowwise().sum();
+	EdZtZ = 2 * (dXtEEX_lowertri.rowwise() * muw_sq_combos.transpose()).rowwise().sum();
 	if(n_env > 1) {
 		for (int ll = 0; ll < n_env; ll++) {
-			EdZtZ += dXtEEX.col(ll * n_env + ll) * sw_sq(ll);
+			EdZtZ += dXtEEX_lowertri.col(dXtEEX_col_ind(ll, ll, n_env)) * sw_sq(ll);
+			EdZtZ -= dXtEEX_lowertri.col(dXtEEX_col_ind(ll, ll, n_env)) * muw(ll) * muw(ll);
 		}
 	}
+}
+
+long dXtEEX_col_ind(long kk, long jj, long n_env) {
+	long x_min = std::min(kk, jj);
+	long x_diff = std::abs(kk - jj);
+	long index = x_min * n_env - ((x_min - 1) * x_min) / 2 + x_diff;
+	return index;
 }

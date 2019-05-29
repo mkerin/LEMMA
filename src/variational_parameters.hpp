@@ -18,6 +18,8 @@
 
 namespace boost_io = boost::iostreams;
 
+long dXtEEX_col_ind(long kk, long jj, long n_env);
+
 class VariationalParamsBase {
 public:
 // This stores parameters used in VB and some summary quantities that

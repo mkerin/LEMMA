@@ -3,7 +3,7 @@
 #define STATS_TESTS_HPP
 #define CATCH_CONFIG_MAIN
 
-#include <cmath>
+#include "mpi_utils.hpp"
 
 #include "tools/eigen3.3/Dense"
 #include "tools/eigen3.3/Eigenvalues"
@@ -12,6 +12,8 @@
 #include <boost/math/distributions/students_t.hpp>
 #include <boost/math/distributions/complement.hpp> // complements
 
+#include <cmath>
+
 namespace boost_m  = boost::math;
 
 template <typename Derived1, typename Derived2>
@@ -19,7 +21,6 @@ void prep_lm(const Eigen::MatrixBase<Derived1>& H,
 			 const Eigen::MatrixBase<Derived2>& y,
 			 EigenRefDataMatrix HtH,
 			 EigenRefDataMatrix HtH_inv,
-			 EigenRefDataMatrix tau,
 			 EigenRefDataMatrix Hty,
 			 double& rss,
 			 EigenRefDataMatrix HtVH){
@@ -28,13 +29,17 @@ void prep_lm(const Eigen::MatrixBase<Derived1>& H,
 	 */
 
 	HtH     = H.transpose() * H;
+	HtH     = mpiUtils::mpiReduce_inplace(HtH);
 	Hty     = H.transpose() * y;
-	tau     = HtH_inv * Hty;
-
-	EigenDataVector resid = y - H * tau;
-	HtVH = H.transpose() * resid.cwiseProduct(resid).asDiagonal() * H;
+	Hty     = mpiUtils::mpiReduce_inplace(Hty);
 	HtH_inv = HtH.inverse();
+
+	EigenDataVector resid = y - H * HtH_inv * Hty;
+	HtVH = H.transpose() * resid.cwiseProduct(resid).asDiagonal() * H;
+	HtVH = mpiUtils::mpiReduce_inplace(HtVH);
+
 	rss = resid.squaredNorm();
+	rss = mpiUtils::mpiReduce_inplace(&rss);
 }
 
 template <typename Derived1, typename Derived2>
@@ -42,7 +47,6 @@ void prep_lm(const Eigen::MatrixBase<Derived1>& H,
 			 const Eigen::MatrixBase<Derived2>& y,
 			 EigenRefDataMatrix HtH,
 			 EigenRefDataMatrix HtH_inv,
-			 EigenRefDataMatrix tau,
 			 EigenRefDataMatrix Hty,
 			 double& rss){
 	/*** All of the heavy lifting for linear hypothesis tests.
@@ -50,12 +54,14 @@ void prep_lm(const Eigen::MatrixBase<Derived1>& H,
 	 */
 
 	HtH     = H.transpose() * H;
+	HtH     = mpiUtils::mpiReduce_inplace(HtH);
 	Hty     = H.transpose() * y;
-	tau     = HtH_inv * Hty;
-
-	EigenDataVector resid = y - H * tau;
+	Hty     = mpiUtils::mpiReduce_inplace(Hty);
 	HtH_inv = HtH.inverse();
+
+	EigenDataVector resid = y - H * HtH_inv * Hty;
 	rss = resid.squaredNorm();
+	rss = mpiUtils::mpiReduce_inplace(&rss);
 }
 
 template <typename Derived1, typename Derived2>
@@ -69,7 +75,7 @@ void student_t_test(long nn,
 	/* 2-sided Student t-test on regression output
 	H0: beta[jj] != 0
  	*/
-	int pp = HtH_inv.rows();
+	long pp = HtH_inv.rows();
 	assert(jj <= pp);
 
 	auto beta = HtH_inv * Hty;
@@ -102,7 +108,7 @@ void hetero_chi_sq(const Eigen::MatrixBase<Derived1>& HtH_inv,
 	https://en.wikipedia.org/wiki/Heteroscedasticity-consistent_standard_errors
 	HtVH = (H.transpose() * resid_sq.asDiagonal() * H)
 	*/
-	int pp = HtH_inv.rows();
+	long pp = HtH_inv.rows();
 	assert(jj <= pp);
 
 	auto beta = HtH_inv * Hty;

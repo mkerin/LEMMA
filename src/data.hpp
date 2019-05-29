@@ -79,10 +79,10 @@ public:
 	std::vector< std::string > env_names;
 
 	GenotypeMatrix G;
-	EigenDataMatrix Y, Y2;
-	EigenDataMatrix C;
-	EigenDataMatrix E;
-	Eigen::ArrayXXd dXtEEX;
+	EigenDataMatrix Y, Y2;                                                                                         // phenotype matrix (#2 always has covars regressed)
+	EigenDataMatrix C;                                                                                         // covariate matrix
+	EigenDataMatrix E;                                                                                         // env matrix
+	Eigen::ArrayXXd dXtEEX_lowertri;
 	Eigen::ArrayXXd external_dXtEEX;
 
 // Init points
@@ -313,11 +313,11 @@ public:
 				// H.col(0) = E.col(ee);
 				H.col(0) = E.col(ee).array().square().matrix();
 
-				Eigen::MatrixXd HtH_inv = (H.transpose() * H).inverse();
-				Eigen::MatrixXd Hty = H.transpose() * Y;
-				double rss = (Y - H * HtH_inv * Hty).squaredNorm();
+				double rss_alt;
+				Eigen::MatrixXd HtH(H.cols(), H.cols()), Hty(H.cols(), 1), HtH_inv(H.cols(), H.cols());
+				prep_lm(H, Y, HtH, HtH_inv, Hty, rss_alt);
 
-				double pval = student_t_test(n_samples, HtH_inv, Hty, rss, 0);
+				double pval = student_t_test(n_samples, HtH_inv, Hty, rss_alt, 0);
 
 				std::cout << env_names[ee] << "\t";
 				std::cout << -1 * std::log10(pval) << std::endl;
@@ -361,14 +361,17 @@ public:
 					Eigen::MatrixXd H(n_samples, n_covar + n_signif_envs_sq);
 					H << E_sq, C;
 
-					Eigen::MatrixXd HtH = H.transpose() * H;
-					Eigen::MatrixXd Hty = H.transpose() * Y;
+					Eigen::MatrixXd HtH, Hty;
+					HtH = H.transpose() * H;
+					HtH = mpiUtils::mpiReduce_inplace(HtH);
+					Hty = H.transpose() * Y;
+					Hty = mpiUtils::mpiReduce_inplace(Hty);
 					Eigen::MatrixXd beta = HtH.colPivHouseholderQr().solve(Hty);
 
 					Y -= E_sq * beta.block(0, 0, n_signif_envs_sq, 1);
 				} else {
 					std::cout << "Warning: Projection of significant square envs (";
-					for (auto env_sq_name : env_sq_names) {
+					for (const auto& env_sq_name : env_sq_names) {
 						std::cout << env_sq_name << ", ";
 					}
 					std::cout << ") suppressed" << std::endl;
@@ -782,8 +785,8 @@ public:
 		MyTimer t_calcDXtEEX("dXtEEX array constructed in %ts \n");
 		t_calcDXtEEX.resume();
 		EigenDataArrayX cl_j;
-		scalarData dztz_lmj, dztzLocal;
-		dXtEEX.resize(n_var, n_env * n_env);
+		scalarData dztz_lmj;
+		dXtEEX_lowertri.resize(n_var, n_env * (n_env + 1) / 2);
 		n_dxteex_computed = 0;
 		int dxteex_check = 0, se_cnt = 0;
 		double mean_ae = 0, max_ae = 0;
@@ -794,23 +797,27 @@ public:
 				cl_j = G.col(jj);
 				for (int ll = 0; ll < n_env; ll++) {
 					for (int mm = 0; mm <= ll; mm++) {
-						dztzLocal = (cl_j * E.array().col(ll) * E.array().col(mm) * cl_j).sum();
-						MPI_Allreduce(&dztzLocal, &dztz_lmj, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
-						dXtEEX(jj, ll*n_env + mm) = dztz_lmj;
-						dXtEEX(jj, mm*n_env + ll) = dztz_lmj;
+						dztz_lmj = (cl_j * E.array().col(ll) * E.array().col(mm) * cl_j).sum();
+						dztz_lmj = mpiUtils::mpiReduce_inplace(&dztz_lmj);
+						dXtEEX_lowertri(jj, dXtEEX_col_ind(ll, mm, n_env)) = dztz_lmj;
 					}
 				}
 			} else {
-				dXtEEX.row(jj) = external_dXtEEX.row(it - external_dXtEEX_SNPID.begin());
+				long row = it - external_dXtEEX_SNPID.begin();
+				for (int ll = 0; ll < n_env; ll++) {
+					for (int mm = 0; mm <= ll; mm++) {
+						dXtEEX_lowertri(jj, dXtEEX_col_ind(ll, mm, n_env)) = external_dXtEEX(row, ll*n_env + mm);
+					}
+				}
 				if(dxteex_check < 100) {
 					dxteex_check++;
 					cl_j = G.col(jj);
 					for (int ll = 0; ll < n_env; ll++) {
 						for (int mm = 0; mm <= ll; mm++) {
-							dztzLocal = (cl_j * E.array().col(ll) * E.array().col(mm) * cl_j).sum();
-							MPI_Allreduce(&dztzLocal, &dztz_lmj, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
-							double x1 = std::abs(dXtEEX(jj, ll*n_env + mm) - dztz_lmj);
-							double x2 = std::abs(dXtEEX(jj, mm*n_env + ll) - dztz_lmj);
+							dztz_lmj = (cl_j * E.array().col(ll) * E.array().col(mm) * cl_j).sum();
+							dztz_lmj = mpiUtils::mpiReduce_inplace(&dztz_lmj);
+							double x1 = std::abs(dXtEEX_lowertri(jj, dXtEEX_col_ind(ll, mm, n_env)) - dztz_lmj);
+							double x2 = std::abs(dXtEEX_lowertri(jj, dXtEEX_col_ind(ll, mm, n_env)) - dztz_lmj);
 							max_ae = std::max(x1, max_ae);
 							max_ae = std::max(x2, max_ae);
 							mean_ae += x1;
@@ -1147,7 +1154,7 @@ public:
 	template <typename EigenMat>
 	EigenMat reduce_mat_to_complete_cases( EigenMat& M,
 	                                       bool& matrix_reduced,
-	                                       const unsigned long& n_cols,
+	                                       const long& n_cols,
 	                                       const std::map< std::size_t, bool >& incomplete_cases ) {
 		// Remove rows contained in incomplete_cases
 		EigenMat M_tmp;
@@ -1178,8 +1185,11 @@ public:
 	void regress_first_mat_from_second(const EigenDataMatrix& A,
 	                                   EigenDataMatrix& yy){
 
-		Eigen::MatrixXd AtA = (A.transpose() * A).cast<double>();
-		Eigen::MatrixXd Aty = (A.transpose() * yy).cast<double>();
+		Eigen::MatrixXd AtA, Aty;
+		AtA = (A.transpose() * A).cast<double>();
+		AtA = mpiUtils::mpiReduce_inplace(AtA);
+		Aty = (A.transpose() * yy).cast<double>();
+		Aty = mpiUtils::mpiReduce_inplace(Aty);
 
 		Eigen::MatrixXd bb = EigenUtils::solve(AtA, Aty);
 		yy -= A * bb.cast<scalarData>();
@@ -1201,8 +1211,11 @@ public:
 		}
 		std::cout << std::endl;
 
-		Eigen::MatrixXd AtA = (A.transpose() * A).cast<double>();
-		Eigen::MatrixXd Aty = (A.transpose() * yy).cast<double>();
+		Eigen::MatrixXd AtA, Aty;
+		AtA = (A.transpose() * A).cast<double>();
+		AtA = mpiUtils::mpiReduce_inplace(AtA);
+		Aty = (A.transpose() * yy).cast<double>();
+		Aty = mpiUtils::mpiReduce_inplace(Aty);
 
 		Eigen::MatrixXd bb = EigenUtils::solve(AtA, Aty);
 		yy -= A * bb.cast<scalarData>();
