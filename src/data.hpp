@@ -57,6 +57,7 @@ public:
 	long n_env;
 	int n_effects;
 	long n_samples;
+	long Nglobal;
 	long n_var;
 	long n_var_parsed;
 	long int n_dxteex_computed;
@@ -1256,7 +1257,7 @@ public:
 		missing_covars.clear();
 		missing_envs.clear();
 
-		long Nglobal = mpiUtils::mpiReduce_inplace(&n_samples);
+		Nglobal = mpiUtils::mpiReduce_inplace(&n_samples);
 
 		std::cout << "Reduced to " << Nglobal << " samples with complete data";
 		std::cout << " across covariates";

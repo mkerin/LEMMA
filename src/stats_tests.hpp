@@ -77,6 +77,7 @@ void student_t_test(long nn,
  	*/
 	long pp = HtH_inv.rows();
 	assert(jj <= pp);
+	nn = mpiUtils::mpiReduce_inplace(&nn);
 
 	auto beta = HtH_inv * Hty;
 	tstat = beta(jj, 0);
