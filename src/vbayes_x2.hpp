@@ -98,7 +98,7 @@ public:
 	EigenDataMatrix& C;
 	Eigen::MatrixXd XtE;
 
-	Eigen::ArrayXXd& dXtEEX;
+	Eigen::ArrayXXd& dXtEEX_lowertri;
 	std::unordered_map<long, bool> sample_is_invalid;
 
 // Global location of y_m = E[X beta] and y_x = E[X gamma]
@@ -123,11 +123,11 @@ public:
 	explicit VBayesX2(Data& dat) : X(dat.G),
 		Y(Eigen::Map<EigenDataVector>(dat.Y.data(), dat.Y.rows())),
 		C(dat.C),
-		dXtEEX(dat.dXtEEX),
+		dXtEEX_lowertri(dat.dXtEEX_lowertri),
 		snpstats(dat.snpstats),
 		p(dat.p),
 		hyps_inits(dat.hyps_inits),
-								   sample_is_invalid(dat.sample_is_invalid),
+		sample_is_invalid(dat.sample_is_invalid),
 		vp_init(dat.vp_init){
 		std::cout << "Initialising vbayes object" << std::endl;
 		mkl_set_num_threads_local(p.n_thread);
@@ -599,7 +599,7 @@ public:
 			VariationalParameters vp(p, YM.col(nn), YX.col(nn), ETA.col(nn), ETA_SQ.col(nn));
 			vp.init_from_lite(vp_init);
 			if(n_effects > 1) {
-				vp.calcEdZtZ(dXtEEX, n_env);
+				vp.calcEdZtZ(dXtEEX_lowertri, n_env);
 			}
 			all_vp.push_back(vp);
 		}
@@ -1091,7 +1091,7 @@ public:
 			// Update s_sq
 			double denom = hyps.sigma;
 			denom       += (vp.yx.array() * E.col(ll)).square().sum();
-			denom       += (varG * dXtEEX.col(ll*n_env + ll)).sum();
+			denom       += (varG * dXtEEX_lowertri.col(dXtEEX_col_ind(ll, ll, n_env))).sum();
 			vp.sw_sq(ll) = hyps.sigma / denom;
 
 			// Remove dependance on current weight
@@ -1101,7 +1101,7 @@ public:
 			Eigen::ArrayXd env_vars = Eigen::ArrayXd::Zero(n_var);
 			for (int mm = 0; mm < n_env; mm++) {
 				if(mm != ll) {
-					env_vars += vp.muw(mm) * dXtEEX.col(ll*n_env + mm);
+					env_vars += vp.muw(mm) * dXtEEX_lowertri.col(dXtEEX_col_ind(ll, mm, n_env));
 				}
 			}
 
@@ -1123,20 +1123,25 @@ public:
 #endif
 
 		// Recompute expected value of diagonal of ZtZ
-		vp.calcEdZtZ(dXtEEX, n_env);
+		vp.calcEdZtZ(dXtEEX_lowertri, n_env);
 
-		// Compute s_x; sum of column variances of Z
-		Eigen::ArrayXd muw_sq(n_env * n_env);
+		Eigen::ArrayXd muw_sq_combos(n_env * (n_env + 1) / 2);
 		for (int ll = 0; ll < n_env; ll++) {
 			for (int mm = 0; mm < n_env; mm++) {
-				muw_sq(mm*n_env + ll) = vp.muw(mm) * vp.muw(ll);
+				muw_sq_combos(dXtEEX_col_ind(ll, mm, n_env)) = vp.muw(mm) * vp.muw(ll);
 			}
 		}
-		// WARNING: Hard coded limit!
+
+		double colVarZ = 2 * (dXtEEX_lowertri.rowwise() * muw_sq_combos.transpose()).sum();
+		for (int ll = 0; ll < n_env; ll++) {
+			colVarZ -= (vp.muw(ll) * vp.muw(ll) * dXtEEX_lowertri.col(dXtEEX_col_ind(ll, ll, n_env))).sum();
+		}
+		colVarZ -= (XtE * vp.muw.matrix()).array().square().sum() / N / (N - 1.0);
+
+		// WARNING: Hard coded index
 		// WARNING: Updates S_x in hyps
 		hyps.s_x(0) = (double) n_var;
-		hyps.s_x(1) = (dXtEEX.rowwise() * muw_sq.transpose()).sum() / (N - 1.0);
-		hyps.s_x(1) -= (XtE * vp.muw.matrix()).array().square().sum() / N / (N - 1.0);
+		hyps.s_x(1) = colVarZ;
 	}
 
 	double calc_logw(const Hyps& hyps,
@@ -1256,7 +1261,7 @@ public:
 		vp.muw     = 1.0 / (double) n_env;
 		vp.eta     = E.matrix() * vp.muw.matrix().cast<scalarData>();
 		vp.eta_sq  = vp.eta.array().square().matrix();
-		vp.calcEdZtZ(dXtEEX, n_env);
+		vp.calcEdZtZ(dXtEEX_lowertri, n_env);
 	}
 
 	void calcPredEffects(VariationalParameters& vp){
@@ -1821,8 +1826,8 @@ public:
 //			}
 //		}
 		fileUtils::dump_yhat_to_file(outf_map_pred, n_samples, n_covar, n_var,
-									 n_env, Y, vp_init, Ealpha, sample_is_invalid,
-									 resid_loco, chrs_present);
+		                             n_env, Y, vp_init, Ealpha, sample_is_invalid,
+		                             resid_loco, chrs_present);
 
 		// weights to file
 		if(n_effects > 1) {

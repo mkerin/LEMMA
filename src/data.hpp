@@ -81,7 +81,7 @@ public:
 	EigenDataMatrix Y, Y2;                                                                                         // phenotype matrix (#2 always has covars regressed)
 	EigenDataMatrix C;                                                                                         // covariate matrix
 	EigenDataMatrix E;                                                                                         // env matrix
-	Eigen::ArrayXXd dXtEEX;
+	Eigen::ArrayXXd dXtEEX_lowertri;
 	Eigen::ArrayXXd external_dXtEEX;
 
 // Init points
@@ -782,7 +782,7 @@ public:
 		t_calcDXtEEX.resume();
 		EigenDataArrayX cl_j;
 		scalarData dztz_lmj;
-		dXtEEX.resize(n_var, n_env * n_env);
+		dXtEEX_lowertri.resize(n_var, n_env * (n_env + 1) / 2);
 		n_dxteex_computed = 0;
 		int dxteex_check = 0, se_cnt = 0;
 		double mean_ae = 0, max_ae = 0;
@@ -794,20 +794,24 @@ public:
 				for (int ll = 0; ll < n_env; ll++) {
 					for (int mm = 0; mm <= ll; mm++) {
 						dztz_lmj = (cl_j * E.array().col(ll) * E.array().col(mm) * cl_j).sum();
-						dXtEEX(jj, ll*n_env + mm) = dztz_lmj;
-						dXtEEX(jj, mm*n_env + ll) = dztz_lmj;
+						dXtEEX_lowertri(jj, dXtEEX_col_ind(ll, mm, n_env)) = dztz_lmj;
 					}
 				}
 			} else {
-				dXtEEX.row(jj) = external_dXtEEX.row(it - external_dXtEEX_SNPID.begin());
+				long row = it - external_dXtEEX_SNPID.begin();
+				for (int ll = 0; ll < n_env; ll++) {
+					for (int mm = 0; mm <= ll; mm++) {
+						dXtEEX_lowertri(jj, dXtEEX_col_ind(ll, mm, n_env)) = external_dXtEEX(row, ll*n_env + mm);
+					}
+				}
 				if(dxteex_check < 100) {
 					dxteex_check++;
 					cl_j = G.col(jj);
 					for (int ll = 0; ll < n_env; ll++) {
 						for (int mm = 0; mm <= ll; mm++) {
 							dztz_lmj = (cl_j * E.array().col(ll) * E.array().col(mm) * cl_j).sum();
-							double x1 = std::abs(dXtEEX(jj, ll*n_env + mm) - dztz_lmj);
-							double x2 = std::abs(dXtEEX(jj, mm*n_env + ll) - dztz_lmj);
+							double x1 = std::abs(dXtEEX_lowertri(jj, dXtEEX_col_ind(ll, mm, n_env)) - dztz_lmj);
+							double x2 = std::abs(dXtEEX_lowertri(jj, dXtEEX_col_ind(ll, mm, n_env)) - dztz_lmj);
 							max_ae = std::max(x1, max_ae);
 							max_ae = std::max(x2, max_ae);
 							mean_ae += x1;

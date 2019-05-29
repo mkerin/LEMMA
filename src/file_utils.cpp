@@ -321,7 +321,7 @@ bool fileUtils::read_bgen_chunk(genfile::bgen::View::UniquePtr &bgenView,
 	DosageSetter setter_v2(sample_is_invalid, nInvalid);
 
 	double chunk_missingness = 0;
-	int n_var_incomplete = 0;
+	long n_var_incomplete = 0;
 
 	// Resize genotype matrix
 	G.resize(n_samples, chunk_size);
@@ -391,11 +391,11 @@ bool fileUtils::read_bgen_chunk(genfile::bgen::View::UniquePtr &bgenView,
 	G.conservativeResize(n_samples, jj);
 	assert( G.rsid.size() == jj );
 
-	chunk_missingness /= n_samples;
+	chunk_missingness /= jj;
 	if(chunk_missingness > 0.0) {
 		std::cout << "Average chunk missingness " << chunk_missingness << "(";
 		std::cout << n_var_incomplete << "/" << G.cols();
-		std::cout << " variants incomplete)" << std::endl;
+		std::cout << " variants contain >=1 imputed entry)" << std::endl;
 	}
 
 	if(n_constant_variance > 0) {
@@ -412,24 +412,24 @@ bool fileUtils::read_bgen_chunk(genfile::bgen::View::UniquePtr &bgenView,
 }
 
 void fileUtils::dump_yhat_to_file(boost_io::filtering_ostream &outf, const long &n_samples, const long &n_covar,
-								  const long &n_var, const int &n_env, const EigenDataVector &Y,
-								  const VariationalParametersLite &vp, const Eigen::Ref<const Eigen::VectorXd> &Ealpha,
-								  std::unordered_map<long, bool> sample_is_invalid){
+                                  const long &n_var, const int &n_env, const EigenDataVector &Y,
+                                  const VariationalParametersLite &vp, const Eigen::Ref<const Eigen::VectorXd> &Ealpha,
+                                  std::unordered_map<long, bool> sample_is_invalid){
 	std::vector<Eigen::VectorXd> resid_loco;
 	std::vector<int> chrs_present;
 
 	fileUtils::dump_yhat_to_file(outf, n_samples, n_covar,
-	n_var, n_env, Y,
-	vp, Ealpha,
-	sample_is_invalid,
-	resid_loco, chrs_present);
+	                             n_var, n_env, Y,
+	                             vp, Ealpha,
+	                             sample_is_invalid,
+	                             resid_loco, chrs_present);
 }
 
 void fileUtils::dump_yhat_to_file(boost_io::filtering_ostream &outf, const long &n_samples, const long &n_covar,
-								  const long &n_var, const int &n_env, const EigenDataVector &Y,
-								  const VariationalParametersLite &vp, const Eigen::Ref<const Eigen::VectorXd> &Ealpha,
-								  std::unordered_map<long, bool> sample_is_invalid,
-								  const std::vector<Eigen::VectorXd> &resid_loco, std::vector<int> chrs_present) {
+                                  const long &n_var, const int &n_env, const EigenDataVector &Y,
+                                  const VariationalParametersLite &vp, const Eigen::Ref<const Eigen::VectorXd> &Ealpha,
+                                  std::unordered_map<long, bool> sample_is_invalid,
+                                  const std::vector<Eigen::VectorXd> &resid_loco, std::vector<int> chrs_present) {
 	assert(chrs_present.size() == resid_loco.size() || resid_loco.empty());
 
 	// header
@@ -450,9 +450,9 @@ void fileUtils::dump_yhat_to_file(boost_io::filtering_ostream &outf, const long 
 	// body
 	long iiValid = 0;
 	for (long ii = 0; ii < sample_is_invalid.size(); ii++) {
-		if(sample_is_invalid[ii]){
+		if(sample_is_invalid[ii]) {
 			// NA for incomplete sample
-			for (int jj = 0; jj < n_cols; jj++){
+			for (int jj = 0; jj < n_cols; jj++) {
 				outf << "NA";
 				if(jj < n_cols - 1) outf << " ";
 			}
@@ -465,11 +465,11 @@ void fileUtils::dump_yhat_to_file(boost_io::filtering_ostream &outf, const long 
 			} else {
 				outf << " " << vp.ym(iiValid);
 			}
-			if (n_env > 0){
+			if (n_env > 0) {
 				outf << " " << vp.eta(iiValid) << " " << vp.yx(iiValid);
 			}
-			if (n_chrs > 0){
-				for (int cc = 0; cc < n_chrs; cc++){
+			if (n_chrs > 0) {
+				for (int cc = 0; cc < n_chrs; cc++) {
 					outf << " " << resid_loco[cc](iiValid);
 				}
 			}

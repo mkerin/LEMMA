@@ -150,15 +150,15 @@ TEST_CASE("Data") {
 
 		SECTION("dXtEEX computed correctly") {
 			data.calc_dxteex();
-			CHECK(data.dXtEEX(0, 0) == Approx(42.2994405499));
-			CHECK(data.dXtEEX(1, 0) == Approx(43.2979303929));
-			CHECK(data.dXtEEX(2, 0) == Approx(37.6440444004));
-			CHECK(data.dXtEEX(3, 0) == Approx(40.9258647207));
+			CHECK(data.dXtEEX_lowertri(0, 0) == Approx(42.2994405499));
+			CHECK(data.dXtEEX_lowertri(1, 0) == Approx(43.2979303929));
+			CHECK(data.dXtEEX_lowertri(2, 0) == Approx(37.6440444004));
+			CHECK(data.dXtEEX_lowertri(3, 0) == Approx(40.9258647207));
 
-			CHECK(data.dXtEEX(0, 4) == Approx(-4.0453940676));
-			CHECK(data.dXtEEX(1, 4) == Approx(-15.6140263169));
-			CHECK(data.dXtEEX(2, 4) == Approx(-13.2508795732));
-			CHECK(data.dXtEEX(3, 4) == Approx(-9.8081456731));
+			CHECK(data.dXtEEX_lowertri(0, dXtEEX_col_ind(1, 0, data.n_env)) == Approx(-4.0453940676));
+			CHECK(data.dXtEEX_lowertri(1, dXtEEX_col_ind(1, 0, data.n_env)) == Approx(-15.6140263169));
+			CHECK(data.dXtEEX_lowertri(2, dXtEEX_col_ind(1, 0, data.n_env)) == Approx(-13.2508795732));
+			CHECK(data.dXtEEX_lowertri(3, dXtEEX_col_ind(1, 0, data.n_env)) == Approx(-9.8081456731));
 		}
 	}
 
@@ -191,15 +191,15 @@ TEST_CASE("Data") {
 
 		SECTION("dXtEEX computed correctly") {
 			data.calc_dxteex();
-			CHECK(data.dXtEEX(0, 0) == Approx(23.2334219303));
-			CHECK(data.dXtEEX(1, 0) == Approx(27.9920667408));
-			CHECK(data.dXtEEX(2, 0) == Approx(24.7041225993));
-			CHECK(data.dXtEEX(3, 0) == Approx(24.2423580715));
+			CHECK(data.dXtEEX_lowertri(0, 0) == Approx(23.2334219303));
+			CHECK(data.dXtEEX_lowertri(1, 0) == Approx(27.9920667408));
+			CHECK(data.dXtEEX_lowertri(2, 0) == Approx(24.7041225993));
+			CHECK(data.dXtEEX_lowertri(3, 0) == Approx(24.2423580715));
 
-			CHECK(data.dXtEEX(0, 4) == Approx(-1.056112897));
-			CHECK(data.dXtEEX(1, 4) == Approx(-8.526431457));
-			CHECK(data.dXtEEX(2, 4) == Approx(-6.5950206611));
-			CHECK(data.dXtEEX(3, 4) == Approx(-3.6842212598));
+			CHECK(data.dXtEEX_lowertri(0, dXtEEX_col_ind(1, 0, data.n_env)) == Approx(-1.056112897));
+			CHECK(data.dXtEEX_lowertri(1, dXtEEX_col_ind(1, 0, data.n_env)) == Approx(-8.526431457));
+			CHECK(data.dXtEEX_lowertri(2, dXtEEX_col_ind(1, 0, data.n_env)) == Approx(-6.5950206611));
+			CHECK(data.dXtEEX_lowertri(3, dXtEEX_col_ind(1, 0, data.n_env)) == Approx(-3.6842212598));
 		}
 	}
 
@@ -243,30 +243,30 @@ TEST_CASE("Data") {
 
 		SECTION("dXtEEX computed correctly") {
 			data.calc_dxteex();
-			CHECK(data.dXtEEX(0, 0) == Approx(38.9610805993));
-			CHECK(data.dXtEEX(1, 0) == Approx(38.2995451744));
-			CHECK(data.dXtEEX(2, 0) == Approx(33.7077899144));
-			CHECK(data.dXtEEX(3, 0) == Approx(35.7391671158));
+			CHECK(data.dXtEEX_lowertri(0, 0) == Approx(38.9610805993));
+			CHECK(data.dXtEEX_lowertri(1, 0) == Approx(38.2995451744));
+			CHECK(data.dXtEEX_lowertri(2, 0) == Approx(33.7077899144));
+			CHECK(data.dXtEEX_lowertri(3, 0) == Approx(35.7391671158));
 
-			CHECK(data.dXtEEX(0, 4) == Approx(-2.6239467101));
-			CHECK(data.dXtEEX(1, 4) == Approx(-13.0001255314));
-			CHECK(data.dXtEEX(2, 4) == Approx(-11.6635557299));
-			CHECK(data.dXtEEX(3, 4) == Approx(-7.2154836264));
+			CHECK(data.dXtEEX_lowertri(0, dXtEEX_col_ind(1, 0, data.n_env)) == Approx(-2.6239467101));
+			CHECK(data.dXtEEX_lowertri(1, dXtEEX_col_ind(1, 0, data.n_env)) == Approx(-13.0001255314));
+			CHECK(data.dXtEEX_lowertri(2, dXtEEX_col_ind(1, 0, data.n_env)) == Approx(-11.6635557299));
+			CHECK(data.dXtEEX_lowertri(3, dXtEEX_col_ind(1, 0, data.n_env)) == Approx(-7.2154836264));
 		}
 
 		SECTION("Ex1. Confirm calc_dxteex() reorders properly") {
 			data.p.dxteex_file = "data/io_test/n50_p100_dxteex_low_mem.txt";
 			data.read_external_dxteex();
 			data.calc_dxteex();
-			CHECK(data.dXtEEX(0, 0) == Approx(38.9610805993));
-			CHECK(data.dXtEEX(1, 0) == Approx(38.2995451744));
-			CHECK(data.dXtEEX(2, 0) == Approx(33.7077899144));
-			CHECK(data.dXtEEX(3, 0) == Approx(35.7391671158));
+			CHECK(data.dXtEEX_lowertri(0, 0) == Approx(38.9610805993));
+			CHECK(data.dXtEEX_lowertri(1, 0) == Approx(38.2995451744));
+			CHECK(data.dXtEEX_lowertri(2, 0) == Approx(33.7077899144));
+			CHECK(data.dXtEEX_lowertri(3, 0) == Approx(35.7391671158));
 
-			CHECK(data.dXtEEX(0, 4) == Approx(-2.6239467101));
-			CHECK(data.dXtEEX(1, 4) == Approx(-13.0001255314));
-			CHECK(data.dXtEEX(2, 4) == Approx(-11.6635557299));
-			CHECK(data.dXtEEX(3, 4) == Approx(-7.2154836264));
+			CHECK(data.dXtEEX_lowertri(0, dXtEEX_col_ind(1, 0, data.n_env)) == Approx(-2.6239467101));
+			CHECK(data.dXtEEX_lowertri(1, dXtEEX_col_ind(1, 0, data.n_env)) == Approx(-13.0001255314));
+			CHECK(data.dXtEEX_lowertri(2, dXtEEX_col_ind(1, 0, data.n_env)) == Approx(-11.6635557299));
+			CHECK(data.dXtEEX_lowertri(3, dXtEEX_col_ind(1, 0, data.n_env)) == Approx(-7.2154836264));
 			CHECK(data.n_dxteex_computed == 1);
 		}
 	}
@@ -358,16 +358,16 @@ TEST_CASE( "Example 4: multi-env + mog + covars + emp_bayes" ){
 
 	SECTION("Ex4. No filters applied, high mem mode"){
 		char* argv[] = { (char*) "bin/bgen_prog", (char*) "--mode_vb", (char*) "--low_mem",
-						 (char*) "--use_vb_on_covars", (char*) "--mode_empirical_bayes",
-						 (char*) "--spike_diff_factor", (char*) "10000",
-						 (char*) "--effects_prior_mog",
-						 (char*) "--vb_iter_max", (char*) "10",
-						 (char*) "--environment", (char*) "data/io_test/n50_p100_env.txt",
-						 (char*) "--bgen", (char*) "data/io_test/n50_p100.bgen",
-						 (char*) "--out", (char*) "data/io_test/config4.out",
-						 (char*) "--pheno", (char*) "data/io_test/pheno.txt",
-						 (char*) "--hyps_grid", (char*) "data/io_test/single_hyps_gxage.txt",
-						 (char*) "--hyps_probs", (char*) "data/io_test/single_hyps_gxage_probs.txt"};
+			             (char*) "--use_vb_on_covars", (char*) "--mode_empirical_bayes",
+			             (char*) "--spike_diff_factor", (char*) "10000",
+			             (char*) "--effects_prior_mog",
+			             (char*) "--vb_iter_max", (char*) "10",
+			             (char*) "--environment", (char*) "data/io_test/n50_p100_env.txt",
+			             (char*) "--bgen", (char*) "data/io_test/n50_p100.bgen",
+			             (char*) "--out", (char*) "data/io_test/config4.out",
+			             (char*) "--pheno", (char*) "data/io_test/pheno.txt",
+			             (char*) "--hyps_grid", (char*) "data/io_test/single_hyps_gxage.txt",
+			             (char*) "--hyps_probs", (char*) "data/io_test/single_hyps_gxage_probs.txt"};
 		int argc = sizeof(argv)/sizeof(argv[0]);
 		parse_arguments(p, argc, argv);
 		Data data( p );
@@ -399,11 +399,11 @@ TEST_CASE( "Example 4: multi-env + mog + covars + emp_bayes" ){
 			CHECK(VB.n_effects == 2);
 			CHECK(VB.vp_init.muw(0) == 0.25);
 			CHECK(VB.p.init_weights_with_snpwise_scan == false);
-			CHECK(VB.dXtEEX(0, 0) == Approx(38.9610805993));
-			CHECK(VB.dXtEEX(1, 0) == Approx(38.2995451744));
+			CHECK(VB.dXtEEX_lowertri(0, 0) == Approx(38.9610805993));
+			CHECK(VB.dXtEEX_lowertri(1, 0) == Approx(38.2995451744));
 
-			CHECK(VB.dXtEEX(0, 4) == Approx(-2.6239467101));
-			CHECK(VB.dXtEEX(1, 4) == Approx(-13.0001255314));
+			CHECK(VB.dXtEEX_lowertri(0, dXtEEX_col_ind(1, 0, data.n_env)) == Approx(-2.6239467101));
+			CHECK(VB.dXtEEX_lowertri(1, dXtEEX_col_ind(1, 0, data.n_env)) == Approx(-13.0001255314));
 		}
 
 		std::vector< VbTracker > trackers(VB.hyps_inits.size(), p);
@@ -430,7 +430,10 @@ TEST_CASE( "Example 4: multi-env + mog + covars + emp_bayes" ){
 			CHECK(vp.alpha_beta(0)            == Approx(0.1347598474));
 			CHECK(vp.alpha_beta(1)            == Approx(0.1406737102));
 			CHECK(vp.alpha_beta(63)           == Approx(0.142092349));
+			CHECK(vp.mean_gam(0)           == Approx(-0.0008039753));
+			CHECK(vp.mean_gam(63)           == Approx(-0.0004864387));
 			CHECK(vp.muw(0, 0)              == Approx(0.1064068968));
+			CHECK(vp.sw_sq(0, 0)              == Approx(0.4188888912));
 
 			CHECK(hyps.sigma                == Approx(0.6981184547));
 			CHECK(hyps.lambda[0]            == Approx(0.1683579572));
@@ -469,8 +472,8 @@ TEST_CASE( "Example 4: multi-env + mog + covars + emp_bayes" ){
 			VbTracker tracker(p);
 			tracker.init_interim_output(0,2, VB.n_effects, VB.n_covar, VB.n_env, VB.env_names, vp);
 			tracker.dump_state("2", VB.n_samples, VB.n_covar, VB.n_var, VB.n_env,
-							   VB.n_effects, vp, hyps, VB.Y, VB.C, VB.X,
-							   VB.covar_names, VB.env_names, VB.sample_is_invalid);
+			                   VB.n_effects, vp, hyps, VB.Y, VB.C, VB.X,
+			                   VB.covar_names, VB.env_names, VB.sample_is_invalid);
 
 			// Checking logw
 			double int_linear = -1.0 * VB.calcExpLinear(hyps, vp) / 2.0 / hyps.sigma;
@@ -529,17 +532,17 @@ TEST_CASE( "Example 4: multi-env + mog + covars + emp_bayes + sample subset" ){
 
 	SECTION("Ex4. No filters applied, high mem mode"){
 		char* argv[] = { (char*) "bin/bgen_prog", (char*) "--mode_vb", (char*) "--low_mem",
-						 (char*) "--use_vb_on_covars", (char*) "--mode_empirical_bayes",
-						 (char*) "--spike_diff_factor", (char*) "10000",
-						 (char*) "--effects_prior_mog",
-						 (char*) "--incl_sample_ids", (char*) "data/io_test/sample_ids_head28.txt",
-						 (char*) "--vb_iter_max", (char*) "10",
-						 (char*) "--environment", (char*) "data/io_test/n50_p100_env.txt",
-						 (char*) "--bgen", (char*) "data/io_test/n50_p100.bgen",
-						 (char*) "--out", (char*) "data/io_test/config4_subset.out",
-						 (char*) "--pheno", (char*) "data/io_test/pheno.txt",
-						 (char*) "--hyps_grid", (char*) "data/io_test/single_hyps_gxage.txt",
-						 (char*) "--hyps_probs", (char*) "data/io_test/single_hyps_gxage_probs.txt"};
+			             (char*) "--use_vb_on_covars", (char*) "--mode_empirical_bayes",
+			             (char*) "--spike_diff_factor", (char*) "10000",
+			             (char*) "--effects_prior_mog",
+			             (char*) "--incl_sample_ids", (char*) "data/io_test/sample_ids_head28.txt",
+			             (char*) "--vb_iter_max", (char*) "10",
+			             (char*) "--environment", (char*) "data/io_test/n50_p100_env.txt",
+			             (char*) "--bgen", (char*) "data/io_test/n50_p100.bgen",
+			             (char*) "--out", (char*) "data/io_test/config4_subset.out",
+			             (char*) "--pheno", (char*) "data/io_test/pheno.txt",
+			             (char*) "--hyps_grid", (char*) "data/io_test/single_hyps_gxage.txt",
+			             (char*) "--hyps_probs", (char*) "data/io_test/single_hyps_gxage_probs.txt"};
 		int argc = sizeof(argv)/sizeof(argv[0]);
 		parse_arguments(p, argc, argv);
 		Data data( p );
