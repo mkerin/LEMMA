@@ -173,14 +173,12 @@ public:
 		p.gxe_chunk_size = (unsigned int) std::min((long int) p.gxe_chunk_size, (long int) n_var);
 
 		// Read environmental variables
-		if(n_env > 0) {
-			Eigen::MatrixXd XtElocal;
-			std::cout << "Computing XtE" << std::endl;
-			XtElocal = X.transpose_multiply(E);
-			std::cout << "XtE computed" << std::endl;
-			XtE.resize(XtElocal.rows(), XtElocal.cols());
-			mpiUtils::mpiReduce_double(XtElocal.data(), XtE.data(), XtElocal.size());
-		}
+//		if(n_env > 0) {
+//			std::cout << "Computing XtE" << std::endl;
+//			XtE = X.transpose_multiply(E);
+//			std::cout << "XtE computed" << std::endl;
+//			XtE = mpiUtils::mpiReduce_inplace(XtE);
+//		}
 
 		// When n_env > 1 this gets set when in updateEnvWeights
 		if(n_env == 0) {
@@ -1115,7 +1113,7 @@ public:
 			colVarZ -= (vp.muw(ll) * vp.muw(ll) * dXtEEX_lowertri.col(dXtEEX_col_ind(ll, ll, n_env))).sum();
 		}
 		colVarZ /= (Nglobal - 1.0);
-		colVarZ -= (XtE * vp.muw.matrix()).array().square().sum() / Nglobal / (Nglobal - 1.0);
+//		colVarZ -= (XtE * vp.muw.matrix()).array().square().sum() / Nglobal / (Nglobal - 1.0);
 
 		// WARNING: Hard coded index
 		// WARNING: Updates S_x in hyps
