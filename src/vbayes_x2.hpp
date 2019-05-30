@@ -58,10 +58,6 @@ public:
 	std::vector< std::string > covar_names;
 	std::vector< std::string > env_names;
 
-// Column order of hyperparameters in grid
-	const std::vector< std::string > hyps_names = {"sigma", "sigma_b", "sigma_g",
-		                                           "lambda_b", "lambda_g"};
-
 // sizes
 	int n_effects;
 	std::uint32_t n_samples;
@@ -897,11 +893,11 @@ public:
 	               const double& offset,
 	               const Hyps& hyps,
 	               const std::uint32_t& ii,
-	               const Eigen::Ref<const Eigen::MatrixXd> rr_k_diff,
+	               const Eigen::Ref<const Eigen::MatrixXd>& rr_k_diff,
 	               const Eigen::Ref<const Eigen::VectorXd>& A,
 	               const Eigen::Ref<const Eigen::MatrixXd>& D_corr,
 	               VariationalParameters& vp,
-	               const Eigen::Ref<const Eigen::ArrayXd> alpha_cnst){
+	               const Eigen::Ref<const Eigen::ArrayXd>& alpha_cnst){
 		// check for NaNs and spit out diagnostics if so.
 
 		if(std::isnan(alpha)) {
@@ -1737,35 +1733,7 @@ public:
 		if(n_covar > 0) {
 			Ealpha += (C * vp_init.muc.matrix().cast<scalarData>()).cast<double>();
 		}
-//		if(n_effects == 1) {
-//			outf_map_pred << "Y Ealpha Xbeta";
-//			for(auto cc : chrs_index) {
-//				outf_map_pred << " residuals_excl_chr" << chrs_present[cc];
-//			}
-//			outf_map_pred << std::endl;
-//
-//			for (std::uint32_t ii = 0; ii < n_samples; ii++) {
-//				outf_map_pred << Y(ii) << " " << Ealpha(ii) << " " << vp_init.ym(ii) - Ealpha(ii);
-//				for(auto cc : chrs_index) {
-//					outf_map_pred << " " << resid_loco[cc](ii);
-//				}
-//				outf_map_pred << std::endl;
-//			}
-//		} else {
-//			outf_map_pred << "Y Ealpha Xbeta eta Xgamma";
-//			for(auto cc : chrs_index) {
-//				outf_map_pred << " residuals_excl_chr" << chrs_present[cc];
-//			}
-//			outf_map_pred << std::endl;
-//			for (std::uint32_t ii = 0; ii < n_samples; ii++) {
-//				outf_map_pred << Y(ii) << " " << Ealpha(ii) << " " << vp_init.ym(ii) - Ealpha(ii);
-//				outf_map_pred << " " << vp_init.eta(ii) << " " << vp_init.yx(ii);
-//				for(auto cc : chrs_index) {
-//					outf_map_pred << " " << resid_loco[cc](ii);
-//				}
-//				outf_map_pred << std::endl;
-//			}
-//		}
+
 		fileUtils::dump_yhat_to_file(outf_map_pred, n_samples, n_covar, n_var,
 		                             n_env, Y, vp_init, Ealpha, sample_is_invalid,
 		                             resid_loco, chrs_present);
