@@ -90,7 +90,7 @@ public:
 	std::vector< std::vector < std::uint32_t > > main_back_pass_chunks, gxe_back_pass_chunks;
 	std::vector< int > env_fwd_pass;
 	std::vector< int > env_back_pass;
-	std::map<long, Eigen::MatrixXd> D_correlations;
+	std::map<long, Eigen::MatrixXd> XtX_block_cache, ZtZ_block_cache;
 
 // Data
 	GenotypeMatrix&  X;
@@ -781,25 +781,33 @@ public:
 		unsigned long ch_len   = chunk.size();
 		Eigen::MatrixXd Dlocal(ch_len, ch_len), Dglobal(ch_len, ch_len);
 		if (ee == 0) {
-			if (D_correlations.count(memoize_id) == 0) {
+			if (XtX_block_cache.count(memoize_id) == 0) {
 				if(p.n_thread == 1) {
 					Dlocal.triangularView<Eigen::StrictlyUpper>() = (D.transpose() * D).template cast<double>();
 				} else {
 					Dlocal = (D.transpose() * D).template cast<double>();
 				}
 				MPI_Allreduce(Dlocal.data(), Dglobal.data(), Dlocal.size(), MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
-				D_correlations[memoize_id] = Dglobal;
+				XtX_block_cache[memoize_id] = Dglobal;
 			}
-			_internal_updateAlphaMu_beta(chunk, A, D_correlations[memoize_id], all_hyps[nn], all_vp[nn], rr_diff.col(nn));
+			_internal_updateAlphaMu_beta(chunk, A, XtX_block_cache[memoize_id], all_hyps[nn], all_vp[nn], rr_diff.col(nn));
 		} else {
 			if(p.gxe_chunk_size > 1) {
-				if(p.n_thread == 1) {
+				auto it = ZtZ_block_cache.find(memoize_id);
+				if (n_env == 1 && it != ZtZ_block_cache.end()){
+					Dglobal = ZtZ_block_cache[memoize_id];
+				} else if(p.n_thread == 1) {
 					Dlocal.triangularView<Eigen::StrictlyUpper>() = (D.transpose() * all_vp[nn].eta_sq.asDiagonal() * D).template cast<double>();
+					MPI_Allreduce(Dlocal.data(), Dglobal.data(), Dlocal.size(), MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
 				} else {
 					Dlocal = (D.transpose() * all_vp[nn].eta_sq.asDiagonal() * D).template cast<double>();
+					MPI_Allreduce(Dlocal.data(), Dglobal.data(), Dlocal.size(), MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+				}
+
+				if(n_env == 1 && it == ZtZ_block_cache.end()){
+					ZtZ_block_cache[memoize_id] = Dglobal;
 				}
 			}
-			MPI_Allreduce(Dlocal.data(), Dglobal.data(), Dlocal.size(), MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
 			_internal_updateAlphaMu_gam(chunk, A, Dglobal, all_hyps[nn], all_vp[nn], rr_diff.col(nn));
 		}
 	}
