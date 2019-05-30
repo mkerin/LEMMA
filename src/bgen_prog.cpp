@@ -28,11 +28,11 @@ int main( int argc, char** argv ) {
 	MPI_Init(NULL, NULL);
 
 	// Sanitise std::cout
-	int rank;
-	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+	int world_rank;
+	MPI_Comm_rank(MPI_COMM_WORLD, &world_rank);
 	std::ofstream sink("/dev/null");
 	std::streambuf *coutbuf = std::cout.rdbuf();
-	if (rank != 0) {
+	if (world_rank != 0) {
 		std::cout.rdbuf(sink.rdbuf());
 	}
 
@@ -99,13 +99,6 @@ int main( int argc, char** argv ) {
 				outf_time << "full_inference " << elapsed_vb.count() << std::endl;
 				outf_time << "vb_outer_loop " << VB.elapsed_innerLoop.count() << std::endl;
 			}
-			// ONLY IMPLEMENT MPI FOR VARIATIONAL BAYES
-
-			if (rank != 0) {
-				std::cout.rdbuf(coutbuf);
-			}
-			MPI_Finalize();
-			return 0;
 
 			if (p.mode_calc_snpstats) {
 				VB.write_map_stats_to_file("");
@@ -134,7 +127,9 @@ int main( int argc, char** argv ) {
 				bool append = false;
 
 				boost_io::filtering_ostream outf;
-				fileUtils::fstream_init(outf, p.streamBgenOutFile);
+				if(world_rank == 0) {
+					fileUtils::fstream_init(outf, p.streamBgenOutFile);
+				}
 
 				while (fileUtils::read_bgen_chunk(bgenView, Xstream, data.sample_is_invalid,
 				                                  data.n_samples, 128, p, bgen_pass, n_var_parsed)) {
@@ -146,18 +141,31 @@ int main( int argc, char** argv ) {
 					                 test_stat_rgam,
 					                 test_stat_joint);
 
-					fileUtils::write_snp_stats_to_file(outf, VB.n_effects, Xstream, append, neglogp_beta, neglogp_gam,
-					                                   neglogp_rgam, neglogp_joint, test_stat_beta, test_stat_gam,
-					                                   test_stat_rgam, test_stat_joint);
+					if(world_rank == 0) {
+						fileUtils::write_snp_stats_to_file(outf, VB.n_effects, Xstream, append, neglogp_beta,
+														   neglogp_gam,
+														   neglogp_rgam, neglogp_joint, test_stat_beta, test_stat_gam,
+														   test_stat_rgam, test_stat_joint);
+					}
 					append = true;
 				}
 			}
 		}
 
+		// MPI ONLY IMPLEMENTED UP TO HERE
+		if (world_rank != 0) {
+			std::cout.rdbuf(coutbuf);
+		}
+		MPI_Finalize();
+		return 0;
+
 		if(p.mode_pve_est) {
 			if(p.random_seed == -1) {
-				std::random_device rd;
-				p.random_seed = rd();
+				if(world_rank == 0) {
+					std::random_device rd;
+					p.random_seed = rd();
+				}
+				MPI_Bcast(&p.random_seed, 1, MPI_UNSIGNED, 0, MPI_COMM_WORLD);
 			}
 			std::cout << "Initialising random sample generator with seed " << p.random_seed << std::endl;
 

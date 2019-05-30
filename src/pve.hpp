@@ -8,6 +8,8 @@
 #include "genotype_matrix.hpp"
 #include "file_utils.hpp"
 #include "parameters.hpp"
+#include "eigen_utils.hpp"
+#include "mpi_utils.hpp"
 
 #include <boost/iostreams/filtering_stream.hpp>
 
@@ -23,8 +25,9 @@ public:
 	long n_var;
 	const bool mode_gxe;
 	const int n_components;
-	int n_covar;
+	long n_covar;
 	bool mog_beta, mog_gam;
+	int world_rank;
 
 	parameters params;
 
@@ -59,8 +62,10 @@ public:
 		std::cout << "N-covars: " << n_covar << std::endl;
 
 		// Center and scale eta
-		eta.array() -= eta.mean();
-		eta.array() /= eta.squaredNorm() / (eta.rows() - 1.0);
+		EigenUtils::center_matrix(eta);
+		EigenUtils::scale_matrix_and_remove_constant_cols(eta);
+
+		MPI_Comm_rank(MPI_COMM_WORLD, &world_rank);
 	}
 
 	PVE(const parameters& myparams,
@@ -77,6 +82,8 @@ public:
 
 		n_covar = C.cols();
 		std::cout << "N-covars: " << n_covar << std::endl;
+
+		MPI_Comm_rank(MPI_COMM_WORLD, &world_rank);
 	}
 
 	void run(const std::string& file);
@@ -87,7 +94,7 @@ public:
 	void fill_gaussian_noise(unsigned int seed,
 	                         Eigen::Ref<Eigen::MatrixXd> zz,
 	                         long nn,
-	                         long pp);
+	                         long n_repeats);
 
 	void he_reg_single_component_mog();
 
@@ -152,14 +159,14 @@ void PVE::set_mog_weights(Eigen::VectorXd weights_beta, Eigen::VectorXd weights_
 	}
 }
 
-void PVE::fill_gaussian_noise(unsigned int seed, Eigen::Ref<Eigen::MatrixXd> zz, long nn, long pp) {
+void PVE::fill_gaussian_noise(unsigned int seed, Eigen::Ref<Eigen::MatrixXd> zz, long nn, long n_repeats) {
 	assert(zz.rows() == nn);
-	assert(zz.cols() == pp);
+	assert(zz.cols() == n_repeats);
 
 	std::mt19937 generator{seed};
 	std::normal_distribution<scalarData> noise_normal(0.0, 1);
 
-	for (int bb = 0; bb < pp; bb++) {
+	for (int bb = 0; bb < n_repeats; bb++) {
 		for (std::size_t ii = 0; ii < nn; ii++) {
 			zz(ii, bb) = noise_normal(generator);
 		}
@@ -301,7 +308,10 @@ void PVE::he_reg_gxe() {
 
 void PVE::run(const std::string &file) {
 	// Filepath to write interim results to
-	init_interim_results(file);
+	if(world_rank == 0) {
+		init_interim_results(file);
+	}
+
 	if(mode_gxe) {
 		std::cout << "G+GxE effects model (gaussian prior)" << std::endl;
 		he_reg_gxe();
@@ -312,7 +322,10 @@ void PVE::run(const std::string &file) {
 		std::cout << "Main effects model (gaussian prior)" << std::endl;
 		he_reg_single_component();
 	}
-boost_io: close(outf);
+
+	if(world_rank == 0) {
+		boost_io::close(outf);
+	}
 
 	std::cout << "Variance components estimates" << std::endl;
 	std::cout << sigmas << std::endl;

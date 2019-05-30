@@ -28,6 +28,16 @@ void scale_matrix_and_remove_constant_cols(EigenMat &M,
 										   long &n_cols,
 										   std::vector<std::string> &col_names);
 
+template <typename EigenMat>
+void scale_matrix_and_remove_constant_cols(EigenMat &M){
+	long n_cols = M.cols();
+	std::vector<std::string> placeholder;
+	for (long ii = 0; ii < n_cols; ii++){
+		placeholder.emplace_back("tmp");
+	}
+	scale_matrix_and_remove_constant_cols(M, n_cols, placeholder);
+}
+
 Eigen::MatrixXf solve(const Eigen::MatrixXf &A, const Eigen::MatrixXf &b);
 
 Eigen::MatrixXd solve(const Eigen::MatrixXd &A, const Eigen::MatrixXd &b);

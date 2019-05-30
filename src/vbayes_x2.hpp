@@ -1695,7 +1695,9 @@ public:
 	}
 
 	void write_map_stats_to_file(const std::string &file_prefix) {
-		output_init(file_prefix);
+		if(world_rank == 0) {
+			output_init(file_prefix);
+		}
 		output_results();
 	}
 
@@ -1738,26 +1740,28 @@ public:
 		                             n_env, Y, vp_init, Ealpha, sample_is_invalid,
 		                             resid_loco, chrs_present);
 
-		// weights to file
-		if(n_effects > 1) {
-			for (int ll = 0; ll < n_env; ll++) {
-				outf_weights << env_names[ll];
-				if (ll + 1 < n_env) outf_weights << " ";
+		if(world_rank == 0) {
+			// weights to file
+			if (n_effects > 1) {
+				for (int ll = 0; ll < n_env; ll++) {
+					outf_weights << env_names[ll];
+					if (ll + 1 < n_env) outf_weights << " ";
+				}
+				outf_weights << std::endl;
+				for (int ll = 0; ll < n_env; ll++) {
+					outf_weights << vp_init.muw(ll);
+					if (ll + 1 < n_env) outf_weights << " ";
+				}
+				outf_weights << std::endl;
 			}
-			outf_weights << std::endl;
-			for (int ll = 0; ll < n_env; ll++) {
-				outf_weights << vp_init.muw(ll);
-				if (ll + 1 < n_env) outf_weights << " ";
-			}
-			outf_weights << std::endl;
 		}
 
 		// Compute LOCO p-values
 		Eigen::VectorXd neglogp_beta(n_var), neglogp_gam(n_var), neglogp_rgam(n_var), neglogp_joint(n_var);
 		Eigen::VectorXd test_stat_beta(n_var), test_stat_gam(n_var), test_stat_rgam(n_var), test_stat_joint(n_var);
-		if(p.LOSO_window == -1) {
+		if (p.LOSO_window == -1) {
 			LOCO_pvals(vp_init, resid_loco, neglogp_beta, neglogp_gam, neglogp_rgam, neglogp_joint,
-			           test_stat_beta, test_stat_gam, test_stat_rgam, test_stat_joint);
+					   test_stat_beta, test_stat_gam, test_stat_rgam, test_stat_joint);
 		} else {
 			LOCO_pvals_v2(X, vp_init, p.LOSO_window, neglogp_beta,
 						  neglogp_rgam,
@@ -1769,12 +1773,16 @@ public:
 			test_stat_gam.resize(0);
 		}
 
-		// MAP snp-stats to file
-		fileUtils::write_snp_stats_to_file(outf_map, n_effects, n_var, vp_init, X, p, true, neglogp_beta, neglogp_gam,
-		                                   neglogp_rgam, neglogp_joint, test_stat_beta, test_stat_gam, test_stat_rgam,
-		                                   test_stat_joint);
-		if(n_covar > 0) {
-			write_covars_to_file(outf_map_covar, vp_init);
+		if(world_rank == 0){
+			// MAP snp-stats to file
+			fileUtils::write_snp_stats_to_file(outf_map, n_effects, n_var, vp_init, X, p, true, neglogp_beta,
+											   neglogp_gam,
+											   neglogp_rgam, neglogp_joint, test_stat_beta, test_stat_gam,
+											   test_stat_rgam,
+											   test_stat_joint);
+			if (n_covar > 0) {
+				write_covars_to_file(outf_map_covar, vp_init);
+			}
 		}
 	}
 
