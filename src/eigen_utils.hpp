@@ -23,6 +23,16 @@ namespace EigenUtils {
 template <typename EigenMat>
 void center_matrix(EigenMat& M);
 
+	template <typename EigenMat>
+	void scale_matrix_and_remove_constant_cols(EigenMat &M){
+		long n_cols = M.cols();
+		std::vector<std::string> placeholder;
+		for (long ii = 0; ii < n_cols; ii++){
+			placeholder.emplace_back("tmp");
+		}
+		scale_matrix_and_remove_constant_cols(M, n_cols, placeholder);
+	}
+
 template <typename EigenMat>
 void scale_matrix_and_remove_constant_cols(EigenMat &M,
 										   long &n_cols,
