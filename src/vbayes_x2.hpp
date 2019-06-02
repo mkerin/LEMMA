@@ -494,9 +494,9 @@ public:
 				all_hyps[nn].update_pve();
 				if(world_rank == 0) {
 					all_tracker[nn].push_interim_hyps(count, all_hyps[nn], i_logw[nn],
-													  covar_diff[nn], beta_diff[nn], gam_diff[nn], w_diff[nn],
-													  n_effects,
-													  n_var, n_covar, n_env, all_vp[nn]);
+					                                  covar_diff[nn], beta_diff[nn], gam_diff[nn], w_diff[nn],
+					                                  n_effects,
+					                                  n_var, n_covar, n_env, all_vp[nn]);
 				}
 				if (p.param_dump_interval > 0 && count % p.param_dump_interval == 0) {
 					all_tracker[nn].dump_state(std::to_string(count), n_samples, n_covar, n_var,
@@ -790,7 +790,7 @@ public:
 		} else {
 			if(p.gxe_chunk_size > 1) {
 				auto it = ZtZ_block_cache.find(memoize_id);
-				if (n_env == 1 && it != ZtZ_block_cache.end()){
+				if (n_env == 1 && it != ZtZ_block_cache.end()) {
 					Dglobal = ZtZ_block_cache[memoize_id];
 				} else if(p.n_thread == 1) {
 					Dlocal.triangularView<Eigen::StrictlyUpper>() = (D.transpose() * all_vp[nn].eta_sq.asDiagonal() * D).template cast<double>();
@@ -800,7 +800,7 @@ public:
 					MPI_Allreduce(Dlocal.data(), Dglobal.data(), Dlocal.size(), MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
 				}
 
-				if(n_env == 1 && it == ZtZ_block_cache.end()){
+				if(n_env == 1 && it == ZtZ_block_cache.end()) {
 					ZtZ_block_cache[memoize_id] = Dglobal;
 				}
 			}
@@ -1067,10 +1067,11 @@ public:
 			double r_ll = vp.muw(ll);
 
 			// Update s_sq
-			double denom = hyps.sigma;
-			denom += (vp.yx.array() * E.col(ll)).square().sum();
+			double denom;
+			denom  = (vp.yx.array() * E.col(ll)).square().sum();
 			denom  = mpiUtils::mpiReduce_inplace(&denom);
 			denom += (varG * dXtEEX_lowertri.col(dXtEEX_col_ind(ll, ll, n_env))).sum();
+			denom += hyps.sigma;
 			vp.sw_sq(ll) = hyps.sigma / denom;
 
 			// Remove dependance on current weight
@@ -1442,12 +1443,12 @@ public:
 				} else {
 					chr_residuals[cc] = map_residuals + pred_main[cc];
 				}
-				chr_residuals[cc].array() -= chr_residuals[cc].mean();
+				EigenUtils::center_matrix(chr_residuals[cc]);
 			}
 		} else {
 			for (auto cc : chrs_index) {
 				chr_residuals[cc] = map_residuals;
-				chr_residuals[cc].array() -= chr_residuals[cc].mean();
+				EigenUtils::center_matrix(chr_residuals[cc]);
 			}
 		}
 	}
@@ -1499,6 +1500,7 @@ public:
 
 				prep_lm(H, chr_residuals[cc], HtH, HtH_inv, Hty, rss_alt, HtVH);
 				rss_null = chr_residuals[cc].squaredNorm();
+				rss_null = mpiUtils::mpiReduce_inplace(&rss_null);
 
 				// Single-var tests
 				double beta_tstat, gam_tstat, rgam_stat, beta_pval, gam_pval, rgam_pval;
@@ -1534,14 +1536,14 @@ public:
 
 
 	void LOCO_pvals_v2(GenotypeMatrix &Xtest,
-					   const VariationalParametersLite &vp,
-					   const long &LOSO_window,
-					   Eigen::Ref<Eigen::VectorXd> neglogp_beta,
-					   Eigen::Ref<Eigen::VectorXd> neglogp_gam_robust,
-					   Eigen::Ref<Eigen::VectorXd> neglogp_joint,
-					   Eigen::Ref<Eigen::VectorXd> test_stat_beta,
-					   Eigen::Ref<Eigen::VectorXd> test_stat_gam_robust,
-					   Eigen::Ref<Eigen::VectorXd> test_stat_joint) const {
+	                   const VariationalParametersLite &vp,
+	                   const long &LOSO_window,
+	                   Eigen::Ref<Eigen::VectorXd> neglogp_beta,
+	                   Eigen::Ref<Eigen::VectorXd> neglogp_gam_robust,
+	                   Eigen::Ref<Eigen::VectorXd> neglogp_joint,
+	                   Eigen::Ref<Eigen::VectorXd> test_stat_beta,
+	                   Eigen::Ref<Eigen::VectorXd> test_stat_gam_robust,
+	                   Eigen::Ref<Eigen::VectorXd> test_stat_joint) const {
 		assert(neglogp_beta.rows()  == n_var);
 		assert(neglogp_joint.rows() == n_var);
 		assert(test_stat_beta.rows()  == n_var);
@@ -1597,6 +1599,7 @@ public:
 
 				prep_lm(H, y_resid, HtH, HtH_inv, Hty, rss_alt, HtVH);
 				rss_null = y_resid.squaredNorm();
+				rss_null = mpiUtils::mpiReduce_inplace(&rss_null);
 
 				// Single-var tests
 				double beta_tstat, gam_tstat, rgam_stat, beta_pval, gam_pval, rgam_pval;
@@ -1761,25 +1764,25 @@ public:
 		Eigen::VectorXd test_stat_beta(n_var), test_stat_gam(n_var), test_stat_rgam(n_var), test_stat_joint(n_var);
 		if (p.LOSO_window == -1) {
 			LOCO_pvals(vp_init, resid_loco, neglogp_beta, neglogp_gam, neglogp_rgam, neglogp_joint,
-					   test_stat_beta, test_stat_gam, test_stat_rgam, test_stat_joint);
+			           test_stat_beta, test_stat_gam, test_stat_rgam, test_stat_joint);
 		} else {
 			LOCO_pvals_v2(X, vp_init, p.LOSO_window, neglogp_beta,
-						  neglogp_rgam,
-						  neglogp_joint,
-						  test_stat_beta,
-						  test_stat_rgam,
-						  test_stat_joint);
+			              neglogp_rgam,
+			              neglogp_joint,
+			              test_stat_beta,
+			              test_stat_rgam,
+			              test_stat_joint);
 			neglogp_gam.resize(0);
 			test_stat_gam.resize(0);
 		}
 
-		if(world_rank == 0){
+		if(world_rank == 0) {
 			// MAP snp-stats to file
 			fileUtils::write_snp_stats_to_file(outf_map, n_effects, n_var, vp_init, X, p, true, neglogp_beta,
-											   neglogp_gam,
-											   neglogp_rgam, neglogp_joint, test_stat_beta, test_stat_gam,
-											   test_stat_rgam,
-											   test_stat_joint);
+			                                   neglogp_gam,
+			                                   neglogp_rgam, neglogp_joint, test_stat_beta, test_stat_gam,
+			                                   test_stat_rgam,
+			                                   test_stat_joint);
 			if (n_covar > 0) {
 				write_covars_to_file(outf_map_covar, vp_init);
 			}

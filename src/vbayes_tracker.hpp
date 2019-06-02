@@ -34,10 +34,10 @@ namespace boost_io = boost::iostreams;
 
 class VbTracker {
 public:
-	int count;                                                            // Number of iterations to convergence at each step
-	VariationalParametersLite vp;                                             // best mu at each ii
-	double logw;                                                             // best logw at each ii
-	Hyps hyps;                                                              // hyps values at end of VB inference.
+	int count;                                                                // Number of iterations to convergence at each step
+	VariationalParametersLite vp;                                                 // best mu at each ii
+	double logw;                                                                 // best logw at each ii
+	Hyps hyps;                                                                  // hyps values at end of VB inference.
 
 	parameters p;
 
@@ -164,7 +164,7 @@ public:
 			outf_iter << i_hyps.lambda(ee) << " ";
 		}
 
-		outf_iter << std::setprecision(6) << std::fixed;
+		outf_iter << std::setprecision(6) << std::scientific;
 		for (int ee = 0; ee < n_effects; ee++) {
 			outf_iter << i_hyps.s_x(ee) << " ";
 		}
@@ -174,6 +174,7 @@ public:
 		outf_iter << beta_diff << " ";
 		if (n_env > 0) outf_iter << gam_diff << " ";
 		if (n_env > 1) outf_iter << w_diff << " ";
+		outf_iter << std::setprecision(6) << std::fixed;
 		outf_iter << lapsecs.count() << std::endl;
 
 		if(n_effects > 1) {
@@ -225,67 +226,45 @@ public:
 		fileUtils::dump_yhat_to_file(outf_inits, n_samples, n_covar, n_var,
 		                             n_env,Y,vp_lite,Ealpha, sample_is_invalid);
 
+		int world_rank;
+		MPI_Comm_rank(MPI_COMM_WORLD, &world_rank);
+		if(world_rank == 0) {
+			// Snp-stats
+			fstream_init(outf_inits, dir, "_dump_it" + count + "_latent_snps", true);
+			vp.dump_snps_to_file(outf_inits, X, n_env);
+			boost_io::close(outf_inits);
 
-//		outf_inits << "Y";
-//		if (n_covar > 0) outf_inits << " Ealpha";
-//		outf_inits << " Xbeta";
-//		if (n_env > 0) outf_inits << " eta Xgamma";
-//		outf_inits << std::endl;
-//		for (long ii = 0; ii < n_samples; ii++) {
-//			if(sample_is_invalid[ii]){
-//				for (int jj = 0; jj < n_cols; jj++){
-//					outf_inits << "NA";
-//					if(jj < n_cols - 1) outf_inits << " ";
-//				}
-//				outf_inits << std::endl;
-//			} else {
-//				outf_inits << Y(ii);
-//				if (n_covar > 0) {
-//					outf_inits << " " << Ealpha(ii) << " " << vp.ym(ii) - Ealpha(ii);
-//				} else {
-//					outf_inits << " " << vp.ym(ii);
-//				}
-//				if (n_env > 0) outf_inits << " " << vp.eta(ii) << " " << vp.yx(ii);
-//				outf_inits << std::endl;
-//			}
-//		}
-//		boost_io::close(outf_inits);
-
-		// Snp-stats
-		fstream_init(outf_inits, dir, "_dump_it" + count + "_latent_snps", true);
-		vp.dump_snps_to_file(outf_inits, X, n_env);
-		boost_io::close(outf_inits);
-
-		// Covars
-		if(n_covar > 0) {
-			fstream_init(outf_inits, dir, "_dump_it" + count + "_covars", true);
-			outf_inits << std::scientific << std::setprecision(7);
-			outf_inits << "covar mu s_sq" << std::endl;
-			for (int cc = 0; cc < n_covar; cc++) {
-				outf_inits << covar_names[cc] << " ";
-				outf_inits << vp.muc(cc) << " ";
-				outf_inits << vp.sc_sq(cc) << std::endl;
+			// Covars
+			if(n_covar > 0) {
+				fstream_init(outf_inits, dir, "_dump_it" + count + "_covars", true);
+				outf_inits << std::scientific << std::setprecision(7);
+				outf_inits << "covar mu s_sq" << std::endl;
+				for (int cc = 0; cc < n_covar; cc++) {
+					outf_inits << covar_names[cc] << " ";
+					outf_inits << vp.muc(cc) << " ";
+					outf_inits << vp.sc_sq(cc) << std::endl;
+				}
+				boost_io::close(outf_inits);
 			}
+
+			// Env-weights
+			if(n_env > 0) {
+				fstream_init(outf_inits, dir, "_dump_it" + count + "_env", true);
+				outf_inits << std::scientific << std::setprecision(7);
+				outf_inits << "env mu s_sq" << std::endl;
+				for (int ll = 0; ll < n_env; ll++) {
+					outf_inits << env_names[ll] << " ";
+					outf_inits << vp.muw(ll) << " ";
+					outf_inits << vp.sw_sq(ll) << std::endl;
+				}
+				boost_io::close(outf_inits);
+			}
+
+			// Hyps
+			fstream_init(outf_inits, dir, "_dump_it" + count + "_hyps", true);
+			outf_inits << hyps << std::endl;
 			boost_io::close(outf_inits);
 		}
-
-		// Env-weights
-		if(n_env > 0) {
-			fstream_init(outf_inits, dir, "_dump_it" + count + "_env", true);
-			outf_inits << std::scientific << std::setprecision(7);
-			outf_inits << "env mu s_sq" << std::endl;
-			for (int ll = 0; ll < n_env; ll++) {
-				outf_inits << env_names[ll] << " ";
-				outf_inits << vp.muw(ll) << " ";
-				outf_inits << vp.sw_sq(ll) << std::endl;
-			}
-			boost_io::close(outf_inits);
-		}
-
-		// Hyps
-		fstream_init(outf_inits, dir, "_dump_it" + count + "_hyps", true);
-		outf_inits << hyps << std::endl;
-		boost_io::close(outf_inits);
 	}
 
 	void fstream_init(boost_io::filtering_ostream& my_outf,
@@ -310,7 +289,7 @@ public:
 
 		int rank;
 		MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-		if(rank == 0){
+		if(rank == 0) {
 			my_outf.push(boost_io::file_sink(ofile));
 		} else {
 			my_outf.push(boost_io::file_sink(ofile, std::ios_base::app));

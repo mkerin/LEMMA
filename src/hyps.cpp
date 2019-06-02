@@ -183,15 +183,20 @@ void Hyps::read_from_dump(const std::string& filename){
 
 		if(s1 != "") {
 			variables.push_back(s1);
-			values.push_back(stod(s2));
+			try {
+				values.push_back(stod(s2));
+			} catch(...) {
+				std::cout << "Caught exception from Hyps::read_from_dump" << std::endl;
+				throw std::invalid_argument("stod failed");
+			}
 		}
 	}
 
 	std::vector< std::string > case_g = {"sigma", "lambda1", "sigma_beta0", "sigma_beta1"};
 	std::vector< std::string > case_gxe = {"sigma", "lambda1", "lambda2", "sigma_beta0", "sigma_gam0",
-										"sigma_beta1", "sigma_gam1"};
+		                                   "sigma_beta1", "sigma_gam1"};
 
-	if(variables == case_gxe){
+	if(variables == case_gxe) {
 		resize(2);
 
 		sigma = values[0];
@@ -204,7 +209,7 @@ void Hyps::read_from_dump(const std::string& filename){
 
 		slab_var = slab_relative_var * sigma;
 		spike_var = spike_relative_var * sigma;
-	} else if (variables == case_g){
+	} else if (variables == case_g) {
 		resize(1);
 
 		sigma = values[0];
@@ -213,7 +218,7 @@ void Hyps::read_from_dump(const std::string& filename){
 		spike_relative_var[0] = values[3];
 	} else {
 		std::cout << "Unrecognised hyps header:" << std::endl;
-		for (auto sss : variables){
+		for (auto sss : variables) {
 			std::cout << sss << std::endl;
 		}
 		throw std::runtime_error("Unrecognised hyps header");

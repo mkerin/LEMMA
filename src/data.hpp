@@ -31,6 +31,7 @@
 #include <stdexcept>
 #include <thread>
 #include <unordered_map>
+#include <unordered_set>
 
 #include <boost/math/distributions/chi_squared.hpp>
 #include <boost/math/distributions/fisher_f.hpp>
@@ -51,7 +52,6 @@ class Data
 public:
 	parameters p;
 
-
 	long n_pheno;
 	long n_covar;
 	long n_env;
@@ -60,14 +60,13 @@ public:
 	long Nglobal;
 	long n_var;
 	long n_var_parsed;
-	long int n_dxteex_computed;
-	long int n_snpstats_computed;
+	long n_dxteex_computed;
+	long n_snpstats_computed;
 
 	bool Y_reduced;
 	bool W_reduced;
 	bool E_reduced;
 
-	std::vector< std::string > external_dXtEEX_SNPID;
 	std::vector< std::string > rsid_list;
 
 	std::map<int, bool> missing_envs;
@@ -84,7 +83,6 @@ public:
 	EigenDataMatrix C;                                                                                         // covariate matrix
 	EigenDataMatrix E;                                                                                         // env matrix
 	Eigen::ArrayXXd dXtEEX_lowertri;
-	Eigen::ArrayXXd external_dXtEEX;
 
 // Init points
 	VariationalParametersLite vp_init;
@@ -242,10 +240,6 @@ public:
 		// Read in hyperparameter values
 		if(p.hyps_grid_file != "NULL") {
 			read_hyps();
-		}
-
-		if(n_env > 1 && p.dxteex_file != "NULL") {
-			read_external_dxteex();
 		}
 
 		if(p.snpstats_file != "NULL") {
@@ -595,18 +589,6 @@ public:
 		E_reduced = false;
 	}
 
-	void read_external_dxteex( ){
-		std::vector< std::string > col_names;
-		read_txt_file_w_context( p.dxteex_file, 6, external_dXtEEX,
-		                         external_dXtEEX_SNPID, col_names);
-
-		if(external_dXtEEX.cols() != n_env * n_env) {
-			std::cout << "Expecting columns in order: " << std::endl;
-			std::cout << "SNPID, chr, rsid, pos, allele0, allele1, env-snp covariances.." << std::endl;
-			throw std::runtime_error("Unexpected number of columns");
-		}
-	}
-
 	void read_external_snpstats( ){
 		std::vector< std::string > col_names;
 		read_txt_file_w_context( p.snpstats_file, 8, external_snpstats,
@@ -663,12 +645,10 @@ public:
 			std::cout << "ERROR: " << filename << " contains zero lines" << std::endl;
 			std::exit(EXIT_FAILURE);
 		}
-		std::stringstream ss;
 		std::string s;
 		int n_cols = 0;
 		col_names.clear();
-		ss.clear();
-		ss.str(line);
+		std::stringstream ss(line);
 		while (ss >> s) {
 			++n_cols;
 			col_names.push_back(s);
@@ -702,6 +682,69 @@ public:
 			i++;
 		}
 		std::cout << n_lines << " rows found in " << filename << std::endl;
+	}
+
+	void parse_dxteex_header(const int& col_offset,
+							  boost_io::filtering_istream& fg,
+								  std::vector<std::string>& col_names){
+
+		// Reading from file
+		std::string gz_str = ".gz";
+		if (p.dxteex_file.find(gz_str) != std::string::npos) {
+			fg.push(boost_io::gzip_decompressor());
+		}
+		fg.push(boost_io::file_source(p.dxteex_file));
+		if (!fg) {
+			std::cout << "ERROR: " << p.dxteex_file << " not opened." << std::endl;
+			std::exit(EXIT_FAILURE);
+		}
+
+		// Reading column names
+		std::string s, line;
+		if (!getline(fg, line)) {
+			std::cout << "ERROR: " << p.dxteex_file << " contains zero lines" << std::endl;
+			std::exit(EXIT_FAILURE);
+		}
+		int n_cols = 0;
+		col_names.clear();
+		std::stringstream ss(line);
+		while (ss >> s) {
+			++n_cols;
+			col_names.push_back(s);
+		}
+		assert(n_cols > col_offset);
+	}
+
+	bool read_dxteex_line(const int& col_offset,
+			boost_io::filtering_istream& fg,
+								  Eigen::ArrayXd& M,
+								  const long n_cols,
+								  std::string& snpid,
+								  long& ii){
+
+		std::string line;
+		bool file_ongoing = (bool) getline(fg, line);
+		if(file_ongoing) {
+			std::stringstream ss(line);
+			for (int k = 0; k < n_cols; k++) {
+				std::string sss;
+				ss >> sss;
+				if (k == 0) {
+					snpid = sss;
+				}
+				if (k >= col_offset) {
+					try {
+						M(k - col_offset) = stod(sss);
+					} catch (const std::invalid_argument &exc) {
+						std::cout << "Found value " << sss << " on line " << ii;
+						std::cout << " of file " << p.dxteex_file << std::endl;
+						throw std::runtime_error("Unexpected value");
+					}
+				}
+			}
+			ii++;
+		}
+		return file_ongoing;
 	}
 
 	void calc_snpstats(){
@@ -785,56 +828,78 @@ public:
 		std::cout << "Reordering/building dXtEEX array...";
 		MyTimer t_calcDXtEEX("dXtEEX array constructed in %ts \n");
 		t_calcDXtEEX.resume();
-		EigenDataArrayX cl_j;
-		scalarData dztz_lmj;
 		dXtEEX_lowertri.resize(n_var, n_env * (n_env + 1) / 2);
-		n_dxteex_computed = 0;
-		int dxteex_check = 0, se_cnt = 0;
-		double mean_ae = 0, max_ae = 0;
-		for (std::size_t jj = 0; jj < n_var; jj++) {
-			auto it = std::find(external_dXtEEX_SNPID.begin(), external_dXtEEX_SNPID.end(), G.SNPID[jj]);
-			if (it == external_dXtEEX_SNPID.end()) {
-				n_dxteex_computed++;
-				cl_j = G.col(jj);
-				for (int ll = 0; ll < n_env; ll++) {
-					for (int mm = 0; mm <= ll; mm++) {
-						dztz_lmj = (cl_j * E.array().col(ll) * E.array().col(mm) * cl_j).sum();
-						dztz_lmj = mpiUtils::mpiReduce_inplace(&dztz_lmj);
-						dXtEEX_lowertri(jj, dXtEEX_col_ind(ll, mm, n_env)) = dztz_lmj;
-					}
-				}
-			} else {
-				long row = it - external_dXtEEX_SNPID.begin();
-				for (int ll = 0; ll < n_env; ll++) {
-					for (int mm = 0; mm <= ll; mm++) {
-						dXtEEX_lowertri(jj, dXtEEX_col_ind(ll, mm, n_env)) = external_dXtEEX(row, ll*n_env + mm);
-					}
-				}
-				if(dxteex_check < 100) {
-					dxteex_check++;
-					cl_j = G.col(jj);
+
+		// Unfilled snp indexes;
+		std::unordered_set<long> unfilled_indexes;
+		for (long jj = 0; jj < n_var; jj++){
+			unfilled_indexes.insert(jj);
+		}
+
+		if(p.dxteex_file != "NULL"){
+			boost_io::filtering_istream fg;
+			std::vector< std::string > col_names;
+			parse_dxteex_header(6, fg, col_names);
+			long n_cols = col_names.size();
+
+			std::string snpid;
+			Eigen::ArrayXd dxteex_row(n_env * n_env);
+			int dxteex_check = 0, se_cnt = 0;
+			double mean_ae = 0, max_ae = 0;
+			long ii = 0;
+			while(read_dxteex_line(6, fg, dxteex_row, n_cols, snpid, ii)){
+				auto it = std::find(G.SNPID.begin(), G.SNPID.end(), snpid);
+				if(it == G.SNPID.end()){
+					std::cout << "WARNING: SNPID " << snpid << " not found";
+				} else {
+					long jj = it - G.SNPID.begin();
 					for (int ll = 0; ll < n_env; ll++) {
 						for (int mm = 0; mm <= ll; mm++) {
-							dztz_lmj = (cl_j * E.array().col(ll) * E.array().col(mm) * cl_j).sum();
-							dztz_lmj = mpiUtils::mpiReduce_inplace(&dztz_lmj);
-							double x1 = std::abs(dXtEEX_lowertri(jj, dXtEEX_col_ind(ll, mm, n_env)) - dztz_lmj);
-							double x2 = std::abs(dXtEEX_lowertri(jj, dXtEEX_col_ind(ll, mm, n_env)) - dztz_lmj);
-							max_ae = std::max(x1, max_ae);
-							max_ae = std::max(x2, max_ae);
-							mean_ae += x1;
-							mean_ae += x2;
-							se_cnt++;
+							dXtEEX_lowertri(jj, dXtEEX_col_ind(ll, mm, n_env)) = dxteex_row(ll * n_env + mm);
 						}
+					}
+					unfilled_indexes.erase(jj);
+
+					// Double check external dXtEEX
+					if(dxteex_check < 100) {
+						dxteex_check++;
+						EigenDataArrayX cl_j = G.col(jj);
+						for (int ll = 0; ll < n_env; ll++) {
+							for (int mm = 0; mm <= ll; mm++) {
+								double dztz_lmj = (cl_j * E.array().col(ll) * E.array().col(mm) * cl_j).sum();
+								dztz_lmj = mpiUtils::mpiReduce_inplace(&dztz_lmj);
+								double x1 = std::abs(dXtEEX_lowertri(jj, dXtEEX_col_ind(ll, mm, n_env)) - dztz_lmj);
+								max_ae = std::max(x1, max_ae);
+								mean_ae += x1;
+								se_cnt++;
+							}
+						}
+					} else if (dxteex_check == 100){
+						dxteex_check++;
+						mean_ae /= (double) se_cnt;
+						std::cout << "Checking correlations from first 100 SNPs" << std::endl;
+						std::cout << " - max absolute error = " << max_ae << std::endl;
+						std::cout << " - mean absolute error = " << mean_ae << std::endl;
 					}
 				}
 			}
+			std::cout << ii << " lines read from " << p.dxteex_file << std::endl;
 		}
-		if(p.dxteex_file != "NULL" && n_dxteex_computed < n_var) {
-			mean_ae /= (double) se_cnt;
-			std::cout << "Checking correlations from first 100 SNPs" << std::endl;
-			std::cout << " - max absolute error = " << max_ae << std::endl;
-			std::cout << " - mean absolute error = " << mean_ae << std::endl;
+
+		// Compute correlations not available in file
+		n_dxteex_computed = 0;
+		for (auto jj : unfilled_indexes) {
+			n_dxteex_computed++;
+			EigenDataArrayX cl_j = G.col(jj);
+			for (int ll = 0; ll < n_env; ll++) {
+				for (int mm = 0; mm <= ll; mm++) {
+					double dztz_lmj = (cl_j * E.array().col(ll) * E.array().col(mm) * cl_j).sum();
+					dztz_lmj = mpiUtils::mpiReduce_inplace(&dztz_lmj);
+					dXtEEX_lowertri(jj, dXtEEX_col_ind(ll, mm, n_env)) = dztz_lmj;
+				}
+			}
 		}
+
 		std::cout << " (" << n_dxteex_computed << " computed from raw data, " << n_var - n_dxteex_computed << " read from file)" << std::endl;
 	}
 

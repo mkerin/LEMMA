@@ -2,11 +2,6 @@
 #define EIGEN_USE_MKL_ALL
 #include "catch.hpp"
 
-#include <algorithm>
-#include <cmath>
-#include <limits>
-#include <iostream>
-#include <sys/stat.h>
 #include "../src/tools/eigen3.3/Dense"
 #include "../src/parse_arguments.hpp"
 #include "../src/vbayes_x2.hpp"
@@ -14,344 +9,11 @@
 #include "../src/hyps.hpp"
 #include "../src/genotype_matrix.hpp"
 
-
-TEST_CASE( "Algebra in Eigen3" ) {
-
-	Eigen::MatrixXd X(3, 3), X2;
-	Eigen::VectorXd v1(3), v2(3);
-	X << 1, 2, 3,
-	    4, 5, 6,
-	    7, 8, 9;
-	v1 << 1, 1, 1;
-	v2 << 1, 2, 3;
-	X2 = X.rowwise().reverse();
-
-	SECTION("dot product of vector with col vector"){
-		CHECK((v1.dot(X.col(0))) == 12.0);
-	}
-
-	SECTION("Eigen reverses columns as expected"){
-		Eigen::MatrixXd res(3, 3);
-		res << 3, 2, 1,
-		    6, 5, 4,
-		    9, 8, 7;
-		CHECK(X2 == res);
-	}
-
-	SECTION("coefficient-wise product between vectors"){
-		Eigen::VectorXd res(3);
-		res << 1, 2, 3;
-		CHECK((v1.array() * v2.array()).matrix() == res);
-		CHECK(v1.cwiseProduct(v2) == res);
-	}
-
-	SECTION("coefficient-wise subtraction between vectors"){
-		Eigen::VectorXd res(3);
-		res << 0, 1, 2;
-		CHECK((v2 - v1) == res);
-	}
-
-	SECTION("Check .sum() function"){
-		Eigen::VectorXd res(3);
-		res << 1, 2, 3;
-		CHECK(res.sum() == 6);
-	}
-
-	SECTION("Sum of NaN returns NaN"){
-		Eigen::VectorXd res(3);
-		res << 1, std::numeric_limits<double>::quiet_NaN(), 3;
-		CHECK(std::isnan(res.sum()));
-	}
-
-	SECTION("Ref of columns working correctly"){
-		Eigen::Ref<Eigen::VectorXd> y1 = X.col(0);
-		CHECK(y1(0) == 1);
-		CHECK(y1(1) == 4);
-		CHECK(y1(2) == 7);
-		X = X + X;
-		CHECK(y1(0) == 2);
-		CHECK(y1(1) == 8);
-		CHECK(y1(2) == 14);
-	}
-
-	SECTION("Conservative Resize"){
-		std::vector<int> keep;
-		keep.push_back(1);
-		for (std::size_t i = 0; i < keep.size(); i++) {
-			X.col(i) = X.col(keep[i]);
-		}
-		X.conservativeResize(X.rows(), keep.size());
-
-		CHECK(X.rows() == 3);
-		CHECK(X.cols() == 1);
-		CHECK(X(0, 0) == 2);
-	}
-
-	SECTION("selfAdjoit views"){
-		Eigen::MatrixXd m3(3, 3);
-		m3.triangularView<Eigen::StrictlyUpper>() = X.transpose() * X;
-		CHECK(m3(0, 1) == 78);
-	}
-
-	SECTION("colwise subtraction between vector and matrix"){
-		Eigen::MatrixXd res;
-		res = -1*(X.colwise() - v1);
-		CHECK(res(0, 0) == 0);
-		CHECK(res.rows() == 3);
-		CHECK(res.cols() == 3);
-	}
-}
-
-TEST_CASE("Data") {
-	parameters p;
-
-	p.env_file = "data/io_test/n50_p100_env.txt";
-	p.pheno_file = "data/io_test/pheno.txt";
-
-	SECTION("n50_p100.bgen (low mem) w covars") {
-		p.covar_file = "data/io_test/age.txt";
-		p.bgen_file = "data/io_test/n50_p100.bgen";
-		p.bgi_file = "data/io_test/n50_p100.bgen.bgi";
-		p.low_mem = true;
-		Data data(p);
-
-		data.read_non_genetic_data();
-		CHECK(data.n_env == 4);
-		CHECK(data.E(0, 0) == Approx(0.785198212));
-
-		data.standardise_non_genetic_data();
-		CHECK(data.p.use_vb_on_covars);
-		CHECK(data.E(0, 0) == Approx(0.9959851422));
-
-		data.read_full_bgen();
-		SECTION("bgen read in & standardised correctly") {
-			data.G.calc_scaled_values();
-			CHECK(data.G.low_mem);
-			CHECK(data.p.low_mem);
-			CHECK(!data.p.flip_high_maf_variants);
-			CHECK(data.G(0, 0) == Approx(-1.8575040711));
-			CHECK(data.G.M(0, 0) == 1);
-			int entry;
-			entry = data.G.M(0, 1); CHECK(entry == 128);
-			entry = data.G.M(0, 2); CHECK(entry == 128);
-			entry = data.G.M(1, 0); CHECK(entry == 251);
-			entry = data.G.M(1, 1); CHECK(entry == 250);
-			entry = data.G.M(2, 0); CHECK(entry == 253);
-			entry = data.G.M(2, 1); CHECK(entry == 213);
-
-			CHECK(data.G.compressed_dosage_means(0) == Approx(1.27453125));
-			CHECK(data.G.compressed_dosage_inv_sds(0) == Approx(1.4709262627));
-			CHECK(data.G.compressed_dosage_sds(0) == Approx(0.679843732));
-			CHECK(data.G(0, 1) == Approx(-0.7404793547));
-			CHECK(data.G(0, 2) == Approx(-0.5845122102));
-			CHECK(data.G(0, 3) == Approx(-0.6633007506));
-			CHECK(data.n_var == 67);
-		}
-
-		SECTION("dXtEEX computed correctly") {
-			data.calc_dxteex();
-			CHECK(data.dXtEEX_lowertri(0, 0) == Approx(42.2994405499));
-			CHECK(data.dXtEEX_lowertri(1, 0) == Approx(43.2979303929));
-			CHECK(data.dXtEEX_lowertri(2, 0) == Approx(37.6440444004));
-			CHECK(data.dXtEEX_lowertri(3, 0) == Approx(40.9258647207));
-
-			CHECK(data.dXtEEX_lowertri(0, dXtEEX_col_ind(1, 0, data.n_env)) == Approx(-4.0453940676));
-			CHECK(data.dXtEEX_lowertri(1, dXtEEX_col_ind(1, 0, data.n_env)) == Approx(-15.6140263169));
-			CHECK(data.dXtEEX_lowertri(2, dXtEEX_col_ind(1, 0, data.n_env)) == Approx(-13.2508795732));
-			CHECK(data.dXtEEX_lowertri(3, dXtEEX_col_ind(1, 0, data.n_env)) == Approx(-9.8081456731));
-		}
-	}
-
-	SECTION("n50_p100.bgen (low mem), covars, sample subset") {
-		p.covar_file = "data/io_test/age.txt";
-		p.bgen_file = "data/io_test/n50_p100.bgen";
-		p.bgi_file = "data/io_test/n50_p100.bgen.bgi";
-		p.incl_sids_file = "data/io_test/sample_ids_head28.txt";
-		p.low_mem = true;
-		Data data(p);
-
-		data.read_non_genetic_data();
-		CHECK(data.n_env == 4);
-		CHECK(data.E(0, 0) == Approx(0.785198212));
-
-		data.standardise_non_genetic_data();
-		CHECK(data.p.use_vb_on_covars);
-		CHECK(data.E(0, 0) == Approx(0.8123860763));
-
-		data.read_full_bgen();
-		SECTION("Ex1. bgen read in & standardised correctly") {
-			data.G.calc_scaled_values();
-			CHECK(data.G.low_mem);
-			CHECK(data.p.low_mem);
-			CHECK(!data.p.flip_high_maf_variants);
-			CHECK(data.G.compressed_dosage_means(0) == Approx(1.2979910714));
-			CHECK(data.G.compressed_dosage_means(50) == Approx(0.3610491071));
-			CHECK(data.n_var == 54);
-		}
-
-		SECTION("dXtEEX computed correctly") {
-			data.calc_dxteex();
-			CHECK(data.dXtEEX_lowertri(0, 0) == Approx(23.2334219303));
-			CHECK(data.dXtEEX_lowertri(1, 0) == Approx(27.9920667408));
-			CHECK(data.dXtEEX_lowertri(2, 0) == Approx(24.7041225993));
-			CHECK(data.dXtEEX_lowertri(3, 0) == Approx(24.2423580715));
-
-			CHECK(data.dXtEEX_lowertri(0, dXtEEX_col_ind(1, 0, data.n_env)) == Approx(-1.056112897));
-			CHECK(data.dXtEEX_lowertri(1, dXtEEX_col_ind(1, 0, data.n_env)) == Approx(-8.526431457));
-			CHECK(data.dXtEEX_lowertri(2, dXtEEX_col_ind(1, 0, data.n_env)) == Approx(-6.5950206611));
-			CHECK(data.dXtEEX_lowertri(3, dXtEEX_col_ind(1, 0, data.n_env)) == Approx(-3.6842212598));
-		}
-	}
-
-	SECTION("n50_p100.bgen (low mem) + non genetic data") {
-		p.bgen_file = "data/io_test/n50_p100.bgen";
-		p.bgi_file = "data/io_test/n50_p100.bgen.bgi";
-		p.low_mem = true;
-		Data data(p);
-
-		data.read_non_genetic_data();
-		SECTION("Ex1. Raw non genetic data read in accurately") {
-			CHECK(data.n_env == 4);
-			CHECK(data.n_pheno == 1);
-			CHECK(data.n_samples == 50);
-			CHECK(data.Y(0, 0) == Approx(-1.18865038973338));
-			CHECK(data.E(0, 0) == Approx(0.785198212));
-		}
-//
-		data.standardise_non_genetic_data();
-		SECTION("Check non genetic data standardised + covars regressed") {
-			CHECK(data.p.scale_pheno);
-			CHECK(data.p.use_vb_on_covars);
-			CHECK(data.p.covar_file == "NULL");
-//			CHECK(data.Y(0,0) == Approx(-3.6676363273605137)); Centered
-			CHECK(data.Y(0,0) == Approx(-1.5800573524786081));
-			CHECK(data.Y2(0, 0) == Approx(-1.5567970303));
-			CHECK(data.E(0, 0) == Approx(0.8957059881));
-		}
-
-		data.read_full_bgen();
-		SECTION("Ex1. bgen read in & standardised correctly") {
-			CHECK(data.G.low_mem);
-			CHECK(data.p.low_mem);
-			CHECK(!data.p.flip_high_maf_variants);
-			CHECK(data.G(0, 0) == Approx(-1.8575040711));
-			CHECK(data.G(0, 1) == Approx(-0.7404793547));
-			CHECK(data.G(0, 2) == Approx(-0.5845122102));
-			CHECK(data.G(0, 3) == Approx(-0.6633007506));
-			CHECK(data.n_var == 67);
-		}
-
-		SECTION("dXtEEX computed correctly") {
-			data.calc_dxteex();
-			CHECK(data.dXtEEX_lowertri(0, 0) == Approx(38.9610805993));
-			CHECK(data.dXtEEX_lowertri(1, 0) == Approx(38.2995451744));
-			CHECK(data.dXtEEX_lowertri(2, 0) == Approx(33.7077899144));
-			CHECK(data.dXtEEX_lowertri(3, 0) == Approx(35.7391671158));
-
-			CHECK(data.dXtEEX_lowertri(0, dXtEEX_col_ind(1, 0, data.n_env)) == Approx(-2.6239467101));
-			CHECK(data.dXtEEX_lowertri(1, dXtEEX_col_ind(1, 0, data.n_env)) == Approx(-13.0001255314));
-			CHECK(data.dXtEEX_lowertri(2, dXtEEX_col_ind(1, 0, data.n_env)) == Approx(-11.6635557299));
-			CHECK(data.dXtEEX_lowertri(3, dXtEEX_col_ind(1, 0, data.n_env)) == Approx(-7.2154836264));
-		}
-
-		SECTION("Ex1. Confirm calc_dxteex() reorders properly") {
-			data.p.dxteex_file = "data/io_test/n50_p100_dxteex_low_mem.txt";
-			data.read_external_dxteex();
-			data.calc_dxteex();
-			CHECK(data.dXtEEX_lowertri(0, 0) == Approx(38.9610805993));
-			CHECK(data.dXtEEX_lowertri(1, 0) == Approx(38.2995451744));
-			CHECK(data.dXtEEX_lowertri(2, 0) == Approx(33.7077899144));
-			CHECK(data.dXtEEX_lowertri(3, 0) == Approx(35.7391671158));
-
-			CHECK(data.dXtEEX_lowertri(0, dXtEEX_col_ind(1, 0, data.n_env)) == Approx(-2.6239467101));
-			CHECK(data.dXtEEX_lowertri(1, dXtEEX_col_ind(1, 0, data.n_env)) == Approx(-13.0001255314));
-			CHECK(data.dXtEEX_lowertri(2, dXtEEX_col_ind(1, 0, data.n_env)) == Approx(-11.6635557299));
-			CHECK(data.dXtEEX_lowertri(3, dXtEEX_col_ind(1, 0, data.n_env)) == Approx(-7.2154836264));
-			CHECK(data.n_dxteex_computed == 1);
-		}
-	}
-
-	SECTION("n50_p100_chr2.bgen") {
-		p.bgen_file = "data/io_test/n50_p100_chr2.bgen";
-		p.bgi_file = "data/io_test/n50_p100_chr2.bgen.bgi";
-		Data data(p);
-
-		data.read_non_genetic_data();
-		data.standardise_non_genetic_data();
-		data.read_full_bgen();
-		SECTION("Ex1. bgen read in & standardised correctly") {
-			CHECK(data.G.low_mem);
-			CHECK(data.p.low_mem);
-			CHECK(!data.p.flip_high_maf_variants);
-			CHECK(data.G(0, 0) == Approx(0.7105269065));
-			CHECK(data.G(0, 1) == Approx(0.6480740698));
-			CHECK(data.G(0, 2) == Approx(0.7105195023));
-			CHECK(data.G(0, 3) == Approx(-0.586791551));
-			CHECK(data.G(0, 60) == Approx(-1.4317770638));
-			CHECK(data.G(0, 61) == Approx(1.4862052498));
-			CHECK(data.G(0, 62) == Approx(-0.3299831646));
-			CHECK(data.G(0, 63) == Approx(-1.0968694989));
-			CHECK(data.G.compressed_dosage_means(60) == Approx(1.00203125));
-			CHECK(data.G.compressed_dosage_means(61) == Approx(0.9821875));
-			CHECK(data.G.compressed_dosage_means(62) == Approx(0.10390625));
-			CHECK(data.G.compressed_dosage_means(63) == Approx(0.68328125));
-			CHECK(data.n_var == 75);
-		}
-	}
-
-	SECTION("n50_p100_chr2.bgen w/ 2 chunks") {
-		p.bgen_file = "data/io_test/n50_p100_chr2.bgen";
-		p.bgi_file = "data/io_test/n50_p100_chr2.bgen.bgi";
-		p.chunk_size = 72;
-		p.n_bgen_thread = 2;
-		Data data(p);
-
-		data.read_non_genetic_data();
-		data.standardise_non_genetic_data();
-		data.read_full_bgen();
-		SECTION("Ex1. bgen read in & standardised correctly") {
-			CHECK(data.G.low_mem);
-			CHECK(data.p.low_mem);
-			CHECK(!data.p.flip_high_maf_variants);
-			CHECK(data.G(0, 0) == Approx(0.7105269065));
-			CHECK(data.G(0, 1) == Approx(0.6480740698));
-			CHECK(data.G(0, 2) == Approx(0.7105195023));
-			CHECK(data.G(0, 3) == Approx(-0.586791551));
-			CHECK(data.G(0, 60) == Approx(-1.4317770638));
-			CHECK(data.G(0, 61) == Approx(1.4862052498));
-			CHECK(data.G(0, 62) == Approx(-0.3299831646));
-			CHECK(data.G(0, 63) == Approx(-1.0968694989));
-			CHECK(data.G.compressed_dosage_means(60) == Approx(1.00203125));
-			CHECK(data.G.compressed_dosage_means(61) == Approx(0.9821875));
-			CHECK(data.G.compressed_dosage_means(62) == Approx(0.10390625));
-			CHECK(data.G.compressed_dosage_means(63) == Approx(0.68328125));
-			CHECK(data.n_var == 75);
-		}
-	}
-
-	SECTION("Check mult_vector_by_chr"){
-		p.bgen_file = "data/io_test/n50_p100_chr2.bgen";
-		p.bgi_file = "data/io_test/n50_p100_chr2.bgen.bgi";
-		Data data(p);
-
-		data.read_non_genetic_data();
-		data.read_full_bgen();
-
-		Eigen::VectorXd vv = Eigen::VectorXd::Ones(data.G.pp);
-		Eigen::VectorXd v1 = data.G.mult_vector_by_chr(1, vv);
-		Eigen::VectorXd v2 = data.G.mult_vector_by_chr(22, vv);
-
-		CHECK(v1(0) == Approx(-0.8981400368));
-		CHECK(v1(1) == Approx(-4.9936547948));
-		CHECK(v1(2) == Approx(-1.7085924856));
-		CHECK(v1(3) == Approx(0.8894016653));
-
-		CHECK(v2(0) == Approx(-10.8022318897));
-		CHECK(v2(1) == Approx(11.658910645));
-		CHECK(v2(2) == Approx(-16.742754449));
-		CHECK(v2(3) == Approx(0.9656298668));
-	}
-}
+#include <algorithm>
+#include <cmath>
+#include <limits>
+#include <iostream>
+#include <sys/stat.h>
 
 TEST_CASE( "Example 4: multi-env + mog + covars + emp_bayes" ){
 	parameters p;
@@ -378,12 +40,6 @@ TEST_CASE( "Example 4: multi-env + mog + covars + emp_bayes" ){
 			CHECK(data.p.scale_pheno);
 			CHECK(data.p.use_vb_on_covars);
 			CHECK(data.p.covar_file == "NULL");
-//			CHECK(data.Y(0,0) == Approx(-3.6676363273605137)); Centered
-			CHECK(data.Y(0,0) == Approx(-1.5800573524786081));
-			CHECK(data.Y2(0,0) == Approx(-1.5567970303));
-//			CHECK(data.C(0,0) == Approx(0.8957059881));
-			CHECK(data.E(0,0) == Approx(0.8957059881));
-			CHECK(data.E.row(0).array().sum() == Approx(2.9708148667));
 		}
 		data.read_full_bgen();
 
@@ -392,16 +48,13 @@ TEST_CASE( "Example 4: multi-env + mog + covars + emp_bayes" ){
 		data.set_vb_init();
 		VBayesX2 VB(data);
 		SECTION("Ex4. Vbayes_X2 initialised correctly"){
-			CHECK(VB.n_samples == 50);
+			CHECK(VB.Nglobal == 50);
 			CHECK(VB.Nglobal == 50.0);
 			CHECK(VB.n_env == 4);
 			CHECK(VB.n_var == 67);
 			CHECK(VB.n_effects == 2);
 			CHECK(VB.vp_init.muw(0) == 0.25);
 			CHECK(VB.p.init_weights_with_snpwise_scan == false);
-			CHECK(VB.dXtEEX_lowertri(0, 0) == Approx(38.9610805993));
-			CHECK(VB.dXtEEX_lowertri(1, 0) == Approx(38.2995451744));
-
 			CHECK(VB.dXtEEX_lowertri(0, dXtEEX_col_ind(1, 0, data.n_env)) == Approx(-2.6239467101));
 			CHECK(VB.dXtEEX_lowertri(1, dXtEEX_col_ind(1, 0, data.n_env)) == Approx(-13.0001255314));
 		}
@@ -515,8 +168,8 @@ TEST_CASE( "Example 4: multi-env + mog + covars + emp_bayes" ){
 
 			// variances
 			CHECK(vp.EdZtZ.sum() == Approx(6231.24321372));
-			CHECK(vp.ym.squaredNorm() == Approx(14.6462021668));
-			CHECK(vp.yx.squaredNorm() == Approx(0.0004903837));
+			// CHECK(vp.ym.squaredNorm() == Approx(14.6462021668));
+			// CHECK(vp.yx.squaredNorm() == Approx(0.0004903837));
 		}
 
 		VB.run_inference(VB.hyps_inits, false, 2, trackers);
@@ -556,7 +209,7 @@ TEST_CASE( "Example 4: multi-env + mog + covars + emp_bayes + sample subset" ){
 		data.set_vb_init();
 		VBayesX2 VB(data);
 		SECTION("Ex4. Vbayes_X2 initialised correctly"){
-			CHECK(VB.n_samples == 28);
+			CHECK(VB.Nglobal == 28);
 			CHECK(VB.n_var == 54);
 		}
 
@@ -599,7 +252,7 @@ TEST_CASE( "Example 4: multi-env + mog + covars + emp_bayes + sample subset" ){
 //		data.set_vb_init();
 //		VBayesX2 VB(data);
 //		SECTION("Ex4. Vbayes_X2 initialised correctly") {
-//			CHECK(VB.n_samples == 50);
+//			CHECK(VB.Nglobal == 50);
 //			CHECK(VB.N == 50.0);
 //			CHECK(VB.n_env == 4);
 //			CHECK(VB.n_effects == 2);
@@ -640,7 +293,7 @@ TEST_CASE( "Example 4: multi-env + mog + covars + emp_bayes + sample subset" ){
 //		data.set_vb_init();
 //		VBayesX2 VB(data);
 //		SECTION("Ex4. Vbayes_X2 initialised correctly") {
-//			CHECK(VB.n_samples == 50);
+//			CHECK(VB.Nglobal == 50);
 //			CHECK(VB.N == 50.0);
 //			CHECK(VB.n_env == 4);
 //			CHECK(VB.n_effects == 2);

@@ -1,20 +1,6 @@
 //
 // Created by kerin on 2019-03-02.
 //
-
-// tests-main.cpp
-//#define EIGEN_USE_MKL_ALL
-//
-//#include "../src/hyps.hpp"
-//#include "../src/variational_parameters.hpp"
-////#include "../src/vbayes_x2.hpp"
-////#include "../src/data.hpp"
-//
-//#include "catch.hpp"
-//#include "../src/tools/Eigen/Dense"
-//
-//#include <vector>
-
 #define EIGEN_USE_MKL_ALL
 #include "catch.hpp"
 

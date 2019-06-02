@@ -95,30 +95,15 @@ include_directories(${TARGET} PRIVATE ${BGEN_INCL_DIRS})
 set_target_properties(${TARGET} PROPERTIES LINK_FLAGS "${LIB-DIRS}")
 target_link_libraries(${TARGET} ${BGEN_LIB} ${DB_LIB} ${SQLITE_LIB} ${ZSTD_LIB} ${LIBS} ${LINKER_OPTS})
 
-add_executable(${TARGET}_Xf src/bgen_prog.cpp ${SOURCES})
-target_compile_options(${TARGET}_Xf PRIVATE -DDATA_AS_FLOAT -msse2 ${LOC_COMPILE_OPTS})
-target_include_directories(${TARGET}_Xf PRIVATE ${BGEN_INCL_DIRS})
-set_target_properties(${TARGET}_Xf PROPERTIES LINK_FLAGS "${LIB-DIRS}")
-target_link_libraries(${TARGET}_Xf ${BGEN_LIB} ${DB_LIB} ${SQLITE_LIB} ${ZSTD_LIB} ${LIBS} ${LINKER_OPTS})
-
-
 ## Catch Unit Tests
-set(TSOURCES unit/test_pve.cpp unit/test_main.cpp unit/test_hyps.cpp unit/test_resume_inference.cpp)
+set(TSOURCES unit/test_pve.cpp unit/test_main.cpp unit/test_hyps.cpp unit/test_resume_inference.cpp unit/test_eigen.cpp unit/test_data.cpp)
 add_executable(tests unit/main.cpp ${TSOURCES} ${SOURCES})
 target_link_libraries(tests ${BGEN_LIB} ${DB_LIB} ${SQLITE_LIB} ${ZSTD_LIB} ${LIBS} ${LINKER_OPTS})
 target_compile_options(tests PRIVATE -msse2 ${LOC_COMPILE_OPTS})
 target_include_directories(tests PRIVATE ${BGEN_INCL_DIRS})
 set_target_properties(tests PROPERTIES LINK_FLAGS "${LIB-DIRS}")
 
-add_executable(tests_Xf unit/main.cpp unit/test_pve.cpp)
-target_link_libraries(tests_Xf ${BGEN_LIB} ${DB_LIB} ${SQLITE_LIB} ${ZSTD_LIB} ${LIBS} ${LINKER_OPTS})
-target_compile_options(tests_Xf PRIVATE -DDATA_AS_FLOAT -msse2 ${LOC_COMPILE_OPTS})
-target_include_directories(tests_Xf PRIVATE ${BGEN_INCL_DIRS})
-set_target_properties(tests_Xf PROPERTIES LINK_FLAGS "${LIB-DIRS}")
-#
-### Profiling by hand
-#add_executable(profile_read_cols examples/profile_read_cols.cpp examples/genotype_matrix_multithread.cpp)
-#target_link_libraries(profile_read_cols boost_iostreams boost_thread ${LIBS} ${LINKER_OPTS})
-#target_compile_options(profile_read_cols PRIVATE -Wno-deprecated -msse2 ${LOC_COMPILE_OPTS})
-#target_include_directories(profile_read_cols PRIVATE ${BGEN}/3rd_party/boost_1_55_0)
-#set_target_properties(profile_read_cols PROPERTIES LINK_FLAGS "${LIB-DIRS}")
+include(CTest)
+include(include/ParseAndAddCatchTests.cmake)
+set(OptionalCatchTestLauncher ${MPIEXEC} ${MPIEXEC_NUMPROC_FLAG} 2)
+ParseAndAddCatchTests(tests)
