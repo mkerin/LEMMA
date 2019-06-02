@@ -164,7 +164,7 @@ public:
 			outf_iter << i_hyps.lambda(ee) << " ";
 		}
 
-		outf_iter << std::setprecision(6) << std::fixed;
+		outf_iter << std::setprecision(6) << std::scientific;
 		for (int ee = 0; ee < n_effects; ee++) {
 			outf_iter << i_hyps.s_x(ee) << " ";
 		}
@@ -174,6 +174,7 @@ public:
 		outf_iter << beta_diff << " ";
 		if (n_env > 0) outf_iter << gam_diff << " ";
 		if (n_env > 1) outf_iter << w_diff << " ";
+		outf_iter << std::setprecision(6) << std::fixed;
 		outf_iter << lapsecs.count() << std::endl;
 
 		if(n_effects > 1) {

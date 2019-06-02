@@ -93,7 +93,7 @@ target_link_libraries(${TARGET}_Xf ${BGEN_LIB} ${DB_LIB} ${SQLITE_LIB} ${ZSTD_LI
 
 
 ## Catch Unit Tests
-set(TSOURCES unit/test_pve.cpp unit/test_main.cpp unit/test_hyps.cpp unit/test_resume_inference.cpp)
+set(TSOURCES unit/test_pve.cpp unit/test_main.cpp unit/test_hyps.cpp unit/test_resume_inference.cpp unit/test_eigen.cpp unit/test_data.cpp)
 add_executable(tests unit/main.cpp ${TSOURCES} ${SOURCES})
 target_link_libraries(tests ${BGEN_LIB} ${DB_LIB} ${SQLITE_LIB} ${ZSTD_LIB} ${LIBS} ${LINKER_OPTS})
 target_compile_options(tests PRIVATE -msse2 ${LOC_COMPILE_OPTS})
