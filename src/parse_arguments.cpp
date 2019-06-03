@@ -94,6 +94,10 @@ void print_compilation_details(){
 #else
 	std::cout << "- compiled with native Eigen backend" << std::endl;
 #endif
+
+#ifdef MPI_VERSION
+	std::cout << "- compiled with openMPI";
+#endif
 }
 
 void parse_arguments(parameters &p, int argc, char **argv) {
