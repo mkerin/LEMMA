@@ -14,6 +14,7 @@
 #include <set>
 #include <cstring>
 #include <boost/filesystem.hpp>
+#include <mpi.h>
 #include <regex>
 #include <stdexcept>
 
@@ -93,6 +94,10 @@ void print_compilation_details(){
 	std::cout << "- compiled with Intel MKL backend" << std::endl;
 #else
 	std::cout << "- compiled with native Eigen backend" << std::endl;
+#endif
+
+#ifdef MPI_VERSION
+	std::cout << "- compiled with openMPI" << std::endl;
 #endif
 }
 
@@ -177,7 +182,7 @@ void parse_arguments(parameters &p, int argc, char **argv) {
 			print_compilation_details();
 			std::cout << std::endl << "Commandline arguments:" << std::endl << std::endl;
 			std::cout << argv[0] << " \\" << std::endl;
-			for (auto keyvalue : args){
+			for (auto keyvalue : args) {
 				std::cout << "\t--" << keyvalue.key() << "=" << keyvalue.value() <<" \\" << std::endl;
 			}
 			std::cout << std::endl;
@@ -188,10 +193,13 @@ void parse_arguments(parameters &p, int argc, char **argv) {
 //			 std::cout << args << std::endl;
 		}
 
-		if(opts.count("")) {
-			p.mode_mog_prior_beta = true;
+		if(opts.count("loso_window_size")) {
+			p.drop_loco = true;
 		}
 
+		if (opts.count("high_mem")) {
+			p.low_mem = false;
+		}
 		if (opts.count("high_mem")) {
 			p.low_mem = false;
 		}
