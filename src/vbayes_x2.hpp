@@ -164,8 +164,8 @@ public:
 		p.main_chunk_size = (unsigned int) std::min((long int) p.main_chunk_size, (long int) n_var);
 		p.gxe_chunk_size = (unsigned int) std::min((long int) p.gxe_chunk_size, (long int) n_var);
 
-		// Read environmental variables
-		if(n_env > 0) {
+		// Cache XtE
+		if(p.mode_vb && n_env > 0) {
 			std::cout << "Computing XtE" << std::endl;
 			XtE = X.transpose_multiply(E);
 			std::cout << "XtE computed" << std::endl;
@@ -290,14 +290,15 @@ public:
 			random_params_init = true;
 		}
 
+		// Initialise summary vars for vp_init
 		if(n_env > 0) {
-			// cast used if DATA_AS_FLOAT
 			vp_init.eta     = E.matrix() * vp_init.muw.matrix().cast<scalarData>();
 			vp_init.eta_sq  = vp_init.eta.array().square().matrix();
 			vp_init.eta_sq += E.square().matrix() * vp_init.sw_sq.matrix().template cast<scalarData>();
 		}
 		calcPredEffects(vp_init);
 
+		// Cache Cty
 		if(n_covar > 0) {
 			Cty = C.transpose() * Y;
 		}
@@ -815,15 +816,15 @@ public:
 			Eigen::MatrixXd D_corr(ch_len, ch_len);
 			if(p.gxe_chunk_size > 1) {
 				auto it = ZtZ_block_cache.find(memoize_id);
-				if (n_env == 1 && it != ZtZ_block_cache.end()){
+				if (n_env == 1 && it != ZtZ_block_cache.end()) {
 					D_corr = ZtZ_block_cache[memoize_id];
 				} else if(p.n_thread == 1) {
 					D_corr.triangularView<Eigen::StrictlyUpper>() = (D.transpose() * all_vp[nn].eta_sq.asDiagonal() * D).template cast<double>();
 				} else {
 					D_corr = (D.transpose() * all_vp[nn].eta_sq.asDiagonal() * D).template cast<double>();
 				}
-				
-				if(n_env == 1 && it == ZtZ_block_cache.end()){
+
+				if(n_env == 1 && it == ZtZ_block_cache.end()) {
 					ZtZ_block_cache[memoize_id] = D_corr;
 				}
 			}
@@ -1765,10 +1766,9 @@ public:
 		// Compute LOCO p-values
 		Eigen::VectorXd neglogp_beta(n_var), neglogp_gam(n_var), neglogp_rgam(n_var), neglogp_joint(n_var);
 		Eigen::VectorXd test_stat_beta(n_var), test_stat_gam(n_var), test_stat_rgam(n_var), test_stat_joint(n_var);
-		if(p.LOSO_window == -1) {
-			LOCO_pvals(vp_init, resid_loco, neglogp_beta, neglogp_gam, neglogp_rgam, neglogp_joint,
-			           test_stat_beta, test_stat_gam, test_stat_rgam, test_stat_joint);
-		} else {
+		if(p.drop_loco) {
+			std::cout << "Computing single-snp hypothesis tests while excluding SNPs within ";
+			std::cout << p.LOSO_window << " of the test SNP" << std::endl;
 			LOCO_pvals_v2(X, vp_init, p.LOSO_window, neglogp_beta,
 			              neglogp_rgam,
 			              neglogp_joint,
@@ -1777,6 +1777,10 @@ public:
 			              test_stat_joint);
 			neglogp_gam.resize(0);
 			test_stat_gam.resize(0);
+		} else {
+			std::cout << "Computing single-snp hypothesis tests with LOCO strategy" << std::endl;
+			LOCO_pvals(vp_init, resid_loco, neglogp_beta, neglogp_gam, neglogp_rgam, neglogp_joint,
+			           test_stat_beta, test_stat_gam, test_stat_rgam, test_stat_joint);
 		}
 
 		// MAP snp-stats to file

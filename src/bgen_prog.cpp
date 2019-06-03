@@ -118,6 +118,13 @@ int main( int argc, char** argv ) {
 				boost_io::filtering_ostream outf;
 				fileUtils::fstream_init(outf, p.streamBgenOutFile);
 
+				if(p.drop_loco) {
+					std::cout << "Computing single-snp hypothesis tests while excluding SNPs within ";
+					std::cout << p.LOSO_window << " of the test SNP" << std::endl;
+				} else {
+					std::cout << "Computing single-snp hypothesis tests with LOCO strategy" << std::endl;
+				}
+
 				while (fileUtils::read_bgen_chunk(bgenView, Xstream, data.sample_is_invalid,
 				                                  data.n_samples, 128, p, bgen_pass, n_var_parsed)) {
 					VB.LOCO_pvals_v2(Xstream,

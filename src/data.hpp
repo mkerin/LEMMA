@@ -51,35 +51,35 @@ class Data
 public:
 	parameters p;
 
-	long n_pheno;                                                                                         // number of phenotypes
-	long n_covar;                                                                                         // number of covariates
-	long n_env;                                                                                         // number of env variables
-	int n_effects;                                                                                           // number of environmental interactions
-	long n_samples;                                                                                         // number of samples
+	long n_pheno;
+	long n_covar;
+	long n_env;
+	int n_effects;
+	long n_samples;
 	long n_var;
-	long n_var_parsed;                                                                                         // Track progress through IndexQuery
+	long n_var_parsed;
 	long n_dxteex_computed;
 	long n_snpstats_computed;
 
-	bool Y_reduced;                                                                                           // Variables to track whether we have already
-	bool W_reduced;                                                                                           // reduced to complete cases or not.
+	bool Y_reduced;
+	bool W_reduced;
 	bool E_reduced;
 
 	std::vector< std::string > rsid_list;
 
-	std::map<int, bool> missing_envs;                                                                                           // set of subjects missing >= 1 env variables
-	std::map<int, bool> missing_covars;                                                                                         // set of subjects missing >= 1 covariate
-	std::map<int, bool> missing_phenos;                                                                                         // set of subjects missing >= phenotype
-	std::map< std::size_t, bool > incomplete_cases;                                                                                         // union of samples missing data
+	std::map<int, bool> missing_envs;
+	std::map<int, bool> missing_covars;
+	std::map<int, bool> missing_phenos;
+	std::map< std::size_t, bool > incomplete_cases;
 
 	std::vector< std::string > pheno_names;
 	std::vector< std::string > covar_names;
 	std::vector< std::string > env_names;
 
 	GenotypeMatrix G;
-	EigenDataMatrix Y, Y2;                                                                                         // phenotype matrix (#2 always has covars regressed)
-	EigenDataMatrix C;                                                                                         // covariate matrix
-	EigenDataMatrix E;                                                                                         // env matrix
+	EigenDataMatrix Y, Y2;
+	EigenDataMatrix C;
+	EigenDataMatrix E;
 	Eigen::ArrayXXd dXtEEX_lowertri;
 
 // Init points
@@ -680,8 +680,8 @@ public:
 	}
 
 	void parse_dxteex_header(const int& col_offset,
-							  boost_io::filtering_istream& fg,
-								  std::vector<std::string>& col_names){
+	                         boost_io::filtering_istream& fg,
+	                         std::vector<std::string>& col_names){
 
 		// Reading from file
 		std::string gz_str = ".gz";
@@ -711,11 +711,11 @@ public:
 	}
 
 	bool read_dxteex_line(const int& col_offset,
-			boost_io::filtering_istream& fg,
-								  Eigen::ArrayXd& M,
-								  const long n_cols,
-								  std::string& snpid,
-								  long& ii){
+	                      boost_io::filtering_istream& fg,
+	                      Eigen::ArrayXd& M,
+	                      const long n_cols,
+	                      std::string& snpid,
+	                      long& ii){
 
 		std::string line;
 		bool file_ongoing = (bool) getline(fg, line);
@@ -827,11 +827,12 @@ public:
 
 		// Unfilled snp indexes;
 		std::unordered_set<long> unfilled_indexes;
-		for (long jj = 0; jj < n_var; jj++){
+		for (long jj = 0; jj < n_var; jj++) {
 			unfilled_indexes.insert(jj);
 		}
 
-		if(p.dxteex_file != "NULL"){
+		if(p.dxteex_file != "NULL") {
+			long nNotFound = 0;
 			boost_io::filtering_istream fg;
 			std::vector< std::string > col_names;
 			parse_dxteex_header(6, fg, col_names);
@@ -842,10 +843,11 @@ public:
 			int dxteex_check = 0, se_cnt = 0;
 			double mean_ae = 0, max_ae = 0;
 			long ii = 0;
-			while(read_dxteex_line(6, fg, dxteex_row, n_cols, snpid, ii)){
+			while(read_dxteex_line(6, fg, dxteex_row, n_cols, snpid, ii)) {
 				auto it = std::find(G.SNPID.begin(), G.SNPID.end(), snpid);
-				if(it == G.SNPID.end()){
-					std::cout << "WARNING: SNPID " << snpid << " not found";
+				if(it == G.SNPID.end()) {
+					// std::cout << "WARNING: SNPID " << snpid << " not found" << std::endl;
+					nNotFound++;
 				} else {
 					long jj = it - G.SNPID.begin();
 					for (int ll = 0; ll < n_env; ll++) {
@@ -868,7 +870,7 @@ public:
 								se_cnt++;
 							}
 						}
-					} else if (dxteex_check == 100){
+					} else if (dxteex_check == 100) {
 						dxteex_check++;
 						mean_ae /= (double) se_cnt;
 						std::cout << "Checking correlations from first 100 SNPs" << std::endl;
@@ -878,6 +880,7 @@ public:
 				}
 			}
 			std::cout << ii << " lines read from " << p.dxteex_file << std::endl;
+			if (nNotFound > 0) std::cout << nNotFound << " match SNPIDs not present in bgen file" << std::endl;
 		}
 
 		// Compute correlations not available in file
@@ -1283,8 +1286,8 @@ public:
 		incomplete_cases.insert(missing_envs.begin(), missing_envs.end());
 
 		sample_is_invalid.clear();
-		for (long ii = 0; ii < n_samples; ii++){
-			if (incomplete_cases.find(ii) == incomplete_cases.end()){
+		for (long ii = 0; ii < n_samples; ii++) {
+			if (incomplete_cases.find(ii) == incomplete_cases.end()) {
 				sample_is_invalid[ii] = false;
 			} else {
 				sample_is_invalid[ii] = true;

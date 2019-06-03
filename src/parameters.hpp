@@ -79,7 +79,7 @@ public:
 		vb_iter_max = 10000;
 		vb_iter_start = 0;
 		n_pve_samples = 50;
-		LOSO_window = -1;
+		LOSO_window = 100000;
 		// Initial difference in variance of spike & slab
 		beta_spike_diff_factor = 1000;
 		gam_spike_diff_factor = 1000;
