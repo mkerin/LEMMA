@@ -69,6 +69,7 @@ public:
 	bool run_round1;
 	double Nglobal;
 	int world_rank;
+	bool first_covar_update;
 
 // Chromosomes in data
 	int n_chrs;
@@ -95,6 +96,7 @@ public:
 	EigenDataArrayXX E;
 	EigenDataMatrix& C;
 	Eigen::MatrixXd XtE;
+	Eigen::MatrixXd CtCRidgeInv;
 
 	Eigen::ArrayXXd& dXtEEX_lowertri;
 	std::unordered_map<long, bool> sample_is_invalid;
@@ -143,6 +145,7 @@ public:
 		double Nlocal  = (double) n_samples;
 		Nglobal        = mpiUtils::mpiReduce_inplace(&Nlocal);
 		E = dat.E;
+		first_covar_update = true;
 
 		assert(Y.rows() == n_samples);
 		assert(X.rows() == n_samples);
@@ -169,12 +172,12 @@ public:
 		p.gxe_chunk_size = (unsigned int) std::min((long int) p.gxe_chunk_size, (long int) n_var);
 
 		// Cache XtE
-		if(p.mode_vb && n_env > 0) {
-			std::cout << "Computing XtE" << std::endl;
-			XtE = X.transpose_multiply(E);
-			std::cout << "XtE computed" << std::endl;
-			XtE = mpiUtils::mpiReduce_inplace(XtE);
-		}
+//		if(p.mode_vb && n_env > 0) {
+//			std::cout << "Computing XtE" << std::endl;
+//			XtE = X.transpose_multiply(E);
+//			std::cout << "XtE computed" << std::endl;
+//			XtE = mpiUtils::mpiReduce_inplace(XtE);
+//		}
 
 		// When n_env > 1 this gets set when in updateEnvWeights
 		if(n_env == 0) {
@@ -684,20 +687,44 @@ public:
 	void updateCovarEffects(VariationalParameters& vp,
 	                        const Hyps& hyps) __attribute__ ((hot)){
 		//
-		for (int cc = 0; cc < n_covar; cc++) {
-			double rr_k = vp.muc(cc);
+		if(p.joint_covar_update) {
+			if(first_covar_update) {
+				if(p.xtra_verbose) {
+					std::cout << "Performing first VB update of covar effects" << std::endl;
+				}
+				Eigen::MatrixXd CtCRidge = C.transpose() * C;
+				CtCRidge = mpiUtils::mpiReduce_inplace(CtCRidge);
+				CtCRidge += Eigen::MatrixXd::Identity(n_covar, n_covar) / sigma_c;
+				CtCRidgeInv = CtCRidge.inverse();
+				first_covar_update = false;
+			}
 
-			// Update s_sq
-			vp.sc_sq(cc) = hyps.sigma * sigma_c / (sigma_c * (Nglobal - 1.0) + 1.0);
+			Eigen::VectorXd rr_k = vp.muc;
+			auto Calpha = C * vp.muc.matrix();
+			Eigen::MatrixXd A = C.transpose() * (Y - (vp.ym + vp.yx.cwiseProduct(vp.eta)) + Calpha);
+			A = mpiUtils::mpiReduce_inplace(A);
+			Eigen::VectorXd muc = CtCRidgeInv * A;
+			for (int cc = 0; cc < n_covar; cc++) {
+				vp.sc_sq(cc) = hyps.sigma * CtCRidgeInv(cc, cc);
+				vp.muc(cc) = muc(cc);
+			}
+			vp.ym += C * (vp.muc.matrix() - rr_k);
+		} else {
+			for (int cc = 0; cc < n_covar; cc++) {
+				double rr_k = vp.muc(cc);
 
-			// Update mu
-			double Alocal = (vp.ym + vp.yx.cwiseProduct(vp.eta)).dot(C.col(cc));
-			auto A = Cty(cc) - mpiUtils::mpiReduce_inplace(&Alocal);
-			vp.muc(cc) = vp.sc_sq(cc) * ( (double) A + rr_k * (Nglobal - 1.0)) / hyps.sigma;
+				// Update s_sq
+				vp.sc_sq(cc) = hyps.sigma * sigma_c / (sigma_c * (Nglobal - 1.0) + 1.0);
 
-			// Update predicted effects
-			double rr_k_diff     = vp.muc(cc) - rr_k;
-			vp.ym += rr_k_diff * C.col(cc);
+				// Update mu
+				double Alocal = (vp.ym + vp.yx.cwiseProduct(vp.eta)).dot(C.col(cc));
+				auto A = Cty(cc) - mpiUtils::mpiReduce_inplace(&Alocal);
+				vp.muc(cc) = vp.sc_sq(cc) * ( (double) A + rr_k * (Nglobal - 1.0)) / hyps.sigma;
+
+				// Update predicted effects
+				double rr_k_diff     = vp.muc(cc) - rr_k;
+				vp.ym += rr_k_diff * C.col(cc);
+			}
 		}
 	}
 

@@ -160,6 +160,7 @@ void parse_arguments(parameters &p, int argc, char **argv) {
 	    ("environment_weights", "", cxxopts::value<std::string>(p.env_coeffs_file))
 	    ("resume_from_param_dump", "", cxxopts::value<std::string>(p.resume_prefix))
 	    ("out", "Filepath to output", cxxopts::value<std::string>(p.out_file))
+	    ("joint_covar_update", "Perform batch update in VB algorithm when updating covariates", cxxopts::value<bool>(p.joint_covar_update))
 	    ("streamBgen", "Path to bgen file containing imputed variants", cxxopts::value<std::string>(p.streamBgenFile))
 	    ("streamOut", "Output file for tests on imputed variants", cxxopts::value<std::string>(p.streamBgenOutFile))
 	;
@@ -202,6 +203,9 @@ void parse_arguments(parameters &p, int argc, char **argv) {
 		}
 		if (opts.count("high_mem")) {
 			p.low_mem = false;
+		}
+		if(p.pheno_file != "NULL") {
+			check_file_exists(p.pheno_file);
 		}
 		if(p.dxteex_file != "NULL") {
 			check_file_exists(p.dxteex_file);
