@@ -54,6 +54,7 @@ TEST_CASE("Data") {
 		p.bgi_file = "data/io_test/n50_p100.bgen.bgi";
 		p.incl_sids_file = "data/io_test/sample_ids_head28.txt";
 		p.low_mem = true;
+		p.use_vb_on_covars = false;
 		Data data(p);
 
 		data.read_non_genetic_data();

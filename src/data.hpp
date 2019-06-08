@@ -273,20 +273,18 @@ public:
 
 		if (n_env > 0) {
 			if (p.use_vb_on_covars) {
-				if (n_covar > 0) {
-					regress_first_mat_from_second(C, "covars", covar_names, Y, "pheno");
-					regress_first_mat_from_second(C, "covars", covar_names, E, "env");
-				}
-
-				C = E;
-				covar_names = env_names;
-				n_covar = n_env;
-			} else if (n_covar > 0) {
 				EigenDataMatrix tmp(C.rows(), C.cols() + E.cols());
 				tmp << C, E;
 				C = tmp;
 				covar_names.insert(covar_names.end(), env_names.begin(), env_names.end());
 				n_covar += n_env;
+			} else if (n_covar > 0) {
+				regress_first_mat_from_second(C, "covars", covar_names, Y, "pheno");
+				regress_first_mat_from_second(C, "covars", covar_names, E, "env");
+
+				C = E;
+				covar_names = env_names;
+				n_covar = n_env;
 			} else {
 				C = E;
 				covar_names = env_names;
@@ -295,10 +293,11 @@ public:
 
 			// Removing squared dependance
 			std::vector<int> cols_to_remove;
-			Eigen::MatrixXd H(n_samples, n_covar + 1);
+			Eigen::MatrixXd H(n_samples, n_covar + 2);
 			Eigen::VectorXd tmp = Eigen::VectorXd::Zero(n_samples);
+			Eigen::MatrixXd ones = Eigen::MatrixXd::Constant(n_samples, 1, 1.0);
 
-			H << tmp, C;
+			H << tmp, ones, C;
 			std::cout << "Checking for squared dependance: " << std::endl;
 			std::cout << "Name\t-log10(p-val)" << std::endl;
 			long n_signif_envs_sq = 0;

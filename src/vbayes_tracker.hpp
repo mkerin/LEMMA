@@ -169,7 +169,9 @@ public:
 			outf_iter << i_hyps.s_x(ee) << " ";
 		}
 		outf_iter << vp.muc.square().sum() << " ";
+		outf_iter << std::setprecision(6) << std::fixed;
 		outf_iter << c_logw << " ";
+		outf_iter << std::setprecision(6) << std::scientific;
 		if (n_covar > 0) outf_iter << covar_diff << " ";
 		outf_iter << beta_diff << " ";
 		if (n_env > 0) outf_iter << gam_diff << " ";

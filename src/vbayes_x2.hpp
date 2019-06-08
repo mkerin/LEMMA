@@ -67,6 +67,7 @@ public:
 	bool random_params_init;
 	bool run_round1;
 	double N;
+	bool first_covar_update;
 
 // Chromosomes in data
 	int n_chrs;
@@ -93,6 +94,7 @@ public:
 	EigenDataArrayXX E;
 	EigenDataMatrix& C;
 	Eigen::MatrixXd XtE;
+	Eigen::MatrixXd CtCRidgeInv;
 
 	Eigen::ArrayXXd& dXtEEX_lowertri;
 	std::unordered_map<long, bool> sample_is_invalid;
@@ -139,6 +141,7 @@ public:
 		env_names      = dat.env_names;
 		N              = (double) n_samples;
 		E = dat.E;
+		first_covar_update = true;
 
 		assert(Y.rows() == n_samples);
 		assert(X.rows() == n_samples);
@@ -705,19 +708,39 @@ public:
 	void updateCovarEffects(VariationalParameters& vp,
 	                        const Hyps& hyps) __attribute__ ((hot)){
 		//
-		for (int cc = 0; cc < n_covar; cc++) {
-			double rr_k = vp.muc(cc);
+		if(p.joint_covar_update) {
+			if(first_covar_update) {
+				if(p.xtra_verbose) {
+					std::cout << "Performing first VB update of covar effects" << std::endl;
+				}
+				auto CtCRidge = C.transpose() * C + Eigen::MatrixXd::Identity(n_covar, n_covar) / sigma_c;
+				CtCRidgeInv = CtCRidge.inverse();
+				first_covar_update = false;
+			}
 
-			// Update s_sq
-			vp.sc_sq(cc) = hyps.sigma * sigma_c / (sigma_c * (N - 1.0) + 1.0);
+			Eigen::VectorXd rr_k = vp.muc;
+			auto Calpha = C * vp.muc.matrix();
+			auto muc = CtCRidgeInv * C.transpose() * (Y - (vp.ym + vp.yx.cwiseProduct(vp.eta)) + Calpha);
+			for (int cc = 0; cc < n_covar; cc++) {
+				vp.sc_sq(cc) = hyps.sigma * CtCRidgeInv(cc, cc);
+				vp.muc(cc) = muc(cc);
+			}
+			vp.ym += C * (vp.muc.matrix() - rr_k);
+		} else {
+			for (int cc = 0; cc < n_covar; cc++) {
+				double rr_k = vp.muc(cc);
 
-			// Update mu
-			auto A = Cty(cc) - (vp.ym + vp.yx.cwiseProduct(vp.eta)).dot(C.col(cc));
-			vp.muc(cc) = vp.sc_sq(cc) * ( (double) A + rr_k * (N - 1.0)) / hyps.sigma;
+				// Update s_sq
+				vp.sc_sq(cc) = hyps.sigma * sigma_c / (sigma_c * (N - 1.0) + 1.0);
 
-			// Update predicted effects
-			double rr_k_diff     = vp.muc(cc) - rr_k;
-			vp.ym += rr_k_diff * C.col(cc);
+				// Update mu
+				auto A = Cty(cc) - (vp.ym + vp.yx.cwiseProduct(vp.eta)).dot(C.col(cc));
+				vp.muc(cc) = vp.sc_sq(cc) * ( (double) A + rr_k * (N - 1.0)) / hyps.sigma;
+
+				// Update predicted effects
+				double rr_k_diff     = vp.muc(cc) - rr_k;
+				vp.ym += rr_k_diff * C.col(cc);
+			}
 		}
 	}
 
