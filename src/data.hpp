@@ -40,6 +40,7 @@
 #include <boost/iostreams/filtering_stream.hpp>
 #include <boost/iostreams/device/file.hpp>
 #include <boost/iostreams/filter/gzip.hpp>
+#include <boost/exception/all.hpp>
 
 namespace boost_io = boost::iostreams;
 namespace boost_m = boost::math;
@@ -305,21 +306,29 @@ public:
 			long n_signif_envs_sq = 0;
 			for (int ee = 0; ee < n_env; ee++) {
 				// H.col(0) = E.col(ee);
-				H.col(0) = E.col(ee).array().square().matrix();
+				double rss_alt, tstat, pval;
+				try {
+					H.col(0) = E.col(ee).array().square().matrix();
+					Eigen::MatrixXd HtH(H.cols(), H.cols()), Hty(H.cols(), 1), HtH_inv(H.cols(), H.cols());
+					prep_lm(H, Y, HtH, HtH_inv, Hty, rss_alt);
+					student_t_test(n_samples, HtH_inv, Hty, rss_alt, 0, tstat, pval);
 
-				double rss_alt;
-				Eigen::MatrixXd HtH(H.cols(), H.cols()), Hty(H.cols(), 1), HtH_inv(H.cols(), H.cols());
-				prep_lm(H, Y, HtH, HtH_inv, Hty, rss_alt);
+					std::cout << env_names[ee] << "\t";
+					std::cout << -1 * std::log10(pval) << std::endl;
 
-				double pval = student_t_test(n_samples, HtH_inv, Hty, rss_alt, 0);
-
-				std::cout << env_names[ee] << "\t";
-				std::cout << -1 * std::log10(pval) << std::endl;
-
-				if (pval < 0.01 / (double) n_env) {
-					cols_to_remove.push_back(ee);
-					n_signif_envs_sq++;
+					if (pval < 0.01 / (double) n_env) {
+						cols_to_remove.push_back(ee);
+						n_signif_envs_sq++;
+					}
+				} catch (const std::exception& e) {
+					if(p.xtra_verbose) {
+						std::cerr << "Error when checking for significant squared envs ";
+						std::cerr << "(I believe this is due to attempting linear regression ";
+						std::cerr << "with a singular matrix)" << std::endl;
+						std::cerr << e.what() << std::endl;
+					}
 				}
+
 			}
 			if (n_signif_envs_sq > 0) {
 				Eigen::MatrixXd E_sq(n_samples, n_signif_envs_sq);

@@ -15,6 +15,7 @@
 #include <memory>
 #include <set>
 #include <unordered_map>
+#include <unordered_set>
 
 // DosageSetter is a callback object appropriate for passing to bgen::read_genotype_data_block() or
 // the synonymous method of genfile::bgen::View. See the comment in bgen.hpp above
@@ -94,7 +95,7 @@ struct DosageSetter {
 
 	// Ditto, but called if data is missing for this sample.
 	void set_value(const uint32_t&, const genfile::MissingValue& value){
-		m_missing_entries.push_back(m_sample_i);
+		m_missing_entries.insert(m_sample_i);
 	}
 
 	// If present with this signature, called once after all data has been set.
@@ -122,7 +123,7 @@ struct DosageSetter {
 		m_sigma2 /= (Nvalid - 1);
 
 		// Fill in missing values with mean
-		for (auto ii : m_missing_entries) {
+		for (const auto& ii : m_missing_entries) {
 			m_dosage(ii) = m_mean;
 		}
 		assert(m_samples_skipped == m_nInvalid);
@@ -142,7 +143,7 @@ private:
 	std::size_t m_sample_i;
 	long m_nInvalid;
 
-	std::vector<long> m_missing_entries;
+	std::unordered_set<long> m_missing_entries;
 	double m_sum_eij2;
 	double m_sum_fij_minus_eij2;
 	double m_eij;
