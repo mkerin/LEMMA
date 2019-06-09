@@ -20,7 +20,7 @@ TEST_CASE( "Example 4: multi-env + mog + covars + emp_bayes" ){
 
 	SECTION("Ex4. No filters applied, high mem mode"){
 		char* argv[] = { (char*) "bin/bgen_prog", (char*) "--mode_vb", (char*) "--low_mem",
-			             (char*) "--use_vb_on_covars", (char*) "--mode_empirical_bayes",
+			             (char*) "--mode_regress_out_covars", (char*) "--mode_empirical_bayes",
 			             (char*) "--spike_diff_factor", (char*) "10000",
 			             (char*) "--effects_prior_mog",
 			             (char*) "--vb_iter_max", (char*) "10",
@@ -38,7 +38,7 @@ TEST_CASE( "Example 4: multi-env + mog + covars + emp_bayes" ){
 		data.standardise_non_genetic_data();
 		SECTION( "Ex4. Non genetic data standardised + covars regressed"){
 			CHECK(data.p.scale_pheno);
-			CHECK(data.p.use_vb_on_covars);
+			CHECK(!data.p.use_vb_on_covars);
 			CHECK(data.p.covar_file == "NULL");
 		}
 		data.read_full_bgen();
@@ -102,10 +102,10 @@ TEST_CASE( "Example 4: multi-env + mog + covars + emp_bayes" ){
 
 			VB.updateAllParams(1, round_index, all_vp, all_hyps, logw_prev);
 
-			CHECK(vp.alpha_beta(0)            == Approx(0.1466416933));
-			CHECK(vp.muw(0, 0)              == Approx(0.0594808543));
-			CHECK(vp.alpha_gam(63)           == Approx(0.1180509779));
-			CHECK(vp.mu1_gam(63)              == Approx(0.0019247043));
+			CHECK(vp.alpha_beta(0)            == Approx(0.1465935244));
+			CHECK(vp.muw(0, 0)              == Approx(0.0586700329));
+			CHECK(vp.alpha_gam(63)           == Approx(0.1180479917));
+			CHECK(vp.mu1_gam(63)              == Approx(0.0018853779));
 			CHECK(vp.s1_gam_sq(63)            == Approx(0.002611992));
 
 			Eq_beta = vp.alpha_beta * vp.mu1_beta;
@@ -116,12 +116,12 @@ TEST_CASE( "Example 4: multi-env + mog + covars + emp_bayes" ){
 
 			VB.updateAllParams(2, round_index, all_vp, all_hyps, logw_prev);
 
-			CHECK(vp.alpha_beta(63)           == Approx(0.1850818614));
-			CHECK(vp.muw(0, 0)              == Approx(0.0365227064));
-			CHECK(vp.alpha_gam(63)           == Approx(0.1036683808));
-			CHECK(vp.mu1_gam(63)              == Approx(0.0000603254));
+			CHECK(vp.alpha_beta(63)           == Approx(0.1860890959));
+			CHECK(vp.muw(0, 0)              == Approx(0.0357150196));
+			CHECK(vp.alpha_gam(63)           == Approx(0.1036438402));
+			CHECK(vp.mu1_gam(63)              == Approx(0.0000414655));
 
-			CHECK(VB.calc_logw(hyps, vp) == Approx(-88.4914916475));
+			CHECK(VB.calc_logw(hyps, vp) == Approx(-88.4701165481));
 			VbTracker tracker(p);
 			tracker.init_interim_output(0,2, VB.n_effects, VB.n_covar, VB.n_env, VB.env_names, vp);
 			tracker.dump_state("2", VB.n_samples, VB.n_covar, VB.n_var, VB.n_env,
@@ -167,9 +167,9 @@ TEST_CASE( "Example 4: multi-env + mog + covars + emp_bayes" ){
 
 
 			// variances
-			CHECK(vp.EdZtZ.sum() == Approx(6231.24321372));
-			// CHECK(vp.ym.squaredNorm() == Approx(14.6462021668));
-			// CHECK(vp.yx.squaredNorm() == Approx(0.0004903837));
+			CHECK(vp.EdZtZ.sum() == Approx(6226.9426820702));
+			// CHECK(vp.ym.squaredNorm() == Approx(14.5271697557));
+			// CHECK(vp.yx.squaredNorm() == Approx(0.0004746624));
 		}
 
 		VB.run_inference(VB.hyps_inits, false, 2, trackers);
@@ -185,7 +185,7 @@ TEST_CASE( "Example 4: multi-env + mog + covars + emp_bayes + sample subset" ){
 
 	SECTION("Ex4. No filters applied, high mem mode"){
 		char* argv[] = { (char*) "bin/bgen_prog", (char*) "--mode_vb", (char*) "--low_mem",
-			             (char*) "--use_vb_on_covars", (char*) "--mode_empirical_bayes",
+			             (char*) "--mode_regress_out_covars", (char*) "--mode_empirical_bayes",
 			             (char*) "--spike_diff_factor", (char*) "10000",
 			             (char*) "--effects_prior_mog",
 			             (char*) "--incl_sample_ids", (char*) "data/io_test/sample_ids_head28.txt",
@@ -218,7 +218,7 @@ TEST_CASE( "Example 4: multi-env + mog + covars + emp_bayes + sample subset" ){
 		VB.write_map_stats_to_file("");
 		SECTION("Ex3. Vbayes_X2 inference correct"){
 			CHECK(trackers[0].count == 10);
-			CHECK(trackers[0].logw == Approx(-57.0634650324));
+			CHECK(trackers[0].logw == Approx(-57.062373213));
 		}
 	}
 }

@@ -85,8 +85,8 @@ public:
 //	std::vector< std::vector < std::uint32_t >> back_pass_chunks;
 	std::vector< std::vector < std::uint32_t > > main_fwd_pass_chunks, gxe_fwd_pass_chunks;
 	std::vector< std::vector < std::uint32_t > > main_back_pass_chunks, gxe_back_pass_chunks;
-	std::vector< int > env_fwd_pass;
-	std::vector< int > env_back_pass;
+	std::vector< int > env_fwd_pass, covar_fwd_pass;
+	std::vector< int > env_back_pass, covar_back_pass;
 	std::map<long, Eigen::MatrixXd> XtX_block_cache, ZtZ_block_cache;
 
 // Data
@@ -214,6 +214,11 @@ public:
 		for(int ll = 0; ll < n_env; ll++) {
 			env_fwd_pass.push_back(ll);
 			env_back_pass.push_back(n_env - ll - 1);
+		}
+
+		for(int ll = 0; ll < n_covar; ll++) {
+			covar_fwd_pass.push_back(ll);
+			covar_back_pass.push_back(n_covar - ll - 1);
 		}
 
 		unsigned long n_main_segs, n_gxe_segs, n_chunks;
@@ -629,7 +634,8 @@ public:
 		// Update covar main effects
 		for (int nn = 0; nn < n_grid; nn++) {
 			if (n_covar > 0) {
-				updateCovarEffects(all_vp[nn], all_hyps[nn]);
+				updateCovarEffects(covar_fwd_pass, all_vp[nn], all_hyps[nn]);
+				updateCovarEffects(covar_back_pass, all_vp[nn], all_hyps[nn]);
 				check_monotonic_elbo(all_hyps[nn], all_vp[nn], count, logw_prev[nn], "updateCovarEffects");
 			}
 		}
@@ -684,8 +690,9 @@ public:
 		}
 	}
 
-	void updateCovarEffects(VariationalParameters& vp,
-	                        const Hyps& hyps) __attribute__ ((hot)){
+	void updateCovarEffects(const std::vector< int >& iter,
+	                        VariationalParameters& vp,
+	                        const Hyps& hyps){
 		//
 		if(p.joint_covar_update) {
 			if(first_covar_update) {
@@ -710,7 +717,7 @@ public:
 			}
 			vp.ym += C * (vp.muc.matrix() - rr_k);
 		} else {
-			for (int cc = 0; cc < n_covar; cc++) {
+			for (const auto& cc : iter) {
 				double rr_k = vp.muc(cc);
 
 				// Update s_sq
