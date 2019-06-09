@@ -273,8 +273,12 @@ public:
 		 */
 
 		if (n_env > 0) {
-			if (p.use_vb_on_covars) {
-				EigenDataMatrix tmp(C.rows(), C.cols() + E.cols());
+			if(n_covar == 0){
+				C = E;
+				covar_names = env_names;
+				n_covar = n_env;
+			} else if (p.use_vb_on_covars) {
+				EigenDataMatrix tmp(E.rows(), C.cols() + E.cols());
 				tmp << C, E;
 				C = tmp;
 				covar_names.insert(covar_names.end(), env_names.begin(), env_names.end());
@@ -283,10 +287,6 @@ public:
 				regress_first_mat_from_second(C, "covars", covar_names, Y, "pheno");
 				regress_first_mat_from_second(C, "covars", covar_names, E, "env");
 
-				C = E;
-				covar_names = env_names;
-				n_covar = n_env;
-			} else {
 				C = E;
 				covar_names = env_names;
 				n_covar = n_env;
