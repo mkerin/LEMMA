@@ -8,6 +8,7 @@
 #include "hyps.hpp"
 #include "parameters.hpp"
 #include "tools/eigen3.3/Dense"
+#include "mpi_utils.hpp"
 
 void VariationalParamsBase::resize(std::int32_t n_samples, std::int32_t n_var, long n_covar, long n_env) {
 	s1_beta_sq.resize(n_var);
@@ -229,20 +230,28 @@ VariationalParametersLite VariationalParameters::convert_to_lite() const {
 }
 
 void VariationalParameters::calcEdZtZ(const Eigen::Ref<const Eigen::ArrayXXd> &dXtEEX_lowertri, const int &n_env) {
-	Eigen::ArrayXd muw_sq_combos(n_env * (n_env + 1) / 2);
-	for (int ll = 0; ll < n_env; ll++) {
-		for (int mm = 0; mm < n_env; mm++) {
-			muw_sq_combos(dXtEEX_col_ind(ll, mm, n_env)) = muw(mm) * muw(ll);
-		}
-	}
+	Eigen::ArrayXd EdZtZlocal = Eigen::ArrayXd::Zero(alpha_beta.rows());
 
-	EdZtZ = 2 * (dXtEEX_lowertri.rowwise() * muw_sq_combos.transpose()).rowwise().sum();
-	if(n_env > 1) {
+	int world_rank;
+	MPI_Comm_rank(MPI_COMM_WORLD, &world_rank);
+	if(world_rank == 0) {
+		Eigen::ArrayXd muw_sq_combos(n_env * (n_env + 1) / 2);
 		for (int ll = 0; ll < n_env; ll++) {
-			EdZtZ += dXtEEX_lowertri.col(dXtEEX_col_ind(ll, ll, n_env)) * sw_sq(ll);
-			EdZtZ -= dXtEEX_lowertri.col(dXtEEX_col_ind(ll, ll, n_env)) * muw(ll) * muw(ll);
+			for (int mm = 0; mm < n_env; mm++) {
+				muw_sq_combos(dXtEEX_col_ind(ll, mm, n_env)) = muw(mm) * muw(ll);
+			}
+		}
+
+		EdZtZlocal = 2 * (dXtEEX_lowertri.rowwise() * muw_sq_combos.transpose()).rowwise().sum();
+		if(n_env > 1) {
+			for (int ll = 0; ll < n_env; ll++) {
+				EdZtZlocal += dXtEEX_lowertri.col(dXtEEX_col_ind(ll, ll, n_env)) * sw_sq(ll);
+				EdZtZlocal -= dXtEEX_lowertri.col(dXtEEX_col_ind(ll, ll, n_env)) * muw(ll) * muw(ll);
+			}
 		}
 	}
+	EdZtZ.resize(EdZtZlocal.rows(), EdZtZlocal.cols());
+	mpiUtils::mpiReduce_double(EdZtZlocal.data(), EdZtZ.data(), EdZtZlocal.size());
 }
 
 long dXtEEX_col_ind(long kk, long jj, long n_env) {

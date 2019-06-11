@@ -313,6 +313,7 @@ public:
 
 		// Cache Cty
 		if(n_covar > 0) {
+			if (p.mode_debug) std::cout << "Caching Cty" << std::endl;
 			EigenDataArrayX Ctylocal;
 			Ctylocal = C.transpose() * Y;
 			Cty.resize(Ctylocal.rows(), Ctylocal.cols());
@@ -361,7 +362,6 @@ public:
 		std::vector< VbTracker > trackers(n_grid, p);
 		run_inference(hyps_inits, false, 2, trackers);
 		write_converged_hyperparams_to_file("", trackers, n_grid);
-
 		std::cout << "Variational inference finished" << std::endl;
 	}
 
@@ -420,6 +420,7 @@ public:
 		// minimise KL Divergence and assign elbo estimate
 		// Assumes vp_init already exist
 		// TODO: re intergrate random starts
+		if (p.mode_debug) std::cout << "Starting inner loop" << std::endl;
 		int print_interval = 25;
 		if(random_init) {
 			throw std::logic_error("Random starts no longer implemented");
@@ -436,7 +437,9 @@ public:
 		std::vector<double> i_logw(n_grid, -1*std::numeric_limits<double>::max());
 
 		for (int nn = 0; nn < n_grid; nn++) {
-			all_tracker[nn].init_interim_output(nn, round_index, n_effects, n_covar, n_env, env_names, all_vp[nn]);
+			if(world_rank == 0) {
+				all_tracker[nn].init_interim_output(nn, round_index, n_effects, n_covar, n_env, env_names, all_vp[nn]);
+			}
 		}
 
 		// SQUAREM objects
@@ -447,6 +450,7 @@ public:
 		// Allow more flexible start point so that we can resume previous inference run
 		int count = p.vb_iter_start;
 		while(!all_converged && count < p.vb_iter_max) {
+			if (p.mode_debug) std::cout << "Iter count: " << count << std::endl;
 			for (int nn = 0; nn < n_grid; nn++) {
 				if(n_covar > 0) covar_prev[nn] = all_vp[nn].mean_covars().array();
 				beta_prev[nn] = all_vp[nn].mean_beta().array();
@@ -455,10 +459,12 @@ public:
 			}
 			std::vector<double> logw_prev = i_logw;
 
+			if (p.mode_debug) std::cout << " - update params" << std::endl;
 			updateAllParams(count, round_index, all_vp, all_hyps, logw_prev);
 
 			// SQUAREM
 			if (p.mode_squarem) {
+				if (p.mode_debug) std::cout << " - SQUAREM accelerator" << std::endl;
 				if(count % 3 == 0) {
 					theta0 = all_hyps;
 				} else if (count % 3 == 1) {
@@ -570,6 +576,7 @@ public:
 		}
 
 		// Dump converged state
+		if (p.mode_debug) std::cout << "Dumping converged params" << std::endl;
 		for (int nn = 0; nn < n_grid; nn++) {
 			all_tracker[nn].dump_state("_converged", n_samples, n_covar, n_var,
 			                           n_env, n_effects,
@@ -583,8 +590,9 @@ public:
 			all_tracker[nn].count = count;
 			all_tracker[nn].vp = all_vp[nn].convert_to_lite();
 			all_tracker[nn].hyps = all_hyps[nn];
-			all_tracker[nn].push_vp_converged(X, n_var, n_effects);
+			// all_tracker[nn].push_vp_converged(X, n_var, n_effects);
 		}
+		if (p.mode_debug) std::cout << "VB algo finished" << std::endl;
 	}
 
 	void setup_variational_params(const std::vector<Hyps>& all_hyps,
@@ -666,6 +674,7 @@ public:
 		}
 
 		// Update env-weights
+		if (p.mode_debug) std::cout << " - update env weights" << std::endl;
 		if (n_effects > 1 && n_env > 1) {
 			for (int nn = 0; nn < n_grid; nn++) {
 				for (int uu = 0; uu < p.env_update_repeats; uu++) {
@@ -678,6 +687,7 @@ public:
 
 		// Maximise hyps
 		if (round_index > 1 && p.mode_empirical_bayes) {
+			if (p.mode_debug) std::cout << " - max hyps" << std::endl;
 			for (int nn = 0; nn < n_grid; nn++) {
 				maximiseHyps(all_hyps[nn], all_vp[nn]);
 				check_monotonic_elbo(all_hyps[nn], all_vp[nn], count, logw_prev[nn], "maxHyps");
@@ -1104,8 +1114,10 @@ public:
 			// Update s_sq
 			double denom;
 			denom  = (vp.yx.array() * E.col(ll)).square().sum();
+			if(world_rank == 0) {
+				denom += (varG * dXtEEX_lowertri.col(dXtEEX_col_ind(ll, ll, n_env))).sum();
+			}
 			denom  = mpiUtils::mpiReduce_inplace(&denom);
-			denom += (varG * dXtEEX_lowertri.col(dXtEEX_col_ind(ll, ll, n_env))).sum();
 			denom += hyps.sigma;
 			vp.sw_sq(ll) = hyps.sigma / denom;
 
@@ -1114,11 +1126,15 @@ public:
 
 			// Update mu
 			Eigen::ArrayXd env_vars = Eigen::ArrayXd::Zero(n_var);
-			for (int mm = 0; mm < n_env; mm++) {
-				if(mm != ll) {
-					env_vars += vp.muw(mm) * dXtEEX_lowertri.col(dXtEEX_col_ind(ll, mm, n_env));
+			if(world_rank == 0) {
+				for (int mm = 0; mm < n_env; mm++) {
+					if(mm != ll) {
+						env_vars += vp.muw(mm) * dXtEEX_lowertri.col(dXtEEX_col_ind(ll, mm, n_env));
+					}
 				}
+				// MPI_Bcast(env_vars.data(), env_vars.size(), MPI_DOUBLE, 0, MPI_COMM_WORLD);
 			}
+			env_vars  = mpiUtils::mpiReduce_inplace(env_vars);
 
 			double eff = ((Y - vp.ym).array() * E.col(ll) * vp.yx.array()).sum();
 			eff       -= (vp.yx.array() * E.col(ll) * vp.eta.array() * vp.yx.array()).sum();
@@ -1141,19 +1157,23 @@ public:
 		// Recompute expected value of diagonal of ZtZ
 		vp.calcEdZtZ(dXtEEX_lowertri, n_env);
 
-		Eigen::ArrayXd muw_sq_combos(n_env * (n_env + 1) / 2);
-		for (int ll = 0; ll < n_env; ll++) {
-			for (int mm = 0; mm < n_env; mm++) {
-				muw_sq_combos(dXtEEX_col_ind(ll, mm, n_env)) = vp.muw(mm) * vp.muw(ll);
+		double colVarZ = 0;
+		if(world_rank == 0) {
+			Eigen::ArrayXd muw_sq_combos(n_env * (n_env + 1) / 2);
+			for (int ll = 0; ll < n_env; ll++) {
+				for (int mm = 0; mm < n_env; mm++) {
+					muw_sq_combos(dXtEEX_col_ind(ll, mm, n_env)) = vp.muw(mm) * vp.muw(ll);
+				}
 			}
-		}
 
-		double colVarZ = 2 * (dXtEEX_lowertri.rowwise() * muw_sq_combos.transpose()).sum();
-		for (int ll = 0; ll < n_env; ll++) {
-			colVarZ -= (vp.muw(ll) * vp.muw(ll) * dXtEEX_lowertri.col(dXtEEX_col_ind(ll, ll, n_env))).sum();
-		}
-		colVarZ /= (Nglobal - 1.0);
+			colVarZ = 2 * (dXtEEX_lowertri.rowwise() * muw_sq_combos.transpose()).sum();
+			for (int ll = 0; ll < n_env; ll++) {
+				colVarZ -= (vp.muw(ll) * vp.muw(ll) * dXtEEX_lowertri.col(dXtEEX_col_ind(ll, ll, n_env))).sum();
+			}
+			colVarZ /= (Nglobal - 1.0);
 //		colVarZ -= (XtE * vp.muw.matrix()).array().square().sum() / Nglobal / (Nglobal - 1.0);
+		}
+		colVarZ = mpiUtils::mpiReduce_inplace(&colVarZ);
 
 		// WARNING: Hard coded index
 		// WARNING: Updates S_x in hyps

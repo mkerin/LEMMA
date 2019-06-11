@@ -275,7 +275,7 @@ public:
 		 */
 
 		if (n_env > 0) {
-			if(n_covar == 0){
+			if(n_covar == 0) {
 				C = E;
 				covar_names = env_names;
 				n_covar = n_env;
@@ -833,10 +833,14 @@ public:
 	}
 
 	void calc_dxteex(){
+		int world_rank;
+		MPI_Comm_rank(MPI_COMM_WORLD, &world_rank);
 		std::cout << "Reordering/building dXtEEX array...";
 		MyTimer t_calcDXtEEX("dXtEEX array constructed in %ts \n");
 		t_calcDXtEEX.resume();
+		// if(world_rank == 0) {
 		dXtEEX_lowertri.resize(n_var, n_env * (n_env + 1) / 2);
+		// }
 
 		// Unfilled snp indexes;
 		std::unordered_set<long> unfilled_indexes;
@@ -865,7 +869,9 @@ public:
 					long jj = it - G.SNPID.begin();
 					for (int ll = 0; ll < n_env; ll++) {
 						for (int mm = 0; mm <= ll; mm++) {
+							// if(world_rank == 0) {
 							dXtEEX_lowertri(jj, dXtEEX_col_ind(ll, mm, n_env)) = dxteex_row(ll * n_env + mm);
+							// }
 						}
 					}
 					unfilled_indexes.erase(jj);
@@ -878,9 +884,11 @@ public:
 							for (int mm = 0; mm <= ll; mm++) {
 								double dztz_lmj = (cl_j * E.array().col(ll) * E.array().col(mm) * cl_j).sum();
 								dztz_lmj = mpiUtils::mpiReduce_inplace(&dztz_lmj);
+								// if(world_rank == 0) {
 								double x1 = std::abs(dXtEEX_lowertri(jj, dXtEEX_col_ind(ll, mm, n_env)) - dztz_lmj);
 								max_ae = std::max(x1, max_ae);
 								mean_ae += x1;
+								// }
 								se_cnt++;
 							}
 						}
@@ -906,7 +914,9 @@ public:
 				for (int mm = 0; mm <= ll; mm++) {
 					double dztz_lmj = (cl_j * E.array().col(ll) * E.array().col(mm) * cl_j).sum();
 					dztz_lmj = mpiUtils::mpiReduce_inplace(&dztz_lmj);
+					// if(world_rank == 0) {
 					dXtEEX_lowertri(jj, dXtEEX_col_ind(ll, mm, n_env)) = dztz_lmj;
+					// }
 				}
 			}
 		}
@@ -1210,6 +1220,7 @@ public:
 		if(p.vb_init_file != "NULL") {
 			assign_vb_init_from_file(vp_init);
 		}
+		if (p.mode_debug) std::cout << "Done vb init" << std::endl;
 	}
 
 	void read_mog_weights(const std::string& filename,
@@ -1308,7 +1319,7 @@ public:
 		incomplete_cases.insert(missing_phenos.begin(), missing_phenos.end());
 		incomplete_cases.insert(missing_envs.begin(), missing_envs.end());
 
-		mpiUtils::partition_valid_samples_across_ranks(n_samples, incomplete_cases);
+		mpiUtils::partition_valid_samples_across_ranks(n_samples, n_var, n_env, p, incomplete_cases);
 
 		sample_is_invalid.clear();
 		for (long ii = 0; ii < n_samples; ii++) {
@@ -1335,11 +1346,14 @@ public:
 
 		Nglobal = mpiUtils::mpiReduce_inplace(&n_samples);
 
+		int world_rank;
+		MPI_Comm_rank(MPI_COMM_WORLD, &world_rank);
+
 		std::cout << "Reduced to " << Nglobal << " samples with complete data";
 		std::cout << " across covariates";
 		if(p.env_file != "NULL") std::cout << ", env-variables" << std::endl;
 		std::cout << " and phenotype";
-		std::cout << " (" << n_samples << " on rank 0)." << std::endl;
+		std::cout << " (" << n_samples << " on rank " << world_rank << ")." << std::endl;
 
 		std::cout << "Load factor for sample_is_invalid map: ";
 		std::cout << sample_is_invalid.load_factor() << std::endl;

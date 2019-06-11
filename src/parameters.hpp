@@ -17,6 +17,7 @@ public:
 	std::vector< std::string > rsid;
 	unsigned int random_seed;
 	long chunk_size, vb_iter_max, vb_iter_start, param_dump_interval, n_pve_samples;
+	long long int maxBytesPerRank;
 	int missing_code, env_update_repeats, n_gconf, n_bgen_thread;
 	unsigned int n_thread, main_chunk_size, gxe_chunk_size;
 	std::uint32_t range_start, range_end;
@@ -78,6 +79,7 @@ public:
 #endif
 		missing_code = -999;
 		vb_iter_max = 10000;
+		maxBytesPerRank = 16000000000;
 		vb_iter_start = 0;
 		n_pve_samples = 50;
 		LOSO_window = 100000;

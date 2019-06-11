@@ -143,6 +143,8 @@ void parse_arguments(parameters &p, int argc, char **argv) {
 	    ("mode_pve_est", "", cxxopts::value<bool>(p.mode_pve_est))
 	    ("incl_squared_envs", "")
 	    ("effects_prior_mog", "")
+	    ("maxBytesPerRank", "Maximum number of bytes of RAM available on each partition when using MPI (Default: 16GB)",
+	    		cxxopts::value<long long>(p.maxBytesPerRank))
 	    ("suppress_squared_env_removal", "")
 	    ("loso_window_size", "", cxxopts::value<long>(p.LOSO_window))
 	    ("drop_loco", "", cxxopts::value<bool>(p.drop_loco))
