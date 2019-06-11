@@ -1,17 +1,17 @@
 /* low-mem genotype matrix
-Useful links:
-- http://www.learncpp.com/cpp-tutorial/131-function-templates/
-- https://www.tutorialspoint.com/cplusplus/cpp_overloading.htm
-- https://eigen.tuxfamily.org/dox/TopicFunctionTakingEigenTypes.html
-- https://stackoverflow.com/questions/23841723/eigen-library-assigning-matrixs-elements
+   Useful links:
+   - http://www.learncpp.com/cpp-tutorial/131-function-templates/
+   - https://www.tutorialspoint.com/cplusplus/cpp_overloading.htm
+   - https://eigen.tuxfamily.org/dox/TopicFunctionTakingEigenTypes.html
+   - https://stackoverflow.com/questions/23841723/eigen-library-assigning-matrixs-elements
 
-Outline
-	Basically a wrapper around an Eigen matrix of unsigned ints.
+   Outline
+        Basically a wrapper around an Eigen matrix of unsigned ints.
 
-To compress dosage entries I split the interval [0,2) into 2^n segments (dosage
-matrix assumed to be standardised). For each dosage value I store the index of
-the segment that it falls into, and return the midpoint of the segment when decompressing.
-*/
+   To compress dosage entries I split the interval [0,2) into 2^n segments (dosage
+   matrix assumed to be standardised). For each dosage value I store the index of
+   the segment that it falls into, and return the midpoint of the segment when decompressing.
+ */
 
 #ifndef GENOTYPE_MATRIX
 #define GENOTYPE_MATRIX
@@ -46,8 +46,8 @@ public:
 	bool scaling_performed;
 	parameters params;
 
-	Eigen::Matrix<unsigned char, Eigen::Dynamic, Eigen::Dynamic> M; // used in low-mem mode
-	EigenDataMatrix G; // used when not in low-mem node
+	Eigen::Matrix<unsigned char, Eigen::Dynamic, Eigen::Dynamic> M;     // used in low-mem mode
+	EigenDataMatrix G;     // used when not in low-mem node
 
 	std::vector< int > chromosome;
 	std::vector< std::string > al_0, al_1, rsid;
@@ -57,10 +57,10 @@ public:
 	std::vector< std::string > SNPKEY;
 	std::vector< std::string > SNPID;
 
-	std::vector<std::map<std::size_t, bool>> missing_genos;
+	std::vector<std::map<std::size_t, bool> > missing_genos;
 	Eigen::VectorXd compressed_dosage_means;
 	Eigen::VectorXd compressed_dosage_sds;
-	Eigen::VectorXd compressed_dosage_inv_sds;  // 1 / col-wise sd
+	Eigen::VectorXd compressed_dosage_inv_sds;      // 1 / col-wise sd
 	std::size_t nn, pp;
 
 	// Interface type of Eigen indices -> see eigen3/Eigen/src/Core/EigenBase.h
@@ -74,7 +74,7 @@ public:
 	};
 
 	explicit GenotypeMatrix(const parameters& my_params) : low_mem(my_params.low_mem),
-                                                  params(my_params){
+		params(my_params){
 		scaling_performed = false;
 		nn = 0;
 		pp = 0;
@@ -109,11 +109,11 @@ public:
 
 	// Eigen element access
 	double operator()(const long& ii, const long& jj){
-		if(!scaling_performed){
+		if(!scaling_performed) {
 			calc_scaled_values();
 		}
 
-		if(low_mem){
+		if(low_mem) {
 			return (DecompressDosage(M(ii, jj)) - compressed_dosage_means[jj]) * compressed_dosage_inv_sds[jj];
 		} else {
 			return G(ii, jj);
@@ -125,11 +125,11 @@ public:
 	Eigen::VectorXf col(long jj){
 		assert(jj < pp);
 		Eigen::VectorXf vec(nn);
-		if(!scaling_performed){
+		if(!scaling_performed) {
 			calc_scaled_values();
 		}
 
-		if(low_mem){
+		if(low_mem) {
 			vec = M.cast<float>().col(jj);
 			vec *= (intervalWidth * compressed_dosage_inv_sds[jj]);
 			vec.array() += (0.5 * intervalWidth - compressed_dosage_means[jj]) * compressed_dosage_inv_sds[jj];
@@ -181,13 +181,13 @@ public:
 #ifdef DATA_AS_FLOAT
 	// Eigen matrix multiplication
 	EigenDataMatrix operator*(Eigen::Ref<Eigen::MatrixXd> rhs){
-		if(!scaling_performed){
+		if(!scaling_performed) {
 			calc_scaled_values();
 		}
 		assert(rhs.rows() == pp);
-		if(low_mem){
+		if(low_mem) {
 			EigenDataMatrix res(nn, rhs.cols());
-			for (int ll = 0; ll < rhs.cols(); ll++){
+			for (int ll = 0; ll < rhs.cols(); ll++) {
 				Eigen::Ref<Eigen::VectorXd> tmp = rhs.col(ll);
 				res.col(ll) = M.cast<scalarData>() * compressed_dosage_inv_sds.cast<scalarData>().asDiagonal() * tmp.cast<scalarData>();
 			}
@@ -205,43 +205,43 @@ public:
 	// Eigen matrix multiplication
 	EigenDataMatrix operator*(EigenRefDataMatrix rhs);
 
-	Eigen::MatrixXd transpose_multiply(EigenRefDataArrayXX lhs);
+	Eigen::MatrixXd transpose_multiply(EigenRefDataMatrix lhs);
 
 	EigenDataMatrix col_block(const std::uint32_t& ch_start,
-							  const int& ch_len);
+	                          const int& ch_len);
 
 	// Eigen lhs matrix multiplication
-	Eigen::VectorXd mult_vector_by_chr(const int& chr, const Eigen::Ref<const Eigen::VectorXd>& rhs);
+	Eigen::VectorXd mult_vector_by_chr(const long& chr, const Eigen::Ref<const Eigen::VectorXd>& rhs);
 
 	template <typename Deriv>
-	void col_block3(const std::vector< std::uint32_t>& chunk,
-					Eigen::MatrixBase<Deriv>& D);
+	void col_block3(const std::vector<long>& chunk,
+	                Eigen::MatrixBase<Deriv>& D);
 
 	template <typename Deriv>
-	void get_cols(const std::vector<int> &index,
-				  const std::vector<std::uint32_t> &iter_chunk,
-				  Eigen::MatrixBase<Deriv>& D);
+	void get_cols(const std::vector<long> &index,
+	              const std::vector<long> &iter_chunk,
+	              Eigen::MatrixBase<Deriv>& D);
 
 	// // Eigen lhs matrix multiplication
 	// Eigen::VectorXd transpose_vector_multiply(const Eigen::Ref<const Eigen::VectorXd>& lhs,
-	// 										  bool lhs_centered){
-	// 	// G.transpose_vector_multiply(y) <=> (y^t G)^t <=> G^t y
-	// 	// NOTE: assumes that lhs is centered!
-	// 	if(!scaling_performed){
-	// 		calc_scaled_values();
-	// 	}
+	//                                        bool lhs_centered){
+	//  // G.transpose_vector_multiply(y) <=> (y^t G)^t <=> G^t y
+	//  // NOTE: assumes that lhs is centered!
+	//  if(!scaling_performed){
+	//      calc_scaled_values();
+	//  }
 	//
-	// 	Eigen::VectorXd res;
-	// 	if(low_mem){
-	// 		assert(lhs.rows() == M.rows());
-	// 		assert(std::abs(lhs.sum()) < 1e-9);
+	//  Eigen::VectorXd res;
+	//  if(low_mem){
+	//      assert(lhs.rows() == M.rows());
+	//      assert(std::abs(lhs.sum()) < 1e-9);
 	//
-	// 		res = lhs.transpose() * M.cast<double>();
+	//      res = lhs.transpose() * M.cast<double>();
 	//
-	// 		return res.cwiseProduct(compressed_dosage_inv_sds) * intervalWidth;
-	// 	} else {
-	// 		return lhs.transpose() * G;
-	// 	}
+	//      return res.cwiseProduct(compressed_dosage_inv_sds) * intervalWidth;
+	//  } else {
+	//      return lhs.transpose() * G;
+	//  }
 	// }
 
 	/********** Mean center & unit variance; internal use ************/
@@ -252,9 +252,13 @@ public:
 	void standardise_matrix();
 
 	/********** Utility functions ************/
-	inline Index rows() const { return nn; }
+	inline Index rows() const {
+		return nn;
+	}
 
-	inline Index cols() const { return pp; }
+	inline Index cols() const {
+		return pp;
+	}
 
 	void resize(const long& n, const long& p);
 
@@ -270,7 +274,7 @@ public:
 	/********** Compression/Decompression ************/
 	inline std::uint8_t CompressDosage(double dosage){
 		assert(dosage <= 2.0);
-		if(dosage > 2){
+		if(dosage > 2) {
 			std::cout << "WARNING: dosage = " << dosage << std::endl;
 		}
 		dosage = std::min(dosage, L - 1e-6);

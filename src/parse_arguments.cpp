@@ -986,6 +986,7 @@ void parse_arguments(parameters &p, int argc, char **argv) {
 
 		p.env_coeffs_file = p.resume_prefix + "_env" + file_ext;
 		if(!boost::filesystem::exists(p.env_coeffs_file)) {
+			assert(p.env_file == "NULL");
 			p.env_coeffs_file = "NULL";
 		}
 

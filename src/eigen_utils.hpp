@@ -39,7 +39,7 @@ void read_matrix( const std::string& filename,
                   const long& n_rows,
                   EigenMat& M,
                   std::vector< std::string >& col_names,
-                  std::map< int, bool >& incomplete_row );
+                  std::map<long, bool>& incomplete_row );
 
 
 void read_matrix( const std::string& filename,

@@ -120,7 +120,7 @@ public:
 
 	VariationalParametersLite convert_to_lite() const;
 
-	void calcEdZtZ(const Eigen::Ref<const Eigen::ArrayXXd>& dXtEEX, const int& n_env);
+	void calcEdZtZ(const Eigen::Ref<const Eigen::ArrayXXd>& dXtEEX, const long& n_env);
 };
 
 #endif

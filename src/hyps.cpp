@@ -71,7 +71,10 @@ Hyps operator*(const double &scalar, const Hyps &h1){
 	return hyps;
 }
 
-void Hyps::init_from_grid(int my_n_effects, int ii, int n_var, const Eigen::Ref<const Eigen::MatrixXd> &hyps_grid) {
+void Hyps::init_from_grid(const int& my_n_effects,
+		const int& ii,
+		const long& n_var,
+		const Eigen::Ref<const Eigen::MatrixXd> &hyps_grid) {
 	// Unpack
 	double my_sigma = hyps_grid(ii, sigma_ind);
 	double my_sigma_b = hyps_grid(ii, sigma_b_ind);
