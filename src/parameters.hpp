@@ -79,7 +79,7 @@ public:
 #endif
 		missing_code = -999;
 		vb_iter_max = 10000;
-		maxBytesPerRank = 16000000000;
+		maxBytesPerRank = 14500000000;
 		vb_iter_start = 0;
 		n_pve_samples = 50;
 		LOSO_window = 100000;

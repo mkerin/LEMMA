@@ -18,7 +18,7 @@ mpiUtils::partition_valid_samples_across_ranks(const long &n_samples,
                                                const long &n_var,
                                                const long &n_env,
                                                const parameters &p,
-                                               std::map<std::size_t, bool> &incomplete_cases) {
+                                               std::map<long, bool> &incomplete_cases) {
 	int rank, size;
 	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 	MPI_Comm_size(MPI_COMM_WORLD, &size);
@@ -94,6 +94,12 @@ double mpiUtils::mpiReduce_inplace(double *local) {
 long mpiUtils::mpiReduce_inplace(long *local) {
 	long global;
 	MPI_Allreduce(local, &global, 1, MPI_LONG, MPI_SUM, MPI_COMM_WORLD);
+	return global;
+}
+
+long long mpiUtils::mpiReduce_inplace(long long *local) {
+	long global;
+	MPI_Allreduce(local, &global, 1, MPI_LONG_LONG, MPI_SUM, MPI_COMM_WORLD);
 	return global;
 }
 

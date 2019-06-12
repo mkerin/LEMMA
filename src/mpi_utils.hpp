@@ -52,12 +52,13 @@ void partition_valid_samples_across_ranks(const long& n_samples,
                                           const long &n_var,
                                           const long &n_env,
                                           const parameters &p,
-                                          std::map<std::size_t, bool>& incomplete_cases);
+                                          std::map<long, bool>& incomplete_cases);
 
 void mpiReduce_double(void* local, void* global, long size);
 
 double mpiReduce_inplace(double* local);
 long mpiReduce_inplace(long* local);
+long long mpiReduce_inplace(long long* local);
 
 Eigen::MatrixXd mpiReduce_inplace(Eigen::Ref<Eigen::MatrixXd> local);
 

@@ -50,9 +50,9 @@ public:
 		lambda.resize(n_effects);
 		s_x.resize(n_effects);
 	}
-	void init_from_grid(int n_effects,
-	                    int ii,
-	                    int n_var,
+	void init_from_grid(const int& n_effects,
+	                    const int& ii,
+	                    const long& n_var,
 	                    const Eigen::Ref<const Eigen::MatrixXd>& hyps_grid);
 	void update_pve();
 	void read_from_dump(const std::string& filename);

@@ -21,13 +21,13 @@
 #include <map>
 
 void GenotypeMatrix::assign_index(const long &ii, const long &jj, double x) {
-	if(low_mem){
-		if(std::isnan(x)){
+	if(low_mem) {
+		if(std::isnan(x)) {
 			throw std::runtime_error("ERROR: missing values not yet compatible in low-mem mode");
 		}
 		M(ii, jj) = CompressDosage(x);
 	} else {
-		if(std::isnan(x)){
+		if(std::isnan(x)) {
 			missing_genos[jj][ii] = 1;
 		} else {
 			G(ii, jj) = x;
@@ -38,36 +38,36 @@ void GenotypeMatrix::assign_index(const long &ii, const long &jj, double x) {
 
 #ifdef DATA_AS_FLOAT
 #else
-	void GenotypeMatrix::col(long jj, EigenRefDataVector vec) {
-		assert(jj < pp);
-		if(!scaling_performed){
-			calc_scaled_values();
-		}
-
-		if(low_mem){
-			vec = M.cast<double>().col(jj);
-			vec *= (intervalWidth * compressed_dosage_inv_sds[jj]);
-			vec.array() += (0.5 * intervalWidth - compressed_dosage_means[jj]) * compressed_dosage_inv_sds[jj];
-		} else {
-			vec = G.col(jj);
-		}
-	}
-#endif
-
-Eigen::MatrixXd GenotypeMatrix::transpose_multiply(EigenRefDataArrayXX lhs) {
-	// Return G^t lhs
-	assert(lhs.rows() == nn);
-	if(!scaling_performed){
+void GenotypeMatrix::col(long jj, EigenRefDataVector vec) {
+	assert(jj < pp);
+	if(!scaling_performed) {
 		calc_scaled_values();
 	}
 
-	if(low_mem){
+	if(low_mem) {
+		vec = M.cast<double>().col(jj);
+		vec *= (intervalWidth * compressed_dosage_inv_sds[jj]);
+		vec.array() += (0.5 * intervalWidth - compressed_dosage_means[jj]) * compressed_dosage_inv_sds[jj];
+	} else {
+		vec = G.col(jj);
+	}
+}
+#endif
+
+Eigen::MatrixXd GenotypeMatrix::transpose_multiply(EigenRefDataMatrix lhs) {
+	// Return G^t lhs
+	assert(lhs.rows() == nn);
+	if(!scaling_performed) {
+		calc_scaled_values();
+	}
+
+	if(low_mem) {
 		Eigen::MatrixXd res;
 		Eigen::VectorXd colsums = lhs.colwise().sum().matrix().cast<double>();
 
 		// Diagnostic messages as worried about RAM
 		Eigen::MatrixXd Mt_lhs(pp, lhs.cols());
-		for (int ll = 0; ll < lhs.cols(); ll++){
+		for (int ll = 0; ll < lhs.cols(); ll++) {
 			EigenRefDataVector tmp = lhs.col(ll);
 			Mt_lhs.col(ll) = tmp.cast<double>().transpose() * M.cast<double>();
 		}
@@ -82,15 +82,15 @@ Eigen::MatrixXd GenotypeMatrix::transpose_multiply(EigenRefDataArrayXX lhs) {
 }
 
 EigenDataMatrix GenotypeMatrix::col_block(const std::uint32_t &ch_start, const int &ch_len) {
-	if(!scaling_performed){
+	if(!scaling_performed) {
 		calc_scaled_values();
 	}
 
-	if(low_mem){
+	if(low_mem) {
 		double ww = intervalWidth;
 
-		EigenDataArrayX  E = (0.5 * ww - compressed_dosage_means.segment(ch_start, ch_len).array()).cast<scalarData>();
-		EigenDataArrayX  S = compressed_dosage_inv_sds.segment(ch_start, ch_len).cast<scalarData>();
+		EigenDataArrayX E = (0.5 * ww - compressed_dosage_means.segment(ch_start, ch_len).array()).cast<scalarData>();
+		EigenDataArrayX S = compressed_dosage_inv_sds.segment(ch_start, ch_len).cast<scalarData>();
 		EigenDataArrayXX res;
 
 		res = ww * M.block(0, ch_start, nn, ch_len).cast<scalarData>();
@@ -102,10 +102,10 @@ EigenDataMatrix GenotypeMatrix::col_block(const std::uint32_t &ch_start, const i
 	}
 }
 
-Eigen::VectorXd GenotypeMatrix::mult_vector_by_chr(const int &chr, const Eigen::Ref<const Eigen::VectorXd> &rhs) {
+Eigen::VectorXd GenotypeMatrix::mult_vector_by_chr(const long& chr, const Eigen::Ref<const Eigen::VectorXd> &rhs) {
 	// (y^t G)^t <=> G^t y
 	assert(rhs.rows() == pp);
-	if(!scaling_performed){
+	if(!scaling_performed) {
 		calc_scaled_values();
 	}
 
@@ -121,7 +121,7 @@ Eigen::VectorXd GenotypeMatrix::mult_vector_by_chr(const int &chr, const Eigen::
 	chr_size = chr_en - chr_st + 1;
 
 	Eigen::VectorXd res;
-	if(low_mem){
+	if(low_mem) {
 		Eigen::VectorXd rhs_trans = rhs.cwiseProduct(compressed_dosage_inv_sds);
 		auto offset = rhs_trans.segment(chr_st, chr_size).sum() * intervalWidth * 0.5;
 		offset -= compressed_dosage_means.segment(chr_st, chr_size).dot(rhs_trans.segment(chr_st, chr_size));
@@ -134,15 +134,16 @@ Eigen::VectorXd GenotypeMatrix::mult_vector_by_chr(const int &chr, const Eigen::
 }
 
 template<typename Deriv>
-void GenotypeMatrix::col_block3(const std::vector<std::uint32_t> &chunk, Eigen::MatrixBase<Deriv> &D) {
-	if(!scaling_performed){
+void GenotypeMatrix::col_block3(const std::vector<long> &chunk,
+		Eigen::MatrixBase<Deriv> &D) {
+	if(!scaling_performed) {
 		calc_scaled_values();
 	}
 
 	// Partition jobs amongst threads
-	unsigned long ch_len = chunk.size();
-	std::vector<std::vector<int>> indexes(params.n_thread);
-	for (int ii = 0; ii < ch_len; ii++) {
+	long ch_len = chunk.size();
+	std::vector<std::vector<long> > indexes(params.n_thread);
+	for (long ii = 0; ii < ch_len; ii++) {
 		// indexes[ii % params.n_thread].push_back(ii);
 		indexes[0].push_back(ii);
 	}
@@ -151,35 +152,36 @@ void GenotypeMatrix::col_block3(const std::vector<std::uint32_t> &chunk, Eigen::
 // #ifdef DEBUG
 	get_cols(indexes[0], chunk, D);
 	// for (int nn = 1; nn < params.n_thread; nn++){
-	// 	get_cols(indexes[nn], chunk, D);
+	//  get_cols(indexes[nn], chunk, D);
 	// }
 // #else
-// 		std::thread t1[params.n_thread];
-// 		for (int nn = 1; nn < params.n_thread; nn++){
-// 			t1[nn] = std::thread( [this, &indexes, nn, &chunk, &D] {
-// 				get_cols(indexes[nn], chunk, D);
-// 			});
-// 		}
-// 		get_cols(indexes[0], chunk, D);
-// 		for (int nn = 1; nn < params.n_thread; nn++){
-// 			t1[nn].join();
-// 		}
+//      std::thread t1[params.n_thread];
+//      for (int nn = 1; nn < params.n_thread; nn++){
+//          t1[nn] = std::thread( [this, &indexes, nn, &chunk, &D] {
+//              get_cols(indexes[nn], chunk, D);
+//          });
+//      }
+//      get_cols(indexes[0], chunk, D);
+//      for (int nn = 1; nn < params.n_thread; nn++){
+//          t1[nn].join();
+//      }
 // #endif
 }
 
 template<typename Deriv>
-void GenotypeMatrix::get_cols(const std::vector<int> &index, const std::vector<std::uint32_t> &iter_chunk,
-							  Eigen::MatrixBase<Deriv> &D) {
+void GenotypeMatrix::get_cols(const std::vector<long> &index,
+		const std::vector<long> &iter_chunk,
+                              Eigen::MatrixBase<Deriv> &D) {
 	// D.col(ii) = X.col(chunk(ii))
-	for(int ii : index ) {
-		std::uint32_t jj = (iter_chunk[ii] % pp);
+	for(const auto& ii : index ) {
+		long jj = (iter_chunk[ii] % pp);
 //			D.col(ii) = col(jj);
 		col(jj, D.col(ii));
 	}
 }
 
 void GenotypeMatrix::calc_scaled_values() {
-	if (low_mem){
+	if (low_mem) {
 		compute_means_and_sd();
 	} else {
 		standardise_matrix();
@@ -192,10 +194,10 @@ void GenotypeMatrix::compute_means_and_sd() {
 	double Nglobal = mpiUtils::mpiReduce_inplace(&Nlocal);
 
 	// Column means
-	for (Index jj = 0; jj < pp; jj++){
+	for (Index jj = 0; jj < pp; jj++) {
 		double sum_mij = 0;
 		compressed_dosage_means[jj] = 0;
-		for (Index ii = 0; ii < nn; ii++){
+		for (Index ii = 0; ii < nn; ii++) {
 			sum_mij += DecompressDosage(M(ii, jj));
 		}
 		sum_mij = mpiUtils::mpiReduce_inplace(&sum_mij);
@@ -205,9 +207,9 @@ void GenotypeMatrix::compute_means_and_sd() {
 
 	// Column standard deviation
 	double val, sigma;
-	for (Index jj = 0; jj < pp; jj++){
+	for (Index jj = 0; jj < pp; jj++) {
 		sigma = 0;
-		for (Index ii = 0; ii < nn; ii++){
+		for (Index ii = 0; ii < nn; ii++) {
 			val = DecompressDosage(M(ii, jj)) - compressed_dosage_means[jj];
 			sigma += val * val;
 		}
@@ -218,9 +220,9 @@ void GenotypeMatrix::compute_means_and_sd() {
 //	compressed_dosage_sds /= ((double) nn - 1.0);
 //	compressed_dosage_sds = compressed_dosage_sds.array().sqrt().matrix();
 
-	for (Index jj = 0; jj < pp; jj++){
+	for (Index jj = 0; jj < pp; jj++) {
 		sigma = compressed_dosage_sds[jj];
-		if (sigma > 1e-9){
+		if (sigma > 1e-9) {
 			compressed_dosage_inv_sds[jj] = 1 / sigma;
 		} else {
 			compressed_dosage_inv_sds[jj] = 0.0;
@@ -229,7 +231,7 @@ void GenotypeMatrix::compute_means_and_sd() {
 }
 
 void GenotypeMatrix::standardise_matrix() {
-	if(!low_mem){
+	if(!low_mem) {
 		for (std::size_t k = 0; k < pp; k++) {
 			double mu = 0.0;
 			double count = 0;
@@ -263,7 +265,7 @@ void GenotypeMatrix::standardise_matrix() {
 }
 
 void GenotypeMatrix::resize(const long &n, const long &p) {
-	if(low_mem){
+	if(low_mem) {
 		M.resize(n, p);
 	} else {
 		G.resize(n, p);
@@ -291,7 +293,7 @@ void GenotypeMatrix::move_variant(std::uint32_t old_index, std::uint32_t new_ind
 	// exclude from analysis.
 	assert(new_index < old_index);
 
-	if(low_mem){
+	if(low_mem) {
 		M.col(new_index) = M.col(old_index);
 	} else {
 		G.col(new_index) = G.col(old_index);
@@ -311,7 +313,7 @@ void GenotypeMatrix::move_variant(std::uint32_t old_index, std::uint32_t new_ind
 }
 
 void GenotypeMatrix::conservativeResize(const long &n, const long &p) {
-	if(low_mem){
+	if(low_mem) {
 		M.conservativeResize(n, p);
 	} else {
 		G.conservativeResize(n, p);
@@ -337,11 +339,11 @@ void GenotypeMatrix::conservativeResize(const long &n, const long &p) {
 Eigen::VectorXd GenotypeMatrix::col(long jj) {
 	assert(jj < pp);
 	Eigen::VectorXd vec(nn);
-	if(!scaling_performed){
+	if(!scaling_performed) {
 		calc_scaled_values();
 	}
 
-	if(low_mem){
+	if(low_mem) {
 		vec = M.cast<double>().col(jj);
 		vec *= (intervalWidth * compressed_dosage_inv_sds[jj]);
 		vec.array() += (0.5 * intervalWidth - compressed_dosage_means[jj]) * compressed_dosage_inv_sds[jj];
@@ -352,13 +354,13 @@ Eigen::VectorXd GenotypeMatrix::col(long jj) {
 }
 
 EigenDataMatrix GenotypeMatrix::operator*(EigenRefDataMatrix rhs) {
-	if(!scaling_performed){
+	if(!scaling_performed) {
 		calc_scaled_values();
 	}
 	assert(rhs.rows() == pp);
-	if(low_mem){
+	if(low_mem) {
 		EigenDataMatrix res(nn, rhs.cols());
-		for (int ll = 0; ll < rhs.cols(); ll++){
+		for (int ll = 0; ll < rhs.cols(); ll++) {
 			EigenRefDataVector tmp = rhs.col(ll);
 			res.col(ll) = M.cast<scalarData>() * compressed_dosage_inv_sds.cast<scalarData>().asDiagonal() * tmp.cast<scalarData>();
 		}
@@ -376,7 +378,7 @@ EigenDataMatrix GenotypeMatrix::operator*(EigenRefDataMatrix rhs) {
 // No need to call this TemporaryFunction() function,
 // it's just to avoid link error.
 void TemporaryFunctionGenotypeMatrix (){
-	std::vector< std::uint32_t> chunk;
+	std::vector<long> chunk;
 	EigenDataMatrix mat;
 	GenotypeMatrix X(false);
 

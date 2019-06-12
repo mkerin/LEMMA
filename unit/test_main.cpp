@@ -141,7 +141,7 @@ TEST_CASE( "Example 4: multi-env + mog + covars + emp_bayes" ){
 
 			// Expectation of linear regression log-likelihood
 			int_linear  = (VB.Y - vp.ym).squaredNorm();
-			int_linear -= 2.0 * (VB.Y - vp.ym).cwiseProduct(vp.eta).dot(vp.yx);
+			int_linear -= 2.0 * (VB.Y - vp.ym).cwiseProduct(vp.eta).cwiseProduct(vp.yx).sum();
 			int_linear += vp.yx.cwiseProduct(vp.eta_sq).dot(vp.yx);
 			// CHECK(int_linear == Approx(21.6133648827));
 

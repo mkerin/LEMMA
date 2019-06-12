@@ -33,7 +33,7 @@ Eigen::MatrixXd EigenUtils::subset_matrix(const Eigen::MatrixXd &orig, const std
 
 template <typename EigenMat>
 void EigenUtils::read_matrix(const std::string &filename, const long &n_rows, EigenMat &M, std::vector<std::string> &col_names,
-                             std::map<int, bool> &incomplete_row) {
+                             std::map<long, bool> &incomplete_row) {
 	/* Assumptions:
 	   - n_rows constant (number of samples constant across files)
 	 */
@@ -366,9 +366,9 @@ void EigenUtils::center_matrix(EigenMat& M){
 // https://stackoverflow.com/questions/2152002/how-do-i-force-a-particular-instance-of-a-c-template-to-instantiate
 
 template void EigenUtils::read_matrix(const std::string&, const long&,
-                                      Eigen::MatrixXf&, std::vector<std::string>&, std::map<int, bool>&);
+                                      Eigen::MatrixXf&, std::vector<std::string>&, std::map<long, bool>&);
 template void EigenUtils::read_matrix(const std::string&, const long&,
-                                      Eigen::MatrixXd&, std::vector<std::string>&, std::map<int, bool>&);
+                                      Eigen::MatrixXd&, std::vector<std::string>&, std::map<long, bool>&);
 template void EigenUtils::center_matrix(Eigen::MatrixXd&);
 template void EigenUtils::center_matrix(Eigen::VectorXd&);
 template void EigenUtils::center_matrix(Eigen::MatrixXf&);

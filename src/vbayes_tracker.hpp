@@ -34,7 +34,7 @@ namespace boost_io = boost::iostreams;
 
 class VbTracker {
 public:
-	int count;                                                                    // Number of iterations to convergence at each step
+	long count;                                                                    // Number of iterations to convergence at each step
 	VariationalParametersLite vp;                                                     // best mu at each ii
 	double logw;                                                                     // best logw at each ii
 	Hyps hyps;                                                                      // hyps values at end of VB inference.
@@ -50,7 +50,7 @@ public:
 	std::chrono::system_clock::time_point time_check;
 	long count_to_convergence;
 
-	VbTracker(parameters my_params) : p(my_params), vp(my_params), hyps(my_params) {
+	VbTracker(const parameters& my_params) : p(my_params), vp(my_params), hyps(my_params) {
 		main_out_file = p.out_file;
 		count_to_convergence = 0;
 	}
@@ -69,11 +69,11 @@ public:
 		boost_io::close(outf_weights);
 	};
 
-	void init_interim_output(const int ii,
-	                         const int round_index,
-	                         const int n_effects,
-	                         const int n_covar,
-	                         const int n_env,
+	void init_interim_output(const long& ii,
+	                         const int& round_index,
+	                         const int& n_effects,
+	                         const long& n_covar,
+	                         const long& n_env,
 	                         std::vector< std::string > env_names,
 	                         const VariationalParameters& vp){
 		time_check = std::chrono::system_clock::now();
@@ -126,7 +126,7 @@ public:
 		outf_iter << " secs" << std::endl;
 	}
 
-	void push_interim_hyps(const int& cnt,
+	void push_interim_hyps(const long& cnt,
 	                       const Hyps& i_hyps,
 	                       const double& c_logw,
 	                       const double& covar_diff,
@@ -134,9 +134,9 @@ public:
 	                       const double& gam_diff,
 	                       const double& w_diff,
 	                       const int& n_effects,
-	                       const unsigned long& n_var,
-	                       const unsigned long& n_covar,
-	                       const unsigned long& n_env,
+	                       const long& n_var,
+	                       const long& n_covar,
+	                       const long& n_env,
 	                       const VariationalParameters& vp) {
 		// Diagnostics + env-weights from latest vb iteration
 		std::chrono::duration<double> lapsecs = std::chrono::system_clock::now() - time_check;
@@ -188,24 +188,11 @@ public:
 		}
 	}
 
-	void push_vp_converged(const GenotypeMatrix& X,
-	                       const std::uint32_t n_var,
-	                       const int& n_effects){
-		// Assumes that information for all measures that we track have between
-		// added to VbTracker at index ii.
-		if (p.verbose) std::cout << "Pushing converged vp" << std::endl;
-		// Converged snp-stats to file
-		fstream_init(outf_inits, dir, "_converged", true);
-		fileUtils::write_snp_stats_to_file(outf_inits, n_effects, n_var, vp, X, p, true);
-		boost_io::close(outf_inits);
-	}
-
-
 	void dump_state(const std::string& count,
 	                const long& n_samples,
 	                const long& n_covar,
 	                const long& n_var,
-	                const int& n_env,
+	                const long& n_env,
 	                const int& n_effects,
 	                const VariationalParameters& vp,
 	                const Hyps& hyps,
@@ -254,7 +241,7 @@ public:
 				fstream_init(outf_inits, dir, "_dump_it" + count + "_env", true);
 				outf_inits << std::scientific << std::setprecision(7);
 				outf_inits << "env mu s_sq" << std::endl;
-				for (int ll = 0; ll < n_env; ll++) {
+				for (long ll = 0; ll < n_env; ll++) {
 					outf_inits << env_names[ll] << " ";
 					outf_inits << vp.muw(ll) << " ";
 					outf_inits << vp.sw_sq(ll) << std::endl;

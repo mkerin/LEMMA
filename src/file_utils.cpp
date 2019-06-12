@@ -75,9 +75,13 @@ std::string variational_params_header(const parameters& p, const int& effect_ind
 	return header;
 }
 
-void fileUtils::write_snp_stats_to_file(boost_io::filtering_ostream &ofile, const int &n_effects, const int &n_var,
-                                        const VariationalParameters &vp, const GenotypeMatrix &X, const parameters &p,
-                                        const bool &write_mog) {
+void fileUtils::write_snp_stats_to_file(boost_io::filtering_ostream &ofile,
+		const int &n_effects,
+		const long &n_var,
+		const VariationalParameters &vp,
+		const GenotypeMatrix &X,
+		const parameters &p,
+		const bool &write_mog) {
 	// Function to write parameter values from genetic effects to file
 	// Assumes ofile has been initialised
 
@@ -124,9 +128,13 @@ void fileUtils::write_snp_stats_to_file(boost_io::filtering_ostream &ofile, cons
 	}
 }
 
-void fileUtils::write_snp_stats_to_file(boost_io::filtering_ostream &ofile, const int &n_effects, const int &n_var,
-                                        const VariationalParametersLite &vp, const GenotypeMatrix &X, const parameters &p,
-                                        const bool &write_mog) {
+void fileUtils::write_snp_stats_to_file(boost_io::filtering_ostream &ofile,
+		const int &n_effects,
+		const long &n_var,
+		const VariationalParametersLite &vp,
+		const GenotypeMatrix &X,
+		const parameters &p,
+		const bool &write_mog) {
 	// Function to write parameter values from genetic effects to file
 	// Assumes ofile has been initialised
 
@@ -415,13 +423,13 @@ void fileUtils::dump_yhat_to_file(boost_io::filtering_ostream &outf,
                                   const long &n_samples,
                                   const long &n_covar,
                                   const long &n_var,
-                                  const int &n_env,
+                                  const long &n_env,
                                   const EigenDataVector &Y,
                                   const VariationalParametersLite &vp,
                                   const Eigen::Ref<const Eigen::VectorXd> &Ealpha,
                                   std::unordered_map<long, bool> sample_is_invalid){
 	std::vector<Eigen::VectorXd> resid_loco;
-	std::vector<int> chrs_present;
+	std::vector<long> chrs_present;
 
 	fileUtils::dump_yhat_to_file(outf, n_samples, n_covar,
 	                             n_var, n_env, Y,
@@ -434,13 +442,13 @@ void fileUtils::dump_yhat_to_file(boost_io::filtering_ostream &outf,
                                   const long &n_samples,
                                   const long &n_covar,
                                   const long &n_var,
-                                  const int &n_env,
+                                  const long &n_env,
                                   const EigenDataVector &Y,
                                   const VariationalParametersLite &vp,
                                   const Eigen::Ref<const Eigen::VectorXd> &Ealpha,
                                   std::unordered_map<long, bool> sample_is_invalid,
                                   const std::vector<Eigen::VectorXd> &resid_loco,
-                                  std::vector<int> chrs_present) {
+                                  std::vector<long> chrs_present) {
 	assert(chrs_present.size() == resid_loco.size() || resid_loco.empty());
 
 	int world_size, rank;

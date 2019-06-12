@@ -70,10 +70,10 @@ public:
 
 	std::vector< std::string > rsid_list;
 
-	std::map<int, bool> missing_envs;
-	std::map<int, bool> missing_covars;
-	std::map<int, bool> missing_phenos;
-	std::map< std::size_t, bool > incomplete_cases;
+	std::map<long, bool> missing_envs;
+	std::map<long, bool> missing_covars;
+	std::map<long, bool> missing_phenos;
+	std::map<long, bool> incomplete_cases;
 
 	std::vector< std::string > pheno_names;
 	std::vector< std::string > covar_names;
@@ -982,6 +982,7 @@ public:
 			// Reading from hyps dump
 			Hyps hyps(p);
 			hyps.read_from_dump(p.hyps_grid_file);
+			assert(hyps.n_effects == n_effects);
 			hyps_inits.push_back(hyps);
 		} else if(hyps_names == case4c) {
 			// h_b lambda_b f1_b
@@ -1154,13 +1155,18 @@ public:
 			// Unknown header
 			std::cout << "Unknown header in " << p.vb_init_file << std::endl;
 			std::cout << "Expected headers are:" << std::endl;
-			for (auto ss : case1) std::cout << ss << " ";
+			for (const auto& ss : case1) std::cout << ss << " ";
 			std::cout << std::endl;
-			for (auto ss : case2) std::cout << ss << " ";
+			for (const auto& ss : case2) std::cout << ss << " ";
 			std::cout << std::endl;
-			for (auto ss : case3b) std::cout << ss << " ";
+			for (const auto& ss : case3b) std::cout << ss << " ";
 			std::cout << std::endl;
 			throw std::runtime_error("Unexpected header");
+		}
+
+		assert(vp_init.alpha_beta.rows() == n_var);
+		if(n_env > 0){
+			assert(vp_init.alpha_gam.rows() == n_var);
 		}
 	}
 
@@ -1184,6 +1190,7 @@ public:
 			} else {
 				throw std::runtime_error("Unexpected file to --environment_weights");
 			}
+			assert(vp_init.muw.rows() == n_env);
 		} else if (n_env > 1 && p.init_weights_with_snpwise_scan) {
 			assert(false);
 			// calc_snpwise_regression(vp_init);
@@ -1206,6 +1213,7 @@ public:
 			} else {
 				throw std::runtime_error("Unexpected file to --environment_weights");
 			}
+			assert(vp_init.muc.rows() == n_covar);
 		} else if (n_covar > 0) {
 			// Start covars at least squared solution
 			std::cout << "Starting covars at least squares fit" << std::endl;
@@ -1243,7 +1251,7 @@ public:
 	EigenMat reduce_mat_to_complete_cases( EigenMat& M,
 	                                       bool& matrix_reduced,
 	                                       const long& n_cols,
-	                                       const std::map< std::size_t, bool >& incomplete_cases ) {
+	                                       const std::map<long, bool>& incomplete_cases ) {
 		// Remove rows contained in incomplete_cases
 		EigenMat M_tmp;
 		if (matrix_reduced) {

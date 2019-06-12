@@ -229,7 +229,7 @@ VariationalParametersLite VariationalParameters::convert_to_lite() const {
 	return vplite;
 }
 
-void VariationalParameters::calcEdZtZ(const Eigen::Ref<const Eigen::ArrayXXd> &dXtEEX_lowertri, const int &n_env) {
+void VariationalParameters::calcEdZtZ(const Eigen::Ref<const Eigen::ArrayXXd> &dXtEEX_lowertri, const long &n_env) {
 	Eigen::ArrayXd EdZtZlocal = Eigen::ArrayXd::Zero(alpha_beta.rows());
 
 	int world_rank;

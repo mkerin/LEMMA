@@ -24,7 +24,8 @@
 #include <chrono>     // start/end time info
 #include <cmath>      // isnan
 #include <ctime>      // start/end time info
-#include <cstdint>    // uint32_t
+#include <cstdint>
+#include <cstdio>
 #include <iostream>
 #include <iterator>
 #include <limits>
@@ -60,11 +61,11 @@ public:
 
 // sizes
 	int n_effects;
-	std::uint32_t n_samples;
-	unsigned long n_covar;
-	unsigned long n_env;
-	std::uint32_t n_var;
-	std::uint32_t n_var2;
+	long n_samples;
+	long n_covar;
+	long n_env;
+	long n_var;
+	long n_var2;
 	bool random_params_init;
 	bool run_round1;
 	double Nglobal;
@@ -72,28 +73,28 @@ public:
 	bool first_covar_update;
 
 // Chromosomes in data
-	int n_chrs;
-	std::vector<int> chrs_present;
-	std::vector<int> chrs_index;
+	long n_chrs;
+	std::vector<long> chrs_present;
+	std::vector<long> chrs_index;
 
 
 //
 	parameters& p;
-	std::vector< std::uint32_t > fwd_pass;
-	std::vector< std::uint32_t > back_pass;
+	std::vector<long> fwd_pass;
+	std::vector<long> back_pass;
 //	std::vector< std::vector < std::uint32_t >> fwd_pass_chunks;
 //	std::vector< std::vector < std::uint32_t >> back_pass_chunks;
-	std::vector< std::vector < std::uint32_t > > main_fwd_pass_chunks, gxe_fwd_pass_chunks;
-	std::vector< std::vector < std::uint32_t > > main_back_pass_chunks, gxe_back_pass_chunks;
-	std::vector< int > env_fwd_pass, covar_fwd_pass;
-	std::vector< int > env_back_pass, covar_back_pass;
+	std::vector< std::vector <long> > main_fwd_pass_chunks, gxe_fwd_pass_chunks;
+	std::vector< std::vector <long> > main_back_pass_chunks, gxe_back_pass_chunks;
+	std::vector<long> env_fwd_pass, covar_fwd_pass;
+	std::vector<long> env_back_pass, covar_back_pass;
 	std::map<long, Eigen::MatrixXd> XtX_block_cache, ZtZ_block_cache;
 
 // Data
 	GenotypeMatrix&  X;
-	EigenDataVector Y;
+	EigenDataMatrix& Y;
 	EigenDataArrayX Cty;
-	EigenDataArrayXX E;
+	EigenDataMatrix& E;
 	EigenDataMatrix& C;
 	Eigen::MatrixXd XtE;
 	Eigen::MatrixXd CtCRidgeInv;
@@ -121,15 +122,25 @@ public:
 	std::chrono::duration<double> elapsed_innerLoop;
 
 	explicit VBayesX2(Data& dat) : X(dat.G),
-		Y(Eigen::Map<EigenDataVector>(dat.Y.data(), dat.Y.rows())),
+		Y(dat.Y),
 		C(dat.C),
+		E(dat.E),
 		dXtEEX_lowertri(dat.dXtEEX_lowertri),
 		snpstats(dat.snpstats),
 		p(dat.p),
 		hyps_inits(dat.hyps_inits),
 		sample_is_invalid(dat.sample_is_invalid),
 		vp_init(dat.vp_init){
-		std::cout << "Initialising vbayes object" << std::endl;
+#ifndef OSX
+		long long kbMax, kbGlobal, kbLocal = getValueRAM();
+		MPI_Allreduce(&kbLocal, &kbMax, 1, MPI_LONG_LONG, MPI_MAX, MPI_COMM_WORLD);
+		MPI_Allreduce(&kbLocal, &kbGlobal, 1, MPI_LONG_LONG, MPI_SUM, MPI_COMM_WORLD);
+		double gbGlobal = kbGlobal / 1000.0 / 1000.0;
+		double gbMax = kbMax / 1000.0 / 1000.0;
+		printf("Initialising vbayes object (RAM usage: %.2f GB in total; max of %.2f GB per rank)", gbGlobal, gbMax);
+#else
+		printf("Initialising vbayes object");
+		#endif
 		mkl_set_num_threads_local(p.n_thread);
 		MPI_Comm_rank(MPI_COMM_WORLD, &world_rank);
 
@@ -144,7 +155,7 @@ public:
 		env_names      = dat.env_names;
 		double Nlocal  = (double) n_samples;
 		Nglobal        = mpiUtils::mpiReduce_inplace(&Nlocal);
-		E = dat.E;
+		// E = dat.E;
 		first_covar_update = true;
 
 		assert(Y.rows() == n_samples);
@@ -206,22 +217,22 @@ public:
 		}
 
 		// Allocate memory - fwd/back pass vectors
-		for(std::uint32_t kk = 0; kk < n_var * n_effects; kk++) {
+		for(long kk = 0; kk < n_var * n_effects; kk++) {
 			fwd_pass.push_back(kk);
 			back_pass.push_back(n_var2 - kk - 1);
 		}
 
-		for(int ll = 0; ll < n_env; ll++) {
+		for(long ll = 0; ll < n_env; ll++) {
 			env_fwd_pass.push_back(ll);
 			env_back_pass.push_back(n_env - ll - 1);
 		}
 
-		for(int ll = 0; ll < n_covar; ll++) {
+		for(long ll = 0; ll < n_covar; ll++) {
 			covar_fwd_pass.push_back(ll);
 			covar_back_pass.push_back(n_covar - ll - 1);
 		}
 
-		unsigned long n_main_segs, n_gxe_segs, n_chunks;
+		long n_main_segs, n_gxe_segs, n_chunks;
 		// ceiling of n_var / chunk size
 		n_main_segs = (n_var + p.main_chunk_size - 1) / p.main_chunk_size;
 		// ceiling of n_var / chunk size
@@ -243,9 +254,9 @@ public:
 		main_back_pass_chunks.resize(n_main_segs);
 		gxe_fwd_pass_chunks.resize(n_gxe_segs);
 		gxe_back_pass_chunks.resize(n_gxe_segs);
-		for(std::uint32_t kk = 0; kk < n_var; kk++) {
-			std::uint32_t main_ch_index = kk / p.main_chunk_size;
-			std::uint32_t gxe_ch_index = kk / p.gxe_chunk_size;
+		for(long kk = 0; kk < n_var; kk++) {
+			long main_ch_index = kk / p.main_chunk_size;
+			long gxe_ch_index = kk / p.gxe_chunk_size;
 			main_fwd_pass_chunks[main_ch_index].push_back(kk);
 			main_back_pass_chunks[n_main_segs - 1 - main_ch_index].push_back(kk);
 			gxe_fwd_pass_chunks[gxe_ch_index].push_back(kk + n_var);
@@ -305,9 +316,9 @@ public:
 
 		// Initialise summary vars for vp_init
 		if(n_env > 0) {
-			vp_init.eta     = E.matrix() * vp_init.muw.matrix().cast<scalarData>();
+			vp_init.eta     = E * vp_init.muw.matrix().cast<scalarData>();
 			vp_init.eta_sq  = vp_init.eta.array().square().matrix();
-			vp_init.eta_sq += E.square().matrix() * vp_init.sw_sq.matrix().template cast<scalarData>();
+			vp_init.eta_sq += E.cwiseProduct(E) * vp_init.sw_sq.matrix().template cast<scalarData>();
 		}
 		calcPredEffects(vp_init);
 
@@ -362,7 +373,6 @@ public:
 		std::vector< VbTracker > trackers(n_grid, p);
 		run_inference(hyps_inits, false, 2, trackers);
 		write_converged_hyperparams_to_file("", trackers, n_grid);
-		std::cout << "Variational inference finished" << std::endl;
 	}
 
 	void run_inference(const std::vector<Hyps>& hyps_inits,
@@ -448,7 +458,7 @@ public:
 		std::vector<Hyps> theta2 = all_hyps;
 
 		// Allow more flexible start point so that we can resume previous inference run
-		int count = p.vb_iter_start;
+		long count = p.vb_iter_start;
 		while(!all_converged && count < p.vb_iter_max) {
 			if (p.mode_debug) std::cout << "Iter count: " << count << std::endl;
 			for (int nn = 0; nn < n_grid; nn++) {
@@ -590,9 +600,9 @@ public:
 			all_tracker[nn].count = count;
 			all_tracker[nn].vp = all_vp[nn].convert_to_lite();
 			all_tracker[nn].hyps = all_hyps[nn];
-			// all_tracker[nn].push_vp_converged(X, n_var, n_effects);
 		}
-		if (p.mode_debug) std::cout << "VB algo finished" << std::endl;
+
+		std::cout << "Variational inference finished after " << count << " iterations." << std::endl;
 	}
 
 	void setup_variational_params(const std::vector<Hyps>& all_hyps,
@@ -629,7 +639,7 @@ public:
 	}
 
 /********** VB update functions ************/
-	void updateAllParams(const int& count,
+	void updateAllParams(const long& count,
 	                     const int& round_index,
 	                     std::vector<VariationalParameters>& all_vp,
 	                     std::vector<Hyps>& all_hyps,
@@ -700,7 +710,7 @@ public:
 		}
 	}
 
-	void updateCovarEffects(const std::vector< int >& iter,
+	void updateCovarEffects(const std::vector<long>& iter,
 	                        VariationalParameters& vp,
 	                        const Hyps& hyps){
 		//
@@ -745,12 +755,12 @@ public:
 		}
 	}
 
-	void updateAlphaMu(const std::vector< std::vector< std::uint32_t > >& iter_chunks,
+	void updateAlphaMu(const std::vector< std::vector<long> >& iter_chunks,
 	                   const std::vector<Hyps>& all_hyps,
 	                   std::vector<VariationalParameters>& all_vp,
 	                   const bool& is_fwd_pass,
 	                   std::vector<double> logw_prev,
-	                   int count){
+	                   const long& count){
 		// Divide updates into chunks
 		// Partition chunks amongst available threads
 		unsigned long n_grid = all_hyps.size();
@@ -761,9 +771,9 @@ public:
 		Eigen::MatrixXd rr_diff;
 
 		for (std::uint32_t ch = 0; ch < iter_chunks.size(); ch++) {
-			std::vector< std::uint32_t > chunk = iter_chunks[ch];
+			std::vector<long> chunk = iter_chunks[ch];
 			int ee                 = chunk[0] / n_var;
-			unsigned long ch_len   = chunk.size();
+			long ch_len   = chunk.size();
 
 			// D is n_samples x snp_batch
 			if(D.cols() != ch_len) {
@@ -811,7 +821,7 @@ public:
 	}
 
 	void adjustParams(const int& nn, const unsigned long& memoize_id,
-	                  const std::vector<std::uint32_t>& chunk,
+	                  const std::vector<long>& chunk,
 	                  const EigenDataMatrix& D,
 	                  const Eigen::Ref<const Eigen::VectorXd>& A,
 	                  const std::vector<Hyps>& all_hyps,
@@ -877,7 +887,7 @@ public:
 		return(resGlobal.template cast<double>());
 	}
 
-	void _internal_updateAlphaMu_beta(const std::vector< std::uint32_t >& iter_chunk,
+	void _internal_updateAlphaMu_beta(const std::vector<long>& iter_chunk,
 	                                  const Eigen::Ref<const Eigen::VectorXd>& A,
 	                                  const Eigen::Ref<const Eigen::MatrixXd>& D_corr,
 	                                  const Hyps& hyps,
@@ -899,7 +909,7 @@ public:
 		Eigen::VectorXd rr_k(ch_len);
 		assert(rr_k_diff.rows() == ch_len);
 		for (int ii = 0; ii < ch_len; ii++) {
-			std::uint32_t jj = iter_chunk[ii];
+			long jj = iter_chunk[ii];
 
 			// Log prev value
 			rr_k(ii) = vp.mean_beta(jj);
@@ -937,7 +947,7 @@ public:
 	               const double& ff_k,
 	               const double& offset,
 	               const Hyps& hyps,
-	               const std::uint32_t& ii,
+	               const long& ii,
 	               const Eigen::Ref<const Eigen::MatrixXd>& rr_k_diff,
 	               const Eigen::Ref<const Eigen::VectorXd>& A,
 	               const Eigen::Ref<const Eigen::MatrixXd>& D_corr,
@@ -960,14 +970,14 @@ public:
 		}
 	}
 
-	void _internal_updateAlphaMu_gam(const std::vector< std::uint32_t >& iter_chunk,
+	void _internal_updateAlphaMu_gam(const std::vector<long>& iter_chunk,
 	                                 const Eigen::Ref<const Eigen::VectorXd>& A,
 	                                 const Eigen::Ref<const Eigen::MatrixXd>& D_corr,
 	                                 const Hyps& hyps,
 	                                 VariationalParameters& vp,
 	                                 Eigen::Ref<Eigen::MatrixXd> rr_k_diff){
 
-		int ch_len = iter_chunk.size();
+		long ch_len = iter_chunk.size();
 		int ee     = 1;
 
 		Eigen::ArrayXd alpha_cnst;
@@ -984,7 +994,7 @@ public:
 		assert(rr_k_diff.rows() == ch_len);
 		for (int ii = 0; ii < ch_len; ii++) {
 			// variant index
-			std::uint32_t jj = (iter_chunk[ii] % n_var);
+			long jj = (iter_chunk[ii] % n_var);
 
 			// Log prev value
 			rr_k(ii) = vp.mean_gam(jj);
@@ -1102,7 +1112,7 @@ public:
 		// hyps.sigma_g_spike = hyps.spike_relative_var(1);
 	}
 
-	void updateEnvWeights(const std::vector< int >& iter,
+	void updateEnvWeights(const std::vector<long>& iter,
 	                      Hyps& hyps,
 	                      VariationalParameters& vp){
 
@@ -1113,7 +1123,7 @@ public:
 
 			// Update s_sq
 			double denom;
-			denom  = (vp.yx.array() * E.col(ll)).square().sum();
+			denom  = vp.yx.cwiseProduct(E.col(ll)).squaredNorm();
 			if(world_rank == 0) {
 				denom += (varG * dXtEEX_lowertri.col(dXtEEX_col_ind(ll, ll, n_env))).sum();
 			}
@@ -1136,8 +1146,8 @@ public:
 			}
 			env_vars  = mpiUtils::mpiReduce_inplace(env_vars);
 
-			double eff = ((Y - vp.ym).array() * E.col(ll) * vp.yx.array()).sum();
-			eff       -= (vp.yx.array() * E.col(ll) * vp.eta.array() * vp.yx.array()).sum();
+			double eff = ((Y - vp.ym).array() * E.col(ll).array() * vp.yx.array()).sum();
+			eff       -= (vp.yx.array() * E.col(ll).array() * vp.eta.array() * vp.yx.array()).sum();
 			eff        = mpiUtils::mpiReduce_inplace(&eff);
 			eff       -= (varG * env_vars).sum();
 			vp.muw(ll) = vp.sw_sq(ll) * eff / hyps.sigma;
@@ -1149,9 +1159,9 @@ public:
 		// Recompute eta_sq
 		vp.eta_sq  = vp.eta.array().square().matrix();
 #ifdef DATA_AS_FLOAT
-		vp.eta_sq += E.square().matrix() * vp.sw_sq.matrix().cast<float>();
+		vp.eta_sq += E.cwiseProduct(E) * vp.sw_sq.matrix().cast<float>();
 #else
-		vp.eta_sq += E.square().matrix() * vp.sw_sq.matrix();
+		vp.eta_sq += E.cwiseProduct(E) * vp.sw_sq.matrix();
 #endif
 
 		// Recompute expected value of diagonal of ZtZ
@@ -1232,7 +1242,7 @@ public:
 	void initRandomAlphaMu(VariationalParameters& vp){
 		// vp.alpha a uniform simplex, vp.mu standard gaussian
 		// Also sets predicted effects
-		std::default_random_engine gen_gauss, gen_unif;
+		std::default_random_engine gen_gauss(p.random_seed), gen_unif(p.random_seed);
 		std::normal_distribution<double> gaussian(0.0,1.0);
 		std::uniform_real_distribution<double> uniform(0.0,1.0);
 
@@ -1273,7 +1283,7 @@ public:
 
 		// Env weights - cast if DATA_AS_FLOAT
 		vp.muw     = 1.0 / (double) n_env;
-		vp.eta     = E.matrix() * vp.muw.matrix().cast<scalarData>();
+		vp.eta     = E * vp.muw.matrix().cast<scalarData>();
 		vp.eta_sq  = vp.eta.array().square().matrix();
 		vp.calcEdZtZ(dXtEEX_lowertri, n_env);
 	}
@@ -1308,7 +1318,7 @@ public:
 
 	void check_monotonic_elbo(const Hyps& hyps,
 	                          VariationalParameters& vp,
-	                          const int count,
+	                          const long& count,
 	                          double& logw_prev,
 	                          const std::string& prev_function){
 		double i_logw     = calc_logw(hyps, vp);
@@ -1323,7 +1333,7 @@ public:
 	void normaliseLogWeights(std::vector< double >& my_weights){
 		// Safer to normalise log-weights than niavely convert to weights
 		// Skip non-finite values!
-		int nn = my_weights.size();
+		long nn = my_weights.size();
 		double max_elem = *std::max_element(my_weights.begin(), my_weights.end());
 		for (int ii = 0; ii < nn; ii++) {
 			my_weights[ii] = std::exp(my_weights[ii] - max_elem);
@@ -1361,7 +1371,7 @@ public:
 		// Expectation of linear regression log-likelihood
 		resLocal  = (Y - vp.ym).squaredNorm();
 		if(n_effects > 1) {
-			resLocal -= 2.0 * (Y - vp.ym).cwiseProduct(vp.eta).dot(vp.yx);
+			resLocal -= 2.0 * (Y - vp.ym).cwiseProduct(vp.eta).cwiseProduct(vp.yx).sum();
 			if (n_env > 1) {
 				resLocal += vp.yx.cwiseProduct(vp.eta_sq).dot(vp.yx);
 			} else {
@@ -1534,8 +1544,8 @@ public:
 		boost_m::students_t t_dist(n_samples - n_effects - 1);
 		boost_m::fisher_f f_dist(n_effects, n_samples - n_effects - 1);
 		for(std::uint32_t jj = 0; jj < n_var; jj++ ) {
-			int chr1 = X.chromosome[jj];
-			int cc = std::find(chrs_present.begin(), chrs_present.end(), chr1) - chrs_present.begin();
+			long chr1 = X.chromosome[jj];
+			long cc = std::find(chrs_present.begin(), chrs_present.end(), chr1) - chrs_present.begin();
 			H.col(0) = X.col(jj).cast<double>();
 
 			double rss_alt, rss_null;
@@ -1881,21 +1891,21 @@ public:
 		return ofile;
 	}
 
-	int parseLineRAM(char* line){
+	long long parseLineRAM(char* line){
 		// This assumes that a digit will be found and the line ends in " Kb".
 		std::size_t i = strlen(line);
 		const char* p = line;
 		while (*p <'0' || *p > '9') p++;
 		line[i-3] = '\0';
 		char* s_end;
-		int res = atoi(p);
+		long long res = std::stoll(p);
 		return res;
 	}
 
-	int getValueRAM(){
+	long long getValueRAM(){
 #ifndef OSX
 		FILE* file = fopen("/proc/self/status", "r");
-		int result = -1;
+		long long result = -1;
 		char line[128];
 
 		while (fgets(line, 128, file) != NULL) {
