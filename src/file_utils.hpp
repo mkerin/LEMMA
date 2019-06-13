@@ -93,7 +93,8 @@ void dump_yhat_to_file(boost_io::filtering_ostream &outf,
 					   const EigenDataVector &Y,
 					   const VariationalParametersLite &vp,
 					   const Eigen::Ref<const Eigen::VectorXd> &Ealpha,
-					   std::unordered_map<long, bool> sample_is_invalid,
+					   const std::unordered_map<long, bool>& sample_is_invalid,
+					   const std::map<long, int>& sample_location,
 					   const std::vector<Eigen::VectorXd> &resid_loco,
 					   std::vector<long> chrs_present);
 
@@ -105,7 +106,8 @@ void dump_yhat_to_file(boost_io::filtering_ostream &outf,
 						   const EigenDataVector &Y,
 						   const VariationalParametersLite &vp,
 						   const Eigen::Ref<const Eigen::VectorXd> &Ealpha,
-						   std::unordered_map<long, bool> sample_is_invalid);
+						   const std::unordered_map<long, bool>& sample_is_invalid,
+						   const std::map<long, int>& sample_location);
 
 
 }

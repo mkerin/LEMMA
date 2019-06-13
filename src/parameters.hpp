@@ -86,7 +86,7 @@ public:
 		// Initial difference in variance of spike & slab
 		beta_spike_diff_factor = 1000;
 		gam_spike_diff_factor = 1000;
-		param_dump_interval = -1;
+		param_dump_interval = 50;
 		range = false;
 		min_spike_diff_set = false;
 		mode_remove_squared_envs = true;

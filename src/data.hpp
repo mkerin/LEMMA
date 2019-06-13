@@ -74,6 +74,7 @@ public:
 	std::map<long, bool> missing_covars;
 	std::map<long, bool> missing_phenos;
 	std::map<long, bool> incomplete_cases;
+	std::map<long, int> sample_location;
 
 	std::vector< std::string > pheno_names;
 	std::vector< std::string > covar_names;
@@ -322,10 +323,10 @@ public:
 					}
 				} catch (const std::exception& e) {
 					if(p.xtra_verbose) {
-						std::cerr << "Error when checking for significant squared envs ";
-						std::cerr << "(I believe this is due to attempting linear regression ";
-						std::cerr << "with a singular matrix)" << std::endl;
-						std::cerr << e.what() << std::endl;
+						std::cout << "Error when checking for significant squared envs ";
+						std::cout << "(I believe this is due to attempting linear regression ";
+						std::cout << "with a singular matrix)" << std::endl;
+						std::cout << e.what() << std::endl;
 					}
 				}
 
@@ -1327,7 +1328,7 @@ public:
 		incomplete_cases.insert(missing_phenos.begin(), missing_phenos.end());
 		incomplete_cases.insert(missing_envs.begin(), missing_envs.end());
 
-		mpiUtils::partition_valid_samples_across_ranks(n_samples, n_var, n_env, p, incomplete_cases);
+		mpiUtils::partition_valid_samples_across_ranks(n_samples, n_var, n_env, p, incomplete_cases, sample_location);
 
 		sample_is_invalid.clear();
 		for (long ii = 0; ii < n_samples; ii++) {

@@ -76,12 +76,12 @@ std::string variational_params_header(const parameters& p, const int& effect_ind
 }
 
 void fileUtils::write_snp_stats_to_file(boost_io::filtering_ostream &ofile,
-		const int &n_effects,
-		const long &n_var,
-		const VariationalParameters &vp,
-		const GenotypeMatrix &X,
-		const parameters &p,
-		const bool &write_mog) {
+                                        const int &n_effects,
+                                        const long &n_var,
+                                        const VariationalParameters &vp,
+                                        const GenotypeMatrix &X,
+                                        const parameters &p,
+                                        const bool &write_mog) {
 	// Function to write parameter values from genetic effects to file
 	// Assumes ofile has been initialised
 
@@ -129,12 +129,12 @@ void fileUtils::write_snp_stats_to_file(boost_io::filtering_ostream &ofile,
 }
 
 void fileUtils::write_snp_stats_to_file(boost_io::filtering_ostream &ofile,
-		const int &n_effects,
-		const long &n_var,
-		const VariationalParametersLite &vp,
-		const GenotypeMatrix &X,
-		const parameters &p,
-		const bool &write_mog) {
+                                        const int &n_effects,
+                                        const long &n_var,
+                                        const VariationalParametersLite &vp,
+                                        const GenotypeMatrix &X,
+                                        const parameters &p,
+                                        const bool &write_mog) {
 	// Function to write parameter values from genetic effects to file
 	// Assumes ofile has been initialised
 
@@ -427,14 +427,15 @@ void fileUtils::dump_yhat_to_file(boost_io::filtering_ostream &outf,
                                   const EigenDataVector &Y,
                                   const VariationalParametersLite &vp,
                                   const Eigen::Ref<const Eigen::VectorXd> &Ealpha,
-                                  std::unordered_map<long, bool> sample_is_invalid){
+                                  const std::unordered_map<long, bool>& sample_is_invalid,
+                                  const std::map<long, int>& sample_location){
 	std::vector<Eigen::VectorXd> resid_loco;
 	std::vector<long> chrs_present;
 
 	fileUtils::dump_yhat_to_file(outf, n_samples, n_covar,
 	                             n_var, n_env, Y,
 	                             vp, Ealpha,
-	                             sample_is_invalid,
+	                             sample_is_invalid, sample_location,
 	                             resid_loco, chrs_present);
 }
 
@@ -446,7 +447,8 @@ void fileUtils::dump_yhat_to_file(boost_io::filtering_ostream &outf,
                                   const EigenDataVector &Y,
                                   const VariationalParametersLite &vp,
                                   const Eigen::Ref<const Eigen::VectorXd> &Ealpha,
-                                  std::unordered_map<long, bool> sample_is_invalid,
+                                  const std::unordered_map<long, bool>& sample_is_invalid,
+                                  const std::map<long, int>& sample_location,
                                   const std::vector<Eigen::VectorXd> &resid_loco,
                                   std::vector<long> chrs_present) {
 	assert(chrs_present.size() == resid_loco.size() || resid_loco.empty());
@@ -455,68 +457,104 @@ void fileUtils::dump_yhat_to_file(boost_io::filtering_ostream &outf,
 	MPI_Comm_size(MPI_COMM_WORLD, &world_size);
 	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 
-	for (int rnk = 0; rnk < world_size; rnk++) {
-		MPI_Barrier(MPI_COMM_WORLD);
+	// n_cols
+	long n_cols = 0, n_chrs = resid_loco.size();
+	n_cols++;
+	if (n_covar > 0) n_cols++;
+	n_cols++;
+	if (n_env > 0) n_cols += 2;
+	if(n_chrs > 0) {
+		n_cols += n_chrs;
+	}
 
-		// header
-		if(rank == rnk && rnk == 0) {
-			long n_cols = 0, n_chrs = resid_loco.size();
-			outf << "Y"; n_cols++;
-			if (n_covar > 0) outf << " Ealpha"; n_cols++;
-			outf << " Xbeta"; n_cols++;
-			if (n_env > 0) outf << " eta Xgamma"; n_cols += 2;
-			if(n_chrs > 0) {
-				for(auto cc : chrs_present) {
-					outf << " residuals_excl_chr" << cc;
+	// header
+	if(rank == 0) {
+		outf << "Y";
+		if (n_covar > 0) outf << " Ealpha";
+		outf << " Xbeta";
+		if (n_env > 0) outf << " eta Xgamma";
+		if(n_chrs > 0) {
+			for(auto cc : chrs_present) {
+				outf << " residuals_excl_chr" << cc;
+			}
+		}
+		outf << std::endl;
+	}
+
+	// ss is a pair;
+	// ss.first sample index
+	// ss.second 'rank' that sample is located on (-1 for missing)
+	long iiValid = 0;
+	for (const auto& ss : sample_location) {
+		std::cout << "Sample " <<  ss.first << " is located on rank " << ss.second << std::endl;
+		MPI_Barrier(MPI_COMM_WORLD);
+		if(rank == ss.second) {
+			// sample info
+			outf << Y(iiValid);
+			if (n_covar > 0) {
+				outf << " " << Ealpha(iiValid) << " " << vp.ym(iiValid) - Ealpha(iiValid);
+			} else {
+				outf << " " << vp.ym(iiValid);
+			}
+			if (n_env > 0) {
+				outf << " " << vp.eta(iiValid) << " " << vp.yx(iiValid);
+			}
+			if (n_chrs > 0) {
+				for (int cc = 0; cc < n_chrs; cc++) {
+					outf << " " << resid_loco[cc](iiValid);
 				}
-				n_cols += n_chrs;
+			}
+			outf << std::endl;
+			iiValid++;
+		} else if (ss.second == -1 && rank == 0) {
+			// NA for incomplete sample
+			for (int jj = 0; jj < n_cols; jj++) {
+				outf << "NA";
+				if(jj < n_cols - 1) outf << " ";
 			}
 			outf << std::endl;
 		}
+	}
 
-		if(rank == rnk) {
-			// n_cols
-			long n_cols = 0, n_chrs = resid_loco.size();
-			n_cols++;
-			if (n_covar > 0) n_cols++;
-			n_cols++;
-			if (n_env > 0) n_cols += 2;
-			if(n_chrs > 0) {
-				n_cols += n_chrs;
-			}
+	// long iiValid = 0;
+	// for (int rnk = 0; rnk < world_size; rnk++) {
+	//  MPI_Barrier(MPI_COMM_WORLD);
+	//
+	//  if(rank == rnk) {
+	//      // body
+	//      for (long ii = 0; ii < sample_is_invalid.size(); ii++) {
+	//          if(sample_is_invalid[ii]) {
+	//              // NA for incomplete sample
+	//              for (int jj = 0; jj < n_cols; jj++) {
+	//                  outf << "NA";
+	//                  if(jj < n_cols - 1) outf << " ";
+	//              }
+	//              outf << std::endl;
+	//          } else {
+	//              // sample info
+	//              outf << Y(iiValid);
+	//              if (n_covar > 0) {
+	//                  outf << " " << Ealpha(iiValid) << " " << vp.ym(iiValid) - Ealpha(iiValid);
+	//              } else {
+	//                  outf << " " << vp.ym(iiValid);
+	//              }
+	//              if (n_env > 0) {
+	//                  outf << " " << vp.eta(iiValid) << " " << vp.yx(iiValid);
+	//              }
+	//              if (n_chrs > 0) {
+	//                  for (int cc = 0; cc < n_chrs; cc++) {
+	//                      outf << " " << resid_loco[cc](iiValid);
+	//                  }
+	//              }
+	//              outf << std::endl;
+	//              iiValid++;
+	//          }
+	//      }
+	//  }
+	// }
 
-			// body
-			long iiValid = 0;
-			for (long ii = 0; ii < sample_is_invalid.size(); ii++) {
-				if(sample_is_invalid[ii]) {
-					// NA for incomplete sample
-					for (int jj = 0; jj < n_cols; jj++) {
-						outf << "NA";
-						if(jj < n_cols - 1) outf << " ";
-					}
-					outf << std::endl;
-				} else {
-					// sample info
-					outf << Y(iiValid);
-					if (n_covar > 0) {
-						outf << " " << Ealpha(iiValid) << " " << vp.ym(iiValid) - Ealpha(iiValid);
-					} else {
-						outf << " " << vp.ym(iiValid);
-					}
-					if (n_env > 0) {
-						outf << " " << vp.eta(iiValid) << " " << vp.yx(iiValid);
-					}
-					if (n_chrs > 0) {
-						for (int cc = 0; cc < n_chrs; cc++) {
-							outf << " " << resid_loco[cc](iiValid);
-						}
-					}
-					outf << std::endl;
-					iiValid++;
-				}
-			}
-			assert(iiValid == n_samples);
-			boost_io::close(outf);
-		}
+	assert(iiValid == n_samples);
+	if(rank == 0) {
+		boost_io::close(outf);
 	}
 }

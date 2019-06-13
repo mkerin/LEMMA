@@ -101,6 +101,7 @@ public:
 
 	Eigen::ArrayXXd& dXtEEX_lowertri;
 	std::unordered_map<long, bool> sample_is_invalid;
+	std::map<long, int>& sample_location;
 
 // Global location of y_m = E[X beta] and y_x = E[X gamma]
 	EigenDataMatrix YY, YX, YM, ETA, ETA_SQ;
@@ -129,20 +130,23 @@ public:
 		snpstats(dat.snpstats),
 		p(dat.p),
 		hyps_inits(dat.hyps_inits),
+		sample_location(dat.sample_location),
 		sample_is_invalid(dat.sample_is_invalid),
 		vp_init(dat.vp_init){
+		MPI_Comm_rank(MPI_COMM_WORLD, &world_rank);
 #ifndef OSX
 		long long kbMax, kbGlobal, kbLocal = getValueRAM();
 		MPI_Allreduce(&kbLocal, &kbMax, 1, MPI_LONG_LONG, MPI_MAX, MPI_COMM_WORLD);
 		MPI_Allreduce(&kbLocal, &kbGlobal, 1, MPI_LONG_LONG, MPI_SUM, MPI_COMM_WORLD);
 		double gbGlobal = kbGlobal / 1000.0 / 1000.0;
 		double gbMax = kbMax / 1000.0 / 1000.0;
-		printf("Initialising vbayes object (RAM usage: %.2f GB in total; max of %.2f GB per rank)", gbGlobal, gbMax);
+		if(world_rank == 0){
+			printf("Initialising vbayes object (RAM usage: %.2f GB in total; max of %.2f GB per rank)\n", gbGlobal, gbMax);
+		}
 #else
 		printf("Initialising vbayes object");
-		#endif
+								#endif
 		mkl_set_num_threads_local(p.n_thread);
-		MPI_Comm_rank(MPI_COMM_WORLD, &world_rank);
 
 		// Data size params
 		n_effects      = dat.n_effects;
@@ -527,7 +531,8 @@ public:
 					all_tracker[nn].dump_state(std::to_string(count), n_samples, n_covar, n_var,
 					                           n_env, n_effects,
 					                           all_vp[nn], all_hyps[nn], Y, C,
-					                           X, covar_names, env_names, sample_is_invalid);
+					                           X, covar_names, env_names, sample_is_invalid,
+					                           sample_location);
 				}
 			}
 
@@ -591,7 +596,7 @@ public:
 			all_tracker[nn].dump_state("_converged", n_samples, n_covar, n_var,
 			                           n_env, n_effects,
 			                           all_vp[nn], all_hyps[nn], Y, C,
-			                           X, covar_names, env_names, sample_is_invalid);
+			                           X, covar_names, env_names, sample_is_invalid, sample_location);
 		}
 
 		// Log all things that we want to track
@@ -1805,7 +1810,7 @@ public:
 		}
 
 		fileUtils::dump_yhat_to_file(outf_map_pred, n_samples, n_covar, n_var,
-		                             n_env, Y, vp_init, Ealpha, sample_is_invalid,
+		                             n_env, Y, vp_init, Ealpha, sample_is_invalid, sample_location,
 		                             resid_loco, chrs_present);
 
 		if(world_rank == 0) {

@@ -34,10 +34,10 @@ namespace boost_io = boost::iostreams;
 
 class VbTracker {
 public:
-	long count;                                                                    // Number of iterations to convergence at each step
-	VariationalParametersLite vp;                                                     // best mu at each ii
-	double logw;                                                                     // best logw at each ii
-	Hyps hyps;                                                                      // hyps values at end of VB inference.
+	long count;                                                                            // Number of iterations to convergence at each step
+	VariationalParametersLite vp;                                                             // best mu at each ii
+	double logw;                                                                             // best logw at each ii
+	Hyps hyps;                                                                              // hyps values at end of VB inference.
 
 	parameters p;
 
@@ -201,7 +201,8 @@ public:
 	                const GenotypeMatrix& X,
 	                const std::vector< std::string >& covar_names,
 	                const std::vector< std::string >& env_names,
-	                const std::unordered_map<long, bool>& sample_is_invalid){
+	                const std::unordered_map<long, bool>& sample_is_invalid,
+	                const std::map<long, int>& sample_location){
 
 		// Aggregate effects
 		fstream_init(outf_inits, dir, "_dump_it" + count + "_aggregate", true);
@@ -213,7 +214,8 @@ public:
 		VariationalParametersLite vp_lite = vp.convert_to_lite();
 
 		fileUtils::dump_yhat_to_file(outf_inits, n_samples, n_covar, n_var,
-		                             n_env,Y,vp_lite,Ealpha, sample_is_invalid);
+		                             n_env,Y,vp_lite,Ealpha, sample_is_invalid,
+		                             sample_location);
 
 		int world_rank;
 		MPI_Comm_rank(MPI_COMM_WORLD, &world_rank);

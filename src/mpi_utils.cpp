@@ -18,7 +18,8 @@ mpiUtils::partition_valid_samples_across_ranks(const long &n_samples,
                                                const long &n_var,
                                                const long &n_env,
                                                const parameters &p,
-                                               std::map<long, bool> &incomplete_cases) {
+                                               std::map<long, bool> &incomplete_cases,
+											   std::map<long, int> &sample_location) {
 	int rank, size;
 	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 	MPI_Comm_size(MPI_COMM_WORLD, &size);
@@ -61,8 +62,22 @@ mpiUtils::partition_valid_samples_across_ranks(const long &n_samples,
 		// No overflow; hence have same number of samples on all ranks.
 		rankZeroSamples = samplesPerRank;
 	}
-
 	long diff = samplesPerRank - rankZeroSamples;
+
+	// store 'rank' that each sample is located in
+	// samples excluded due to missing data have location zero
+	long iiValid = diff;
+	for (long ii = 0; ii < n_samples; ii++){
+		if (incomplete_cases.count(ii) == 0) {
+			sample_location[ii] = (int) (iiValid / samplesPerRank);
+			iiValid++;
+		} else {
+			sample_location[ii] = -1;
+		}
+	}
+	assert(iiValid == n_valid_sids);
+
+
 	for (long ii = 0; ii < n_valid_sids; ii++) {
 		long ii1 = ii + diff;
 		if (ii1 < rank * samplesPerRank || ii1 >= (rank+1) * samplesPerRank) {
@@ -71,6 +86,10 @@ mpiUtils::partition_valid_samples_across_ranks(const long &n_samples,
 			rank_cases.push_back(valid_sids[ii]);
 		}
 	}
+
+
+
+
 
 	// Check Nlocal sums to expected number of valid samples
 	long Nlocal = rank_cases.size();
@@ -88,6 +107,12 @@ void mpiUtils::mpiReduce_double(void *local, void *global, long size) {
 double mpiUtils::mpiReduce_inplace(double *local) {
 	double global;
 	MPI_Allreduce(local, &global, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+	return global;
+}
+
+double mpiUtils::mpiReduce_inplace(double local) {
+	double global;
+	MPI_Allreduce(&local, &global, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
 	return global;
 }
 
