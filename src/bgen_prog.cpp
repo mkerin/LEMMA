@@ -48,14 +48,18 @@ int main( int argc, char** argv ) {
 
 		// For the HE-reg method
 		Eigen::VectorXd eta;
-		if (data.n_env > 0) {
+		if (data.n_env == 1) {
 			eta = data.E.col(0);
 		}
 
-		if (p.mode_vb || p.mode_calc_snpstats || p.streamBgenFile != "NULL") {
+		if (p.mode_vb || p.mode_calc_snpstats || p.streamBgenFile != "NULL" || p.env_coeffs_file != "NULL") {
 			data.set_vb_init();
+			if(data.n_env > 1 && p.env_coeffs_file != "NULL") {
+				eta = data.E * data.vp_init.muw.matrix();
+			}
+		}
 
-
+		if (p.mode_vb || p.mode_calc_snpstats || p.streamBgenFile != "NULL") {
 			VBayesX2 VB(data);
 			if (p.mode_vb) {
 				if (data.n_effects > 1) {
@@ -155,7 +159,7 @@ int main( int argc, char** argv ) {
 			Eigen::MatrixXd C = data.C.cast<double>();
 			if(data.n_env > 0) {
 				// If multi env; use VB to collapse to single
-				assert(data.n_env == 1 || p.mode_vb);
+				assert(data.n_env == 1 || p.mode_vb || p.env_coeffs_file != "NULL");
 				PVE pve(p, data.G, Y, C, eta);
 				pve.run(p.out_file);
 				pve.to_file(p.out_file);

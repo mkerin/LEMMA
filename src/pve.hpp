@@ -19,7 +19,7 @@ class PVE {
 public:
 	// constants
 	long nDraws;
-	long n_samples;                                         // number of samples
+	long n_samples;                                             // number of samples
 	long n_var;
 	const bool mode_gxe;
 	const int n_components;
@@ -91,16 +91,17 @@ public:
 	void calc_sigmas(){
 		// New general implementation
 		struct indexes_t {
-			indexes_t() : main(0), noise(1) {}
+			indexes_t() : main(0), noise(1) {
+			}
 			long main, main2, gxe, gxe2, noise;
 		} ind;
 		long n_components = 2;
-		if(n_env == 1){
+		if(n_env == 1) {
 			n_components += 1;
 			ind.gxe = ind.noise;
 			ind.noise += 1;
 		}
-		if(mog_beta){
+		if(mog_beta) {
 			n_components += 1;
 			ind.main2 = ind.gxe;
 			ind.gxe += 1;
@@ -164,10 +165,8 @@ public:
 			A(ind.noise, ind.noise) += N - n_covar;
 		}
 		A.array() /= nDraws;
-
-		std::cout << "A: " << std::endl << A << std::endl; \
 		A = A.selfadjointView<Eigen::Upper>();
-		std::cout << "A: " << std::endl << A << std::endl; \
+		std::cout << "A: " << std::endl << A << std::endl;
 
 		sigmas = A.colPivHouseholderQr().solve(bb);
 	}
@@ -180,7 +179,7 @@ public:
 
 	Eigen::MatrixXd project_out_covars(Eigen::Ref<Eigen::MatrixXd> rhs){
 		if(n_covar > 0) {
-			if (CtC_inv.rows() != n_covar){
+			if (CtC_inv.rows() != n_covar) {
 				CtC_inv = (C.transpose() * C).inverse();
 			}
 			Eigen::MatrixXd res, yhat;
