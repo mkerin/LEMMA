@@ -456,6 +456,7 @@ void fileUtils::dump_yhat_to_file(boost_io::filtering_ostream &outf,
 	int world_size, rank;
 	MPI_Comm_size(MPI_COMM_WORLD, &world_size);
 	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+	MPI_Barrier(MPI_COMM_WORLD);
 
 	// n_cols
 	long n_cols = 0, n_chrs = resid_loco.size();
@@ -481,79 +482,42 @@ void fileUtils::dump_yhat_to_file(boost_io::filtering_ostream &outf,
 		outf << std::endl;
 	}
 
-	// ss is a pair;
-	// ss.first sample index
-	// ss.second 'rank' that sample is located on (-1 for missing)
-	long iiValid = 0;
-	for (const auto& ss : sample_location) {
-		std::cout << "Sample " <<  ss.first << " is located on rank " << ss.second << std::endl;
-		MPI_Barrier(MPI_COMM_WORLD);
-		if(rank == ss.second) {
-			// sample info
-			outf << Y(iiValid);
-			if (n_covar > 0) {
-				outf << " " << Ealpha(iiValid) << " " << vp.ym(iiValid) - Ealpha(iiValid);
-			} else {
-				outf << " " << vp.ym(iiValid);
-			}
-			if (n_env > 0) {
-				outf << " " << vp.eta(iiValid) << " " << vp.yx(iiValid);
-			}
-			if (n_chrs > 0) {
-				for (int cc = 0; cc < n_chrs; cc++) {
-					outf << " " << resid_loco[cc](iiValid);
-				}
-			}
-			outf << std::endl;
-			iiValid++;
-		} else if (ss.second == -1 && rank == 0) {
-			// NA for incomplete sample
-			for (int jj = 0; jj < n_cols; jj++) {
-				outf << "NA";
-				if(jj < n_cols - 1) outf << " ";
-			}
-			outf << std::endl;
-		}
-	}
-
+	// // ss is a pair;
+	// // ss.first sample index
+	// // ss.second 'rank' that sample is located on (-1 for missing)
 	// long iiValid = 0;
-	// for (int rnk = 0; rnk < world_size; rnk++) {
+	// for (const auto& ss : sample_location) {
+	//  std::cout << "Sample " <<  ss.first << " is located on rank " << ss.second << std::endl;
 	//  MPI_Barrier(MPI_COMM_WORLD);
-	//
-	//  if(rank == rnk) {
-	//      // body
-	//      for (long ii = 0; ii < sample_is_invalid.size(); ii++) {
-	//          if(sample_is_invalid[ii]) {
-	//              // NA for incomplete sample
-	//              for (int jj = 0; jj < n_cols; jj++) {
-	//                  outf << "NA";
-	//                  if(jj < n_cols - 1) outf << " ";
-	//              }
-	//              outf << std::endl;
-	//          } else {
-	//              // sample info
-	//              outf << Y(iiValid);
-	//              if (n_covar > 0) {
-	//                  outf << " " << Ealpha(iiValid) << " " << vp.ym(iiValid) - Ealpha(iiValid);
-	//              } else {
-	//                  outf << " " << vp.ym(iiValid);
-	//              }
-	//              if (n_env > 0) {
-	//                  outf << " " << vp.eta(iiValid) << " " << vp.yx(iiValid);
-	//              }
-	//              if (n_chrs > 0) {
-	//                  for (int cc = 0; cc < n_chrs; cc++) {
-	//                      outf << " " << resid_loco[cc](iiValid);
-	//                  }
-	//              }
-	//              outf << std::endl;
-	//              iiValid++;
+	//  if(rank == ss.second) {
+	//      // sample info
+	//      outf << Y(iiValid);
+	//      if (n_covar > 0) {
+	//          outf << " " << Ealpha(iiValid) << " " << vp.ym(iiValid) - Ealpha(iiValid);
+	//      } else {
+	//          outf << " " << vp.ym(iiValid);
+	//      }
+	//      if (n_env > 0) {
+	//          outf << " " << vp.eta(iiValid) << " " << vp.yx(iiValid);
+	//      }
+	//      if (n_chrs > 0) {
+	//          for (int cc = 0; cc < n_chrs; cc++) {
+	//              outf << " " << resid_loco[cc](iiValid);
 	//          }
 	//      }
+	//      outf << std::endl;
+	//      iiValid++;
+	//  } else if (ss.second == -1 && rank == 0) {
+	//      // NA for incomplete sample
+	//      for (int jj = 0; jj < n_cols; jj++) {
+	//          outf << "NA";
+	//          if(jj < n_cols - 1) outf << " ";
+	//      }
+	//      outf << std::endl;
 	//  }
 	// }
+	// assert(iiValid == n_samples);
 
-	assert(iiValid == n_samples);
 	if(rank == 0) {
 		boost_io::close(outf);
 	}
