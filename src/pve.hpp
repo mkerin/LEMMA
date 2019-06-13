@@ -19,7 +19,7 @@ class PVE {
 public:
 	// constants
 	long nDraws;
-	long n_samples;                                             // number of samples
+	long n_samples;                                                                         // number of samples
 	long n_var;
 	const bool mode_gxe;
 	const int n_components;
@@ -124,6 +124,7 @@ public:
 			eY = Y.cwiseProduct(eta);
 			bb(ind.gxe) = X.transpose_multiply(eY).squaredNorm() / P;
 		}
+		std::cout << "b: " << std::endl << bb << std::endl;
 
 		/*** trace computations for LHS ***/
 		Eigen::MatrixXd A = Eigen::MatrixXd::Zero(n_components, n_components);
@@ -131,6 +132,7 @@ public:
 		std::mt19937 generator{params.random_seed};
 		std::normal_distribution<scalarData> noise_normal(0.0, 1);
 		for (int rr = 0; rr < nDraws; rr++) {
+			if(params.mode_debug) std::cout << "Starting reg-PVE pass " << rr << std::endl;
 
 			// fill gaussian noise
 			for (long ii = 0; ii < n_samples; ii++) {
@@ -179,12 +181,16 @@ public:
 
 	Eigen::MatrixXd project_out_covars(Eigen::Ref<Eigen::MatrixXd> rhs){
 		if(n_covar > 0) {
+			if(params.mode_debug) std::cout << "Starting project_out_covars" << std::endl;
 			if (CtC_inv.rows() != n_covar) {
+				if(params.mode_debug) std::cout << "Starting compute of CtC_inv" << std::endl;
 				CtC_inv = (C.transpose() * C).inverse();
+				if(params.mode_debug) std::cout << "Ending compute of CtC_inv" << std::endl;
 			}
-			Eigen::MatrixXd res, yhat;
-			yhat = C * CtC_inv * C.transpose() * rhs;
-			res = rhs - yhat;
+			Eigen::VectorXd beta = CtC_inv * C.transpose() * rhs;
+			Eigen::MatrixXd yhat = C * beta;
+			Eigen::MatrixXd res = rhs - yhat;
+			if(params.mode_debug) std::cout << "Ending project_out_covars" << std::endl;
 			return res;
 		} else {
 			return rhs;

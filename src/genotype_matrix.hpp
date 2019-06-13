@@ -46,8 +46,8 @@ public:
 	bool scaling_performed;
 	parameters params;
 
-	Eigen::Matrix<unsigned char, Eigen::Dynamic, Eigen::Dynamic> M;     // used in low-mem mode
-	EigenDataMatrix G;     // used when not in low-mem node
+	Eigen::Matrix<unsigned char, Eigen::Dynamic, Eigen::Dynamic> M;         // used in low-mem mode
+	EigenDataMatrix G;         // used when not in low-mem node
 
 	std::vector< int > chromosome;
 	std::vector< std::string > al_0, al_1, rsid;
@@ -60,7 +60,7 @@ public:
 	std::vector<std::map<std::size_t, bool> > missing_genos;
 	Eigen::VectorXd compressed_dosage_means;
 	Eigen::VectorXd compressed_dosage_sds;
-	Eigen::VectorXd compressed_dosage_inv_sds;      // 1 / col-wise sd
+	Eigen::VectorXd compressed_dosage_inv_sds;          // 1 / col-wise sd
 	std::size_t nn, pp;
 
 	// Interface type of Eigen indices -> see eigen3/Eigen/src/Core/EigenBase.h
@@ -186,6 +186,7 @@ public:
 		}
 		assert(rhs.rows() == pp);
 		if(low_mem) {
+			if(params.mode_debug) std::cout << "Starting low-mem matrix mult" << std::endl;
 			EigenDataMatrix res(nn, rhs.cols());
 			for (int ll = 0; ll < rhs.cols(); ll++) {
 				Eigen::Ref<Eigen::VectorXd> tmp = rhs.col(ll);
@@ -195,6 +196,7 @@ public:
 			// res = M.cast<scalarData>() * compressed_dosage_inv_sds.cast<scalarData>().asDiagonal() * rhs.cast<scalarData>() * intervalWidth;
 			res.array().rowwise() += (compressed_dosage_inv_sds.cast<scalarData>().asDiagonal() * rhs.cast<scalarData>()).array().colwise().sum() * intervalWidth * 0.5;
 			res.array().rowwise() -= (compressed_dosage_inv_sds.cast<scalarData>().cwiseProduct(compressed_dosage_means.cast<scalarData>()).asDiagonal() * rhs.cast<scalarData>()).array().colwise().sum();
+			if(params.mode_debug) std::cout << "Ending low-mem matrix mult" << std::endl;
 			return res;
 		} else {
 			return G * rhs.cast<scalarData>();

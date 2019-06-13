@@ -60,6 +60,7 @@ Eigen::MatrixXd GenotypeMatrix::transpose_multiply(EigenRefDataMatrix lhs) {
 	}
 
 	if(low_mem) {
+		if(params.mode_debug) std::cout << "Starting transpose multiply" << std::endl;
 		Eigen::MatrixXd res;
 		Eigen::VectorXd colsums = lhs.colwise().sum().matrix().cast<double>();
 
@@ -73,6 +74,7 @@ Eigen::MatrixXd GenotypeMatrix::transpose_multiply(EigenRefDataMatrix lhs) {
 		res = intervalWidth * (compressed_dosage_inv_sds.asDiagonal() * Mt_lhs);
 		res += 0.5 * intervalWidth * compressed_dosage_inv_sds * colsums.transpose();
 		res -= compressed_dosage_inv_sds.cwiseProduct(compressed_dosage_means) * colsums.transpose();
+		if(params.mode_debug) std::cout << "Ending transpose multiply" << std::endl;
 		return res;
 	} else {
 		return (G.transpose() * lhs.matrix()).cast<double>();
@@ -133,7 +135,7 @@ Eigen::VectorXd GenotypeMatrix::mult_vector_by_chr(const long& chr, const Eigen:
 
 template<typename Deriv>
 void GenotypeMatrix::col_block3(const std::vector<long> &chunk,
-		Eigen::MatrixBase<Deriv> &D) {
+                                Eigen::MatrixBase<Deriv> &D) {
 	if(!scaling_performed) {
 		calc_scaled_values();
 	}
@@ -168,7 +170,7 @@ void GenotypeMatrix::col_block3(const std::vector<long> &chunk,
 
 template<typename Deriv>
 void GenotypeMatrix::get_cols(const std::vector<long> &index,
-		const std::vector<long> &iter_chunk,
+                              const std::vector<long> &iter_chunk,
                               Eigen::MatrixBase<Deriv> &D) {
 	// D.col(ii) = X.col(chunk(ii))
 	for(const auto& ii : index ) {
