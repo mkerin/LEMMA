@@ -1,10 +1,10 @@
 /* re-implementation of variational bayes algorithm for 1D GxE
 
-   How to use Eigen::Ref:
-   https://stackoverflow.com/questions/21132538/correct-usage-of-the-eigenref-class
+                 How to use Eigen::Ref:
+                 https://stackoverflow.com/questions/21132538/correct-usage-of-the-eigenref-class
 
-   Building static executable:
-   https://stackoverflow.com/questions/3283021/compile-a-standalone-static-executable
+                 Building static executable:
+                 https://stackoverflow.com/questions/3283021/compile-a-standalone-static-executable
  */
 #ifndef VBAYES_X2_HPP
 #define VBAYES_X2_HPP
@@ -140,12 +140,12 @@ public:
 		MPI_Allreduce(&kbLocal, &kbGlobal, 1, MPI_LONG_LONG, MPI_SUM, MPI_COMM_WORLD);
 		double gbGlobal = kbGlobal / 1000.0 / 1000.0;
 		double gbMax = kbMax / 1000.0 / 1000.0;
-		if(world_rank == 0){
+		if(world_rank == 0) {
 			printf("Initialising vbayes object (RAM usage: %.2f GB in total; max of %.2f GB per rank)\n", gbGlobal, gbMax);
 		}
 #else
 		printf("Initialising vbayes object");
-								#endif
+																																#endif
 		mkl_set_num_threads_local(p.n_thread);
 
 		// Data size params
@@ -434,7 +434,7 @@ public:
 		// minimise KL Divergence and assign elbo estimate
 		// Assumes vp_init already exist
 		// TODO: re intergrate random starts
-		if (p.mode_debug) std::cout << "Starting inner loop" << std::endl;
+		if (p.xtra_verbose) std::cout << "Starting inner loop" << std::endl;
 		int print_interval = 25;
 		if(random_init) {
 			throw std::logic_error("Random starts no longer implemented");
@@ -591,7 +591,7 @@ public:
 		}
 
 		// Dump converged state
-		if (p.mode_debug) std::cout << "Dumping converged params" << std::endl;
+		if (p.xtra_verbose) std::cout << "Dumping converged params" << std::endl;
 		for (int nn = 0; nn < n_grid; nn++) {
 			all_tracker[nn].dump_state("_converged", n_samples, n_covar, n_var,
 			                           n_env, n_effects,
