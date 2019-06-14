@@ -134,6 +134,7 @@ void parse_arguments(parameters &p, int argc, char **argv) {
 	    ("mode_squarem", "")
 	    ("mode_constant_hyps", "")
 	    ("mode_debug", "")
+	    ("exclude_ones_from_env_sq", "", cxxopts::value<bool>(p.exclude_ones_from_env_sq))
 	    ("mode_alternating_updates", "", cxxopts::value<bool>(p.mode_alternating_updates))
 	    ("mode_regress_out_covars", "")
 	    ("pve_mog_weights", "", cxxopts::value<std::string>(p.mog_weights_file))

@@ -30,6 +30,7 @@ public:
 	bool init_weights_with_snpwise_scan, flip_high_maf_variants, min_spike_diff_set;
 	bool mode_mog_prior_beta, mode_mog_prior_gam, mode_random_start, mode_calc_snpstats;
 	bool mode_remove_squared_envs, mode_squarem, mode_incl_squared_envs, drop_loco;
+	bool exclude_ones_from_env_sq;
 	double min_maf, min_info, elbo_tol, alpha_tol, gamma_updates_thresh;
 	double beta_spike_diff_factor, gam_spike_diff_factor, min_spike_diff_factor;
 	long LOSO_window;
@@ -84,11 +85,12 @@ public:
 		// Initial difference in variance of spike & slab
 		beta_spike_diff_factor = 1000;
 		gam_spike_diff_factor = 1000;
-		param_dump_interval = -1;
+		param_dump_interval = 50;
 		range = false;
 		min_spike_diff_set = false;
 		mode_remove_squared_envs = true;
 		mode_incl_squared_envs = false;
+		exclude_ones_from_env_sq = false;
 		maf_lim = false;
 		info_lim = false;
 		mode_empirical_bayes = true;
