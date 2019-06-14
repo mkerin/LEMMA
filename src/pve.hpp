@@ -19,7 +19,7 @@ class PVE {
 public:
 	// constants
 	long nDraws;
-	long n_samples;                                             // number of samples
+	long n_samples;                                                                     // number of samples
 	long n_var;
 	const bool mode_gxe;
 	const int n_components;
@@ -131,6 +131,8 @@ public:
 		std::mt19937 generator{params.random_seed};
 		std::normal_distribution<scalarData> noise_normal(0.0, 1);
 		for (int rr = 0; rr < nDraws; rr++) {
+			if(params.verbose) std::cout << "Starting iteration " << rr << std::endl;
+			Eigen::MatrixXd Arr = Eigen::MatrixXd::Zero(n_components, n_components);
 
 			// fill gaussian noise
 			for (long ii = 0; ii < n_samples; ii++) {
@@ -143,8 +145,8 @@ public:
 			Eigen::VectorXd WXXtz = project_out_covars(XXtz);
 			Eigen::VectorXd XtWz = X.transpose_multiply(Wzz);
 			Eigen::VectorXd XXtWz = X * XtWz;
-			A(ind.main, ind.main) += WXXtz.dot(XXtWz) / P / P;
-			A(ind.main, ind.noise) += XXtz.dot(Wzz) / P;
+			Arr(ind.main, ind.main) = WXXtz.dot(XXtWz) / P / P;
+			Arr(ind.main, ind.noise) = XXtz.dot(Wzz) / P;
 
 			if(n_env == 1) {
 				Eigen::VectorXd ezz = eta.cwiseProduct(zz);
@@ -157,12 +159,22 @@ public:
 				Eigen::VectorXd XteWz = X.transpose_multiply(eWzz);
 				Eigen::VectorXd XXteWz = X * XteWz;
 				Eigen::VectorXd eXXteWz = eta.cwiseProduct(XXteWz);
-				A(ind.gxe, ind.gxe) += eXXteWz.dot(WeXXtez) / P / P;
-				A(ind.main, ind.gxe) += WeXXtez.dot(XXtWz) / P / P;
-				A(ind.gxe, ind.noise) += XXteWz.dot(ezz) / P;
+				Arr(ind.gxe, ind.gxe) = eXXteWz.dot(WeXXtez) / P / P;
+				Arr(ind.main, ind.gxe) = WeXXtez.dot(XXtWz) / P / P;
+				Arr(ind.gxe, ind.noise) = XXteWz.dot(ezz) / P;
+
+				to_interim_results(Arr(ind.main, ind.noise),
+				                   Arr(ind.main, ind.main),
+				                   Arr(ind.gxe, ind.noise),
+				                   Arr(ind.main, ind.gxe),
+				                   Arr(ind.gxe, ind.gxe));
+			} else {
+				to_interim_results(Arr(ind.main, ind.noise),
+				                   Arr(ind.main, ind.main));
 			}
 
-			A(ind.noise, ind.noise) += N - n_covar;
+			Arr(ind.noise, ind.noise) = N - n_covar;
+			A += Arr;
 		}
 		A.array() /= nDraws;
 		A = A.selfadjointView<Eigen::Upper>();
