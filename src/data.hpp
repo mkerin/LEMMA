@@ -297,11 +297,17 @@ public:
 
 			// Removing squared dependance
 			std::vector<int> cols_to_remove;
-			Eigen::MatrixXd H(n_samples, n_covar + 2);
+			Eigen::MatrixXd H;
 			Eigen::VectorXd tmp = Eigen::VectorXd::Zero(n_samples);
-			Eigen::MatrixXd ones = Eigen::MatrixXd::Constant(n_samples, 1, 1.0);
+			if(p.exclude_ones_from_env_sq) {
+				H.resize(n_samples, n_covar + 1);
+				H << tmp, C;
+			} else {
+				Eigen::MatrixXd ones = Eigen::MatrixXd::Constant(n_samples, 1, 1.0);
+				H.resize(n_samples, n_covar + 2);
+				H << tmp, ones, C;
+			}
 
-			H << tmp, ones, C;
 			std::cout << "Checking for squared dependance: " << std::endl;
 			std::cout << "Name\t-log10(p-val)" << std::endl;
 			long n_signif_envs_sq = 0;
@@ -1166,7 +1172,7 @@ public:
 		}
 
 		assert(vp_init.alpha_beta.rows() == n_var);
-		if(n_env > 0){
+		if(n_env > 0) {
 			assert(vp_init.alpha_gam.rows() == n_var);
 		}
 	}
