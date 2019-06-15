@@ -47,7 +47,7 @@ TEST_CASE("HE-reg"){
 		Eigen::VectorXd Y = data.Y.cast<double>();
 		Eigen::MatrixXd C = data.C.cast<double>();
 		Eigen::VectorXd eta = data.E.col(0);
-		PVE pve(p, data.G, Y, C, eta);
+		PVE pve(data, Y, C, eta);
 		pve.run(p.out_file);
 
 		CHECK(pve.sigmas(0)  == Approx(0.4757065487));
@@ -58,10 +58,11 @@ TEST_CASE("HE-reg"){
 		CHECK(pve.h2(2)  == Approx(0.3370233093));
 	}
 
-	SECTION("Main effects fit (gaussian prior)"){
+	SECTION("Main effects fit (single sample; gaussian prior)"){
 		parameters p;
 		int argc = sizeof(argv_main1)/sizeof(argv_main1[0]);
 		parse_arguments(p, argc, argv_main1);
+		p.n_pve_samples = 1;
 		Data data( p );
 		data.read_non_genetic_data();
 		data.standardise_non_genetic_data();
@@ -71,14 +72,37 @@ TEST_CASE("HE-reg"){
 		Eigen::MatrixXd C = data.C.cast<double>();
 
 		SECTION("Gaussian prior"){
-			PVE pve(p, data.G, Y, C);
+			PVE pve(data, Y, C);
 			pve.run(p.out_file);
 
-			CHECK(pve.sigmas(0)  == Approx(0.5240473249));
-			CHECK(pve.sigmas(1)  == Approx(0.4986619236));
+			CHECK(pve.bb(0)  == Approx(1872.2247892629));
+			CHECK(pve.bb(1)  == Approx(999.0));
+			CHECK(pve.sigmas(0)  == Approx(0.5296102553));
+			CHECK(pve.sigmas(1)  == Approx(0.4895490047));
 //			CHECK(pve.h2(0)  == Approx(0.5124108594));
 //			CHECK(pve.h2(1)  == Approx(0.4875891406));
 		}
+
+	SECTION("Main effects fit (gaussian prior)") {
+		parameters p;
+		int argc = sizeof(argv_main1) / sizeof(argv_main1[0]);
+		parse_arguments(p, argc, argv_main1);
+		Data data(p);
+		data.read_non_genetic_data();
+		data.standardise_non_genetic_data();
+		data.read_full_bgen();
+
+		Eigen::VectorXd Y = data.Y.cast<double>();
+		Eigen::MatrixXd C = data.C.cast<double>();
+
+		SECTION("Gaussian prior") {
+			PVE pve(data, Y, C);
+			pve.run(p.out_file);
+
+			CHECK(pve.sigmas(0) == Approx(0.5240473249));
+			CHECK(pve.sigmas(1) == Approx(0.4986619236));
+		}
+	}
 //
 //		SECTION("MoG prior v1"){
 //			Eigen::VectorXd alpha_beta = Eigen::VectorXd::Constant(data.n_var, 0.99999999);

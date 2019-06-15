@@ -10,12 +10,19 @@
 #include "parameters.hpp"
 #include "eigen_utils.hpp"
 #include "mpi_utils.hpp"
+#include "data.hpp"
 
 #include <boost/iostreams/filtering_stream.hpp>
 
 #include <random>
 
 namespace boost_io = boost::iostreams;
+
+struct Index_t {
+	Index_t() : main(0), noise(1) {
+	}
+	long main, main2, gxe, gxe2, noise;
+};
 
 class PVE {
 public:
@@ -29,11 +36,13 @@ public:
 	long n_env;
 	bool mog_beta, mog_gam;
 	double N, P;
-	int world_rank;
+	int world_rank, world_size;
+
+	std::map<long, int> sample_location;
 
 	parameters params;
 
-	GenotypeMatrix& X;
+	const GenotypeMatrix& X;
 
 	Eigen::VectorXd eta;
 	Eigen::VectorXd Y;
@@ -43,16 +52,19 @@ public:
 	Eigen::MatrixXd CtC_inv;
 	double usum, vsum;
 
+	Index_t ind;
+	Eigen::VectorXd bb;
+	Eigen::MatrixXd A;
+
 	std::vector<std::string> components;
 
 	// Interim results
 	boost_io::filtering_ostream outf;
 
-	PVE(const parameters& myparams,
-	    GenotypeMatrix& myX,
+	PVE(const Data& dat,
 	    Eigen::VectorXd& myY,
 	    Eigen::MatrixXd& myC,
-	    Eigen::VectorXd& myeta) : params(myparams), X(myX), eta(myeta), Y(myY), C(myC), mode_gxe(true), n_components(3) {
+	    Eigen::VectorXd& myeta) : params(dat.p), X(dat.G), sample_location(dat.sample_location), eta(myeta), Y(myY), C(myC), mode_gxe(true), n_components(3) {
 		n_samples = X.nn;
 		n_var = X.pp;
 		N = X.nn;
@@ -72,12 +84,12 @@ public:
 		EigenUtils::scale_matrix_and_remove_constant_cols(eta);
 
 		MPI_Comm_rank(MPI_COMM_WORLD, &world_rank);
+		MPI_Comm_size(MPI_COMM_WORLD, &world_size);
 	}
 
-	PVE(const parameters& myparams,
-	    GenotypeMatrix& myX,
+	PVE(const Data& dat,
 	    Eigen::VectorXd& myY,
-	    Eigen::MatrixXd& myC) : params(myparams), X(myX), Y(myY), C(myC), mode_gxe(false), n_components(2) {
+	    Eigen::MatrixXd& myC) : params(dat.p), X(dat.G), sample_location(dat.sample_location), Y(myY), C(myC), mode_gxe(false), n_components(2) {
 		n_samples = X.nn;
 		n_var = X.pp;
 		N = X.nn;
@@ -93,15 +105,10 @@ public:
 		std::cout << "N-covars: " << n_covar << std::endl;
 
 		MPI_Comm_rank(MPI_COMM_WORLD, &world_rank);
+		MPI_Comm_size(MPI_COMM_WORLD, &world_size);
 	}
 
 	void calc_sigmas(){
-		// New general implementation
-		struct indexes_t {
-			indexes_t() : main(0), noise(1) {
-			}
-			long main, main2, gxe, gxe2, noise;
-		} ind;
 		long n_components = 2;
 		if(n_env == 1) {
 			n_components += 1;
@@ -123,20 +130,23 @@ public:
 		/*** trace computations for RHS ***/
 		long index = 0;
 		Y = project_out_covars(Y);
-		Eigen::VectorXd eY, bb(n_components);
+		Eigen::VectorXd eY;
+		bb.resize(n_components);
 
-		bb(ind.main) = X.transpose_multiply(Y).squaredNorm() / P;
-		bb(ind.noise) = Y.squaredNorm();
+		Eigen::VectorXd tmp;
+		tmp = X.transpose_multiply(Y);
+		bb(ind.main) = mpiUtils::mpiReduce_inplace(tmp).squaredNorm() / P;
+		bb(ind.noise) = mpiUtils::mpiReduce_inplace(Y.squaredNorm());
 		if(n_env == 1) {
 			eY = Y.cwiseProduct(eta);
-			bb(ind.gxe) = X.transpose_multiply(eY).squaredNorm() / P;
+			tmp = X.transpose_multiply(eY);
+			bb(ind.gxe) = mpiUtils::mpiReduce_inplace(tmp).squaredNorm() / P;
 		}
-
-		bb = mpiUtils::mpiReduce_inplace(bb);
+//		bb = mpiUtils::mpiReduce_inplace(bb);
 		std::cout << "b: " << std::endl << bb << std::endl;
 
 		/*** trace computations for LHS ***/
-		Eigen::MatrixXd A = Eigen::MatrixXd::Zero(n_components, n_components);
+		A = Eigen::MatrixXd::Zero(n_components, n_components);
 		Eigen::VectorXd zz(n_samples);
 		std::mt19937 generator{params.random_seed};
 		std::normal_distribution<scalarData> noise_normal(0.0, 1);
@@ -145,9 +155,38 @@ public:
 			Eigen::MatrixXd Arr = Eigen::MatrixXd::Zero(n_components, n_components);
 
 			// fill gaussian noise
-			for (long ii = 0; ii < n_samples; ii++) {
-				zz(ii) = noise_normal(generator);
+			if(world_rank == 0) {
+				std::vector<long> all_n_samples(world_size);
+				for (const auto &kv : sample_location) {
+					if (kv.second != -1) {
+						all_n_samples[kv.second]++;
+					}
+				}
+
+				std::vector<Eigen::VectorXd> allzz(world_size);
+				for (int ii = 0; ii < world_size; ii++){
+					allzz[ii].resize(all_n_samples[ii]);
+				}
+
+				std::vector<long> allii(world_size, 0);
+				for (const auto &kv : sample_location) {
+					if (kv.second != -1) {
+						int local_rank = kv.second;
+						long local_ii = allii[local_rank];
+						allzz[local_rank][local_ii] = noise_normal(generator);
+						allii[local_rank]++;
+					}
+				}
+
+				for (int ii = 1; ii < world_size; ii++){
+					allzz[ii].resize(all_n_samples[ii]);
+					MPI_Send(allzz[ii].data(), allzz[ii].size(), MPI_DOUBLE, ii, 0, MPI_COMM_WORLD);
+				}
+				zz = allzz[0];
+			} else {
+				MPI_Recv(zz.data(), n_samples, MPI_DOUBLE, 0, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
 			}
+
 			Eigen::VectorXd Wzz = project_out_covars(zz);
 
 			Eigen::VectorXd Xtz = X.transpose_multiply(zz);
@@ -207,16 +246,20 @@ public:
 
 	Eigen::MatrixXd project_out_covars(Eigen::Ref<Eigen::MatrixXd> rhs){
 		if(n_covar > 0) {
+			if(params.mode_debug) std::cout << "Starting project_out_covars" << std::endl;
 			if (CtC_inv.rows() != n_covar) {
+				if(params.mode_debug) std::cout << "Starting compute of CtC_inv" << std::endl;
 				Eigen::MatrixXd CtC = C.transpose() * C;
 				CtC = mpiUtils::mpiReduce_inplace(CtC);
 				CtC_inv = CtC.inverse();
+				if(params.mode_debug) std::cout << "Ending compute of CtC_inv" << std::endl;
 			}
-			Eigen::MatrixXd res, yhat;
 			Eigen::MatrixXd CtRHS = C.transpose() * rhs;
 			CtRHS = mpiUtils::mpiReduce_inplace(CtRHS);
-			yhat = C * CtC_inv * CtRHS;
-			res = rhs - yhat;
+			Eigen::VectorXd beta = CtC_inv * CtRHS;
+			Eigen::MatrixXd yhat = C * beta;
+			Eigen::MatrixXd res = rhs - yhat;
+			if(params.mode_debug) std::cout << "Ending project_out_covars" << std::endl;
 			return res;
 		} else {
 			return rhs;
@@ -380,6 +423,22 @@ void PVE::run(const std::string &file) {
 	h2 = calc_h2();
 	std::cout << "PVE estimates" << std::endl;
 	std::cout << h2 << std::endl;
+
+
+	if(n_env > 0) {
+		// Main effects model
+		Eigen::MatrixXd A1(2, 2);
+		Eigen::VectorXd bb1(2);
+		A1(0, 0) = A(ind.main, ind.main);
+		A1(0, 1) = A(ind.main, ind.noise);
+		A1(1, 0) = A(ind.noise, ind.main);
+		A1(1, 1) = A(ind.noise, ind.noise);
+
+		bb1 << bb(ind.main), bb(ind.noise);
+		Eigen::VectorXd sigmas1 = A1.colPivHouseholderQr().solve(bb1);
+		Eigen::VectorXd h2_1 = sigmas / sigmas.sum();
+		std::cout << "h2-G = " << h2_1(0, 0) << " (main effects model only)" << std::endl;
+	}
 }
 
 #endif //BGEN_PROG_PVE_HPP

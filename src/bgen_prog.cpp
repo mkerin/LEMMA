@@ -163,13 +163,6 @@ int main( int argc, char** argv ) {
 			}
 		}
 
-		// MPI ONLY IMPLEMENTED UP TO HERE
-		if (world_rank != 0) {
-			std::cout.rdbuf(coutbuf);
-		}
-		MPI_Finalize();
-		return 0;
-
 		if(p.mode_pve_est) {
 			if(p.random_seed == -1) {
 				if(world_rank == 0) {
@@ -186,18 +179,18 @@ int main( int argc, char** argv ) {
 			if(data.n_env > 0) {
 				// If multi env; use VB to collapse to single
 				assert(data.n_env == 1 || p.mode_vb || p.env_coeffs_file != "NULL");
-				PVE pve(p, data.G, Y, C, eta);
+				PVE pve(data, Y, C, eta);
 				pve.run(p.out_file);
 				pve.to_file(p.out_file);
 			} else if(p.mog_weights_file != "NULL") {
 				Eigen::VectorXd alpha_beta, alpha_gam;
 				data.read_mog_weights(p.mog_weights_file, alpha_beta, alpha_gam);
-				PVE pve(p, data.G, Y, C);
+				PVE pve(data, Y, C);
 				pve.set_mog_weights(alpha_beta, alpha_gam);
 				pve.run(p.out_file);
 				pve.to_file(p.out_file);
 			} else {
-				PVE pve(p, data.G, Y, C);
+				PVE pve(data, Y, C);
 				pve.run(p.out_file);
 				pve.to_file(p.out_file);
 			}
@@ -213,5 +206,10 @@ int main( int argc, char** argv ) {
 	std::time_t end_time = std::chrono::system_clock::to_time_t(end);
 	std::cout << "Analysis finished at " << std::ctime(&end_time);
 	std::cout << "Elapsed time: " << elapsed_seconds.count() << "s" << std::endl;
+
+	if (world_rank != 0) {
+		std::cout.rdbuf(coutbuf);
+	}
+	MPI_Finalize();
 	return 0;
 }

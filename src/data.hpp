@@ -158,7 +158,7 @@ public:
 
 		// filter - range
 		if (p.range) {
-			std::cout << "Selecting range..." << std::endl;
+			std::cout << "Selecting snps in range " << p.chr << ": " << p.range_start << " - " << p.range_end << std::endl;
 			genfile::bgen::IndexQuery::GenomicRange rr1(p.chr, p.range_start, p.range_end);
 			query->include_range( rr1 );
 
@@ -170,7 +170,7 @@ public:
 		// filter - incl rsids
 		if(p.select_snps) {
 			read_incl_rsids();
-			std::cout << "Filtering SNPs by rsid..." << std::endl;
+			std::cout << "Including SNPs from file: " << p.incl_rsids_file << std::endl;
 			query->include_rsids( rsid_list );
 
 			for (int nn = 0; nn < p.n_bgen_thread; nn++) {
@@ -410,6 +410,9 @@ public:
 		t_readFullBgen.stop();
 		std::cout << "BGEN contained " << n_var << " variants." << std::endl;
 
+		G.calc_scaled_values();
+		if(p.xtra_verbose) std::cout << "Computed colwise mean and sd of genetic data" << std::endl;
+
 		// Set default hyper-parameters if not read from file
 		// Run read_hyps twice as some settings depend on n_var
 		// which changes depending on how many variants excluded due to maf etc.
@@ -489,7 +492,7 @@ public:
 				incomplete_cases[ii] = true;
 			}
 		}
-		std::cout << "Subsetted down to " << user_sample_ids.size() << " ids from --incl_sample_ids";
+		std::cout << "Subsetted down to " << user_sample_ids.size() << " ids from file: " << p.incl_sids_file;
 		std::cout << std::endl;
 	}
 
