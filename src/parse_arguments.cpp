@@ -156,6 +156,7 @@ void parse_arguments(parameters &p, int argc, char **argv) {
 	    ("hyps_grid", "", cxxopts::value<std::string>(p.hyps_grid_file))
 	    ("hyps_probs", "", cxxopts::value<std::string>(p.hyps_probs_file))
 	    ("vb_init", "", cxxopts::value<std::string>(p.vb_init_file))
+	    ("covar_init", "", cxxopts::value<std::string>(p.covar_coeffs_file))
 	    ("snpwise_scan", "", cxxopts::value<std::string>(p.snpstats_file))
 	    ("environment_weights", "", cxxopts::value<std::string>(p.env_coeffs_file))
 	    ("resume_from_param_dump", "", cxxopts::value<std::string>(p.resume_prefix))
@@ -213,6 +214,9 @@ void parse_arguments(parameters &p, int argc, char **argv) {
 		if(p.vb_init_file != "NULL") {
 			check_file_exists(p.vb_init_file);
 		}
+		if(p.covar_coeffs_file != "NULL") {
+            check_file_exists(p.covar_coeffs_file);
+        }
 		if(p.hyps_grid_file != "NULL") {
 			check_file_exists(p.hyps_grid_file);
 		}

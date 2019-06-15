@@ -15,6 +15,12 @@
 
 namespace boost_io = boost::iostreams;
 
+struct Index_t {
+	Index_t() : main(0), noise(1) {
+	}
+	long main, main2, gxe, gxe2, noise;
+};
+
 class PVE {
 public:
 	// constants
@@ -39,6 +45,10 @@ public:
 	Eigen::VectorXd uu, vv;
 	Eigen::MatrixXd CtC_inv;
 	double usum, vsum;
+
+	Index_t ind;
+	Eigen::VectorXd bb;
+	Eigen::MatrixXd A;
 
 	std::vector<std::string> components;
 
@@ -89,12 +99,6 @@ public:
 	}
 
 	void calc_sigmas(){
-		// New general implementation
-		struct indexes_t {
-			indexes_t() : main(0), noise(1) {
-			}
-			long main, main2, gxe, gxe2, noise;
-		} ind;
 		long n_components = 2;
 		if(n_env == 1) {
 			n_components += 1;
@@ -116,7 +120,8 @@ public:
 		/*** trace computations for RHS ***/
 		long index = 0;
 		Y = project_out_covars(Y);
-		Eigen::VectorXd eY, bb(n_components);
+		Eigen::VectorXd eY;
+		bb.resize(n_components);
 
 		bb(ind.main) = X.transpose_multiply(Y).squaredNorm() / P;
 		bb(ind.noise) = Y.squaredNorm();
@@ -127,7 +132,7 @@ public:
 		std::cout << "b: " << std::endl << bb << std::endl;
 
 		/*** trace computations for LHS ***/
-		Eigen::MatrixXd A = Eigen::MatrixXd::Zero(n_components, n_components);
+		A = Eigen::MatrixXd::Zero(n_components, n_components);
 		Eigen::VectorXd zz(n_samples);
 		std::mt19937 generator{params.random_seed};
 		std::normal_distribution<scalarData> noise_normal(0.0, 1);
@@ -359,6 +364,22 @@ void PVE::run(const std::string &file) {
 	h2 = calc_h2();
 	std::cout << "PVE estimates" << std::endl;
 	std::cout << h2 << std::endl;
+
+
+	if(n_env > 0) {
+		// Main effects model
+		Eigen::MatrixXd A1(2, 2);
+		Eigen::VectorXd bb1(2);
+		A1(0, 0) = A(ind.main, ind.main);
+		A1(0, 1) = A(ind.main, ind.noise);
+		A1(1, 0) = A(ind.noise, ind.main);
+		A1(1, 1) = A(ind.noise, ind.noise);
+
+		bb1 << bb(ind.main), bb(ind.noise);
+		Eigen::VectorXd sigmas1 = A1.colPivHouseholderQr().solve(bb1);
+		Eigen::VectorXd h2_1 = sigmas / sigmas.sum();
+		std::cout << "h2-G = " << h2_1(0, 0) << " (main effects model only)" << std::endl;
+	}
 }
 
 #endif //BGEN_PROG_PVE_HPP
