@@ -75,7 +75,7 @@ mpiUtils::partition_valid_samples_across_ranks(const long &n_samples,
 			sample_location[ii] = -1;
 		}
 	}
-	assert(iiValid == n_valid_sids);
+	assert(iiValid == n_valid_sids + diff);
 
 
 	for (long ii = 0; ii < n_valid_sids; ii++) {
