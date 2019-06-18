@@ -145,7 +145,7 @@ void parse_arguments(parameters &p, int argc, char **argv) {
 	    ("incl_squared_envs", "")
 	    ("effects_prior_mog", "")
 	    ("maxBytesPerRank", "Maximum number of bytes of RAM available on each partition when using MPI (Default: 16GB)",
-	    		cxxopts::value<long long>(p.maxBytesPerRank))
+	    cxxopts::value<long long>(p.maxBytesPerRank))
 	    ("suppress_squared_env_removal", "")
 	    ("loso_window_size", "", cxxopts::value<long>(p.LOSO_window))
 	    ("drop_loco", "", cxxopts::value<bool>(p.drop_loco))
@@ -173,6 +173,7 @@ void parse_arguments(parameters &p, int argc, char **argv) {
 	    ("random_seed", "Seed used when simulating a phenotype (default: random)",
 	    cxxopts::value<unsigned int>(p.random_seed))
 	    ("param_dump_interval", "", cxxopts::value<long>(p.param_dump_interval))
+	    ("redo_ym_interval", "", cxxopts::value<long>(p.redo_ym_interval))
 	    ("h, help", "")
 	;
 
@@ -218,8 +219,8 @@ void parse_arguments(parameters &p, int argc, char **argv) {
 			check_file_exists(p.vb_init_file);
 		}
 		if(p.covar_coeffs_file != "NULL") {
-            check_file_exists(p.covar_coeffs_file);
-        }
+			check_file_exists(p.covar_coeffs_file);
+		}
 		if(p.hyps_grid_file != "NULL") {
 			check_file_exists(p.hyps_grid_file);
 		}

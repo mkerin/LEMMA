@@ -145,7 +145,7 @@ public:
 		}
 #else
 		printf("Initialising vbayes object");
-																																#endif
+																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																#endif
 		mkl_set_num_threads_local(p.n_thread);
 
 		// Data size params
@@ -473,6 +473,22 @@ public:
 			}
 			std::vector<double> logw_prev = i_logw;
 
+			if(count > 0 && p.redo_ym_interval > 0 && count % p.redo_ym_interval == 0) {
+				if(p.xtra_verbose) {
+					std::cout << "Recomputing ym to reduce numerical error" << std::endl;
+				}
+				Eigen::VectorXd yhat_old, yhat_new;
+				for (int nn = 0; nn < n_grid; nn++) {
+					yhat_old = all_vp[nn].ym + all_vp[nn].yx.cwiseProduct(all_vp[nn].eta);
+					calcPredEffects(all_vp[nn]);
+					yhat_new = all_vp[nn].ym + all_vp[nn].yx.cwiseProduct(all_vp[nn].eta);
+					yhat_old.array() -= yhat_old.mean();
+					yhat_new.array() -= yhat_new.mean();
+					double corr = yhat_old.dot(yhat_new) / yhat_old.norm() / yhat_new.norm();
+					std::cout << "Correlation between old and new yhat: " << corr << std::endl;
+				}
+			}
+
 			if (p.mode_debug) std::cout << " - update params" << std::endl;
 			updateAllParams(count, round_index, all_vp, all_hyps, logw_prev);
 
@@ -657,8 +673,8 @@ public:
 		// Update covar main effects
 		for (int nn = 0; nn < n_grid; nn++) {
 			if (n_covar > 0) {
-				updateCovarEffects(covar_fwd_pass, all_vp[nn], all_hyps[nn]);
-				updateCovarEffects(covar_back_pass, all_vp[nn], all_hyps[nn]);
+				// updateCovarEffects(covar_fwd_pass, all_vp[nn], all_hyps[nn]);
+				// updateCovarEffects(covar_back_pass, all_vp[nn], all_hyps[nn]);
 				check_monotonic_elbo(all_hyps[nn], all_vp[nn], count, logw_prev[nn], "updateCovarEffects");
 			}
 		}
