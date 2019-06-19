@@ -48,6 +48,13 @@ inline double sigmoid(double x){
 	return 1.0 / (1.0 + std::exp(-x));
 }
 
+inline double get_corr(Eigen::VectorXd v1, Eigen::VectorXd v2){
+	v1.array() -= v1.mean();
+	v2.array() -= v2.mean();
+	double res = v1.dot(v2) / v1.norm() / v2.norm();
+	return res;
+}
+
 class VBayesX2 {
 public:
 // Constants
@@ -145,7 +152,7 @@ public:
 		}
 #else
 		printf("Initialising vbayes object");
-																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																#endif
+#endif
 		mkl_set_num_threads_local(p.n_thread);
 
 		// Data size params
@@ -480,12 +487,23 @@ public:
 				Eigen::VectorXd yhat_old, yhat_new;
 				for (int nn = 0; nn < n_grid; nn++) {
 					yhat_old = all_vp[nn].ym + all_vp[nn].yx.cwiseProduct(all_vp[nn].eta);
+					Eigen::VectorXd ym_old = all_vp[nn].ym;
+					Eigen::VectorXd yx_old = all_vp[nn].yx;
+					Eigen::VectorXd eta_old = all_vp[nn].eta;
+
 					calcPredEffects(all_vp[nn]);
 					yhat_new = all_vp[nn].ym + all_vp[nn].yx.cwiseProduct(all_vp[nn].eta);
+					Eigen::VectorXd ym_new = all_vp[nn].ym;
+					Eigen::VectorXd yx_new = all_vp[nn].yx;
+					Eigen::VectorXd eta_new = all_vp[nn].eta;
 					yhat_old.array() -= yhat_old.mean();
 					yhat_new.array() -= yhat_new.mean();
 					double corr = yhat_old.dot(yhat_new) / yhat_old.norm() / yhat_new.norm();
-					std::cout << "Correlation between old and new yhat: " << corr << std::endl;
+
+					std::cout << "Correlation between old and new yhat: " << get_corr(yhat_old, yhat_new) << std::endl;
+					std::cout << "Correlation between old and new ym: " << get_corr(ym_old, ym_new) << std::endl;
+					std::cout << "Correlation between old and new yx: " << get_corr(yx_old, yx_new) << std::endl;
+					std::cout << "Correlation between old and new eta: " << get_corr(eta_old, eta_new) << std::endl;
 				}
 			}
 
@@ -673,8 +691,8 @@ public:
 		// Update covar main effects
 		for (int nn = 0; nn < n_grid; nn++) {
 			if (n_covar > 0) {
-				// updateCovarEffects(covar_fwd_pass, all_vp[nn], all_hyps[nn]);
-				// updateCovarEffects(covar_back_pass, all_vp[nn], all_hyps[nn]);
+				updateCovarEffects(covar_fwd_pass, all_vp[nn], all_hyps[nn]);
+				updateCovarEffects(covar_back_pass, all_vp[nn], all_hyps[nn]);
 				check_monotonic_elbo(all_hyps[nn], all_vp[nn], count, logw_prev[nn], "updateCovarEffects");
 			}
 		}
