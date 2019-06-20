@@ -19,9 +19,9 @@
 #include <iostream>
 #include <algorithm>
 #include <cmath>
-#include <cstddef>     // for ptrdiff_t class
-#include <chrono>      // start/end time info
-#include <ctime>       // start/end time info
+#include <cstddef>
+#include <chrono>
+#include <ctime>
 #include <map>
 #include <mutex>
 #include <vector>
@@ -403,6 +403,9 @@ public:
 		n_var = G.cols();
 		t_readFullBgen.stop();
 		std::cout << "BGEN contained " << n_var << " variants." << std::endl;
+
+		G.calc_scaled_values();
+		if(p.xtra_verbose) std::cout << "Computed colwise mean and sd of genetic data" << std::endl;
 
 		// Set default hyper-parameters if not read from file
 		// Run read_hyps twice as some settings depend on n_var
@@ -1037,7 +1040,7 @@ public:
 		//  }
 		// } else {
 		//  if(hyps_names != case1) {
-		//      // Allow gxe params if coeffs set to zero
+		//
 		//      if(std::includes(hyps_names.begin(), hyps_names.end(), case2.begin(), case2.end())) {
 		//          double sigma_g_sum  = hyps_grid.col(2).array().abs().sum();
 		//          double lambda_g_sum = hyps_grid.col(4).array().abs().sum();

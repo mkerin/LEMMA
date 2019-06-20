@@ -34,10 +34,10 @@ namespace boost_io = boost::iostreams;
 
 class VbTracker {
 public:
-	long count;                                                            // Number of iterations to convergence at each step
-	VariationalParametersLite vp;                                             // best mu at each ii
-	double logw;                                                             // best logw at each ii
-	Hyps hyps;                                                              // hyps values at end of VB inference.
+	long count;
+	VariationalParametersLite vp;
+	double logw;
+	Hyps hyps;
 
 	parameters p;
 

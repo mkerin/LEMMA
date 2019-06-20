@@ -11,6 +11,7 @@
 
 #include "genfile/bgen/bgen.hpp"
 #include "genfile/bgen/View.hpp"
+#include "tools/eigen3.3/Dense"
 
 #include <boost/iostreams/filtering_stream.hpp>
 #include <boost/iostreams/device/file.hpp>
@@ -30,6 +31,10 @@ std::string fstream_init(boost_io::filtering_ostream &my_outf,
                          const std::string &file,
                          const std::string &file_prefix = "",
                          const std::string &file_suffix = "");
+
+void dump_predicted_vec_to_file(boost_io::filtering_ostream &my_outf,
+		Eigen::Ref<Eigen::VectorXd> vec,
+	const std::string& header);
 
 void write_snp_stats_to_file(boost_io::filtering_ostream &ofile,
                              const int &n_effects,

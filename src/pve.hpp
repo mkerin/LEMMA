@@ -8,6 +8,7 @@
 #include "genotype_matrix.hpp"
 #include "file_utils.hpp"
 #include "parameters.hpp"
+#include "data.hpp"
 
 #include <boost/iostreams/filtering_stream.hpp>
 
@@ -21,11 +22,130 @@ struct Index_t {
 	long main, main2, gxe, gxe2, noise;
 };
 
+Eigen::MatrixXd project_out_covars(Eigen::Ref<Eigen::MatrixXd> rhs,
+                                   Eigen::Ref<Eigen::MatrixXd> C,
+                                   const Eigen::Ref<const Eigen::MatrixXd>& CtC_inv,
+                                   const parameters& params){
+	assert(CtC_inv.cols() == C.cols());
+	assert(CtC_inv.rows() == C.cols());
+	assert(C.rows() == rhs.rows());
+	if(params.mode_debug) std::cout << "Starting project_out_covars" << std::endl;
+	Eigen::MatrixXd beta = CtC_inv * C.transpose() * rhs;
+	Eigen::MatrixXd yhat = C * beta;
+	Eigen::MatrixXd res = rhs - yhat;
+	if(params.mode_debug) std::cout << "Ending project_out_covars" << std::endl;
+	return res;
+}
+
+class PVE_Component {
+public:
+	Eigen::MatrixXd XXtz, XXtWz;
+	double ytXXty;
+	std::string label;
+	long n_env;
+	long n_covar;
+	long n_samples;
+	long n_draws;
+	double n_component_var;
+	parameters params;
+	bool is_active;
+
+	Eigen::MatrixXd& C, CtC_inv, zz, Wzz;
+	Eigen::VectorXd Y;
+	Eigen::VectorXd eta;
+	PVE_Component(const parameters& myparams,
+	              Eigen::VectorXd& myY,
+	              Eigen::MatrixXd& myzz,
+	              Eigen::MatrixXd& myWzz,
+	              Eigen::MatrixXd& myC,
+	              Eigen::MatrixXd& myCtC_inv) : params(myparams), Y(myY), zz(myzz), Wzz(myWzz), C(myC), CtC_inv(myCtC_inv) {
+		n_covar = C.cols();
+		n_samples = zz.rows();
+		n_draws = zz.cols();
+
+		n_component_var = 0;
+		n_env = 0;
+		label = "";
+		is_active = true;
+
+		XXtz = Eigen::MatrixXd::Zero(n_samples, n_draws);
+		XXtWz = Eigen::MatrixXd::Zero(n_samples, n_draws);
+	}
+
+	void set_eta(Eigen::Ref<Eigen::VectorXd> myeta, const long& my_n_env){
+		assert(is_active);
+		n_env = my_n_env;
+		eta = myeta;
+		Y.array() *= eta.array();
+		zz.array().colwise() *= eta.array();
+		Wzz.array().colwise() *= eta.array();
+
+	}
+
+	void set_inactive(){
+		// The inactive component corresponds to sigma_e
+		// Ie the 'noise' component
+		assert(n_env == 0);
+		is_active = false;
+		XXtz = zz;
+		XXtWz = Wzz;
+		n_component_var = 1;
+		ytXXty = Y.squaredNorm();
+	}
+
+	void add_to_trace_estimator(Eigen::Ref<Eigen::MatrixXd> X){
+		if(is_active) {
+			ytXXty += (X.transpose() * Y).squaredNorm();
+
+
+			Eigen::MatrixXd Xtz = X.transpose() * zz;
+			XXtz += X * Xtz;
+			if(n_covar > 0) {
+				Eigen::MatrixXd XtWz = X.transpose() * Wzz;
+				XXtWz += X * XtWz;
+			}
+
+			n_component_var += X.cols();
+		}
+	}
+
+	double get_bb_trace() const {
+		return ytXXty / n_component_var;
+	}
+
+	double operator*(const PVE_Component& other) {
+		double res;
+		if(n_covar == 0 && n_env == 0) {
+
+			res = XXtz.cwiseProduct(other.XXtz).sum();
+		} else if (n_covar == 0 && n_env == 1) {
+
+			res = (eta.cwiseProduct(XXtz)).cwiseProduct(other.XXtz).sum();
+		} else if (n_covar > 0 && n_env == 0) {
+
+			Eigen::MatrixXd WXXtz = project_out_covars(XXtz);
+			res = WXXtz.cwiseProduct(other.XXtWz).sum();
+		} else if (n_covar > 0 && n_env == 1) {
+
+			Eigen::MatrixXd eXXtz = XXtz.array().colwise() * eta.array();
+			Eigen::MatrixXd WeXXtz = project_out_covars(eXXtz);
+			res = WeXXtz.cwiseProduct(other.XXtWz).sum();
+		} else {
+			throw std::runtime_error("Error in PVE_Component");
+		}
+		return res / n_component_var / other.n_component_var / n_draws;
+	}
+
+	Eigen::MatrixXd project_out_covars(Eigen::Ref<Eigen::MatrixXd> rhs) {
+		return ::project_out_covars(rhs, C, CtC_inv, params);
+	}
+};
+
 class PVE {
 public:
 	// constants
-	long nDraws;
-	long n_samples;                                                                     // number of samples
+	long n_draws;
+	long n_samples;
 	long n_var;
 	const bool mode_gxe;
 	const int n_components;
@@ -34,9 +154,9 @@ public:
 	bool mog_beta, mog_gam;
 	double N, P;
 
-	parameters params;
+	parameters p;
 
-	GenotypeMatrix& X;
+	const GenotypeMatrix& X;
 
 	Eigen::VectorXd eta;
 	Eigen::VectorXd Y;
@@ -55,16 +175,15 @@ public:
 	// Interim results
 	boost_io::filtering_ostream outf;
 
-	PVE(const parameters& myparams,
-	    GenotypeMatrix& myX,
+	PVE(const Data& dat,
 	    Eigen::VectorXd& myY,
 	    Eigen::MatrixXd& myC,
-	    Eigen::VectorXd& myeta) : params(myparams), X(myX), eta(myeta), Y(myY), C(myC), mode_gxe(true), n_components(3) {
+	    Eigen::VectorXd& myeta) : p(dat.p), X(dat.G), eta(myeta), Y(myY), C(myC), mode_gxe(true), n_components(3) {
 		n_samples = X.nn;
 		n_var = X.pp;
 		N = X.nn;
 		P = X.pp;
-		nDraws = params.n_pve_samples;
+		n_draws = p.n_pve_samples;
 		std::vector<std::string> my_components = {"G", "GxE", "noise"};
 		components = my_components;
 		mog_beta = false;
@@ -79,15 +198,14 @@ public:
 		eta.array() /= eta.squaredNorm() / (eta.rows() - 1.0);
 	}
 
-	PVE(const parameters& myparams,
-	    GenotypeMatrix& myX,
+	PVE(const Data& dat,
 	    Eigen::VectorXd& myY,
-	    Eigen::MatrixXd& myC) : params(myparams), X(myX), Y(myY), C(myC), mode_gxe(false), n_components(2) {
+	    Eigen::MatrixXd& myC) : p(dat.p), X(dat.G), Y(myY), C(myC), mode_gxe(false), n_components(2) {
 		n_samples = X.nn;
 		n_var = X.pp;
 		N = X.nn;
 		P = X.pp;
-		nDraws = params.n_pve_samples;
+		n_draws = p.n_pve_samples;
 		std::vector<std::string> my_components = {"G", "noise"};
 		components = my_components;
 		mog_beta = false;
@@ -98,7 +216,83 @@ public:
 		std::cout << "N-covars: " << n_covar << std::endl;
 	}
 
+	void calc_sigmas_v2(){
+		EigenDataMatrix zz(n_samples, n_draws);
+		EigenDataMatrix Wzz;
+		fill_gaussian_noise(p.random_seed, zz, n_samples, n_draws);
+
+		if(n_covar > 0) {
+			Wzz = project_out_covars(zz);
+			Y = project_out_covars(Y);
+		} else {
+			Wzz = zz;
+		}
+
+		// Set variance components
+		std::vector<PVE_Component> components;
+		if(true) {
+			PVE_Component comp(p, Y, zz, Wzz, C, CtC_inv);
+			comp.label = "sigma_beta";
+			components.push_back(comp);
+		}
+
+		if(n_env == 1) {
+			PVE_Component comp(p, Y, zz, Wzz, C, CtC_inv);
+			comp.label = "sigma_gamma";
+			comp.set_eta(eta, n_env);
+			components.push_back(comp);
+		}
+
+		if(true) {
+			PVE_Component comp(p, Y, zz, Wzz, C, CtC_inv);
+			comp.set_inactive();
+			comp.label = "sigma_e";
+			components.push_back(comp);
+		}
+
+		// Compute randomised traces
+		long n_main_segs;
+		n_main_segs = (n_var + p.main_chunk_size - 1) / p.main_chunk_size;
+		std::vector< std::vector <long> > main_fwd_pass_chunks(n_main_segs);
+		for(long kk = 0; kk < n_var; kk++) {
+			long main_ch_index = kk / p.main_chunk_size;
+			main_fwd_pass_chunks[main_ch_index].push_back(kk);
+		}
+
+		EigenDataMatrix D;
+		for (auto& iter_chunk : main_fwd_pass_chunks) {
+			long ch_len = iter_chunk.size();
+			if(D.cols() != ch_len) {
+				D.resize(n_samples, ch_len);
+			}
+			X.col_block3(iter_chunk, D);
+
+			for (auto& comp : components) {
+				comp.add_to_trace_estimator(D);
+			}
+		}
+
+		// Solve system to estimate sigmas
+		long n_components = components.size();
+		A.resize(n_components, n_components);
+		bb.resize(n_components);
+
+		for (long ii = 0; ii < n_components; ii++) {
+			bb(ii) = components[ii].get_bb_trace();
+			for (long jj = 0; jj <= ii; jj++) {
+				A(ii, jj) = components[ii] * components[jj];
+				A(jj, ii) = A(ii, jj);
+			}
+		}
+
+		std::cout << "A: " << std::endl << A << std::endl;
+		std::cout << "b: " << std::endl << bb << std::endl;
+
+		sigmas = A.colPivHouseholderQr().solve(bb);
+	}
+
 	void calc_sigmas(){
+
 		long n_components = 2;
 		if(n_env == 1) {
 			n_components += 1;
@@ -134,10 +328,10 @@ public:
 		/*** trace computations for LHS ***/
 		A = Eigen::MatrixXd::Zero(n_components, n_components);
 		Eigen::VectorXd zz(n_samples);
-		std::mt19937 generator{params.random_seed};
+		std::mt19937 generator{p.random_seed};
 		std::normal_distribution<scalarData> noise_normal(0.0, 1);
-		for (int rr = 0; rr < nDraws; rr++) {
-			if(params.verbose) std::cout << "Starting iteration " << rr << std::endl;
+		for (int rr = 0; rr < n_draws; rr++) {
+			if(p.verbose) std::cout << "Starting iteration " << rr << std::endl;
 			Eigen::MatrixXd Arr = Eigen::MatrixXd::Zero(n_components, n_components);
 
 			// fill gaussian noise
@@ -182,7 +376,7 @@ public:
 			Arr(ind.noise, ind.noise) = N - n_covar;
 			A += Arr;
 		}
-		A.array() /= nDraws;
+		A.array() /= n_draws;
 		A = A.selfadjointView<Eigen::Upper>();
 		std::cout << "A: " << std::endl << A << std::endl;
 
@@ -197,17 +391,12 @@ public:
 
 	Eigen::MatrixXd project_out_covars(Eigen::Ref<Eigen::MatrixXd> rhs){
 		if(n_covar > 0) {
-			if(params.mode_debug) std::cout << "Starting project_out_covars" << std::endl;
 			if (CtC_inv.rows() != n_covar) {
-				if(params.mode_debug) std::cout << "Starting compute of CtC_inv" << std::endl;
+				if(p.mode_debug) std::cout << "Starting compute of CtC_inv" << std::endl;
 				CtC_inv = (C.transpose() * C).inverse();
-				if(params.mode_debug) std::cout << "Ending compute of CtC_inv" << std::endl;
+				if(p.mode_debug) std::cout << "Ending compute of CtC_inv" << std::endl;
 			}
-			Eigen::VectorXd beta = CtC_inv * C.transpose() * rhs;
-			Eigen::MatrixXd yhat = C * beta;
-			Eigen::MatrixXd res = rhs - yhat;
-			if(params.mode_debug) std::cout << "Ending project_out_covars" << std::endl;
-			return res;
+			return ::project_out_covars(rhs, C, CtC_inv, p);
 		} else {
 			return rhs;
 		}
@@ -300,7 +489,7 @@ void PVE::he_reg_single_component_mog() {
 	// Compute matrix-vector calculations to store
 	double P = n_var, N = n_samples;
 	Eigen::VectorXd uuinv = (1 - uu.array()).matrix();
-	EigenDataMatrix zz(n_samples, nDraws);
+	EigenDataMatrix zz(n_samples, n_draws);
 
 	// Compute trace computations
 	Eigen::Vector3d bb;
@@ -311,7 +500,7 @@ void PVE::he_reg_single_component_mog() {
 	std::cout << "bb: " << std::endl << bb << std::endl;
 
 	// Randomised trace computations
-	fill_gaussian_noise(params.random_seed, zz, n_samples, nDraws);
+	fill_gaussian_noise(p.random_seed, zz, n_samples, n_draws);
 	auto Xtz = X.transpose_multiply(zz);
 	Eigen::MatrixXd UUXtz = uu.cwiseProduct(uu).asDiagonal() * Xtz;
 	Eigen::MatrixXd UinvUinvXtz = uuinv.cwiseProduct(uuinv).asDiagonal() * Xtz;
@@ -319,8 +508,8 @@ void PVE::he_reg_single_component_mog() {
 	auto XuinvXtz = X * UinvUinvXtz;
 
 	// mean of traces
-	Eigen::ArrayXd atrK1(nDraws), atrK1K1(nDraws), atrK2(nDraws), atrK2K2(nDraws), atrK1K2(nDraws);
-	for (int bb = 0; bb < nDraws; bb++) {
+	Eigen::ArrayXd atrK1(n_draws), atrK1K1(n_draws), atrK2(n_draws), atrK2K2(n_draws), atrK1K2(n_draws);
+	for (int bb = 0; bb < n_draws; bb++) {
 		atrK1(bb) = (uu.asDiagonal() * Xtz.col(bb)).squaredNorm() / usum;
 		atrK1K1(bb) = XuXtz.col(bb).squaredNorm() / usum / usum;
 		atrK2(bb) = (uuinv.asDiagonal() * Xtz.col(bb)).squaredNorm() / (P - usum);

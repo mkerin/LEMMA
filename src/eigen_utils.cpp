@@ -81,7 +81,7 @@ void EigenUtils::read_matrix(const std::string &filename, const long &n_rows, Ei
 			ss >> sss;
 			/// NA
 			if (sss == "NA" || sss == "NAN" || sss == "NaN" || sss == "nan") {
-				tmp_d = 0;                  // Will skip over this value in future
+				tmp_d = 0;
 				incomplete_row[i] = true;
 			} else {
 				try{
@@ -93,7 +93,7 @@ void EigenUtils::read_matrix(const std::string &filename, const long &n_rows, Ei
 			}
 			M(i, k) = tmp_d;
 		}
-		i++;          // loop should end at i == n_samples
+		i++;
 	}
 	if (i < n_rows) {
 		throw std::runtime_error("ERROR: could not convert txt file (too few lines).");
@@ -168,7 +168,7 @@ void EigenUtils::read_matrix(const std::string &filename, Eigen::MatrixXd &M, st
 
 			M(i, k) = tmp_d;
 		}
-		i++;          // loop should end at i == n_rows
+		i++;
 	}
 	if (i < n_rows) {
 		throw std::runtime_error("ERROR: could not convert txt file (too few lines).");
@@ -248,7 +248,7 @@ void EigenUtils::read_matrix_and_skip_cols(const std::string &filename,
 				M(i, k - n_skip_cols) = tmp_d;
 			}
 		}
-		i++;          // loop should end at i == n_rows
+		i++;
 	}
 	if (i < n_rows) {
 		throw std::runtime_error("ERROR: could not convert txt file (too few lines).");
@@ -280,8 +280,8 @@ Eigen::MatrixXd EigenUtils::solve(const Eigen::MatrixXd &A, const Eigen::MatrixX
 
 template <typename EigenMat>
 void EigenUtils::scale_matrix_and_remove_constant_cols(EigenMat &M,
-													   long &n_cols,
-													   std::vector<std::string> &col_names){
+                                                       long &n_cols,
+                                                       std::vector<std::string> &col_names){
 	// Scale eigen matrix passed by reference.
 	// Removes columns with zero variance + updates col_names.
 	// Only call on matrixes which have been reduced to complete cases,

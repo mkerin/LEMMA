@@ -11,27 +11,27 @@
 
 // Scenarios
 char* argv_pve1[] = { (char*) "--mode_pve_est",
-				 (char*) "--random_seed", (char*) "1",
-				 (char*) "--n_pve_samples", (char*) "3",
-				 (char*) "--bgen", (char*) "data/io_test/n1000_p2000.bgen",
-				 (char*) "--pheno", (char*) "data/io_test/case8/pheno.txt",
-				 (char*) "--environment", (char*) "data/io_test/case8/age.txt",
-				 (char*) "--out", (char*) "data/io_test/case8/test_pve_est.out.gz"};
+	                  (char*) "--random_seed", (char*) "1",
+	                  (char*) "--n_pve_samples", (char*) "3",
+	                  (char*) "--bgen", (char*) "data/io_test/n1000_p2000.bgen",
+	                  (char*) "--pheno", (char*) "data/io_test/case8/pheno.txt",
+	                  (char*) "--environment", (char*) "data/io_test/case8/age.txt",
+	                  (char*) "--out", (char*) "data/io_test/case8/test_pve_est.out.gz"};
 //
 char* argv_main1[] = { (char*) "--mode_pve_est",
-				 (char*) "--random_seed", (char*) "1",
-				 (char*) "--n_pve_samples", (char*) "3",
-				 (char*) "--bgen", (char*) "data/io_test/n1000_p2000.bgen",
-				 (char*) "--pheno", (char*) "data/io_test/case8/pheno.txt",
-				 (char*) "--out", (char*) "data/io_test/case8/test_pve_est.out.gz"};
+	                   (char*) "--random_seed", (char*) "1",
+	                   (char*) "--n_pve_samples", (char*) "3",
+	                   (char*) "--bgen", (char*) "data/io_test/n1000_p2000.bgen",
+	                   (char*) "--pheno", (char*) "data/io_test/case8/pheno.txt",
+	                   (char*) "--out", (char*) "data/io_test/case8/test_pve_est.out.gz"};
 
 char* argv_main2[] = { (char*) "--mode_pve_est",
-					   (char*) "--random_seed", (char*) "1",
-					   (char*) "--n_pve_samples", (char*) "3",
-					   (char*) "--bgen", (char*) "data/io_test/n1000_p2000.bgen",
-					   (char*) "--pheno", (char*) "data/io_test/case8/pheno.txt",
-					   (char*) "--pve_mog_weights", (char*) "data/io_test/case8/test_mog_weights.txt",
-					   (char*) "--out", (char*) "data/io_test/case8/test_pve_est.out.gz"};
+	                   (char*) "--random_seed", (char*) "1",
+	                   (char*) "--n_pve_samples", (char*) "3",
+	                   (char*) "--bgen", (char*) "data/io_test/n1000_p2000.bgen",
+	                   (char*) "--pheno", (char*) "data/io_test/case8/pheno.txt",
+	                   (char*) "--pve_mog_weights", (char*) "data/io_test/case8/test_mog_weights.txt",
+	                   (char*) "--out", (char*) "data/io_test/case8/test_pve_est.out.gz"};
 
 
 TEST_CASE("HE-reg"){
@@ -47,7 +47,7 @@ TEST_CASE("HE-reg"){
 		Eigen::VectorXd Y = data.Y.cast<double>();
 		Eigen::MatrixXd C = data.C.cast<double>();
 		Eigen::VectorXd eta = data.E.col(0);
-		PVE pve(p, data.G, Y, C, eta);
+		PVE pve(data, Y, C, eta);
 		pve.run(p.out_file);
 
 		CHECK(pve.sigmas(0)  == Approx(0.4757065487));
@@ -71,7 +71,7 @@ TEST_CASE("HE-reg"){
 		Eigen::MatrixXd C = data.C.cast<double>();
 
 		SECTION("Gaussian prior"){
-			PVE pve(p, data.G, Y, C);
+			PVE pve(data, Y, C);
 			pve.run(p.out_file);
 
 			CHECK(pve.sigmas(0)  == Approx(0.5240473249));
@@ -83,7 +83,7 @@ TEST_CASE("HE-reg"){
 		SECTION("MoG prior v1"){
 			Eigen::VectorXd alpha_beta = Eigen::VectorXd::Constant(data.n_var, 0.99999999);
 			Eigen::VectorXd alpha_gam = Eigen::VectorXd::Constant(data.n_var, 0.99999999);
-			PVE pve(p, data.G, Y, C);
+			PVE pve(data, Y, C);
 			pve.set_mog_weights(alpha_beta, alpha_gam);
 			pve.run(p.out_file);
 
@@ -98,7 +98,7 @@ TEST_CASE("HE-reg"){
 		SECTION("MoG prior v2"){
 			Eigen::VectorXd alpha_beta = Eigen::VectorXd::Constant(data.n_var, 0.00000001);
 			Eigen::VectorXd alpha_gam = Eigen::VectorXd::Constant(data.n_var, 0.00000001);
-			PVE pve(p, data.G, Y, C);
+			PVE pve(data, Y, C);
 			pve.set_mog_weights(alpha_beta, alpha_gam);
 			pve.run(p.out_file);
 
@@ -127,7 +127,7 @@ TEST_CASE("HE-reg"){
 
 		Eigen::VectorXd Y = data.Y.cast<double>();
 		Eigen::MatrixXd C = data.C.cast<double>();
-		PVE pve(p, data.G, Y, C);
+		PVE pve(data, Y, C);
 
 		Eigen::VectorXd alpha_beta, alpha_gam;
 		data.read_mog_weights(p.mog_weights_file, alpha_beta, alpha_gam);

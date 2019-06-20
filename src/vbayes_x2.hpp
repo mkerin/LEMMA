@@ -20,10 +20,10 @@
 #include "hyps.hpp"
 
 #include <algorithm>
-#include <chrono>     // start/end time info
-#include <cmath>      // isnan
-#include <ctime>      // start/end time info
-#include <cstdint>    // uint32_t
+#include <chrono>
+#include <cmath>
+#include <ctime>
+#include <cstdint>
 #include <iostream>
 #include <iterator>
 #include <limits>
@@ -111,7 +111,7 @@ public:
 
 // boost fstreams
 	boost_io::filtering_ostream outf, outf_map, outf_inits;
-	boost_io::filtering_ostream outf_elbo, outf_alpha_diff, outf_map_pred, outf_weights;
+	boost_io::filtering_ostream outf_map_pred, outf_weights;
 	boost_io::filtering_ostream outf_map_covar;
 
 // Monitoring
@@ -322,8 +322,6 @@ public:
 		// Close all ostreams
 		boost_io::close(outf);
 		boost_io::close(outf_map);
-		boost_io::close(outf_elbo);
-		boost_io::close(outf_alpha_diff);
 		boost_io::close(outf_inits);
 		boost_io::close(outf_map_covar);
 	}
@@ -1757,14 +1755,6 @@ public:
 		if (n_covar > 0) std::cout << "Writing MAP covar coefficients to " << ofile_map_covar << std::endl;
 		std::cout << "Writing yhat from map to " << ofile_map_yhat << std::endl;
 		if (n_env > 0) std::cout << "Writing env weights to " << ofile_w << std::endl;
-
-		if(p.verbose) {
-			std::string ofile_elbo = fstream_init(outf_elbo, file_prefix, "_elbo");
-			std::cout << "Writing ELBO from each VB iteration to " << ofile_elbo << std::endl;
-
-			std::string ofile_alpha_diff = fstream_init(outf_alpha_diff, file_prefix, "_alpha_diff");
-			std::cout << "Writing max change in alpha from each VB iteration to " << ofile_alpha_diff << std::endl;
-		}
 	}
 
 	void output_results(){
@@ -1783,6 +1773,27 @@ public:
 		fileUtils::dump_yhat_to_file(outf_map_pred, n_samples, n_covar, n_var,
 		                             n_env, Y, vp_init, Ealpha, sample_is_invalid,
 		                             resid_loco, chrs_present);
+
+		// Save eta & residual phenotypes to file
+		if(p.xtra_verbose) {
+			if (n_env > 0) {
+				boost_io::filtering_ostream tmp_outf;
+				std::string path = fileUtils::fstream_init(tmp_outf, p.out_file, "", "_converged_eta");
+				std::cout << "Writing eta to file: " << path << std::endl;
+				fileUtils::dump_predicted_vec_to_file(tmp_outf, vp_init.eta, "eta");
+				boost_io::close(tmp_outf);
+			}
+
+			for (long cc = 0; cc < n_chrs; cc++) {
+				std::string path = fileUtils::fstream_init(tmp_outf, p.out_file, "",
+				                                           "_converged_resid_pheno_chr" + std::to_string(chrs_present[cc]));
+				std::cout << "Writing resid pheno to file: " << path << std::endl;
+				fileUtils::dump_predicted_vec_to_file(tmp_outf, resid_loco[cc],
+				                                      "chr" + std::to_string(chrs_present[cc]));
+				boost_io::close(tmp_outf);
+			}
+		}
+
 
 		// weights to file
 		if(n_effects > 1) {

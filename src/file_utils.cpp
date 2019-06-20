@@ -51,6 +51,15 @@ std::string fileUtils::fstream_init(boost_io::filtering_ostream &my_outf, const 
 	return ofile;
 }
 
+void fileUtils::dump_predicted_vec_to_file(boost_io::filtering_ostream &my_outf,
+								Eigen::Ref<Eigen::VectorXd> vec,
+								const std::string& header){
+	my_outf << header << std::endl;
+	for (long ii = 0; ii < vec.rows(); ii++){
+		my_outf << vec[ii] << std::endl;
+	}
+}
+
 //std::string variational_params_header(const parameters& p, const long& n_effects){
 //	std::string header = "";
 //	header += "beta0 alpha0 mu0 s_sq0";
