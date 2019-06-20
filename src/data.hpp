@@ -20,9 +20,9 @@
 #include <iostream>
 #include <algorithm>
 #include <cmath>
-#include <cstddef>     // for ptrdiff_t class
-#include <chrono>      // start/end time info
-#include <ctime>       // start/end time info
+#include <cstddef>
+#include <chrono>
+#include <ctime>
 #include <map>
 #include <mutex>
 #include <vector>
@@ -1058,7 +1058,7 @@ public:
 		//  }
 		// } else {
 		//  if(hyps_names != case1) {
-		//      // Allow gxe params if coeffs set to zero
+		//
 		//      if(std::includes(hyps_names.begin(), hyps_names.end(), case2.begin(), case2.end())) {
 		//          double sigma_g_sum  = hyps_grid.col(2).array().abs().sum();
 		//          double lambda_g_sum = hyps_grid.col(4).array().abs().sum();

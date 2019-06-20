@@ -11,6 +11,7 @@
 
 #include "genfile/bgen/bgen.hpp"
 #include "genfile/bgen/View.hpp"
+#include "tools/eigen3.3/Dense"
 
 #include <boost/iostreams/filtering_stream.hpp>
 #include <boost/iostreams/device/file.hpp>
@@ -30,6 +31,15 @@ std::string fstream_init(boost_io::filtering_ostream &my_outf,
                          const std::string &file,
                          const std::string &file_prefix = "",
                          const std::string &file_suffix = "");
+
+std::string filepath_format(const std::string& orig,
+                            const std::string& file_prefix,
+                            const std::string& file_suffix);
+
+void dump_predicted_vec_to_file(Eigen::Ref<Eigen::MatrixXd> mat,
+                                const std::string& filename,
+                                const std::string& header,
+                                const std::map<long, int>& sample_location);
 
 void write_snp_stats_to_file(boost_io::filtering_ostream &ofile,
                              const int &n_effects,
@@ -84,32 +94,6 @@ bool read_bgen_chunk(genfile::bgen::View::UniquePtr &bgenView,
                      const parameters &p,
                      bool &bgen_pass,
                      long &n_var_parsed);
-
-void dump_yhat_to_file(boost_io::filtering_ostream &outf,
-					   const long &n_samples,
-					   const long &n_covar,
-					   const long &n_var,
-					   const long &n_env,
-					   const EigenDataVector &Y,
-					   const VariationalParametersLite &vp,
-					   const Eigen::Ref<const Eigen::VectorXd> &Ealpha,
-					   const std::unordered_map<long, bool>& sample_is_invalid,
-					   const std::map<long, int>& sample_location,
-					   const std::vector<Eigen::VectorXd> &resid_loco,
-					   std::vector<long> chrs_present);
-
-	void dump_yhat_to_file(boost_io::filtering_ostream &outf,
-						   const long &n_samples,
-						   const long &n_covar,
-						   const long &n_var,
-						   const long &n_env,
-						   const EigenDataVector &Y,
-						   const VariationalParametersLite &vp,
-						   const Eigen::Ref<const Eigen::VectorXd> &Ealpha,
-						   const std::unordered_map<long, bool>& sample_is_invalid,
-						   const std::map<long, int>& sample_location);
-
-
 }
 
 #endif //FILE_UTILS_HPP

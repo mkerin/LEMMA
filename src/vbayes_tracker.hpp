@@ -34,10 +34,10 @@ namespace boost_io = boost::iostreams;
 
 class VbTracker {
 public:
-	long count;                                                                            // Number of iterations to convergence at each step
-	VariationalParametersLite vp;                                                             // best mu at each ii
-	double logw;                                                                             // best logw at each ii
-	Hyps hyps;                                                                              // hyps values at end of VB inference.
+	long count;
+	VariationalParametersLite vp;
+	double logw;
+	Hyps hyps;
 
 	parameters p;
 
@@ -205,17 +205,30 @@ public:
 	                const std::map<long, int>& sample_location){
 
 		// Aggregate effects
-		fstream_init(outf_inits, dir, "_dump_it" + count + "_aggregate", true);
 		Eigen::VectorXd Ealpha = Eigen::VectorXd::Zero(n_samples);
 		if(n_covar > 0) {
 			Ealpha += (C.matrix() * vp.muc.matrix().cast<scalarData>()).cast<double>();
 		}
 
-		VariationalParametersLite vp_lite = vp.convert_to_lite();
+		std::string header = "Y";
+		long n_cols = 1;
+		if (n_covar > 0) header += " Ealpha"; n_cols += 1;
+		header += " Xbeta"; n_cols += 1;
+		if (n_env > 0) header += " eta Xgamma"; n_cols += 2;
 
-		fileUtils::dump_yhat_to_file(outf_inits, n_samples, n_covar, n_var,
-		                             n_env,Y,vp_lite,Ealpha, sample_is_invalid,
-		                             sample_location);
+		Eigen::MatrixXd tmp(n_samples, n_cols);
+		int cc = 0;
+		tmp.col(cc) = Y; cc++;
+		if (n_covar > 0) tmp.col(cc) = Ealpha; cc++;
+		tmp.col(cc) = vp.ym; cc++;
+		if (n_env > 0) {
+			tmp.col(cc) = vp.eta; cc++;
+			tmp.col(cc) = vp.yx; cc++;
+		}
+		assert(cc == n_cols);
+
+		std::string path = fileUtils::filepath_format(p.out_file, dir.string(), "_dump_it" + count + "_aggregate");
+		fileUtils::dump_predicted_vec_to_file(tmp, path, header, sample_location);
 
 		int world_rank;
 		MPI_Comm_rank(MPI_COMM_WORLD, &world_rank);

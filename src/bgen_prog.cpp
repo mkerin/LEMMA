@@ -89,6 +89,7 @@ int main( int argc, char** argv ) {
 				auto vb_end = std::chrono::system_clock::now();
 				std::chrono::duration<double> elapsed_vb = vb_end - vb_start;
 				eta = VB.vp_init.eta.cast<double>();
+				data.vp_init = VB.vp_init;
 
 				std::cout << std::endl << "Time expenditure:" << std::endl;
 				std::cout << "Reading data: " << elapsed_reading_data.count() << " secs" << std::endl;
@@ -120,14 +121,14 @@ int main( int argc, char** argv ) {
 				bgenView->set_query(query);
 				bgenView->summarise(std::cout);
 
-				Eigen::VectorXd neglogp_beta(VB.n_var);
-				Eigen::VectorXd neglogp_rgam(VB.n_var);
+				Eigen::VectorXd neglogp_beta(data.n_var);
+				Eigen::VectorXd neglogp_rgam(data.n_var);
 				Eigen::VectorXd neglogp_gam;
-				Eigen::VectorXd neglogp_joint(VB.n_var);
-				Eigen::VectorXd test_stat_beta(VB.n_var);
-				Eigen::VectorXd test_stat_rgam(VB.n_var);
+				Eigen::VectorXd neglogp_joint(data.n_var);
+				Eigen::VectorXd test_stat_beta(data.n_var);
+				Eigen::VectorXd test_stat_rgam(data.n_var);
 				Eigen::VectorXd test_stat_gam;
-				Eigen::VectorXd test_stat_joint(VB.n_var);
+				Eigen::VectorXd test_stat_joint(data.n_var);
 				bool append = false;
 
 				boost_io::filtering_ostream outf;
@@ -145,7 +146,7 @@ int main( int argc, char** argv ) {
 				while (fileUtils::read_bgen_chunk(bgenView, Xstream, data.sample_is_invalid,
 				                                  data.n_samples, 128, p, bgen_pass, n_var_parsed)) {
 					VB.LOCO_pvals_v2(Xstream,
-					                 VB.vp_init,
+					                 data.vp_init,
 					                 p.LOSO_window, neglogp_beta, neglogp_rgam,
 					                 neglogp_joint,
 					                 test_stat_beta,
@@ -153,7 +154,7 @@ int main( int argc, char** argv ) {
 					                 test_stat_joint);
 
 					if(world_rank == 0) {
-						fileUtils::write_snp_stats_to_file(outf, VB.n_effects, Xstream, append, neglogp_beta,
+						fileUtils::write_snp_stats_to_file(outf, data.n_effects, Xstream, append, neglogp_beta,
 														   neglogp_gam,
 														   neglogp_rgam, neglogp_joint, test_stat_beta, test_stat_gam,
 														   test_stat_rgam, test_stat_joint);
@@ -176,22 +177,24 @@ int main( int argc, char** argv ) {
 			// Eigen::VectorXd eta = data.E.col(0).cast<double>();
 			Eigen::VectorXd Y = data.Y.cast<double>();
 			Eigen::MatrixXd C = data.C.cast<double>();
+			std::string out_file = p.out_file;
+			out_file = out_file.substr(0, out_file.find(".gz"));
 			if(data.n_env > 0) {
 				// If multi env; use VB to collapse to single
 				assert(data.n_env == 1 || p.mode_vb || p.env_coeffs_file != "NULL");
 				PVE pve(data, Y, C, eta);
-				pve.run(p.out_file);
+				pve.run(out_file);
 				pve.to_file(p.out_file);
 			} else if(p.mog_weights_file != "NULL") {
 				Eigen::VectorXd alpha_beta, alpha_gam;
 				data.read_mog_weights(p.mog_weights_file, alpha_beta, alpha_gam);
 				PVE pve(data, Y, C);
 				pve.set_mog_weights(alpha_beta, alpha_gam);
-				pve.run(p.out_file);
+				pve.run(out_file);
 				pve.to_file(p.out_file);
 			} else {
 				PVE pve(data, Y, C);
-				pve.run(p.out_file);
+				pve.run(out_file);
 				pve.to_file(p.out_file);
 			}
 		}

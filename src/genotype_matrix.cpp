@@ -13,7 +13,7 @@
 #include <algorithm>
 #include <iostream>
 #include <limits>
-#include <cstdint>               // uint32_t
+#include <cstdint>
 #include <cmath>
 #include <random>
 #include <thread>
@@ -38,11 +38,9 @@ void GenotypeMatrix::assign_index(const long &ii, const long &jj, double x) {
 
 #ifdef DATA_AS_FLOAT
 #else
-void GenotypeMatrix::col(long jj, EigenRefDataVector vec) {
+void GenotypeMatrix::col(long jj, EigenRefDataVector vec) const {
 	assert(jj < pp);
-	if(!scaling_performed) {
-		calc_scaled_values();
-	}
+	assert(scaling_performed);
 
 	if(low_mem) {
 		vec = M.cast<double>().col(jj);
@@ -135,10 +133,8 @@ Eigen::VectorXd GenotypeMatrix::mult_vector_by_chr(const long& chr, const Eigen:
 
 template<typename Deriv>
 void GenotypeMatrix::col_block3(const std::vector<long> &chunk,
-                                Eigen::MatrixBase<Deriv> &D) {
-	if(!scaling_performed) {
-		calc_scaled_values();
-	}
+                                Eigen::MatrixBase<Deriv> &D) const {
+	assert(scaling_performed);
 
 	// Partition jobs amongst threads
 	long ch_len = chunk.size();
@@ -171,7 +167,7 @@ void GenotypeMatrix::col_block3(const std::vector<long> &chunk,
 template<typename Deriv>
 void GenotypeMatrix::get_cols(const std::vector<long> &index,
                               const std::vector<long> &iter_chunk,
-                              Eigen::MatrixBase<Deriv> &D) {
+                              Eigen::MatrixBase<Deriv> &D) const {
 	// D.col(ii) = X.col(chunk(ii))
 	for(const auto& ii : index ) {
 		long jj = (iter_chunk[ii] % pp);
@@ -336,12 +332,10 @@ void GenotypeMatrix::conservativeResize(const long &n, const long &p) {
 	SNPID.resize(p);
 }
 
-Eigen::VectorXd GenotypeMatrix::col(long jj) {
+Eigen::VectorXd GenotypeMatrix::col(long jj) const {
 	assert(jj < pp);
+	assert(scaling_performed);
 	Eigen::VectorXd vec(nn);
-	if(!scaling_performed) {
-		calc_scaled_values();
-	}
 
 	if(low_mem) {
 		vec = M.cast<double>().col(jj);

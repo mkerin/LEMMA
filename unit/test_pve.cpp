@@ -94,6 +94,7 @@ TEST_CASE("HE-reg"){
 
 		Eigen::VectorXd Y = data.Y.cast<double>();
 		Eigen::MatrixXd C = data.C.cast<double>();
+		PVE pve(data, Y, C);
 
 		SECTION("Gaussian prior") {
 			PVE pve(data, Y, C);

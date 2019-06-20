@@ -23,7 +23,7 @@
 #include <algorithm>
 #include <iostream>
 #include <limits>
-#include <cstdint>               // uint32_t
+#include <cstdint>
 #include <cmath>
 #include <random>
 #include <thread>
@@ -46,8 +46,8 @@ public:
 	bool scaling_performed;
 	parameters params;
 
-	Eigen::Matrix<unsigned char, Eigen::Dynamic, Eigen::Dynamic> M;         // used in low-mem mode
-	EigenDataMatrix G;         // used when not in low-mem node
+	Eigen::Matrix<unsigned char, Eigen::Dynamic, Eigen::Dynamic> M;
+	EigenDataMatrix G;
 
 	std::vector< int > chromosome;
 	std::vector< std::string > al_0, al_1, rsid;
@@ -60,7 +60,7 @@ public:
 	std::vector<std::map<std::size_t, bool> > missing_genos;
 	Eigen::VectorXd compressed_dosage_means;
 	Eigen::VectorXd compressed_dosage_sds;
-	Eigen::VectorXd compressed_dosage_inv_sds;          // 1 / col-wise sd
+	Eigen::VectorXd compressed_dosage_inv_sds;
 	std::size_t nn, pp;
 
 	// Interface type of Eigen indices -> see eigen3/Eigen/src/Core/EigenBase.h
@@ -122,12 +122,10 @@ public:
 
 #ifdef DATA_AS_FLOAT
 	// Eigen read column
-	Eigen::VectorXf col(long jj){
+	Eigen::VectorXf col(long jj) const {
 		assert(jj < pp);
+		assert(scaling_performed);
 		Eigen::VectorXf vec(nn);
-		if(!scaling_performed) {
-			calc_scaled_values();
-		}
 
 		if(low_mem) {
 			vec = M.cast<float>().col(jj);
@@ -140,11 +138,11 @@ public:
 	}
 #else
 	// Eigen read column
-	Eigen::VectorXd col(long jj);
+	Eigen::VectorXd col(long jj) const;
 #endif
 
 	// Eigen read column
-	void col(long jj, EigenRefDataVector vec);
+	void col(long jj, EigenRefDataVector vec) const ;
 //
 //	void col(long jj, Eigen::Ref<Eigen::VectorXf> vec){
 //		assert(jj < pp);
@@ -180,10 +178,8 @@ public:
 	// Eigen matrix multiplication
 #ifdef DATA_AS_FLOAT
 	// Eigen matrix multiplication
-	EigenDataMatrix operator*(Eigen::Ref<Eigen::MatrixXd> rhs){
-		if(!scaling_performed) {
-			calc_scaled_values();
-		}
+	EigenDataMatrix operator*(Eigen::Ref<Eigen::MatrixXd> rhs) const {
+		assert(scaling_performed);
 		assert(rhs.rows() == pp);
 		if(low_mem) {
 			if(params.mode_debug) std::cout << "Starting low-mem matrix mult" << std::endl;
@@ -217,12 +213,12 @@ public:
 
 	template <typename Deriv>
 	void col_block3(const std::vector<long>& chunk,
-	                Eigen::MatrixBase<Deriv>& D);
+	                Eigen::MatrixBase<Deriv>& D) const;
 
 	template <typename Deriv>
 	void get_cols(const std::vector<long> &index,
 	              const std::vector<long> &iter_chunk,
-	              Eigen::MatrixBase<Deriv>& D);
+	              Eigen::MatrixBase<Deriv>& D) const;
 
 	// // Eigen lhs matrix multiplication
 	// Eigen::VectorXd transpose_vector_multiply(const Eigen::Ref<const Eigen::VectorXd>& lhs,
