@@ -13,7 +13,7 @@ public:
 	std::string r1_hyps_grid_file, r1_probs_grid_file, hyps_grid_file;
 	std::string env_coeffs_file, covar_coeffs_file, hyps_probs_file, vb_init_file;
 	std::string dxteex_file, snpstats_file, mog_weights_file, resume_prefix;
-	std::string streamBgenFile, streamBgiFile, streamBgenOutFile;
+	std::string streamBgenFile, streamBgiFile, streamBgenOutFile, extra_pve_covar_file;
 	std::vector< std::string > rsid;
 	unsigned int random_seed;
 	long chunk_size, vb_iter_max, vb_iter_start, param_dump_interval, n_pve_samples;
@@ -51,6 +51,7 @@ public:
 		r1_probs_grid_file("NULL"),
 		hyps_grid_file("NULL"),
 		hyps_probs_file("NULL"),
+		extra_pve_covar_file("NULL"),
 		vb_init_file("NULL"),
 		incl_sids_file("NULL"),
 		incl_rsids_file("NULL"),

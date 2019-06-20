@@ -1847,6 +1847,7 @@ public:
 
 		// Save eta & residual phenotypes to separate files
 		if(p.xtra_verbose) {
+			boost_io::filtering_ostream tmp_outf;
 			if (n_env > 0) {
 				std::string path = fileUtils::filepath_format(p.out_file, "", "_converged_eta");
 				std::cout << "Writing eta to file: " << path << std::endl;
