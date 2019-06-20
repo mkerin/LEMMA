@@ -155,9 +155,16 @@ int main( int argc, char** argv ) {
 			}
 			std::cout << "Initialising random sample generator with seed " << p.random_seed << std::endl;
 
-			// Eigen::VectorXd eta = data.E.col(0).cast<double>();
 			Eigen::VectorXd Y = data.Y.cast<double>();
-			Eigen::MatrixXd C = data.C.cast<double>();
+			Eigen::MatrixXd C;
+			if (p.extra_pve_covar_file != "NULL") {
+				C.resize(data.n_samples, data.C.cols() + data.C_extra_pve.cols());
+				C << data.C.cast<double>(), data.C_extra_pve.cast<double>();
+			} else {
+				C.resize(data.n_samples, data.C.cols());
+				C << data.C.cast<double>();
+			}
+
 			std::string out_file = p.out_file;
 			out_file = out_file.substr(0, out_file.find(".gz"));
 			if(data.n_env > 0) {

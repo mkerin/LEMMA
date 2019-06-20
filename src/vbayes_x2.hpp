@@ -1776,8 +1776,8 @@ public:
 
 		// Save eta & residual phenotypes to file
 		if(p.xtra_verbose) {
+			boost_io::filtering_ostream tmp_outf;
 			if (n_env > 0) {
-				boost_io::filtering_ostream tmp_outf;
 				std::string path = fileUtils::fstream_init(tmp_outf, p.out_file, "", "_converged_eta");
 				std::cout << "Writing eta to file: " << path << std::endl;
 				fileUtils::dump_predicted_vec_to_file(tmp_outf, vp_init.eta, "eta");
