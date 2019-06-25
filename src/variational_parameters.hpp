@@ -22,31 +22,35 @@ long dXtEEX_col_ind(long kk, long jj, long n_env);
 
 class VariationalParamsBase {
 public:
-// This stores parameters used in VB and some summary quantities that
-// depend on those parameters.
+	// This stores parameters used in VB and some summary quantities that
+	// depend on those parameters.
 	parameters p;
 
-// Variational parameters for slab (params 1)
-	Eigen::ArrayXd alpha_beta;         // P x (E+1)
-	Eigen::ArrayXd mu1_beta;            // P x (E+1)
-	Eigen::ArrayXd s1_beta_sq;          // P x (E+1)
-	Eigen::ArrayXd mu2_beta;            // P x (E+1)
-	Eigen::ArrayXd s2_beta_sq;          // P x (E+1)
+	// Variational parameters for slab (params 1)
+	// P x (E+1)
+	Eigen::ArrayXd alpha_beta;
+	Eigen::ArrayXd mu1_beta;
+	Eigen::ArrayXd s1_beta_sq;
+	Eigen::ArrayXd mu2_beta;
+	Eigen::ArrayXd s2_beta_sq;
 
-// Variational parameters for spike (MoG prior mode; params 2)
-	Eigen::ArrayXd alpha_gam;         // P x (E+1)
-	Eigen::ArrayXd mu1_gam;            // P x (E+1)
-	Eigen::ArrayXd s1_gam_sq;          // P x (E+1)
-	Eigen::ArrayXd mu2_gam;            // P x (E+1)
-	Eigen::ArrayXd s2_gam_sq;          // P x (E+1)
+	// Variational parameters for spike (MoG prior mode; params 2)
+	// P x (E+1)
+	Eigen::ArrayXd alpha_gam;
+	Eigen::ArrayXd mu1_gam;
+	Eigen::ArrayXd s1_gam_sq;
+	Eigen::ArrayXd mu2_gam;
+	Eigen::ArrayXd s2_gam_sq;
 
-// Variational parameters for covariate main effects
-	Eigen::ArrayXd muc;            // C x 1
-	Eigen::ArrayXd sc_sq;          // C x 1
+	// Variational parameters for covariate main effects
+	// n_covar x 1
+	Eigen::ArrayXd muc;
+	Eigen::ArrayXd sc_sq;
 
-// Variational params for weights
-	Eigen::ArrayXd muw;              // n_env x 1
-	Eigen::ArrayXd sw_sq;            // n_env x 1
+	// Variational params for weights
+	// n_env x 1
+	Eigen::ArrayXd muw;
+	Eigen::ArrayXd sw_sq;
 
 	VariationalParamsBase(parameters my_params) : p(my_params){
 	};
@@ -82,8 +86,8 @@ public:
 class VariationalParametersLite : public VariationalParamsBase {
 public:
 // Other quantities to track
-	EigenDataVector yx;            // N x 1
-	EigenDataVector ym;            // N x 1
+	EigenDataVector yx;
+	EigenDataVector ym;
 	EigenDataVector eta;
 	EigenDataVector eta_sq;
 
@@ -97,12 +101,12 @@ public:
 // depend on those parameters.
 
 // Summary quantities
-	EigenRefDataVector yx;              // N x 1
-	EigenRefDataVector ym;              // N x 1
-	EigenRefDataVector eta;             // expected value of matrix product E x w
-	EigenRefDataVector eta_sq;          // expected value (E x w) cdot (E x w)
+	EigenRefDataVector yx;
+	EigenRefDataVector ym;
+	EigenRefDataVector eta;
+	EigenRefDataVector eta_sq;
 
-	Eigen::ArrayXd EdZtZ;           // expectation of the diagonal of Z^t Z
+	Eigen::ArrayXd EdZtZ;
 
 
 	VariationalParameters(parameters my_params,

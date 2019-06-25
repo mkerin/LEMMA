@@ -20,9 +20,9 @@
 #include <iostream>
 #include <algorithm>
 #include <cmath>
-#include <cstddef>     // for ptrdiff_t class
-#include <chrono>      // start/end time info
-#include <ctime>       // start/end time info
+#include <cstddef>
+#include <chrono>
+#include <ctime>
 #include <map>
 #include <mutex>
 #include <vector>
@@ -79,12 +79,14 @@ public:
 	std::vector< std::string > pheno_names;
 	std::vector< std::string > covar_names;
 	std::vector< std::string > env_names;
+	std::vector<std::string> extra_covar_pve_names;
 
 	GenotypeMatrix G;
 	EigenDataMatrix Y, Y2;
 	EigenDataMatrix C;
 	EigenDataMatrix E;
 	Eigen::ArrayXXd dXtEEX_lowertri;
+	EigenDataMatrix C_extra_pve;
 
 // Init points
 	VariationalParametersLite vp_init;
@@ -222,6 +224,10 @@ public:
 		// Read in covariates if present
 		if(p.covar_file != "NULL") {
 			read_covar();
+		}
+
+		if (p.extra_pve_covar_file != "NULL" && p.mode_pve_est) {
+			read_extra_pve_covar();
 		}
 
 		// Environmental vars - subset of covars
@@ -598,6 +604,11 @@ public:
 		EigenUtils::read_matrix(p.covar_file, n_samples, C, covar_names, missing_covars);
 		n_covar = C.cols();
 		W_reduced = false;
+	}
+
+	void read_extra_pve_covar( ){
+		// Read covariates to Eigen matrix C
+		EigenUtils::read_matrix(p.extra_pve_covar_file, C_extra_pve, extra_covar_pve_names);
 	}
 
 	void read_environment( ){
@@ -1058,7 +1069,7 @@ public:
 		//  }
 		// } else {
 		//  if(hyps_names != case1) {
-		//      // Allow gxe params if coeffs set to zero
+		//
 		//      if(std::includes(hyps_names.begin(), hyps_names.end(), case2.begin(), case2.end())) {
 		//          double sigma_g_sum  = hyps_grid.col(2).array().abs().sum();
 		//          double lambda_g_sum = hyps_grid.col(4).array().abs().sum();
@@ -1356,6 +1367,11 @@ public:
 		}
 		if(n_env > 0) {
 			E = reduce_mat_to_complete_cases( E, E_reduced, n_env, incomplete_cases );
+		}
+		if(p.extra_pve_covar_file != "NULL" && p.mode_pve_est) {
+			long n_extra_cols = C_extra_pve.cols();
+			bool placeholder = false;
+			C_extra_pve = reduce_mat_to_complete_cases(C_extra_pve, placeholder, n_extra_cols, incomplete_cases);
 		}
 		n_samples -= incomplete_cases.size();
 		missing_phenos.clear();

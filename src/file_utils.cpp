@@ -51,6 +51,89 @@ std::string fileUtils::fstream_init(boost_io::filtering_ostream &my_outf, const 
 	return ofile;
 }
 
+std::string fileUtils::filepath_format(const std::string& orig,
+                                       const std::string& file_prefix,
+                                       const std::string& file_suffix){
+	std::string filepath   = orig;
+	std::string dir        = filepath.substr(0, filepath.rfind('/')+1);
+	std::string stem_w_dir = filepath.substr(0, filepath.find('.'));
+	std::string stem       = stem_w_dir.substr(stem_w_dir.rfind('/')+1, stem_w_dir.size());
+	std::string ext        = filepath.substr(filepath.find('.'), filepath.size());
+
+	std::string ofile      = dir + file_prefix + stem + file_suffix + ext;
+	return ofile;
+}
+
+void fileUtils::dump_predicted_vec_to_file(Eigen::Ref<Eigen::MatrixXd> mat,
+                                           const std::string& filename,
+                                           const std::string& header,
+                                           const std::map<long, int>& sample_location){
+	int world_rank, world_size;
+	MPI_Comm_rank(MPI_COMM_WORLD, &world_rank);
+	MPI_Comm_size(MPI_COMM_WORLD, &world_size);
+	std::vector<Eigen::MatrixXd> all_mat(world_size);
+	long n_cols = mat.cols();
+
+	if(world_rank == 0) {
+		std::vector<long> all_n_samples(world_size);
+		for (const auto &kv : sample_location) {
+			if (kv.second != -1) {
+				all_n_samples[kv.second]++;
+			}
+		}
+
+		for (int rr = 1; rr < world_size; rr++) {
+			all_mat[rr].resize(all_n_samples[rr], n_cols);
+			MPI_Recv(all_mat[rr].data(), all_n_samples[rr] * n_cols, MPI_DOUBLE, rr, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+		}
+		all_mat[0] = mat;
+
+		// std::cout << "Condensed data on rank 0:" << std::endl;
+		// for (const auto& mmm : all_mat) {
+		//  std::cout << mmm.size() << std::endl;
+		// }
+	} else {
+		// std::cerr << "Sending from rank " << world_rank << std::endl;
+		MPI_Send(mat.data(), mat.size(), MPI_DOUBLE, 0, 0, MPI_COMM_WORLD);
+		// std::cerr << "Sent from rank " << world_rank << std::endl;
+	}
+
+	if(world_rank == 0) {
+		boost_io::filtering_ostream outf;
+		std::string gz_str = ".gz";
+		if (filename.find(gz_str) != std::string::npos) {
+			outf.push(boost_io::gzip_compressor());
+		}
+		// std::cout << "Pushing " << filename << std::endl;
+		outf.push(boost_io::file_sink(filename));
+		// std::cout << "Sink to " << filename << std::endl;
+
+		std::vector<long> all_ii(world_size, 0);
+		outf << header << std::endl;
+		for (const auto &kv : sample_location) {
+			if(kv.second == -1) {
+				for (long cc = 0; cc < n_cols; cc++) {
+					outf << "NA";
+					outf << (cc != n_cols - 1 ? " " : "");
+				}
+				outf << std::endl;
+			} else {
+				for (long cc = 0; cc < n_cols; cc++) {
+					outf << all_mat[kv.second](all_ii[kv.second], cc);
+					outf << (cc != n_cols - 1 ? " " : "");
+				}
+				outf << std::endl;
+				all_ii[kv.second]++;
+			}
+		}
+		// std::cout << "POpping.." << std::endl;
+		outf.pop();
+		// std::cout << "Written to " << filename << std::endl;
+		boost_io::close(outf);
+		// std::cout << "Closed " << filename << std::endl;
+	}
+}
+
 //std::string variational_params_header(const parameters& p, const long& n_effects){
 //	std::string header = "";
 //	header += "beta0 alpha0 mu0 s_sq0";
@@ -416,109 +499,5 @@ bool fileUtils::read_bgen_chunk(genfile::bgen::View::UniquePtr &bgenView,
 		return false;
 	} else {
 		return true;
-	}
-}
-
-void fileUtils::dump_yhat_to_file(boost_io::filtering_ostream &outf,
-                                  const long &n_samples,
-                                  const long &n_covar,
-                                  const long &n_var,
-                                  const long &n_env,
-                                  const EigenDataVector &Y,
-                                  const VariationalParametersLite &vp,
-                                  const Eigen::Ref<const Eigen::VectorXd> &Ealpha,
-                                  const std::unordered_map<long, bool>& sample_is_invalid,
-                                  const std::map<long, int>& sample_location){
-	std::vector<Eigen::VectorXd> resid_loco;
-	std::vector<long> chrs_present;
-
-	fileUtils::dump_yhat_to_file(outf, n_samples, n_covar,
-	                             n_var, n_env, Y,
-	                             vp, Ealpha,
-	                             sample_is_invalid, sample_location,
-	                             resid_loco, chrs_present);
-}
-
-void fileUtils::dump_yhat_to_file(boost_io::filtering_ostream &outf,
-                                  const long &n_samples,
-                                  const long &n_covar,
-                                  const long &n_var,
-                                  const long &n_env,
-                                  const EigenDataVector &Y,
-                                  const VariationalParametersLite &vp,
-                                  const Eigen::Ref<const Eigen::VectorXd> &Ealpha,
-                                  const std::unordered_map<long, bool>& sample_is_invalid,
-                                  const std::map<long, int>& sample_location,
-                                  const std::vector<Eigen::VectorXd> &resid_loco,
-                                  std::vector<long> chrs_present) {
-	assert(chrs_present.size() == resid_loco.size() || resid_loco.empty());
-
-	int world_size, rank;
-	MPI_Comm_size(MPI_COMM_WORLD, &world_size);
-	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-	MPI_Barrier(MPI_COMM_WORLD);
-
-	// n_cols
-	long n_cols = 0, n_chrs = resid_loco.size();
-	n_cols++;
-	if (n_covar > 0) n_cols++;
-	n_cols++;
-	if (n_env > 0) n_cols += 2;
-	if(n_chrs > 0) {
-		n_cols += n_chrs;
-	}
-
-	// header
-	if(rank == 0) {
-		outf << "Y";
-		if (n_covar > 0) outf << " Ealpha";
-		outf << " Xbeta";
-		if (n_env > 0) outf << " eta Xgamma";
-		if(n_chrs > 0) {
-			for(auto cc : chrs_present) {
-				outf << " residuals_excl_chr" << cc;
-			}
-		}
-		outf << std::endl;
-	}
-
-	// // ss is a pair;
-	// // ss.first sample index
-	// // ss.second 'rank' that sample is located on (-1 for missing)
-	// long iiValid = 0;
-	// for (const auto& ss : sample_location) {
-	//  std::cout << "Sample " <<  ss.first << " is located on rank " << ss.second << std::endl;
-	//  MPI_Barrier(MPI_COMM_WORLD);
-	//  if(rank == ss.second) {
-	//      // sample info
-	//      outf << Y(iiValid);
-	//      if (n_covar > 0) {
-	//          outf << " " << Ealpha(iiValid) << " " << vp.ym(iiValid) - Ealpha(iiValid);
-	//      } else {
-	//          outf << " " << vp.ym(iiValid);
-	//      }
-	//      if (n_env > 0) {
-	//          outf << " " << vp.eta(iiValid) << " " << vp.yx(iiValid);
-	//      }
-	//      if (n_chrs > 0) {
-	//          for (int cc = 0; cc < n_chrs; cc++) {
-	//              outf << " " << resid_loco[cc](iiValid);
-	//          }
-	//      }
-	//      outf << std::endl;
-	//      iiValid++;
-	//  } else if (ss.second == -1 && rank == 0) {
-	//      // NA for incomplete sample
-	//      for (int jj = 0; jj < n_cols; jj++) {
-	//          outf << "NA";
-	//          if(jj < n_cols - 1) outf << " ";
-	//      }
-	//      outf << std::endl;
-	//  }
-	// }
-	// assert(iiValid == n_samples);
-
-	if(rank == 0) {
-		boost_io::close(outf);
 	}
 }

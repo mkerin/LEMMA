@@ -1,10 +1,10 @@
 /* re-implementation of variational bayes algorithm for 1D GxE
 
-                 How to use Eigen::Ref:
-                 https://stackoverflow.com/questions/21132538/correct-usage-of-the-eigenref-class
+   How to use Eigen::Ref:
+   https://stackoverflow.com/questions/21132538/correct-usage-of-the-eigenref-class
 
-                 Building static executable:
-                 https://stackoverflow.com/questions/3283021/compile-a-standalone-static-executable
+   Building static executable:
+   https://stackoverflow.com/questions/3283021/compile-a-standalone-static-executable
  */
 #ifndef VBAYES_X2_HPP
 #define VBAYES_X2_HPP
@@ -21,9 +21,9 @@
 #include "mpi_utils.hpp"
 
 #include <algorithm>
-#include <chrono>     // start/end time info
-#include <cmath>      // isnan
-#include <ctime>      // start/end time info
+#include <chrono>
+#include <cmath>
+#include <ctime>
 #include <cstdint>
 #include <cstdio>
 #include <iostream>
@@ -108,7 +108,7 @@ public:
 
 	Eigen::ArrayXXd& dXtEEX_lowertri;
 	std::unordered_map<long, bool> sample_is_invalid;
-	std::map<long, int>& sample_location;
+	std::map<long, int> sample_location;
 
 // Global location of y_m = E[X beta] and y_x = E[X gamma]
 	EigenDataMatrix YY, YX, YM, ETA, ETA_SQ;
@@ -122,7 +122,7 @@ public:
 
 // boost fstreams
 	boost_io::filtering_ostream outf, outf_map, outf_inits;
-	boost_io::filtering_ostream outf_elbo, outf_alpha_diff, outf_map_pred, outf_weights;
+	boost_io::filtering_ostream outf_weights;
 	boost_io::filtering_ostream outf_map_covar;
 
 // Monitoring
@@ -151,7 +151,9 @@ public:
 			printf("Initialising vbayes object (RAM usage: %.2f GB in total; max of %.2f GB per rank)\n", gbGlobal, gbMax);
 		}
 #else
-		printf("Initialising vbayes object");
+		if(world_rank == 0) {
+			printf("Initialising vbayes object\n");
+		}
 #endif
 		mkl_set_num_threads_local(p.n_thread);
 
@@ -347,8 +349,6 @@ public:
 		// Close all ostreams
 		boost_io::close(outf);
 		boost_io::close(outf_map);
-		boost_io::close(outf_elbo);
-		boost_io::close(outf_alpha_diff);
 		boost_io::close(outf_inits);
 		boost_io::close(outf_map_covar);
 	}
@@ -1813,21 +1813,11 @@ public:
 		std::string ofile_w, ofile_map_covar;
 
 		std::string ofile_map   = fstream_init(outf_map, file_prefix, "_map_snp_stats");
-		std::string ofile_map_yhat = fstream_init(outf_map_pred, file_prefix, "_map_yhat");
 		if (n_env > 0) ofile_w = fstream_init(outf_weights, file_prefix, "_env_weights");
 		if (n_covar > 0) ofile_map_covar = fstream_init(outf_map_covar, file_prefix, "_map_covar");
 		std::cout << "Writing MAP snp stats to " << ofile_map << std::endl;
 		if (n_covar > 0) std::cout << "Writing MAP covar coefficients to " << ofile_map_covar << std::endl;
-		std::cout << "Writing yhat from map to " << ofile_map_yhat << std::endl;
 		if (n_env > 0) std::cout << "Writing env weights to " << ofile_w << std::endl;
-
-		if(p.verbose) {
-			std::string ofile_elbo = fstream_init(outf_elbo, file_prefix, "_elbo");
-			std::cout << "Writing ELBO from each VB iteration to " << ofile_elbo << std::endl;
-
-			std::string ofile_alpha_diff = fstream_init(outf_alpha_diff, file_prefix, "_alpha_diff");
-			std::cout << "Writing max change in alpha from each VB iteration to " << ofile_alpha_diff << std::endl;
-		}
 	}
 
 	void output_results(){
@@ -1843,9 +1833,54 @@ public:
 			Ealpha += (C * vp_init.muc.matrix().cast<scalarData>()).cast<double>();
 		}
 
-		fileUtils::dump_yhat_to_file(outf_map_pred, n_samples, n_covar, n_var,
-		                             n_env, Y, vp_init, Ealpha, sample_is_invalid, sample_location,
-		                             resid_loco, chrs_present);
+		std::string header = "Y";
+		long n_cols = 1;
+		if (n_covar > 0) header += " Ealpha"; n_cols += 1;
+		header += " Xbeta"; n_cols += 1;
+		if (n_env > 0) header += " eta Xgamma"; n_cols += 2;
+		if(n_chrs > 0) {
+			for(auto cc : chrs_present) {
+				header += " residuals_excl_chr" + std::to_string(cc);
+			}
+			n_cols += n_chrs;
+		}
+
+		Eigen::MatrixXd tmp(n_samples, n_cols);
+		int cc = 0;
+		tmp.col(cc) = Y; cc++;
+		if (n_covar > 0) tmp.col(cc) = Ealpha; cc++;
+		tmp.col(cc) = vp_init.ym; cc++;
+		if (n_env > 0) {
+			tmp.col(cc) = vp_init.eta; cc++;
+			tmp.col(cc) = vp_init.yx; cc++;
+		}
+		for(int cc1 = 0; cc1 < n_chrs; cc1++) {
+			tmp.col(cc) = resid_loco[cc1]; cc++;
+		}
+		assert(cc == n_cols);
+
+		std::string path = fileUtils::filepath_format(p.out_file, "", "_map_yhat");
+		std::cout << "Writing yhat to file: " << path << std::endl;
+		fileUtils::dump_predicted_vec_to_file(tmp, path, header, sample_location);
+
+		// Save eta & residual phenotypes to separate files
+		if(p.xtra_verbose) {
+			boost_io::filtering_ostream tmp_outf;
+			if (n_env > 0) {
+				std::string path = fileUtils::filepath_format(p.out_file, "", "_converged_eta");
+				std::cout << "Writing eta to file: " << path << std::endl;
+				fileUtils::dump_predicted_vec_to_file(vp_init.eta, path, "eta", sample_location);
+			}
+
+			for (long cc = 0; cc < n_chrs; cc++) {
+				std::string path = fileUtils::filepath_format(p.out_file, "",
+				                                              "_converged_resid_pheno_chr" + std::to_string(chrs_present[cc]));
+				std::cout << "Writing resid pheno to file: " << path << std::endl;
+				fileUtils::dump_predicted_vec_to_file(resid_loco[cc], path,
+				                                      "chr" + std::to_string(chrs_present[cc]),
+				                                      sample_location);
+			}
+		}
 
 		if(world_rank == 0) {
 			// weights to file

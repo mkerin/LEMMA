@@ -160,6 +160,7 @@ void parse_arguments(parameters &p, int argc, char **argv) {
 	    ("hyps_probs", "", cxxopts::value<std::string>(p.hyps_probs_file))
 	    ("vb_init", "", cxxopts::value<std::string>(p.vb_init_file))
 	    ("covar_init", "", cxxopts::value<std::string>(p.covar_coeffs_file))
+	    ("extra_pve_covar", "Variables that are included as covariates in the PVE analysis but not in the VB algorithm (Eg. principle components).", cxxopts::value<std::string>(p.extra_pve_covar_file))
 	    ("snpwise_scan", "", cxxopts::value<std::string>(p.snpstats_file))
 	    ("environment_weights", "", cxxopts::value<std::string>(p.env_coeffs_file))
 	    ("resume_from_param_dump", "", cxxopts::value<std::string>(p.resume_prefix))
@@ -192,17 +193,11 @@ void parse_arguments(parameters &p, int argc, char **argv) {
 				std::cout << "\t--" << keyvalue.key() << "=" << keyvalue.value() <<" \\" << std::endl;
 			}
 			std::cout << std::endl;
-
-//			for(int i = 0; i < argc; ++i) {
-//				std::cout << argv[i] << std::endl;
-//			}
-//			 std::cout << args << std::endl;
 		}
 
 		if(opts.count("loso_window_size")) {
 			p.drop_loco = true;
 		}
-
 		if (opts.count("high_mem")) {
 			p.low_mem = false;
 		}
@@ -211,6 +206,9 @@ void parse_arguments(parameters &p, int argc, char **argv) {
 		}
 		if(p.pheno_file != "NULL") {
 			check_file_exists(p.pheno_file);
+		}
+		if(p.extra_pve_covar_file != "NULL") {
+			check_file_exists(p.extra_pve_covar_file);
 		}
 		if(p.dxteex_file != "NULL") {
 			check_file_exists(p.dxteex_file);
