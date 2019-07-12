@@ -1835,9 +1835,13 @@ public:
 
 		std::string header = "Y";
 		long n_cols = 1;
-		if (n_covar > 0) header += " Ealpha"; n_cols += 1;
+		if (n_covar > 0) {
+			header += " Ealpha"; n_cols += 1;
+		}
 		header += " Xbeta"; n_cols += 1;
-		if (n_env > 0) header += " eta Xgamma"; n_cols += 2;
+		if (n_env > 0) {
+			header += " eta Xgamma"; n_cols += 2;
+		}
 		if(n_chrs > 0) {
 			for(auto cc : chrs_present) {
 				header += " residuals_excl_chr" + std::to_string(cc);
@@ -1848,7 +1852,9 @@ public:
 		Eigen::MatrixXd tmp(n_samples, n_cols);
 		int cc = 0;
 		tmp.col(cc) = Y; cc++;
-		if (n_covar > 0) tmp.col(cc) = Ealpha; cc++;
+		if (n_covar > 0) {
+			tmp.col(cc) = Ealpha; cc++;
+		}
 		tmp.col(cc) = vp_init.ym; cc++;
 		if (n_env > 0) {
 			tmp.col(cc) = vp_init.eta; cc++;
