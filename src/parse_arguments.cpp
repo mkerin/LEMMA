@@ -277,7 +277,7 @@ void parse_arguments(parameters &p, int argc, char **argv) {
 			p.mode_mog_prior_gam = false;
 		}
 
-		if(opts.count("suppress_squared_env_removal") == 0) {
+		if(opts.count("suppress_squared_env_removal")) {
 			p.mode_remove_squared_envs = false;
 		}
 
