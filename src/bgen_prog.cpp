@@ -171,18 +171,11 @@ int main( int argc, char** argv ) {
 				// If multi env; use VB to collapse to single
 				assert(data.n_env == 1 || p.mode_vb || p.env_coeffs_file != "NULL");
 				PVE pve(data, Y, C, eta);
-				pve.run(out_file);
-				pve.to_file(p.out_file);
-			} else if(p.mog_weights_file != "NULL") {
-				Eigen::VectorXd alpha_beta, alpha_gam;
-				data.read_mog_weights(p.mog_weights_file, alpha_beta, alpha_gam);
-				PVE pve(data, Y, C);
-				pve.set_mog_weights(alpha_beta, alpha_gam);
-				pve.run(out_file);
+				pve.run();
 				pve.to_file(p.out_file);
 			} else {
 				PVE pve(data, Y, C);
-				pve.run(out_file);
+				pve.run();
 				pve.to_file(p.out_file);
 			}
 		}

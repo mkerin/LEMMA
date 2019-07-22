@@ -411,6 +411,7 @@ public:
 		std::cout << "BGEN contained " << n_var << " variants." << std::endl;
 
 		G.calc_scaled_values();
+		G.compute_cumulative_pos();
 		if(p.xtra_verbose) std::cout << "Computed colwise mean and sd of genetic data" << std::endl;
 
 		// Set default hyper-parameters if not read from file

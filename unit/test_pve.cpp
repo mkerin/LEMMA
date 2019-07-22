@@ -48,7 +48,7 @@ TEST_CASE("HE-reg"){
 		Eigen::MatrixXd C = data.C.cast<double>();
 		Eigen::VectorXd eta = data.E.col(0);
 		PVE pve(data, Y, C, eta);
-		pve.run(p.out_file);
+		pve.run();
 
 		CHECK(pve.sigmas(0)  == Approx(0.4757065487));
 		CHECK(pve.sigmas(1)  == Approx(0.0630985531));
@@ -56,6 +56,7 @@ TEST_CASE("HE-reg"){
 		CHECK(pve.h2(0)  == Approx(0.5853366131));
 		CHECK(pve.h2(1)  == Approx(0.0776400776));
 		CHECK(pve.h2(2)  == Approx(0.3370233093));
+		pve.to_file(p.out_file);
 	}
 
 	SECTION("Main effects fit (gaussian prior)"){
@@ -72,73 +73,14 @@ TEST_CASE("HE-reg"){
 
 		SECTION("Gaussian prior"){
 			PVE pve(data, Y, C);
-			pve.run(p.out_file);
+			pve.run();
 
 			CHECK(pve.sigmas(0)  == Approx(0.5240473249));
 			CHECK(pve.sigmas(1)  == Approx(0.4986619236));
-//			CHECK(pve.h2(0)  == Approx(0.5124108594));
-//			CHECK(pve.h2(1)  == Approx(0.4875891406));
-		}
-
-		SECTION("MoG prior v1"){
-			Eigen::VectorXd alpha_beta = Eigen::VectorXd::Constant(data.n_var, 0.99999999);
-			Eigen::VectorXd alpha_gam = Eigen::VectorXd::Constant(data.n_var, 0.99999999);
-			PVE pve(data, Y, C);
-			pve.set_mog_weights(alpha_beta, alpha_gam);
-			pve.run(p.out_file);
-
-			CHECK(pve.sigmas(0)  == Approx(0.5240473249));
-			CHECK(pve.sigmas(1)  == Approx(0.0));
-			CHECK(pve.sigmas(2)  == Approx(0.4986619236));
 			CHECK(pve.h2(0)  == Approx(0.5124108594));
-			CHECK(pve.h2(1)  == Approx(0.0));
-			CHECK(pve.h2(2)  == Approx(0.4875891406));
+			CHECK(pve.h2(1)  == Approx(0.4875891406));
+			std::cout << p.out_file << std::endl;
+			pve.to_file(p.out_file);
 		}
-
-		SECTION("MoG prior v2"){
-			Eigen::VectorXd alpha_beta = Eigen::VectorXd::Constant(data.n_var, 0.00000001);
-			Eigen::VectorXd alpha_gam = Eigen::VectorXd::Constant(data.n_var, 0.00000001);
-			PVE pve(data, Y, C);
-			pve.set_mog_weights(alpha_beta, alpha_gam);
-			pve.run(p.out_file);
-
-			CHECK(pve.sigmas(0)  == Approx(0.0));
-			CHECK(pve.sigmas(1)  == Approx(0.5240473249));
-			CHECK(pve.sigmas(2)  == Approx(0.4986619236));
-			CHECK(pve.h2(0)  == Approx(0.0));
-			CHECK(pve.h2(1)  == Approx(0.5124108594));
-			CHECK(pve.h2(2)  == Approx(0.4875891406));
-		}
-	}
-
-	SECTION("Main effects fit (MoG prior)") {
-		/* R
-		 * eps = 0.0000001
-		 * aa = data.frame(alpha_beta = c(rep(eps, 905), rep(1-eps, 905)), alpha_gam = c(rep(eps, 905), rep(1-eps, 905)))
-		 * write.table(aa, "data/io_test/case8/test_mog_weights.txt", col.names=T, row.names=F, quote=F)
-		 */
-		parameters p;
-		int argc = sizeof(argv_main2) / sizeof(argv_main2[0]);
-		parse_arguments(p, argc, argv_main2);
-		Data data(p);
-		data.read_non_genetic_data();
-		data.standardise_non_genetic_data();
-		data.read_full_bgen();
-
-		Eigen::VectorXd Y = data.Y.cast<double>();
-		Eigen::MatrixXd C = data.C.cast<double>();
-		PVE pve(data, Y, C);
-
-		Eigen::VectorXd alpha_beta, alpha_gam;
-		data.read_mog_weights(p.mog_weights_file, alpha_beta, alpha_gam);
-		pve.set_mog_weights(alpha_beta, alpha_gam);
-		pve.run(p.out_file);
-
-		CHECK(pve.sigmas(0) == Approx(0.4321062545));
-		CHECK(pve.sigmas(1) == Approx(0.1218897171));
-		CHECK(pve.sigmas(2) == Approx(0.4714699134));
-		CHECK(pve.h2(0) == Approx(0.4213755531));
-		CHECK(pve.h2(1) == Approx(0.1188627714));
-		CHECK(pve.h2(2) == Approx(0.4597616755));
 	}
 }

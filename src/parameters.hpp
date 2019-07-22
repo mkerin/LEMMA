@@ -33,7 +33,7 @@ public:
 	bool exclude_ones_from_env_sq;
 	double min_maf, min_info, elbo_tol, alpha_tol, gamma_updates_thresh;
 	double beta_spike_diff_factor, gam_spike_diff_factor, min_spike_diff_factor;
-	long LOSO_window;
+	long LOSO_window, n_jacknife;
 	std::vector < std::string > incl_sample_ids, gconf;
 
 // constructors/destructors
@@ -65,6 +65,7 @@ public:
 		init_weights_with_snpwise_scan = false;
 		restrict_gamma_updates = false;
 		n_thread = 1;
+		n_jacknife = 2;
 		n_bgen_thread = 1;
 		random_seed = -1;
 		env_update_repeats = 1;

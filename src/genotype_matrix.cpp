@@ -18,6 +18,14 @@
 #include <vector>
 #include <map>
 
+long op_pmax(long& ii) {
+	if(ii < 0) {
+		return 1;
+	} else {
+		return ii;
+	}
+}
+
 void GenotypeMatrix::assign_index(const long &ii, const long &jj, double x) {
 	if(low_mem) {
 		if(std::isnan(x)) {

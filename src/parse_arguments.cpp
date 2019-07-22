@@ -159,6 +159,7 @@ void parse_arguments(parameters &p, int argc, char **argv) {
 	    ("covar_init", "", cxxopts::value<std::string>(p.covar_coeffs_file))
 	    ("extra_pve_covar", "Variables that are included as covariates in the PVE analysis but not in the VB algorithm (Eg. principle components).", cxxopts::value<std::string>(p.extra_pve_covar_file))
 	    ("snpwise_scan", "", cxxopts::value<std::string>(p.snpstats_file))
+	    ("n_jacknife_blocks", "", cxxopts::value<long>(p.n_jacknife))
 	    ("environment_weights", "", cxxopts::value<std::string>(p.env_coeffs_file))
 	    ("resume_from_param_dump", "", cxxopts::value<std::string>(p.resume_prefix))
 	    ("out", "Filepath to output", cxxopts::value<std::string>(p.out_file))
