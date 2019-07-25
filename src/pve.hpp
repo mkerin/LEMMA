@@ -315,17 +315,11 @@ public:
 
 		EigenDataMatrix D;
 		long jknf_block_size = (X.cumulative_pos[n_var - 1] + p.n_jacknife - 1) / p.n_jacknife;
-		double trZ = 0, trZprime = 0;
-		Eigen::MatrixXd Z;
 		for (auto& iter_chunk : main_fwd_pass_chunks) {
 			if(D.cols() != iter_chunk.size()) {
 				D.resize(n_samples, iter_chunk.size());
 			}
 			X.col_block3(iter_chunk, D);
-			Z = D.array().colwise() * eta.array();
-			trZ += Z.array().square().sum();
-			Z = project_out_covars(Z);
-			trZprime += Z.array().square().sum();
 
 			// Get jacknife block (just use block assignment of 1st snp)
 			long jacknife_index = X.cumulative_pos[iter_chunk[0]] / jknf_block_size;
@@ -337,10 +331,6 @@ public:
 		for (long ii = 0; ii < n_components; ii++) {
 			components[ii].finalise();
 		}
-		trZ /= n_var;
-		trZprime /= n_var;
-		std::cout << "trace(Z) = " << trZ << std::endl;
-		std::cout << "trace(Zprime) = " << trZprime << std::endl;
 
 		// Solve system to estimate sigmas
 		long n_components = components.size();
