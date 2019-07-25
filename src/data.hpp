@@ -1199,6 +1199,7 @@ public:
 			assert(false);
 			// calc_snpwise_regression(vp_init);
 		}
+		vp_init.eta = E * vp_init.muw.matrix();
 
 		// Manually set covar coeffs
 		if(p.covar_coeffs_file != "NULL") {

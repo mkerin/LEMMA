@@ -45,19 +45,7 @@ int main( int argc, char** argv ) {
 		// Also regresses out covariables if necessary
 		data.standardise_non_genetic_data();
 		data.read_full_bgen();
-
-		// For the HE-reg method
-		Eigen::VectorXd eta;
-		if (data.n_env == 1) {
-			eta = data.E.col(0);
-		}
-
-		if (p.mode_vb || p.mode_calc_snpstats || p.streamBgenFile != "NULL" || p.env_coeffs_file != "NULL") {
-			data.set_vb_init();
-			if(data.n_env > 1 && p.env_coeffs_file != "NULL") {
-				eta = data.E * data.vp_init.muw.matrix();
-			}
-		}
+		data.set_vb_init();
 
 		if (p.mode_vb || p.mode_calc_snpstats || p.streamBgenFile != "NULL") {
 			VBayesX2 VB(data);
@@ -77,7 +65,6 @@ int main( int argc, char** argv ) {
 				VB.run();
 				auto vb_end = std::chrono::system_clock::now();
 				std::chrono::duration<double> elapsed_vb = vb_end - vb_start;
-				eta = VB.vp_init.eta.cast<double>();
 				data.vp_init = VB.vp_init;
 
 				std::cout << std::endl << "Time expenditure:" << std::endl;
@@ -170,7 +157,7 @@ int main( int argc, char** argv ) {
 			if(data.n_env > 0) {
 				// If multi env; use VB to collapse to single
 				assert(data.n_env == 1 || p.mode_vb || p.env_coeffs_file != "NULL");
-				PVE pve(data, Y, C, eta);
+				PVE pve(data, Y, C, data.vp_init.eta);
 				pve.run();
 				pve.to_file(p.out_file);
 			} else {

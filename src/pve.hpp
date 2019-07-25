@@ -9,6 +9,7 @@
 #include "file_utils.hpp"
 #include "parameters.hpp"
 #include "data.hpp"
+#include "eigen_utils.hpp"
 
 #include <boost/iostreams/filtering_stream.hpp>
 
@@ -213,7 +214,6 @@ public:
 	long n_draws;
 	long n_samples;
 	long n_var;
-	const bool mode_gxe;
 	long n_components;
 	long n_covar;
 	long n_env;
@@ -238,7 +238,7 @@ public:
 	PVE(const Data& dat,
 	    Eigen::VectorXd& myY,
 	    Eigen::MatrixXd& myC,
-	    Eigen::VectorXd& myeta) : p(dat.p), X(dat.G), eta(myeta), Y(myY), C(myC), mode_gxe(true) {
+	    Eigen::VectorXd& myeta) : p(dat.p), X(dat.G), eta(myeta), Y(myY), C(myC) {
 		n_samples = X.nn;
 		n_var = X.pp;
 		N = X.nn;
@@ -247,16 +247,11 @@ public:
 
 		n_covar = C.cols();
 		n_env = 1;
-		std::cout << "N-covars: " << n_covar << std::endl;
-
-		// Center and scale eta
-		eta.array() -= eta.mean();
-		eta.array() /= eta.squaredNorm() / (eta.rows() - 1.0);
 	}
 
 	PVE(const Data& dat,
 	    Eigen::VectorXd& myY,
-	    Eigen::MatrixXd& myC) : p(dat.p), X(dat.G), Y(myY), C(myC), mode_gxe(false) {
+	    Eigen::MatrixXd& myC) : p(dat.p), X(dat.G), Y(myY), C(myC) {
 		n_samples = X.nn;
 		n_var = X.pp;
 		N = X.nn;
@@ -265,7 +260,6 @@ public:
 
 		n_covar = C.cols();
 		n_env = 0;
-		std::cout << "N-covars: " << n_covar << std::endl;
 	}
 
 	void calc_sigmas_v2(){
@@ -321,11 +315,17 @@ public:
 
 		EigenDataMatrix D;
 		long jknf_block_size = (X.cumulative_pos[n_var - 1] + p.n_jacknife - 1) / p.n_jacknife;
+		double trZ = 0, trZprime = 0;
+		Eigen::MatrixXd Z;
 		for (auto& iter_chunk : main_fwd_pass_chunks) {
 			if(D.cols() != iter_chunk.size()) {
 				D.resize(n_samples, iter_chunk.size());
 			}
 			X.col_block3(iter_chunk, D);
+			Z = D.array().colwise() * eta.array();
+			trZ += Z.array().square().sum();
+			Z = project_out_covars(Z);
+			trZprime += Z.array().square().sum();
 
 			// Get jacknife block (just use block assignment of 1st snp)
 			long jacknife_index = X.cumulative_pos[iter_chunk[0]] / jknf_block_size;
@@ -337,6 +337,10 @@ public:
 		for (long ii = 0; ii < n_components; ii++) {
 			components[ii].finalise();
 		}
+		trZ /= n_var;
+		trZprime /= n_var;
+		std::cout << "trace(Z) = " << trZ << std::endl;
+		std::cout << "trace(Zprime) = " << trZprime << std::endl;
 
 		// Solve system to estimate sigmas
 		long n_components = components.size();
@@ -505,8 +509,20 @@ void PVE::fill_gaussian_noise(unsigned int seed, Eigen::Ref<Eigen::MatrixXd> zz,
 }
 
 void PVE::run() {
-	// Filepath to write interim results to
-	if(mode_gxe) {
+	// Add intercept to covariates
+	Eigen::MatrixXd C1(n_samples, n_covar + 1);
+	Eigen::MatrixXd ones = Eigen::MatrixXd::Constant(n_samples, 1, 1.0);
+	C1 << C, ones;
+	C = C1;
+	n_covar += 1;
+	std::cout << "N-covars: " << n_covar << std::endl;
+
+	// Center and scale eta
+	std::vector<std::string> placeholder = {"eta"};
+	EigenUtils::center_matrix(eta);
+	EigenUtils::scale_matrix_and_remove_constant_cols(eta, n_env, placeholder);
+
+	if(n_env > 0) {
 		std::cout << "G+GxE effects model (gaussian prior)" << std::endl;
 		calc_sigmas_v2();
 	} else {

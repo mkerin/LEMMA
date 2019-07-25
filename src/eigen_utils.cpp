@@ -364,7 +364,11 @@ template void EigenUtils::read_matrix(const std::string&, const long&,
                                       Eigen::MatrixXd&, std::vector<std::string>&, std::map<long, bool>&);
 template void EigenUtils::center_matrix(Eigen::MatrixXd&);
 template void EigenUtils::center_matrix(Eigen::MatrixXf&);
+template void EigenUtils::center_matrix(Eigen::VectorXd&);
+template void EigenUtils::center_matrix(Eigen::VectorXf&);
 template void EigenUtils::scale_matrix_and_remove_constant_cols(Eigen::MatrixXf&,
                                                                 long&, std::vector<std::string>&);
 template void EigenUtils::scale_matrix_and_remove_constant_cols(Eigen::MatrixXd&,
+                                                                long&, std::vector<std::string>&);
+template void EigenUtils::scale_matrix_and_remove_constant_cols(Eigen::VectorXd&,
                                                                 long&, std::vector<std::string>&);
