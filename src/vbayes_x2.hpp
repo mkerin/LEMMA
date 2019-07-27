@@ -131,7 +131,7 @@ public:
 		std::cout << "Initialising vbayes object";
 #ifndef OSX
 		std::cout << " (application using ";
-		std::cout << (double) getValueRAM() / 1000 / 1000 << "GB of RAM)";
+		std::cout << (double) fileUtils::getValueRAM() / 1000 / 1000 << "GB of RAM)";
 #endif
 		std::cout << std::endl;
 		mkl_set_num_threads_local(p.n_thread);
@@ -1251,7 +1251,7 @@ public:
 		std::chrono::duration<double> elapsed_seconds = now-time_check;
 		std::cout << " (" << elapsed_seconds.count();
 		std::cout << " seconds since last timecheck, estimated RAM usage = ";
-		std::cout << getValueRAM() << "KB)" << std::endl;
+		std::cout << fileUtils::getValueRAM() << "KB)" << std::endl;
 		time_check = now;
 	}
 
@@ -1895,36 +1895,6 @@ public:
 		}
 		my_outf.push(boost_io::file_sink(ofile));
 		return ofile;
-	}
-
-	long long parseLineRAM(char* line){
-		// This assumes that a digit will be found and the line ends in " Kb".
-		std::size_t i = strlen(line);
-		const char* p = line;
-		while (*p <'0' || *p > '9') p++;
-		line[i-3] = '\0';
-		char* s_end;
-		long long res = std::stoll(p);
-		return res;
-	}
-
-	long long getValueRAM(){
-#ifndef OSX
-		FILE* file = fopen("/proc/self/status", "r");
-		long long result = -1;
-		char line[128];
-
-		while (fgets(line, 128, file) != NULL) {
-			if (strncmp(line, "VmRSS:", 6) == 0) {
-				result = parseLineRAM(line);
-				break;
-			}
-		}
-		fclose(file);
-		return result;
-#else
-		return -1;
-#endif
 	}
 };
 

@@ -24,6 +24,36 @@
 
 namespace boost_io = boost::iostreams;
 
+long long parseLineRAM(char* line){
+	// This assumes that a digit will be found and the line ends in " Kb".
+	std::size_t i = strlen(line);
+	const char* p = line;
+	while (*p <'0' || *p > '9') p++;
+	line[i-3] = '\0';
+	char* s_end;
+	long long res = std::stoll(p);
+	return res;
+}
+
+long long fileUtils::getValueRAM(){
+#ifndef OSX
+	FILE* file = fopen("/proc/self/status", "r");
+		long long result = -1;
+		char line[128];
+
+		while (fgets(line, 128, file) != NULL) {
+			if (strncmp(line, "VmRSS:", 6) == 0) {
+				result = parseLineRAM(line);
+				break;
+			}
+		}
+		fclose(file);
+		return result;
+#else
+	return -1;
+#endif
+}
+
 std::string fileUtils::fstream_init(boost_io::filtering_ostream &my_outf, const std::string &file,
                                     const std::string &file_prefix,
                                     const std::string &file_suffix) {

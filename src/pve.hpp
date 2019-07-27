@@ -307,7 +307,7 @@ public:
 
 #ifndef OSX
 		std::cout << "Using ";
-		std::cout << (double) getValueRAM() / 1000 / 1000 << "GB of RAM";
+		std::cout << (double) fileUtils::getValueRAM() / 1000 / 1000 << "GB of RAM";
 		std::cout << " to store HE-Regression components" << std::endl;
 #endif
 	}

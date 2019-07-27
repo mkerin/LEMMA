@@ -27,6 +27,8 @@ namespace boost_io = boost::iostreams;
 
 /***************** File writing *****************/
 namespace fileUtils {
+	long long getValueRAM();
+
 std::string fstream_init(boost_io::filtering_ostream &my_outf,
                          const std::string &file,
                          const std::string &file_prefix = "",
