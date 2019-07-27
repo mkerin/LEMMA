@@ -38,7 +38,7 @@ public:
 	parameters p;
 	int n_effects;
 
-	Hyps(parameters my_params) : p(my_params) {
+	Hyps(const parameters& my_params) : p(my_params) {
 	};
 
 	void resize(int my_n_effects){

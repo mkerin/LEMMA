@@ -235,7 +235,7 @@ void parse_arguments(parameters &p, int argc, char **argv) {
 			check_file_exists(p.bgi_file);
 		}
 		if(p.streamBgenFile != "NULL") {
-			p.streamBgiFile = p.bgen_file + ".bgi";
+			p.streamBgiFile = p.streamBgenFile + ".bgi";
 			check_file_exists(p.streamBgenFile);
 			check_file_exists(p.streamBgiFile);
 		}
@@ -258,7 +258,9 @@ void parse_arguments(parameters &p, int argc, char **argv) {
 		if(opts.count("xtra_verbose")) {
 			p.verbose = true;
 			p.xtra_verbose = true;
-			p.param_dump_interval = 50;
+			if(!opts.count("param_dump_interval")) {
+				p.param_dump_interval = 50;
+			}
 		}
 
 		if(opts.count("mode_debug")) {
@@ -274,7 +276,7 @@ void parse_arguments(parameters &p, int argc, char **argv) {
 			p.mode_mog_prior_gam = false;
 		}
 
-		if(opts.count("suppress_squared_env_removal") == 0) {
+		if(opts.count("suppress_squared_env_removal")) {
 			p.mode_remove_squared_envs = false;
 		}
 
@@ -1014,14 +1016,28 @@ void parse_arguments(parameters &p, int argc, char **argv) {
 	}
 
 	// mode_vb specific options
-	bool has_bgen = p.bgen_file != "NULL";
-	bool has_out = p.out_file != "NULL";
-	bool has_pheno = p.pheno_file != "NULL";
-	bool has_all = (has_pheno && has_out && has_bgen);
-	if(!has_all) {
-		std::cout << "ERROR: bgen, pheno and out filepaths should all be ";
-		std::cout << "provided in conjunction with --mode_vb." << std::endl;
-		std::exit(EXIT_FAILURE);
+	if(p.mode_vb) {
+		bool has_bgen = p.bgen_file != "NULL";
+		bool has_out = p.out_file != "NULL";
+		bool has_pheno = p.pheno_file != "NULL";
+		bool has_all = (has_pheno && has_out && has_bgen);
+		if(!has_all) {
+			std::cout << "ERROR: bgen, pheno and out filepaths should all be ";
+			std::cout << "provided in conjunction with --mode_vb." << std::endl;
+			std::exit(EXIT_FAILURE);
+		}
+	}
+
+	if(p.mode_calc_snpstats) {
+		bool has_bgen = p.bgen_file != "NULL";
+		bool has_out = p.out_file != "NULL";
+		bool has_pheno = p.pheno_file != "NULL";
+		bool has_all = (has_pheno && has_out && has_bgen);
+		if(!has_all) {
+			std::cout << "ERROR: bgen, pheno and out filepaths should all be ";
+			std::cout << "provided in conjunction with --mode_vb." << std::endl;
+			std::exit(EXIT_FAILURE);
+		}
 	}
 
 	if(p.env_file == "NULL" && p.env_coeffs_file != "NULL") {

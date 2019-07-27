@@ -47,7 +47,7 @@ int main( int argc, char** argv ) {
 		data.read_full_bgen();
 		data.set_vb_init();
 
-		if (p.mode_vb || p.mode_calc_snpstats || p.streamBgenFile != "NULL") {
+		if (p.mode_vb || p.mode_calc_snpstats) {
 			VBayesX2 VB(data);
 			if (p.mode_vb) {
 				if (data.n_effects > 1) {
@@ -77,8 +77,9 @@ int main( int argc, char** argv ) {
 				std::string ofile_map = VB.fstream_init(outf_time, "", "_time_elapsed");
 				outf_time << "function time" << std::endl;
 				outf_time << "read_data " << elapsed_reading_data.count() << std::endl;
-				outf_time << "full_inference " << elapsed_vb.count() << std::endl;
-				outf_time << "vb_outer_loop " << VB.elapsed_innerLoop.count() << std::endl;
+				outf_time << "VB_prepro " << elapsed_reading_data.count() << std::endl;
+				outf_time << "VB_inference " << elapsed_vb.count() << std::endl;
+				outf_time << "SNP_testing " << VB.elapsed_innerLoop.count() << std::endl;
 			}
 
 			if (p.mode_calc_snpstats) {
@@ -86,16 +87,9 @@ int main( int argc, char** argv ) {
 			}
 
 			if (p.streamBgenFile != "NULL") {
-				GenotypeMatrix Xstream(false);
+				GenotypeMatrix Xstream(p, false);
 				bool bgen_pass = true;
 				long n_var_parsed = 0;
-
-				genfile::bgen::IndexQuery::UniquePtr query = genfile::bgen::IndexQuery::create(p.bgi_file);
-				genfile::bgen::View::UniquePtr bgenView;
-				query->initialise();
-
-				bgenView->set_query(query);
-				bgenView->summarise(std::cout);
 
 				Eigen::VectorXd neglogp_beta(data.n_var);
 				Eigen::VectorXd neglogp_rgam(data.n_var);
@@ -117,7 +111,7 @@ int main( int argc, char** argv ) {
 					std::cout << "Computing single-snp hypothesis tests with LOCO strategy" << std::endl;
 				}
 
-				while (fileUtils::read_bgen_chunk(bgenView, Xstream, data.sample_is_invalid,
+				while (fileUtils::read_bgen_chunk(data.streamBgenView, Xstream, data.sample_is_invalid,
 				                                  data.n_samples, 128, p, bgen_pass, n_var_parsed)) {
 					VB.LOCO_pvals_v2(Xstream,
 					                 data.vp_init,

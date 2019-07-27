@@ -91,11 +91,13 @@ public:
 		// Weights - add header + initial values
 		if(n_effects > 1) {
 			fstream_init(outf_weights, dir, "_env_weights", false);
+			outf_weights << "count ";
 			for (int ll = 0; ll < n_env; ll++) {
 				outf_weights << env_names[ll];
 				if (ll + 1 < n_env) outf_weights << " ";
 			}
 			outf_weights << std::endl;
+			outf_weights << "-1 ";
 			for (int ll = 0; ll < n_env; ll++) {
 				outf_weights << vp.muw(ll);
 				if (ll + 1 < n_env) outf_weights << " ";
@@ -180,6 +182,7 @@ public:
 		outf_iter << lapsecs.count() << std::endl;
 
 		if(n_effects > 1) {
+			outf_weights << cnt << " ";
 			for (int ll = 0; ll < n_env; ll++) {
 				outf_weights << vp.muw(ll);
 				if (ll < n_env - 1) outf_weights << " ";

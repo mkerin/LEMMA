@@ -52,10 +52,10 @@ std::string fileUtils::fstream_init(boost_io::filtering_ostream &my_outf, const 
 }
 
 void fileUtils::dump_predicted_vec_to_file(boost_io::filtering_ostream &my_outf,
-								Eigen::Ref<Eigen::VectorXd> vec,
-								const std::string& header){
+                                           Eigen::Ref<Eigen::VectorXd> vec,
+                                           const std::string& header){
 	my_outf << header << std::endl;
-	for (long ii = 0; ii < vec.rows(); ii++){
+	for (long ii = 0; ii < vec.rows(); ii++) {
 		my_outf << vec[ii] << std::endl;
 	}
 }
@@ -85,12 +85,12 @@ std::string variational_params_header(const parameters& p, const int& effect_ind
 }
 
 void fileUtils::write_snp_stats_to_file(boost_io::filtering_ostream &ofile,
-		const int &n_effects,
-		const long &n_var,
-		const VariationalParameters &vp,
-		const GenotypeMatrix &X,
-		const parameters &p,
-		const bool &write_mog) {
+                                        const int &n_effects,
+                                        const long &n_var,
+                                        const VariationalParameters &vp,
+                                        const GenotypeMatrix &X,
+                                        const parameters &p,
+                                        const bool &write_mog) {
 	// Function to write parameter values from genetic effects to file
 	// Assumes ofile has been initialised
 
@@ -138,12 +138,12 @@ void fileUtils::write_snp_stats_to_file(boost_io::filtering_ostream &ofile,
 }
 
 void fileUtils::write_snp_stats_to_file(boost_io::filtering_ostream &ofile,
-		const int &n_effects,
-		const long &n_var,
-		const VariationalParametersLite &vp,
-		const GenotypeMatrix &X,
-		const parameters &p,
-		const bool &write_mog) {
+                                        const int &n_effects,
+                                        const long &n_var,
+                                        const VariationalParametersLite &vp,
+                                        const GenotypeMatrix &X,
+                                        const parameters &p,
+                                        const bool &write_mog) {
 	// Function to write parameter values from genetic effects to file
 	// Assumes ofile has been initialised
 
@@ -316,13 +316,9 @@ bool fileUtils::read_bgen_chunk(genfile::bgen::View::UniquePtr &bgenView,
                                 const long &chunk_size,
                                 const parameters &p,
                                 bool &bgen_pass,
-                                long &n_var_parsed) {
+                                long &n_var_parsed){
 	// Wrapper around BgenView to read in a 'chunk' of data. Remembers
 	// if last call hit the EOF, and returns false if so.
-	// Assumed that:
-	// - commandline args parsed and passed to params
-	// - bgenView initialised with correct filename
-	// - scale + centering happening internally
 
 	// Exit function if last call hit EOF.
 	if (!bgen_pass) return false;
@@ -428,6 +424,104 @@ bool fileUtils::read_bgen_chunk(genfile::bgen::View::UniquePtr &bgenView,
 	}
 }
 
+
+bool fileUtils::read_bgen_chunk(genfile::bgen::View::UniquePtr &bgenView,
+                                Eigen::MatrixXd &G,
+                                const std::unordered_map<long, bool> &sample_is_invalid,
+                                const long &n_samples,
+                                const long &chunk_size,
+                                const parameters &p,
+                                bool &bgen_pass,
+                                long &n_var_parsed){
+	// Wrapper around BgenView to read in a 'chunk' of data. Remembers
+	// if last call hit the EOF, and returns false if so.
+
+	// Exit function if last call hit EOF.
+	if (!bgen_pass) return false;
+
+	// Temporary variables to store info from read_variant()
+	std::string chr_j;
+	std::uint32_t pos_j;
+	std::string rsid_j;
+	std::vector< std::string > alleles_j;
+	std::string SNPID_j;
+
+	long nInvalid = sample_is_invalid.size() - n_samples;
+	DosageSetter setter_v2(sample_is_invalid, nInvalid);
+
+	double chunk_missingness = 0;
+	long n_var_incomplete = 0;
+
+	// Resize genotype matrix
+	G.resize(n_samples, chunk_size);
+
+	long int n_constant_variance = 0;
+	std::uint32_t jj = 0;
+	while ( jj < chunk_size && bgen_pass) {
+		bgen_pass = bgenView->read_variant( &SNPID_j, &rsid_j, &chr_j, &pos_j, &alleles_j );
+		if (!bgen_pass) break;
+		n_var_parsed++;
+
+		// Read probs + check maf filter
+		bgenView->read_genotype_data_block( setter_v2 );
+
+		double d1     = setter_v2.m_sum_eij;
+		double maf_j  = setter_v2.m_maf;
+		double info_j = setter_v2.m_info;
+		double mu     = setter_v2.m_mean;
+		double missingness_j    = setter_v2.m_missingness;
+		double sigma = std::sqrt(setter_v2.m_sigma2);
+
+		// Filters
+		if (p.maf_lim && (maf_j < p.min_maf || maf_j > 1 - p.min_maf)) {
+			continue;
+		}
+		if (p.info_lim && info_j < p.min_info) {
+			continue;
+		}
+		if(!p.keep_constant_variants && d1 < 5.0) {
+			n_constant_variance++;
+			continue;
+		}
+		if(!p.keep_constant_variants && sigma <= 1e-12) {
+			n_constant_variance++;
+			continue;
+		}
+
+		// filters passed; write contextual info
+		chunk_missingness += missingness_j;
+		if(missingness_j > 0) n_var_incomplete++;
+
+		for (std::uint32_t ii = 0; ii < n_samples; ii++) {
+			G(ii, jj) = setter_v2.m_dosage[ii];
+		}
+		jj++;
+	}
+
+	// need to resize G whilst retaining existing coefficients if while
+	// loop exits early due to EOF.
+	G.conservativeResize(n_samples, jj);
+
+//	chunk_missingness /= jj;
+//	if(chunk_missingness > 0.0) {
+//		std::cout << "Average chunk missingness " << chunk_missingness << "(";
+//		std::cout << n_var_incomplete << "/" << G.cols();
+//		std::cout << " variants contain >=1 imputed entry)" << std::endl;
+//	}
+//
+//	if(n_constant_variance > 0) {
+//		std::cout << n_constant_variance << " variants removed due to ";
+//		std::cout << "constant variance" << std::endl;
+//	}
+
+	if(jj == 0) {
+		// Immediate EOF
+		return false;
+	} else {
+		return true;
+	}
+}
+
 void fileUtils::dump_yhat_to_file(boost_io::filtering_ostream &outf, const long &n_samples, const long &n_covar,
                                   const long &n_var, const long &n_env, const EigenDataVector &Y,
                                   const VariationalParametersLite &vp, const Eigen::Ref<const Eigen::VectorXd> &Ealpha,
@@ -453,9 +547,13 @@ void fileUtils::dump_yhat_to_file(boost_io::filtering_ostream &outf, const long 
 	long n_cols = 0, n_chrs = resid_loco.size();
 
 	outf << "Y"; n_cols++;
-	if (n_covar > 0) outf << " Ealpha"; n_cols++;
+	if (n_covar > 0) {
+		outf << " Ealpha"; n_cols++;
+	}
 	outf << " Xbeta"; n_cols++;
-	if (n_env > 0) outf << " eta Xgamma"; n_cols += 2;
+	if (n_env > 0) {
+		outf << " eta Xgamma"; n_cols += 2;
+	}
 	if(n_chrs > 0) {
 		for(auto cc : chrs_present) {
 			outf << " residuals_excl_chr" << cc;

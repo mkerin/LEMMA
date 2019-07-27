@@ -33,8 +33,8 @@ std::string fstream_init(boost_io::filtering_ostream &my_outf,
                          const std::string &file_suffix = "");
 
 void dump_predicted_vec_to_file(boost_io::filtering_ostream &my_outf,
-		Eigen::Ref<Eigen::VectorXd> vec,
-	const std::string& header);
+                                Eigen::Ref<Eigen::VectorXd> vec,
+                                const std::string& header);
 
 void write_snp_stats_to_file(boost_io::filtering_ostream &ofile,
                              const int &n_effects,
@@ -90,27 +90,36 @@ bool read_bgen_chunk(genfile::bgen::View::UniquePtr &bgenView,
                      bool &bgen_pass,
                      long &n_var_parsed);
 
-void dump_yhat_to_file(boost_io::filtering_ostream &outf,
-					   const long &n_samples,
-					   const long &n_covar,
-					   const long &n_var,
-					   const long &n_env,
-					   const EigenDataVector &Y,
-					   const VariationalParametersLite &vp,
-					   const Eigen::Ref<const Eigen::VectorXd> &Ealpha,
-					   std::unordered_map<long, bool> sample_is_invalid,
-					   const std::vector<Eigen::VectorXd> &resid_loco,
-					   std::vector<long> chrs_present);
+bool read_bgen_chunk(genfile::bgen::View::UniquePtr &bgenView,
+                     Eigen::MatrixXd &G,
+                     const std::unordered_map<long, bool> &sample_is_invalid,
+                     const long &n_samples,
+                     const long &chunk_size,
+                     const parameters &p,
+                     bool &bgen_pass,
+                     long &n_var_parsed);
 
-	void dump_yhat_to_file(boost_io::filtering_ostream &outf,
-						   const long &n_samples,
-						   const long &n_covar,
-						   const long &n_var,
-						   const long &n_env,
-						   const EigenDataVector &Y,
-						   const VariationalParametersLite &vp,
-						   const Eigen::Ref<const Eigen::VectorXd> &Ealpha,
-						   std::unordered_map<long, bool> sample_is_invalid);
+void dump_yhat_to_file(boost_io::filtering_ostream &outf,
+                       const long &n_samples,
+                       const long &n_covar,
+                       const long &n_var,
+                       const long &n_env,
+                       const EigenDataVector &Y,
+                       const VariationalParametersLite &vp,
+                       const Eigen::Ref<const Eigen::VectorXd> &Ealpha,
+                       std::unordered_map<long, bool> sample_is_invalid,
+                       const std::vector<Eigen::VectorXd> &resid_loco,
+                       std::vector<long> chrs_present);
+
+void dump_yhat_to_file(boost_io::filtering_ostream &outf,
+                       const long &n_samples,
+                       const long &n_covar,
+                       const long &n_var,
+                       const long &n_env,
+                       const EigenDataVector &Y,
+                       const VariationalParametersLite &vp,
+                       const Eigen::Ref<const Eigen::VectorXd> &Ealpha,
+                       std::unordered_map<long, bool> sample_is_invalid);
 
 
 }

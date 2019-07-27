@@ -213,13 +213,12 @@ public:
 	// constants
 	long n_draws;
 	long n_samples;
-	long n_var;
 	long n_components;
 	long n_covar;
 	long n_env;
-	double N, P;
+	double N;
 
-	parameters p;
+	const parameters& p;
 
 	const GenotypeMatrix& X;
 
@@ -232,39 +231,42 @@ public:
 	Eigen::ArrayXd h2, h2_se_jack, h2_bias_corrected;
 	Eigen::ArrayXd h2b, h2b_se_jack, h2b_bias_corrected;
 
+	EigenDataMatrix zz;
+	EigenDataMatrix Wzz;
+	const std::unordered_map<long, bool>& sample_is_invalid;
+	Data& data;
+
 	// std::vector<std::string> components;
 	std::vector<PVE_Component> components;
+	Index_t ind;
 
-	PVE(const Data& dat,
+	PVE(Data& dat,
 	    Eigen::VectorXd& myY,
 	    Eigen::MatrixXd& myC,
-	    Eigen::VectorXd& myeta) : p(dat.p), X(dat.G), eta(myeta), Y(myY), C(myC) {
-		n_samples = X.nn;
-		n_var = X.pp;
-		N = X.nn;
-		P = X.pp;
+	    Eigen::VectorXd& myeta) : p(dat.p), X(dat.G), eta(myeta), Y(myY), C(myC),
+		sample_is_invalid(dat.sample_is_invalid), data(dat) {
+		n_samples = data.n_samples;
+		N = n_samples;
 		n_draws = p.n_pve_samples;
 
 		n_covar = C.cols();
 		n_env = 1;
 	}
 
-	PVE(const Data& dat,
+	PVE(Data& dat,
 	    Eigen::VectorXd& myY,
-	    Eigen::MatrixXd& myC) : p(dat.p), X(dat.G), Y(myY), C(myC) {
-		n_samples = X.nn;
-		n_var = X.pp;
-		N = X.nn;
-		P = X.pp;
+	    Eigen::MatrixXd& myC) : p(dat.p), X(dat.G), Y(myY), C(myC),
+		sample_is_invalid(dat.sample_is_invalid), data(dat) {
+		n_samples = data.n_samples;
+		N = n_samples;
 		n_draws = p.n_pve_samples;
 
 		n_covar = C.cols();
 		n_env = 0;
 	}
 
-	void calc_sigmas_v2(){
-		EigenDataMatrix zz(n_samples, n_draws);
-		EigenDataMatrix Wzz;
+	void initialise_components(){
+		zz.resize(n_samples, n_draws);
 		fill_gaussian_noise(p.random_seed, zz, n_samples, n_draws);
 
 		if(n_covar > 0) {
@@ -281,7 +283,6 @@ public:
 			components.push_back(comp);
 		}
 
-		Index_t ind;
 		if(n_env == 1) {
 			PVE_Component comp(p, Y, zz, Wzz, C, CtC_inv, p.n_jacknife);
 			comp.label = "GxE";
@@ -304,28 +305,58 @@ public:
 		}
 		n_components = components.size();
 
+#ifndef OSX
+		std::cout << "Using ";
+		std::cout << (double) getValueRAM() / 1000 / 1000 << "GB of RAM";
+		std::cout << " to store HE-Regression components" << std::endl;
+#endif
+	}
+
+	void calc_sigmas_v2(){
 		// Compute randomised traces
-		long n_main_segs;
-		n_main_segs = (n_var + p.main_chunk_size - 1) / p.main_chunk_size;
-		std::vector< std::vector <long> > main_fwd_pass_chunks(n_main_segs);
-		for(long kk = 0; kk < n_var; kk++) {
-			long main_ch_index = kk / p.main_chunk_size;
-			main_fwd_pass_chunks[main_ch_index].push_back(kk);
-		}
-
-		EigenDataMatrix D;
-		long jknf_block_size = (X.cumulative_pos[n_var - 1] + p.n_jacknife - 1) / p.n_jacknife;
-		for (auto& iter_chunk : main_fwd_pass_chunks) {
-			if(D.cols() != iter_chunk.size()) {
-				D.resize(n_samples, iter_chunk.size());
+		if(p.bgen_file != "NULL") {
+			long n_main_segs;
+			n_main_segs = (data.n_var + p.main_chunk_size - 1) / p.main_chunk_size;
+			std::vector< std::vector <long> > main_fwd_pass_chunks(n_main_segs);
+			for(long kk = 0; kk < data.n_var; kk++) {
+				long main_ch_index = kk / p.main_chunk_size;
+				main_fwd_pass_chunks[main_ch_index].push_back(kk);
 			}
-			X.col_block3(iter_chunk, D);
 
-			// Get jacknife block (just use block assignment of 1st snp)
-			long jacknife_index = X.cumulative_pos[iter_chunk[0]] / jknf_block_size;
+			EigenDataMatrix D;
+			long jknf_block_size = (X.cumulative_pos[data.n_var - 1] + p.n_jacknife - 1) / p.n_jacknife;
+			for (auto& iter_chunk : main_fwd_pass_chunks) {
+				if(D.cols() != iter_chunk.size()) {
+					D.resize(n_samples, iter_chunk.size());
+				}
+				X.col_block3(iter_chunk, D);
 
-			for (auto& comp : components) {
-				comp.add_to_trace_estimator(D, jacknife_index);
+				// Get jacknife block (just use block assignment of 1st snp)
+				long jacknife_index = X.cumulative_pos[iter_chunk[0]] / jknf_block_size;
+
+				for (auto& comp : components) {
+					comp.add_to_trace_estimator(D, jacknife_index);
+				}
+			}
+		} else if (p.streamBgenFile != "NULL") {
+			Eigen::MatrixXd D;
+			bool bgen_pass = true;
+			long n_var_parsed = 0;
+
+			long jknf_block_size = (data.streamBgenView->number_of_variants() + p.n_jacknife - 1) / p.n_jacknife;
+			while (fileUtils::read_bgen_chunk(data.streamBgenView, D, sample_is_invalid,
+			                                  n_samples, 128, p, bgen_pass, n_var_parsed)) {
+				// Get jacknife block (just use block assignment of 1st snp)
+				long jacknife_index = n_var_parsed / jknf_block_size;
+
+				long n_chunk = D.cols();
+				std::vector<std::string> placeholder(n_chunk, "col");
+				EigenUtils::center_matrix(D);
+				EigenUtils::scale_matrix_and_remove_constant_cols(D, n_chunk, placeholder);
+
+				for (auto& comp : components) {
+					comp.add_to_trace_estimator(D, jacknife_index);
+				}
 			}
 		}
 		for (long ii = 0; ii < n_components; ii++) {
@@ -500,18 +531,26 @@ void PVE::fill_gaussian_noise(unsigned int seed, Eigen::Ref<Eigen::MatrixXd> zz,
 
 void PVE::run() {
 	// Add intercept to covariates
-	Eigen::MatrixXd C1(n_samples, n_covar + 1);
 	Eigen::MatrixXd ones = Eigen::MatrixXd::Constant(n_samples, 1, 1.0);
-	C1 << C, ones;
-	C = C1;
-	n_covar += 1;
+	if(n_covar > 0) {
+		Eigen::MatrixXd C1(n_samples, n_covar + 1);
+		C1 << C, ones;
+		C = C1;
+	} else {
+		C = ones;
+	}
+	n_covar = C.cols();
 	std::cout << "N-covars: " << n_covar << std::endl;
 
 	// Center and scale eta
-	std::vector<std::string> placeholder = {"eta"};
-	EigenUtils::center_matrix(eta);
-	EigenUtils::scale_matrix_and_remove_constant_cols(eta, n_env, placeholder);
+	if(n_env > 0) {
+		std::vector<std::string> placeholder = {"eta"};
+		EigenUtils::center_matrix(eta);
+		EigenUtils::scale_matrix_and_remove_constant_cols(eta, n_env, placeholder);
+	}
 
+	// Compute variance components
+	initialise_components();
 	if(n_env > 0) {
 		std::cout << "G+GxE effects model (gaussian prior)" << std::endl;
 		calc_sigmas_v2();

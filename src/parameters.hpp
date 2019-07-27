@@ -6,6 +6,9 @@
 #include <string>
 #include <vector>
 
+#include "genfile/bgen/bgen.hpp"
+#include "genfile/bgen/View.hpp"
+
 class parameters {
 public:
 	std::string bgen_file, chr, out_file, pheno_file, env_file, covar_file, bgi_file;
