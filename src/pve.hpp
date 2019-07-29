@@ -305,10 +305,15 @@ public:
 		}
 		n_components = components.size();
 
+		std::cout << "Initialised HE-regression components with:" << std::endl;
+		std::cout << " - N-jacknife = " << p.n_jacknife << std::endl;
+		std::cout << " - N-draws = " << p.n_pve_samples << std::endl;
+		std::cout << " - N-samples = " << n_samples << std::endl;
+		std::cout << " - N-covars = " << n_covar << std::endl;
 #ifndef OSX
 		std::cout << "Using ";
-		std::cout << (double) fileUtils::getValueRAM() / 1000 / 1000 << "GB of RAM";
-		std::cout << " to store HE-Regression components" << std::endl;
+		std::cout << (double) fileUtils::getValueRAM() / 1000 / 1000;
+		std::cout << "GB of RAM" << std::endl;
 #endif
 	}
 
@@ -342,10 +347,16 @@ public:
 			Eigen::MatrixXd D;
 			bool bgen_pass = true;
 			long n_var_parsed = 0;
-
+			long ch = 0;
 			long jknf_block_size = (data.streamBgenView->number_of_variants() + p.n_jacknife - 1) / p.n_jacknife;
 			while (fileUtils::read_bgen_chunk(data.streamBgenView, D, sample_is_invalid,
 			                                  n_samples, 128, p, bgen_pass, n_var_parsed)) {
+				if(ch % 100 == 0 && ch > 0) {
+					std::cout << "Chunk " << ch << " read (size " << 128;
+					std::cout << ", " << n_var_parsed-1 << "/" << data.streamBgenView->number_of_variants();
+					std::cout << " variants parsed)" << std::endl;
+				}
+
 				// Get jacknife block (just use block assignment of 1st snp)
 				long jacknife_index = n_var_parsed / jknf_block_size;
 
@@ -357,6 +368,7 @@ public:
 				for (auto& comp : components) {
 					comp.add_to_trace_estimator(D, jacknife_index);
 				}
+				ch++;
 			}
 		}
 		for (long ii = 0; ii < n_components; ii++) {
@@ -446,24 +458,25 @@ public:
 
 	void calc_h2(){
 		// SE of h2
-		h2_se_jack = (h2_jack.rowwise() - h2_jack.colwise().mean()).square().colwise().sum();
-		h2_se_jack *= (double) p.n_jacknife / (p.n_jacknife - 1.0);
+		Eigen::ArrayXd h2_jack_means = h2_jack.colwise().mean();
+
+		h2_se_jack = (h2_jack.rowwise() - h2.transpose()).square().colwise().sum();
+		h2_se_jack *= (p.n_jacknife - 1.0) / (double) p.n_jacknife;
 		h2_se_jack = h2_se_jack.sqrt();
 
 		// h2 bias corrected
-		Eigen::ArrayXd h2_jack_means = h2_jack.colwise().mean();
 		Eigen::ArrayXd h2_bias = h2_jack_means - h2;
 		h2_bias *= p.n_jacknife - 1.0;
 		h2_bias_corrected = h2 - h2_bias;
 
 		/* correct for change in column variance */
 		// SE of h2
-		h2b_se_jack = (h2b_jack.rowwise() - h2b_jack.colwise().mean()).square().colwise().sum();
-		h2b_se_jack *= (double) p.n_jacknife / (p.n_jacknife - 1.0);
+		Eigen::ArrayXd h2b_jack_means = h2b_jack.colwise().mean();
+		h2b_se_jack = (h2b_jack.rowwise() - h2b.transpose()).square().colwise().sum();
+		h2b_se_jack *= (p.n_jacknife - 1.0) / (double) p.n_jacknife;
 		h2b_se_jack = h2b_se_jack.sqrt();
 
 		// h2 bias corrected
-		Eigen::ArrayXd h2b_jack_means = h2b_jack.colwise().mean();
 		Eigen::ArrayXd h2b_bias = h2b_jack_means - h2;
 		h2b_bias *= p.n_jacknife - 1.0;
 		h2b_bias_corrected = h2b - h2b_bias;
@@ -512,6 +525,43 @@ public:
 			outf << h2b_bias_corrected[ii] << std::endl;
 		}
 		boost_io::close(outf);
+
+		if(p.xtra_verbose) {
+			auto filename = fileUtils::fstream_init(outf, file, "", "_pve_jacknife");
+			std::cout << "Writing jacknife estimates to " << filename << std::endl;
+
+			outf << "n_jack";
+			for (long ii = 0; ii < n_components; ii++) {
+				outf << " " << components[ii].label;
+			}
+			outf << std::endl;
+			for (long jj = 0; jj < p.n_jacknife; jj++) {
+				outf << components[0].n_vars_local[jj];
+				for (long ii = 0; ii < n_components; ii++) {
+					outf << " " << h2_jack(jj, ii);
+				}
+				outf << std::endl;
+			}
+			boost_io::close(outf);
+		}
+
+		if(p.xtra_verbose) {
+			auto filename = fileUtils::fstream_init(outf, file, "", "_pve_jacknife_scaled");
+
+			outf << "n_jack";
+			for (long ii = 0; ii < n_components; ii++) {
+				outf << " " << components[ii].label;
+			}
+			outf << std::endl;
+			for (long jj = 0; jj < p.n_jacknife; jj++) {
+				outf << components[0].n_vars_local[jj];
+				for (long ii = 0; ii < n_components; ii++) {
+					outf << " " << h2b_jack(jj, ii);
+				}
+				outf << std::endl;
+			}
+			boost_io::close(outf);
+		}
 	}
 };
 
@@ -540,7 +590,6 @@ void PVE::run() {
 		C = ones;
 	}
 	n_covar = C.cols();
-	std::cout << "N-covars: " << n_covar << std::endl;
 
 	// Center and scale eta
 	if(n_env > 0) {
