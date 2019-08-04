@@ -267,7 +267,17 @@ public:
 
 	void initialise_components(){
 		zz.resize(n_samples, n_draws);
-		fill_gaussian_noise(p.random_seed, zz, n_samples, n_draws);
+		if(p.rhe_random_vectors_file != "NULL") {
+			EigenUtils::read_matrix(p.rhe_random_vectors_file, zz);
+		} else {
+			fill_gaussian_noise(p.random_seed, zz, n_samples, n_draws);
+		}
+
+		std::cout << "Initialising HE-regression components with:" << std::endl;
+		std::cout << " - N-jacknife = " << p.n_jacknife << std::endl;
+		std::cout << " - N-draws = " << p.n_pve_samples << std::endl;
+		std::cout << " - N-samples = " << n_samples << std::endl;
+		std::cout << " - N-covars = " << n_covar << std::endl;
 
 		if(n_covar > 0) {
 			Wzz = project_out_covars(zz);
@@ -305,21 +315,20 @@ public:
 		}
 		n_components = components.size();
 
-		std::cout << "Initialised HE-regression components with:" << std::endl;
-		std::cout << " - N-jacknife = " << p.n_jacknife << std::endl;
-		std::cout << " - N-draws = " << p.n_pve_samples << std::endl;
-		std::cout << " - N-samples = " << n_samples << std::endl;
-		std::cout << " - N-covars = " << n_covar << std::endl;
+		std::cout << " - N-components = " << n_components - 1 << std::endl;
 #ifndef OSX
-		std::cout << "Using ";
+		std::cout << "Initialised with ";
 		std::cout << (double) fileUtils::getValueRAM() / 1000 / 1000;
 		std::cout << "GB of RAM" << std::endl;
 #endif
 	}
 
 	void calc_sigmas_v2(){
+		long n_var;
+
 		// Compute randomised traces
 		if(p.bgen_file != "NULL") {
+			n_var = data.n_var;
 			long n_main_segs;
 			n_main_segs = (data.n_var + p.main_chunk_size - 1) / p.main_chunk_size;
 			std::vector< std::vector <long> > main_fwd_pass_chunks(n_main_segs);
@@ -344,6 +353,7 @@ public:
 				}
 			}
 		} else if (p.streamBgenFile != "NULL") {
+			n_var = 0;
 			Eigen::MatrixXd D;
 			bool bgen_pass = true;
 			long n_var_parsed = 0;
@@ -351,6 +361,7 @@ public:
 			long jknf_block_size = (data.streamBgenView->number_of_variants() + p.n_jacknife - 1) / p.n_jacknife;
 			while (fileUtils::read_bgen_chunk(data.streamBgenView, D, sample_is_invalid,
 			                                  n_samples, 128, p, bgen_pass, n_var_parsed)) {
+				n_var += D.cols();
 				if(ch % 100 == 0 && ch > 0) {
 					std::cout << "Chunk " << ch << " read (size " << 128;
 					std::cout << ", " << n_var_parsed-1 << "/" << data.streamBgenView->number_of_variants();
@@ -390,12 +401,19 @@ public:
 		h2 = calc_h2(A, bb, false);
 		h2b = calc_h2(A, bb, true);
 
+		boost_io::filtering_ostream outf;
+		if(p.mode_debug) {
+			auto filename = fileUtils::fstream_init(outf, p.out_file, "", "_rhe_debug");
+			Eigen::VectorXd tmp(Eigen::Map<Eigen::VectorXd>(CC.data(),CC.cols()*CC.rows()));
+			outf << -1 << " " << tmp.transpose() << std::endl;
+		}
 
 		// jacknife estimates
 		std::cout << "Computing standard errors using " << p.n_jacknife << " jacknife blocks" << std::endl;
 		sigmas_jack.resize(p.n_jacknife, n_components);
 		h2_jack.resize(p.n_jacknife, n_components);
 		h2b_jack.resize(p.n_jacknife, n_components);
+
 		for (long jj = 0; jj < p.n_jacknife; jj++) {
 			for (long ii = 0; ii < n_components; ii++) {
 				components[ii].rm_jacknife_block = jj;
@@ -408,9 +426,17 @@ public:
 			sigmas_jack.row(jj) = ss;
 			h2b_jack.row(jj) = calc_h2(AA, bb, true);
 			h2_jack.row(jj) = calc_h2(AA, bb, false);
+
+			if(p.mode_debug) {
+				Eigen::VectorXd tmp(Eigen::Map<Eigen::VectorXd>(CC.data(),CC.cols()*CC.rows()));
+				outf << jj << " " << tmp.transpose() << std::endl;
+			}
 		}
 		for (long ii = 0; ii < n_components; ii++) {
 			components[ii].rm_jacknife_block = -1;
+		}
+		if(p.mode_debug) {
+			boost_io::close(outf);
 		}
 
 		if(n_env > 0) {
@@ -442,7 +468,6 @@ public:
 				}
 			}
 		}
-		assert(res.rows() > 0);
 		return res;
 	}
 
@@ -504,7 +529,11 @@ public:
 
 	void to_file(const std::string& file){
 		boost_io::filtering_ostream outf;
-		auto filename = fileUtils::fstream_init(outf, file, "", "_pve");
+		std::string suffix = "";
+		if(p.mode_vb || p.mode_calc_snpstats) {
+			suffix = "_pve";
+		}
+		auto filename = fileUtils::fstream_init(outf, file, "", suffix);
 
 		std::cout << "Writing PVE results to " << filename << std::endl;
 		outf << "component sigmas h2 h2_se h2_bias_corrected" << std::endl;
@@ -527,7 +556,7 @@ public:
 		boost_io::close(outf);
 
 		if(p.xtra_verbose) {
-			auto filename = fileUtils::fstream_init(outf, file, "", "_pve_jacknife");
+			auto filename = fileUtils::fstream_init(outf, file, "", suffix + "_jacknife");
 			std::cout << "Writing jacknife estimates to " << filename << std::endl;
 
 			outf << "n_jack";
@@ -546,7 +575,7 @@ public:
 		}
 
 		if(p.xtra_verbose) {
-			auto filename = fileUtils::fstream_init(outf, file, "", "_pve_jacknife_scaled");
+			auto filename = fileUtils::fstream_init(outf, file, "", suffix + "_jacknife_scaled");
 
 			outf << "n_jack";
 			for (long ii = 0; ii < n_components; ii++) {

@@ -13,7 +13,7 @@ class parameters {
 public:
 	std::string bgen_file, chr, out_file, pheno_file, env_file, covar_file, bgi_file;
 	std::string incl_sids_file, incl_rsids_file, recombination_file;
-	std::string r1_hyps_grid_file, r1_probs_grid_file, hyps_grid_file;
+	std::string r1_hyps_grid_file, r1_probs_grid_file, hyps_grid_file, rhe_random_vectors_file;
 	std::string env_coeffs_file, covar_coeffs_file, hyps_probs_file, vb_init_file;
 	std::string dxteex_file, snpstats_file, mog_weights_file, resume_prefix;
 	std::string streamBgenFile, streamBgiFile, streamBgenOutFile, extra_pve_covar_file;
@@ -63,6 +63,7 @@ public:
 		env_coeffs_file("NULL"),
 		streamBgenFile("NULL"),
 		streamBgiFile("NULL"),
+		rhe_random_vectors_file("NULL"),
 		streamBgenOutFile("NULL") {
 		flip_high_maf_variants = false;
 		init_weights_with_snpwise_scan = false;

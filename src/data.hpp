@@ -407,7 +407,7 @@ public:
 			}
 			t_readFullBgen.resume();
 			fileUtils::read_bgen_chunk(bgenView, G, sample_is_invalid, n_samples, p.chunk_size, p, bgen_pass,
-									   n_var_parsed);
+			                           n_var_parsed);
 			n_var = G.cols();
 			t_readFullBgen.stop();
 			std::cout << "BGEN contained " << n_var << " variants." << std::endl;
@@ -470,11 +470,21 @@ public:
 		}
 
 		std::vector<std::string> bgen_ids;
-		bgenView->get_sample_ids(
-			[&]( std::string const& id ) {
-			bgen_ids.push_back(id);
+		if(p.bgen_file != "NULL") {
+			bgenView->get_sample_ids(
+				[&]( std::string const& id ) {
+				bgen_ids.push_back(id);
+			}
+				);
+		} else if (p.streamBgenFile != "NULL") {
+			streamBgenView->get_sample_ids(
+				[&]( std::string const& id ) {
+				bgen_ids.push_back(id);
+			}
+				);
+		} else {
+			std::runtime_error("No valid bgen file found.");
 		}
-			);
 
 		// Want to read in a sid to be included, and skip along bgen_ids until
 		// we find it.
@@ -1202,7 +1212,9 @@ public:
 			assert(false);
 			// calc_snpwise_regression(vp_init);
 		}
-		vp_init.eta = E * vp_init.muw.matrix();
+		if(n_env > 0) {
+			vp_init.eta = E * vp_init.muw.matrix();
+		}
 
 		// Manually set covar coeffs
 		if(p.covar_coeffs_file != "NULL") {

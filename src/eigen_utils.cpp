@@ -175,6 +175,12 @@ void EigenUtils::read_matrix(const std::string &filename, Eigen::MatrixXd &M, st
 	}
 }
 
+void EigenUtils::read_matrix( const std::string& filename,
+                              Eigen::MatrixXd& M){
+	std::vector<std::string> placeholder;
+	EigenUtils::read_matrix(filename, M, placeholder);
+}
+
 void EigenUtils::read_matrix_and_skip_cols(const std::string &filename,
                                            const int& n_skip_cols,
                                            Eigen::MatrixXd &M,
