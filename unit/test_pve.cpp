@@ -25,6 +25,15 @@ char* argv_pve2[] = { (char*) "--mode_pve_est",
 	                  (char*) "--pheno", (char*) "data/io_test/case8/pheno.txt",
 	                  (char*) "--environment", (char*) "data/io_test/case8/age.txt",
 	                  (char*) "--out", (char*) "data/io_test/case8/test_pve_est.out.gz"};
+
+char* argv_pve3[] = { (char*) "--mode_pve_est", (char*) "--maf", (char*) "0.01",
+					  (char*) "--random_seed", (char*) "1",
+					  (char*) "--n_jacknife", (char*) "2",
+					  (char*) "--n_pve_samples", (char*) "10",
+					  (char*) "--streamBgen", (char*) "data/io_test/n1000_p2000.bgen",
+					  (char*) "--pheno", (char*) "data/io_test/case8/pheno.txt",
+					  (char*) "--environment", (char*) "data/io_test/case8/age.txt",
+					  (char*) "--out", (char*) "data/io_test/case8/test_pve_est.out.gz"};
 //
 char* argv_main1[] = { (char*) "--mode_pve_est",
 	                   (char*) "--random_seed", (char*) "1",
@@ -114,4 +123,72 @@ TEST_CASE("HE-reg"){
 			pve.to_file(p.out_file);
 		}
 	}
+
+	SECTION("GxE Jacknife"){
+		parameters p;
+		int argc = sizeof(argv_pve3)/sizeof(argv_pve3[0]);
+		parse_arguments(p, argc, argv_pve3);
+
+		SECTION("Jacknife block 1"){
+			Data data(p);
+			data.read_non_genetic_data();
+			data.standardise_non_genetic_data();
+			data.read_full_bgen();
+			data.set_vb_init();
+
+			Eigen::VectorXd Y = data.Y.cast<double>();
+			PVE pve(data, Y, data.C, data.vp_init.eta);
+			pve.run();
+
+			// RHE with 1st jacknife block removed
+			for (long ii = 0; ii < pve.n_components; ii++) {
+				pve.components[ii].rm_jacknife_block = 0;
+			}
+			CHECK(pve.components[0].get_n_var_local() == Approx(924));
+			CHECK(pve.components[0].getXXtz().squaredNorm() == Approx(39653744616.7472076416));
+			CHECK(pve.components[1].getXXtz().squaredNorm() == Approx(60669447736.4095077515));
+
+			Eigen::MatrixXd CC = pve.construct_vc_system(pve.components);
+			Eigen::MatrixXd AA = CC.block(0, 0, pve.n_components, pve.n_components);
+			Eigen::VectorXd bb = CC.col(pve.n_components);
+			Eigen::VectorXd ss = AA.colPivHouseholderQr().solve(bb);
+
+			CHECK(CC(0, 0) == Approx(4621.41));
+			CHECK(CC(1, 1) == Approx(7041.18));
+			CHECK(CC(1, 0) == Approx(1128.3));
+			CHECK(CC(1, 2) == Approx(1036.74));
+		}
+		SECTION("Full method excluding 1st jacknife"){
+			p.incl_rsids_file = "data/io_test/case8/jack_rsids_1.txt";
+			Data data( p );
+			data.read_non_genetic_data();
+			data.standardise_non_genetic_data();
+			data.read_full_bgen();
+			data.set_vb_init();
+
+			Eigen::VectorXd Y = data.Y.cast<double>();
+			PVE pve(data, Y, data.C, data.vp_init.eta);
+			pve.run();
+
+			// RHE on full data with 1st block removed
+			for (long ii = 0; ii < pve.n_components; ii++) {
+				pve.components[ii].rm_jacknife_block = -1;
+			}
+			CHECK(pve.components[0].get_n_var_local() == Approx(924));
+			CHECK(pve.components[0].getXXtz().squaredNorm() == Approx(39653744616.7472076416));
+			CHECK(pve.components[1].getXXtz().squaredNorm() == Approx(60669447736.4095077515));
+
+			Eigen::MatrixXd CC = pve.construct_vc_system(pve.components);
+			Eigen::MatrixXd AA = CC.block(0, 0, pve.n_components, pve.n_components);
+			Eigen::VectorXd bb = CC.col(pve.n_components);
+			Eigen::VectorXd ss = AA.colPivHouseholderQr().solve(bb);
+
+			CHECK(CC(0, 0) == Approx(4621.41));
+			CHECK(CC(1, 1) == Approx(7041.18));
+			CHECK(CC(1, 0) == Approx(1128.3));
+			CHECK(CC(1, 2) == Approx(1036.74));
+		}
+	}
 }
+
+

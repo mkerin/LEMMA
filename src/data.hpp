@@ -157,7 +157,7 @@ public:
 		}
 
 		// filter - incl rsids
-		if(p.select_snps) {
+		if(p.incl_rsids_file != "NULL") {
 			read_incl_rsids();
 			std::cout << "Including SNPs from file: " << p.incl_rsids_file << std::endl;
 		}
@@ -178,7 +178,7 @@ public:
 				genfile::bgen::IndexQuery::GenomicRange rr1(p.chr, p.range_start, p.range_end);
 				query->include_range( rr1 );
 			}
-			if(p.select_snps) {
+			if(p.incl_rsids_file != "NULL") {
 				query->include_rsids( rsid_list );
 			}
 			if(p.select_rsid) {
@@ -196,7 +196,7 @@ public:
 				genfile::bgen::IndexQuery::GenomicRange rr1(p.chr, p.range_start, p.range_end);
 				query->include_range( rr1 );
 			}
-			if(p.select_snps) {
+			if(p.incl_rsids_file != "NULL") {
 				query->include_rsids( rsid_list );
 			}
 			if(p.select_rsid) {

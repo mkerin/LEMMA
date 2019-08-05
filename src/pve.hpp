@@ -133,6 +133,15 @@ public:
 	void finalise(){
 		// Sum over the different jacknife blocks;
 		if(is_active) {
+			if(n_env > 0) {
+				for (auto& mm : _XXtzs) {
+					mm.array().colwise() *= eta.array();
+				}
+				for (auto& mm : _XXtWzs) {
+					mm.array().colwise() *= eta.array();
+				}
+			}
+
 			_XXtz = Eigen::MatrixXd::Zero(n_samples, n_draws);
 			_XXtWz = Eigen::MatrixXd::Zero(n_samples, n_draws);
 			for (auto& mm : _XXtzs) {
@@ -144,12 +153,6 @@ public:
 
 			n_var_local = std::accumulate(n_vars_local.begin(), n_vars_local.end(), 0.0);
 			ytXXty = std::accumulate(ytXXtys.begin(), ytXXtys.end(), 0.0);
-
-			//
-			if(n_env > 0) {
-				_XXtz.array().colwise() *= eta.array();
-				_XXtWz.array().colwise() *= eta.array();
-			}
 		}
 	}
 
@@ -358,29 +361,32 @@ public:
 			bool bgen_pass = true;
 			long n_var_parsed = 0;
 			long ch = 0;
-			long jknf_block_size = (data.streamBgenView->number_of_variants() + p.n_jacknife - 1) / p.n_jacknife;
+			long print_interval = 100;
+			if(p.mode_debug) print_interval = 1;
+			long jack_block_size = (data.streamBgenView->number_of_variants() + p.n_jacknife - 1) / p.n_jacknife;
 			while (fileUtils::read_bgen_chunk(data.streamBgenView, D, sample_is_invalid,
-			                                  n_samples, 128, p, bgen_pass, n_var_parsed)) {
+											  n_samples, 128, p, bgen_pass, n_var_parsed)) {
 				n_var += D.cols();
-				if(ch % 100 == 0 && ch > 0) {
+				if (ch % 100 == 0 && ch > 0) {
 					std::cout << "Chunk " << ch << " read (size " << 128;
-					std::cout << ", " << n_var_parsed-1 << "/" << data.streamBgenView->number_of_variants();
+					std::cout << ", " << n_var_parsed - 1 << "/" << data.streamBgenView->number_of_variants();
 					std::cout << " variants parsed)" << std::endl;
 				}
 
 				// Get jacknife block (just use block assignment of 1st snp)
-				long jacknife_index = n_var_parsed / jknf_block_size;
+				long jacknife_index = n_var_parsed / jack_block_size;
 
 				long n_chunk = D.cols();
 				std::vector<std::string> placeholder(n_chunk, "col");
 				EigenUtils::center_matrix(D);
 				EigenUtils::scale_matrix_and_remove_constant_cols(D, n_chunk, placeholder);
 
-				for (auto& comp : components) {
+				for (auto &comp : components) {
 					comp.add_to_trace_estimator(D, jacknife_index);
 				}
 				ch++;
 			}
+			if(p.verbose) std::cout << n_var << " variants pass QC filters" << std::endl;
 		}
 		for (long ii = 0; ii < n_components; ii++) {
 			components[ii].finalise();
@@ -404,6 +410,7 @@ public:
 		boost_io::filtering_ostream outf;
 		if(p.mode_debug) {
 			auto filename = fileUtils::fstream_init(outf, p.out_file, "", "_rhe_debug");
+			std::cout << "Writing RHE debugging info to " << filename << std::endl;
 			Eigen::VectorXd tmp(Eigen::Map<Eigen::VectorXd>(CC.data(),CC.cols()*CC.rows()));
 			outf << -1 << " " << tmp.transpose() << std::endl;
 		}
@@ -576,6 +583,7 @@ public:
 
 		if(p.xtra_verbose) {
 			auto filename = fileUtils::fstream_init(outf, file, "", suffix + "_jacknife_scaled");
+			std::cout << "Writing rescaled jacknife estimates to " << filename << std::endl;
 
 			outf << "n_jack";
 			for (long ii = 0; ii < n_components; ii++) {

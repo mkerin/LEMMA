@@ -23,7 +23,7 @@ public:
 	int missing_code, env_update_repeats, n_gconf, n_bgen_thread;
 	unsigned int n_thread, main_chunk_size, gxe_chunk_size;
 	std::uint32_t range_start, range_end;
-	bool range, maf_lim, info_lim, select_snps, xtra_verbose, joint_covar_update;
+	bool range, maf_lim, info_lim, xtra_verbose, joint_covar_update;
 	bool geno_check, mode_vb, use_vb_on_covars;
 	bool select_rsid, interaction_analysis, verbose, low_mem;
 	bool elbo_tol_set_by_user, alpha_tol_set_by_user, mode_empirical_bayes;
@@ -111,7 +111,6 @@ public:
 		mode_debug = false;
 		mode_random_start = false;
 		mode_pve_est = false;
-		select_snps = false;
 		select_rsid = false;
 		// check allele probs sum to 1 by default
 		geno_check = true;

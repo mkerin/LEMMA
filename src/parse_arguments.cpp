@@ -285,6 +285,10 @@ void parse_arguments(parameters &p, int argc, char **argv) {
 		if(opts.count("mode_debug")) {
 			p.mode_debug = true;
 			p.verbose = true;
+			p.xtra_verbose = true;
+			if(!opts.count("param_dump_interval")) {
+				p.param_dump_interval = 50;
+			}
 		}
 		if(opts.count("raw_phenotypes")) {
 			p.scale_pheno = false;
@@ -371,7 +375,6 @@ void parse_arguments(parameters &p, int argc, char **argv) {
 		}
 
 		if(opts.count("incl_rsids")) {
-			p.select_snps = true;
 			check_file_exists(p.incl_rsids_file);
 		}
 	} catch (const cxxopts::OptionException& e) {
