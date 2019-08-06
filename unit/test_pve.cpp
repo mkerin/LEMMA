@@ -74,9 +74,9 @@ TEST_CASE("HE-reg"){
 		CHECK(pve.h2(1)  == Approx(0.0777393749));
 		CHECK(pve.h2(2)  == Approx(0.3373605914));
 
-		CHECK(pve.h2_se_jack(0)  == Approx(0.3514422756));
-		CHECK(pve.h2_se_jack(1)  == Approx(0.0420725248));
-		CHECK(pve.h2_se_jack(2)  == Approx(0.3886915375));
+		CHECK(pve.h2_se_jack(0)  == Approx(0.2647600098));
+		CHECK(pve.h2_se_jack(1)  == Approx(0.0452209812));
+		CHECK(pve.h2_se_jack(2)  == Approx(0.2481256178));
 		pve.to_file(p.out_file);
 	}
 
@@ -102,9 +102,9 @@ TEST_CASE("HE-reg"){
 		CHECK(pve.h2(1)  == Approx(0.0778154366));
 		CHECK(pve.h2(2)  == Approx(0.337726384));
 
-		CHECK(pve.h2_se_jack(0)  == Approx(0.3416824565));
-		CHECK(pve.h2_se_jack(1)  == Approx(0.0240073393));
-		CHECK(pve.h2_se_jack(2)  == Approx(0.3656649197));
+		CHECK(pve.h2_se_jack(0)  == Approx(0.3175758074));
+		CHECK(pve.h2_se_jack(1)  == Approx(0.0125467466));
+		CHECK(pve.h2_se_jack(2)  == Approx(0.2169781382));
 	}
 
 	SECTION("Main effects fit (gaussian prior)"){
@@ -129,8 +129,8 @@ TEST_CASE("HE-reg"){
 		std::cout << p.out_file << std::endl;
 		pve.to_file(p.out_file);
 
-		CHECK(pve.h2_se_jack(0)  == Approx(0.2993360136));
-		CHECK(pve.h2_se_jack(1)  == Approx(0.2993360136));
+		CHECK(pve.h2_se_jack(0)  == Approx(0.193659797));
+		CHECK(pve.h2_se_jack(1)  == Approx(0.1653581733));
 	}
 
 	SECTION("GxE Jacknife"){

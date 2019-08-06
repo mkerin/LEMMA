@@ -204,6 +204,7 @@ public:
 	long n_components;
 	long n_covar;
 	long n_env;
+	long n_var;
 	double N;
 
 	const parameters& p;
@@ -217,6 +218,7 @@ public:
 	Eigen::ArrayXXd sigmas_jack, h2_jack, h2b_jack;
 	Eigen::ArrayXd h2, h2_se_jack, h2_bias_corrected;
 	Eigen::ArrayXd h2b, h2b_se_jack, h2b_bias_corrected;
+	Eigen::ArrayXd n_var_jack;
 
 	EigenDataMatrix zz;
 	EigenDataMatrix Wzz;
@@ -274,6 +276,10 @@ public:
 	                         long pp);
 
 	void to_file(const std::string& file);
+
+	double get_jacknife_var(Eigen::ArrayXd jack_estimates);
+
+	double get_jacknife_bias_correct(Eigen::ArrayXd jack_estimates, double full_data_est);
 };
 
 #endif //BGEN_PROG_PVE_HPP
