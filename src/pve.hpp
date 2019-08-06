@@ -219,6 +219,7 @@ public:
 	long n_components;
 	long n_covar;
 	long n_env;
+	long n_var;
 	double N;
 
 	const parameters& p;
@@ -233,6 +234,7 @@ public:
 	Eigen::ArrayXXd sigmas_jack, h2_jack, h2b_jack;
 	Eigen::ArrayXd h2, h2_se_jack, h2_bias_corrected;
 	Eigen::ArrayXd h2b, h2b_se_jack, h2b_bias_corrected;
+	Eigen::ArrayXd n_var_jack;
 
 	EigenDataMatrix zz;
 	EigenDataMatrix Wzz;
@@ -327,8 +329,6 @@ public:
 	}
 
 	void calc_sigmas_v2(){
-		long n_var;
-
 		// Compute randomised traces
 		if(p.bgen_file != "NULL") {
 			n_var = data.n_var;
@@ -363,11 +363,11 @@ public:
 			long ch = 0;
 			long print_interval = 100;
 			if(p.mode_debug) print_interval = 1;
-			long jack_block_size = (data.streamBgenView->number_of_variants() + p.n_jacknife - 1) / p.n_jacknife;
+			long jack_block_size = (data.streamBgenView->number_of_variants() + p.n_jacknife) / p.n_jacknife;
 			while (fileUtils::read_bgen_chunk(data.streamBgenView, D, sample_is_invalid,
-											  n_samples, 128, p, bgen_pass, n_var_parsed)) {
+			                                  n_samples, 128, p, bgen_pass, n_var_parsed)) {
 				n_var += D.cols();
-				if (ch % 100 == 0 && ch > 0) {
+				if (ch % print_interval == 0 && ch > 0) {
 					std::cout << "Chunk " << ch << " read (size " << 128;
 					std::cout << ", " << n_var_parsed - 1 << "/" << data.streamBgenView->number_of_variants();
 					std::cout << " variants parsed)" << std::endl;
@@ -420,11 +420,13 @@ public:
 		sigmas_jack.resize(p.n_jacknife, n_components);
 		h2_jack.resize(p.n_jacknife, n_components);
 		h2b_jack.resize(p.n_jacknife, n_components);
+		n_var_jack.resize(p.n_jacknife);
 
 		for (long jj = 0; jj < p.n_jacknife; jj++) {
 			for (long ii = 0; ii < n_components; ii++) {
 				components[ii].rm_jacknife_block = jj;
 			}
+			n_var_jack[jj] = components[0].get_n_var_local();
 
 			Eigen::MatrixXd CC = construct_vc_system(components);
 			Eigen::MatrixXd AA = CC.block(0, 0, n_components, n_components);
@@ -489,29 +491,38 @@ public:
 	}
 
 	void calc_h2(){
+		// Rescale h2 to avoid bias
+		for (long ii = 0; ii < n_components - 1; ii++) {
+			h2_jack.col(ii) *= n_var / n_var_jack;
+			h2b_jack.col(ii) *= n_var / n_var_jack;
+		}
+
 		// SE of h2
-		Eigen::ArrayXd h2_jack_means = h2_jack.colwise().mean();
+		h2_se_jack.resize(n_components);
+		h2b_se_jack.resize(n_components);
+		for (long ii = 0; ii < n_components; ii++) {
+			h2_se_jack[ii] = std::sqrt(get_jacknife_var(h2_jack.col(ii)));
+			h2b_se_jack[ii] = std::sqrt(get_jacknife_var(h2b_jack.col(ii)));
+		}
 
-		h2_se_jack = (h2_jack.rowwise() - h2.transpose()).square().colwise().sum();
-		h2_se_jack *= (p.n_jacknife - 1.0) / (double) p.n_jacknife;
-		h2_se_jack = h2_se_jack.sqrt();
+		// bias correction
+		h2_bias_corrected.resize(n_components);
+		h2b_bias_corrected.resize(n_components);
+		for (long ii = 0; ii < n_components; ii++) {
+			h2_bias_corrected[ii] = get_jacknife_bias_correct(h2_jack.col(ii), h2(ii));
+			h2b_bias_corrected[ii] = get_jacknife_bias_correct(h2b_jack.col(ii), h2b(ii));
+		}
+	}
 
-		// h2 bias corrected
-		Eigen::ArrayXd h2_bias = h2_jack_means - h2;
-		h2_bias *= p.n_jacknife - 1.0;
-		h2_bias_corrected = h2 - h2_bias;
+	double get_jacknife_var(Eigen::ArrayXd jack_estimates){
+		double jack_var = (jack_estimates - jack_estimates.mean()).square().sum();
+		jack_var *= (p.n_jacknife - 1.0) / p.n_jacknife;
+		return jack_var;
+	}
 
-		/* correct for change in column variance */
-		// SE of h2
-		Eigen::ArrayXd h2b_jack_means = h2b_jack.colwise().mean();
-		h2b_se_jack = (h2b_jack.rowwise() - h2b.transpose()).square().colwise().sum();
-		h2b_se_jack *= (p.n_jacknife - 1.0) / (double) p.n_jacknife;
-		h2b_se_jack = h2b_se_jack.sqrt();
-
-		// h2 bias corrected
-		Eigen::ArrayXd h2b_bias = h2b_jack_means - h2;
-		h2b_bias *= p.n_jacknife - 1.0;
-		h2b_bias_corrected = h2b - h2b_bias;
+	double get_jacknife_bias_correct(Eigen::ArrayXd jack_estimates, double full_data_est){
+		double res = p.n_jacknife * full_data_est - (p.n_jacknife - 1.0) * jack_estimates.mean();
+		return res;
 	}
 
 	Eigen::MatrixXd project_out_covars(Eigen::Ref<Eigen::MatrixXd> rhs){
