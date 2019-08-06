@@ -73,6 +73,10 @@ TEST_CASE("HE-reg"){
 		CHECK(pve.h2(0)  == Approx(0.5849000337));
 		CHECK(pve.h2(1)  == Approx(0.0777393749));
 		CHECK(pve.h2(2)  == Approx(0.3373605914));
+
+		CHECK(pve.h2_se_jack(0)  == Approx(0.3514422756));
+		CHECK(pve.h2_se_jack(1)  == Approx(0.0420725248));
+		CHECK(pve.h2_se_jack(2)  == Approx(0.3886915375));
 		pve.to_file(p.out_file);
 	}
 
@@ -97,6 +101,10 @@ TEST_CASE("HE-reg"){
 		CHECK(pve.h2(0)  == Approx(0.5844581795));
 		CHECK(pve.h2(1)  == Approx(0.0778154366));
 		CHECK(pve.h2(2)  == Approx(0.337726384));
+
+		CHECK(pve.h2_se_jack(0)  == Approx(0.3416824565));
+		CHECK(pve.h2_se_jack(1)  == Approx(0.0240073393));
+		CHECK(pve.h2_se_jack(2)  == Approx(0.3656649197));
 	}
 
 	SECTION("Main effects fit (gaussian prior)"){
@@ -111,17 +119,18 @@ TEST_CASE("HE-reg"){
 		Eigen::VectorXd Y = data.Y.cast<double>();
 		Eigen::MatrixXd C = data.C.cast<double>();
 
-		SECTION("Gaussian prior"){
-			PVE pve(data, Y, C);
-			pve.run();
+		PVE pve(data, Y, C);
+		pve.run();
 
-			CHECK(pve.sigmas(0)  == Approx(0.5237752503));
-			CHECK(pve.sigmas(1)  == Approx(0.49942111));
-			CHECK(pve.h2(0)  == Approx(0.51190101));
-			CHECK(pve.h2(1)  == Approx(0.48809899));
-			std::cout << p.out_file << std::endl;
-			pve.to_file(p.out_file);
-		}
+		CHECK(pve.sigmas(0)  == Approx(0.5237752503));
+		CHECK(pve.sigmas(1)  == Approx(0.49942111));
+		CHECK(pve.h2(0)  == Approx(0.51190101));
+		CHECK(pve.h2(1)  == Approx(0.48809899));
+		std::cout << p.out_file << std::endl;
+		pve.to_file(p.out_file);
+
+		CHECK(pve.h2_se_jack(0)  == Approx(0.2993360136));
+		CHECK(pve.h2_se_jack(1)  == Approx(0.2993360136));
 	}
 
 	SECTION("GxE Jacknife"){

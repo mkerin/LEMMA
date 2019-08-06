@@ -361,6 +361,22 @@ void EigenUtils::center_matrix(EigenMat& M){
 	}
 }
 
+Eigen::MatrixXd EigenUtils::project_out_covars(Eigen::Ref<Eigen::MatrixXd> rhs,
+		Eigen::Ref<Eigen::MatrixXd> C,
+
+											   const Eigen::Ref<const Eigen::MatrixXd> &CtC_inv,
+											   const bool &mode_debug) {
+	assert(CtC_inv.cols() == C.cols());
+	assert(CtC_inv.rows() == C.cols());
+	assert(C.rows() == rhs.rows());
+	if(mode_debug) std::cout << "Starting project_out_covars" << std::endl;
+	Eigen::MatrixXd beta = CtC_inv * C.transpose() * rhs;
+	Eigen::MatrixXd yhat = C * beta;
+	Eigen::MatrixXd res = rhs - yhat;
+	if(mode_debug) std::cout << "Ending project_out_covars" << std::endl;
+	return res;
+}
+
 // Explicit instantiation
 // https://stackoverflow.com/questions/2152002/how-do-i-force-a-particular-instance-of-a-c-template-to-instantiate
 

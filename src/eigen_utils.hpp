@@ -53,6 +53,11 @@ void read_matrix_and_skip_cols(const std::string &filename,
                                const int& n_skip_cols,
                                Eigen::MatrixXd &M,
                                std::vector <std::string> &col_names);
+
+	Eigen::MatrixXd project_out_covars(Eigen::Ref<Eigen::MatrixXd> rhs,
+									   Eigen::Ref<Eigen::MatrixXd> C,
+									   const Eigen::Ref<const Eigen::MatrixXd>& CtC_inv,
+									   const bool& mode_debug = false);
 }
 
 #endif //LEMMA_EIGEN_UTILS_HPP
