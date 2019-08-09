@@ -369,6 +369,7 @@ public:
 				} else {
 					XtX_block_cache[memoize_id] = (D.transpose() * D).template cast<double>();
 				}
+				XtX_block_cache[memoize_id] = mpiUtils::mpiReduce_inplace(XtX_block_cache[memoize_id]);
 			}
 		}
 	}

@@ -11,8 +11,10 @@
 #include "tools/eigen3.3/Dense"
 
 #include <random>
+#include <mpi.h>
 
 void PVE::run() {
+
 	// Add intercept to covariates
 	Eigen::MatrixXd ones = Eigen::MatrixXd::Constant(n_samples, 1, 1.0);
 	if(n_covar > 0) {
@@ -94,11 +96,12 @@ void PVE::fill_gaussian_noise(unsigned int seed, Eigen::Ref<Eigen::MatrixXd> zz,
 		}
 		zz = allzz[0];
 	} else {
-		MPI_Recv(zz.data(), n_samples, MPI_DOUBLE, 0, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+		MPI_Recv(zz.data(), n_samples * n_draws, MPI_DOUBLE, 0, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
 	}
 }
 
 void PVE::calc_RHE() {
+
 	// Compute randomised traces
 	if(p.bgen_file != "NULL") {
 		n_var = data.n_var;
@@ -287,7 +290,7 @@ Eigen::MatrixXd PVE::project_out_covars(Eigen::Ref<Eigen::MatrixXd> rhs) {
 	if(n_covar > 0) {
 		if (CtC_inv.rows() != n_covar) {
 			if(p.mode_debug) std::cout << "Starting compute of CtC_inv" << std::endl;
-			Eigen::MatrixXd CtC = C.transpose() * C;
+			Eigen::MatrixXd CtC(C.cols(), C.cols()), CtClocal = C.transpose() * C;
 			CtC = mpiUtils::mpiReduce_inplace(CtC);
 			CtC_inv = CtC.inverse();
 			if(p.mode_debug) std::cout << "Ending compute of CtC_inv" << std::endl;
@@ -366,6 +369,7 @@ void PVE::to_file(const std::string &file) {
 }
 
 void PVE::initialise_components() {
+
 	zz.resize(n_samples, n_draws);
 	if(p.rhe_random_vectors_file != "NULL") {
 		EigenUtils::read_matrix(p.rhe_random_vectors_file, zz);
@@ -378,6 +382,7 @@ void PVE::initialise_components() {
 	std::cout << " - N-draws = " << p.n_pve_samples << std::endl;
 	std::cout << " - N-samples = " << (long) Nglobal << std::endl;
 	std::cout << " - N-covars = " << n_covar << std::endl;
+
 
 	if(n_covar > 0) {
 		Wzz = project_out_covars(zz);

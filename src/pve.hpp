@@ -98,7 +98,7 @@ public:
 		_XXtz = zz;
 		_XXtWz = Wzz;
 		n_var_local = 1;
-		ytXXty = Y.squaredNorm();
+		ytXXty = mpiUtils::mpiReduce_inplace(Y.squaredNorm());
 	}
 
 	void add_to_trace_estimator(Eigen::Ref<Eigen::MatrixXd> X,
