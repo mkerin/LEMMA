@@ -166,6 +166,13 @@ TEST_CASE("HE-reg"){
 			CHECK(CC(1, 1) == Approx(7041.18));
 			CHECK(CC(1, 0) == Approx(1128.3));
 			CHECK(CC(1, 2) == Approx(1036.74));
+
+			CHECK(pve.components[0].zz.sum() == Approx(123.7670672474));
+			CHECK(!pve.components[2].is_active);
+			CHECK(pve.components[2].get_bb_trace() == Approx(786.4039860883));
+			CHECK(bb(0) == Approx(2009.8649365637));
+			CHECK(bb(1) == Approx(998.310581355));
+			CHECK(bb(2) == Approx(786.4039860883));
 		}
 		SECTION("Full method excluding 1st jacknife"){
 			p.incl_rsids_file = "data/io_test/case8/jack_rsids_1.txt";

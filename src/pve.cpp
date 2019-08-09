@@ -290,7 +290,7 @@ Eigen::MatrixXd PVE::project_out_covars(Eigen::Ref<Eigen::MatrixXd> rhs) {
 	if(n_covar > 0) {
 		if (CtC_inv.rows() != n_covar) {
 			if(p.mode_debug) std::cout << "Starting compute of CtC_inv" << std::endl;
-			Eigen::MatrixXd CtC(C.cols(), C.cols()), CtClocal = C.transpose() * C;
+			Eigen::MatrixXd CtC = C.transpose() * C;
 			CtC = mpiUtils::mpiReduce_inplace(CtC);
 			CtC_inv = CtC.inverse();
 			if(p.mode_debug) std::cout << "Ending compute of CtC_inv" << std::endl;
