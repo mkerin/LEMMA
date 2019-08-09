@@ -61,7 +61,9 @@ list(APPEND LOC_COMPILE_OPTS -DVERSION_MAJOR=${PROJECT_VERSION_MAJOR})
 list(APPEND LOC_COMPILE_OPTS -DVERSION_MINOR=${PROJECT_VERSION_MINOR})
 list(APPEND LOC_COMPILE_OPTS -DVERSION_PATCH=${PROJECT_VERSION_PATCH})
 
-set(SOURCES src/hyps.cpp src/variational_parameters.cpp src/genotype_matrix.cpp src/parse_arguments.cpp src/file_utils.cpp src/eigen_utils.cpp src/mpi_utils.cpp)
+set(SOURCES src/hyps.cpp src/variational_parameters.cpp src/genotype_matrix.cpp src/mpi_utils.cpp)
+list(APPEND SOURCES src/parse_arguments.cpp src/file_utils.cpp src/eigen_utils.cpp src/pve.cpp)
+
 set(BGEN_INCL_DIRS ${BGEN}/genfile/include ${BGEN}/3rd_party/zstd-1.1.0/lib ${BGEN}/db/include ${BGEN}/3rd_party/sqlite3 ${BGEN}/3rd_party/boost_1_55_0)
 
 find_package(MPI REQUIRED)
@@ -96,7 +98,9 @@ set_target_properties(${TARGET} PROPERTIES LINK_FLAGS "${LIB-DIRS}")
 target_link_libraries(${TARGET} ${BGEN_LIB} ${DB_LIB} ${SQLITE_LIB} ${ZSTD_LIB} ${LIBS} ${LINKER_OPTS})
 
 ## Catch Unit Tests
-set(TSOURCES unit/test_pve.cpp unit/test_main.cpp unit/test_hyps.cpp unit/test_resume_inference.cpp unit/test_eigen.cpp unit/test_data.cpp)
+set(TSOURCES unit/test_pve.cpp unit/test_main.cpp unit/test_hyps.cpp)
+list(APPEND TSOURCES unit/test_resume_inference.cpp unit/test_eigen.cpp unit/test_data.cpp)
+
 add_executable(tests unit/main.cpp ${TSOURCES} ${SOURCES})
 target_link_libraries(tests ${BGEN_LIB} ${DB_LIB} ${SQLITE_LIB} ${ZSTD_LIB} ${LIBS} ${LINKER_OPTS})
 target_compile_options(tests PRIVATE -msse2 ${LOC_COMPILE_OPTS})

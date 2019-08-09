@@ -20,6 +20,14 @@
 #include <vector>
 #include <map>
 
+long op_pmax(long& ii) {
+	if(ii < 0) {
+		return 1;
+	} else {
+		return ii;
+	}
+}
+
 void GenotypeMatrix::assign_index(const long &ii, const long &jj, double x) {
 	if(low_mem) {
 		if(std::isnan(x)) {
@@ -373,7 +381,8 @@ EigenDataMatrix GenotypeMatrix::operator*(EigenRefDataMatrix rhs) const {
 void TemporaryFunctionGenotypeMatrix (){
 	std::vector<long> chunk;
 	EigenDataMatrix mat;
-	GenotypeMatrix X(false);
+	parameters p;
+	GenotypeMatrix X(p, false);
 
 	X.col_block3(chunk, mat);
 }

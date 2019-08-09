@@ -27,6 +27,8 @@ namespace boost_io = boost::iostreams;
 
 /***************** File writing *****************/
 namespace fileUtils {
+	long long getValueRAM();
+
 std::string fstream_init(boost_io::filtering_ostream &my_outf,
                          const std::string &file,
                          const std::string &file_prefix = "",
@@ -94,6 +96,15 @@ bool read_bgen_chunk(genfile::bgen::View::UniquePtr &bgenView,
                      const parameters &p,
                      bool &bgen_pass,
                      long &n_var_parsed);
+
+	bool read_bgen_chunk(genfile::bgen::View::UniquePtr &bgenView,
+						 Eigen::MatrixXd &G,
+						 const std::unordered_map<long, bool> &sample_is_invalid,
+						 const long &n_samples,
+						 const long &chunk_size,
+						 const parameters &p,
+						 bool &bgen_pass,
+						 long &n_var_parsed);
 }
 
 #endif //FILE_UTILS_HPP

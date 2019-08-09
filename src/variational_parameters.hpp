@@ -52,7 +52,7 @@ public:
 	Eigen::ArrayXd muw;
 	Eigen::ArrayXd sw_sq;
 
-	VariationalParamsBase(parameters my_params) : p(my_params){
+	VariationalParamsBase(const parameters& my_params) : p(my_params){
 	};
 
 /*** utility functions ***/
@@ -91,7 +91,7 @@ public:
 	EigenDataVector eta;
 	EigenDataVector eta_sq;
 
-	VariationalParametersLite(parameters my_params) : VariationalParamsBase(my_params) {
+	VariationalParametersLite(const parameters& my_params) : VariationalParamsBase(my_params) {
 	};
 };
 
@@ -109,7 +109,7 @@ public:
 	Eigen::ArrayXd EdZtZ;
 
 
-	VariationalParameters(parameters my_params,
+	VariationalParameters(const parameters my_params,
 	                      EigenRefDataVector my_ym,
 	                      EigenRefDataVector my_yx,
 	                      EigenRefDataVector my_eta,

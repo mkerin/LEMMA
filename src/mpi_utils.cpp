@@ -65,7 +65,7 @@ mpiUtils::partition_valid_samples_across_ranks(const long &n_samples,
 	long diff = samplesPerRank - rankZeroSamples;
 
 	// store 'rank' that each sample is located in
-	// samples excluded due to missing data have location zero
+	// samples excluded due to missing data have location -1
 	long iiValid = diff;
 	for (long ii = 0; ii < n_samples; ii++){
 		if (incomplete_cases.count(ii) == 0) {
@@ -76,6 +76,20 @@ mpiUtils::partition_valid_samples_across_ranks(const long &n_samples,
 		}
 	}
 	assert(iiValid == n_valid_sids + diff);
+
+	if(p.mode_debug){
+		std::vector<long> allii(size, 0);
+		for (const auto &kv : sample_location) {
+			if (kv.second != -1) {
+				int local_rank = kv.second;
+				allii[local_rank]++;
+			}
+		}
+		std::cout << "Samples stored on each rank: " << std::endl;
+		for (int rr = 0; rr < size; rr++){
+			std::cout << "Rank " << rr << ": " << allii[rr] << std::endl;
+		}
+	}
 
 
 	for (long ii = 0; ii < n_valid_sids; ii++) {

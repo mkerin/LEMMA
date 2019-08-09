@@ -176,6 +176,12 @@ void EigenUtils::read_matrix(const std::string &filename, Eigen::MatrixXd &M, st
 	}
 }
 
+void EigenUtils::read_matrix( const std::string& filename,
+                              Eigen::MatrixXd& M){
+	std::vector<std::string> placeholder;
+	EigenUtils::read_matrix(filename, M, placeholder);
+}
+
 void EigenUtils::read_matrix_and_skip_cols(const std::string &filename,
                                            const int& n_skip_cols,
                                            Eigen::MatrixXd &M,
@@ -362,6 +368,24 @@ void EigenUtils::center_matrix(EigenMat& M){
 	}
 }
 
+Eigen::MatrixXd EigenUtils::project_out_covars(Eigen::Ref<Eigen::MatrixXd> rhs,
+                                               Eigen::Ref<Eigen::MatrixXd> C,
+
+                                               const Eigen::Ref<const Eigen::MatrixXd> &CtC_inv,
+                                               const bool &mode_debug) {
+	assert(CtC_inv.cols() == C.cols());
+	assert(CtC_inv.rows() == C.cols());
+	assert(C.rows() == rhs.rows());
+	if(mode_debug) std::cout << "Starting project_out_covars" << std::endl;
+	Eigen::MatrixXd CtRHS = C.transpose() * rhs;
+	CtRHS = mpiUtils::mpiReduce_inplace(CtRHS);
+	Eigen::MatrixXd beta = CtC_inv * CtRHS;
+	Eigen::MatrixXd yhat = C * beta;
+	Eigen::MatrixXd res = rhs - yhat;
+	if(mode_debug) std::cout << "Ending project_out_covars" << std::endl;
+	return res;
+}
+
 // Explicit instantiation
 // https://stackoverflow.com/questions/2152002/how-do-i-force-a-particular-instance-of-a-c-template-to-instantiate
 
@@ -370,8 +394,9 @@ template void EigenUtils::read_matrix(const std::string&, const long&,
 template void EigenUtils::read_matrix(const std::string&, const long&,
                                       Eigen::MatrixXd&, std::vector<std::string>&, std::map<long, bool>&);
 template void EigenUtils::center_matrix(Eigen::MatrixXd&);
-template void EigenUtils::center_matrix(Eigen::VectorXd&);
 template void EigenUtils::center_matrix(Eigen::MatrixXf&);
+template void EigenUtils::center_matrix(Eigen::VectorXd&);
+template void EigenUtils::center_matrix(Eigen::VectorXf&);
 template void EigenUtils::scale_matrix_and_remove_constant_cols(Eigen::MatrixXf&,
                                                                 long&, std::vector<std::string>&);
 template void EigenUtils::scale_matrix_and_remove_constant_cols(Eigen::MatrixXd&,

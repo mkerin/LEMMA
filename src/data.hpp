@@ -92,9 +92,6 @@ public:
 	VariationalParametersLite vp_init;
 	std::vector<Hyps> hyps_inits;
 
-	genfile::bgen::View::UniquePtr bgenView;
-	std::vector<genfile::bgen::View::UniquePtr> bgenViews;
-
 // For gxe genome-wide scan
 // cols neglogp-main, neglogp-gxe, coeff-gxe-main, coeff-gxe-env..
 	Eigen::ArrayXXd snpstats;
@@ -103,6 +100,8 @@ public:
 	bool bgen_pass;
 
 	boost_io::filtering_ostream outf_scan;
+	genfile::bgen::View::UniquePtr bgenView;
+	genfile::bgen::View::UniquePtr streamBgenView;
 
 	bool filters_applied;
 	std::unordered_map<long, bool> sample_is_invalid;
@@ -112,20 +111,26 @@ public:
 	Eigen::MatrixXd hyps_grid;
 	Eigen::ArrayXXd alpha_init, mu_init;
 
-	explicit Data( const parameters& p ) : p(p), G(p), vp_init(p) {
+	explicit Data( parameters& p ) : p(p), G(p), vp_init(p) {
 		Eigen::setNbThreads(p.n_thread);
 		int n = Eigen::nbThreads( );
 		std::cout << "Threads used by eigen: " << n << std::endl;
 
-
 		// Create vector of bgen views for mutlithreading
-		bgenView = genfile::bgen::View::create(p.bgen_file);
-		for (int nn = 0; nn < p.n_bgen_thread; nn++) {
-			genfile::bgen::View::UniquePtr bgenView = genfile::bgen::View::create(p.bgen_file);
-			bgenViews.push_back(std::move(bgenView));
+		n_var = 0;
+		if(p.bgen_file != "NULL") {
+			bgenView = genfile::bgen::View::create(p.bgen_file);
+			n_samples = (long) bgenView->number_of_samples();
+			n_var     = bgenView->number_of_variants();
+		}
+		if(p.streamBgenFile != "NULL") {
+			streamBgenView = genfile::bgen::View::create(p.streamBgenFile);
+			n_samples = (long) streamBgenView->number_of_samples();
+		}
+		if(p.bgen_file != "NULL" && p.streamBgenFile != "NULL") {
+			assert(bgenView->number_of_samples() == streamBgenView->number_of_samples());
 		}
 
-		n_samples = (long) bgenView->number_of_samples();
 		n_var_parsed = 0;
 		filters_applied = false;
 		bgen_pass = true;
@@ -135,7 +140,6 @@ public:
 		n_effects = -1;
 		n_covar   = 0;
 		n_env     = 0;
-		n_var     = bgenView->number_of_variants();
 		Y_reduced = false;
 		W_reduced = false;
 	}
@@ -150,34 +154,15 @@ public:
 			read_incl_sids();
 		}
 
-		// filter - init queries
-		genfile::bgen::IndexQuery::UniquePtr query = genfile::bgen::IndexQuery::create(p.bgi_file);
-		std::vector<genfile::bgen::IndexQuery::UniquePtr> queries;
-		for (int nn = 0; nn < p.n_bgen_thread; nn++) {
-			genfile::bgen::IndexQuery::UniquePtr my_query = genfile::bgen::IndexQuery::create(p.bgi_file);
-			queries.push_back(move(my_query));
-		}
-
 		// filter - range
 		if (p.range) {
 			std::cout << "Selecting snps in range " << p.chr << ": " << p.range_start << " - " << p.range_end << std::endl;
-			genfile::bgen::IndexQuery::GenomicRange rr1(p.chr, p.range_start, p.range_end);
-			query->include_range( rr1 );
-
-			for (int nn = 0; nn < p.n_bgen_thread; nn++) {
-				queries[nn]->include_range( rr1 );
-			}
 		}
 
 		// filter - incl rsids
-		if(p.select_snps) {
+		if(p.incl_rsids_file != "NULL") {
 			read_incl_rsids();
 			std::cout << "Including SNPs from file: " << p.incl_rsids_file << std::endl;
-			query->include_rsids( rsid_list );
-
-			for (int nn = 0; nn < p.n_bgen_thread; nn++) {
-				queries[nn]->include_rsids( rsid_list );
-			}
 		}
 
 		// filter - select single rsid
@@ -188,26 +173,41 @@ public:
 			for (long int kk = 0; kk < n_rsids; kk++) {
 				std::cout << p.rsid[kk]<< std::endl;
 			}
-			query->include_rsids( p.rsid );
+		}
 
-			for (int nn = 0; nn < p.n_bgen_thread; nn++) {
-				queries[nn]->include_rsids( p.rsid );
+		if(p.bgen_file != "NULL") {
+			genfile::bgen::IndexQuery::UniquePtr query = genfile::bgen::IndexQuery::create(p.bgi_file);
+			if (p.range) {
+				genfile::bgen::IndexQuery::GenomicRange rr1(p.chr, p.range_start, p.range_end);
+				query->include_range( rr1 );
 			}
-		}
+			if(p.incl_rsids_file != "NULL") {
+				query->include_rsids( rsid_list );
+			}
+			if(p.select_rsid) {
+				query->include_rsids( p.rsid );
+			}
 
-		// filter - apply queries
-		query->initialise();
-		for (int nn = 0; nn < p.n_bgen_thread; nn++) {
-			queries[nn]->initialise();
+			// filter - apply queries
+			query->initialise();
+			bgenView->set_query(query);
+			bgenView->summarise(std::cout);
 		}
-
-		bgenView->set_query(query);
-		for (int nn = 0; nn < p.n_bgen_thread; nn++) {
-			bgenViews[nn]->set_query( queries[nn] );
+		if(p.streamBgenFile != "NULL") {
+			genfile::bgen::IndexQuery::UniquePtr query = genfile::bgen::IndexQuery::create(p.streamBgiFile);
+			if (p.range) {
+				genfile::bgen::IndexQuery::GenomicRange rr1(p.chr, p.range_start, p.range_end);
+				query->include_range( rr1 );
+			}
+			if(p.incl_rsids_file != "NULL") {
+				query->include_rsids( rsid_list );
+			}
+			if(p.select_rsid) {
+				query->include_rsids( p.rsid );
+			}
+			query->initialise();
+			streamBgenView->set_query(query);
 		}
-
-		// print summaries
-		bgenView->summarise(std::cout);
 
 		filters_applied = true;
 	}
@@ -403,32 +403,36 @@ public:
 	}
 
 	void read_full_bgen(){
-		std::cout << "Reading in BGEN" << std::endl;
-		p.chunk_size = bgenView->number_of_variants();
-		MyTimer t_readFullBgen("BGEN parsed in %ts \n");
+		if(p.bgen_file != "NULL") {
+			std::cout << "Reading in BGEN" << std::endl;
+			p.chunk_size = bgenView->number_of_variants();
+			MyTimer t_readFullBgen("BGEN parsed in %ts \n");
 
-		if(p.flip_high_maf_variants) {
-			std::cout << "Flipping variants with MAF > 0.5" << std::endl;
-		}
-		t_readFullBgen.resume();
-		fileUtils::read_bgen_chunk(bgenView, G, sample_is_invalid, n_samples, p.chunk_size, p, bgen_pass, n_var_parsed);
-		n_var = G.cols();
-		t_readFullBgen.stop();
-		std::cout << "BGEN contained " << n_var << " variants." << std::endl;
+			if (p.flip_high_maf_variants) {
+				std::cout << "Flipping variants with MAF > 0.5" << std::endl;
+			}
+			t_readFullBgen.resume();
+			fileUtils::read_bgen_chunk(bgenView, G, sample_is_invalid, n_samples, p.chunk_size, p, bgen_pass,
+			                           n_var_parsed);
+			n_var = G.cols();
+			t_readFullBgen.stop();
+			std::cout << "BGEN contained " << n_var << " variants." << std::endl;
 
-		G.calc_scaled_values();
-		if(p.xtra_verbose) std::cout << "Computed colwise mean and sd of genetic data" << std::endl;
+			G.calc_scaled_values();
+			G.compute_cumulative_pos();
+			if (p.xtra_verbose) std::cout << "Computed colwise mean and sd of genetic data" << std::endl;
 
-		// Set default hyper-parameters if not read from file
-		// Run read_hyps twice as some settings depend on n_var
-		// which changes depending on how many variants excluded due to maf etc.
-		if(p.hyps_grid_file != "NULL") {
-			read_hyps();
-		} else if(p.hyps_grid_file == "NULL") {
-			std::cout << "Initialising hyper-parameters with default settings" << std::endl;
-			Hyps hyps(p);
-			hyps.use_default_init(n_effects, n_var);
-			hyps_inits.push_back(hyps);
+			// Set default hyper-parameters if not read from file
+			// Run read_hyps twice as some settings depend on n_var
+			// which changes depending on how many variants excluded due to maf etc.
+			if (p.hyps_grid_file != "NULL") {
+				read_hyps();
+			} else if (p.hyps_grid_file == "NULL") {
+				std::cout << "Initialising hyper-parameters with default settings" << std::endl;
+				Hyps hyps(p);
+				hyps.use_default_init(n_effects, n_var);
+				hyps_inits.push_back(hyps);
+			}
 		}
 	}
 
@@ -472,11 +476,21 @@ public:
 		}
 
 		std::vector<std::string> bgen_ids;
-		bgenView->get_sample_ids(
-			[&]( std::string const& id ) {
-			bgen_ids.push_back(id);
+		if(p.bgen_file != "NULL") {
+			bgenView->get_sample_ids(
+				[&]( std::string const& id ) {
+				bgen_ids.push_back(id);
+			}
+				);
+		} else if (p.streamBgenFile != "NULL") {
+			streamBgenView->get_sample_ids(
+				[&]( std::string const& id ) {
+				bgen_ids.push_back(id);
+			}
+				);
+		} else {
+			std::runtime_error("No valid bgen file found.");
 		}
-			);
 
 		// Want to read in a sid to be included, and skip along bgen_ids until
 		// we find it.
@@ -1215,6 +1229,9 @@ public:
 		} else if (n_env > 1 && p.init_weights_with_snpwise_scan) {
 			assert(false);
 			// calc_snpwise_regression(vp_init);
+		}
+		if(n_env > 0) {
+			vp_init.eta = E * vp_init.muw.matrix();
 		}
 
 		// Manually set covar coeffs

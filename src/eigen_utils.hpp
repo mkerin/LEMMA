@@ -25,8 +25,8 @@ void center_matrix(EigenMat& M);
 
 template <typename EigenMat>
 void scale_matrix_and_remove_constant_cols(EigenMat &M,
-										   long &n_cols,
-										   std::vector<std::string> &col_names);
+                                           long &n_cols,
+                                           std::vector<std::string> &col_names);
 
 template <typename EigenMat>
 void scale_matrix_and_remove_constant_cols(EigenMat &M){
@@ -56,10 +56,18 @@ void read_matrix( const std::string& filename,
                   Eigen::MatrixXd& M,
                   std::vector< std::string >& col_names);
 
+void read_matrix( const std::string& filename,
+                  Eigen::MatrixXd& M);
+
 void read_matrix_and_skip_cols(const std::string &filename,
                                const int& n_skip_cols,
                                Eigen::MatrixXd &M,
                                std::vector <std::string> &col_names);
+
+	Eigen::MatrixXd project_out_covars(Eigen::Ref<Eigen::MatrixXd> rhs,
+									   Eigen::Ref<Eigen::MatrixXd> C,
+									   const Eigen::Ref<const Eigen::MatrixXd>& CtC_inv,
+									   const bool& mode_debug = false);
 }
 
 #endif //LEMMA_EIGEN_UTILS_HPP

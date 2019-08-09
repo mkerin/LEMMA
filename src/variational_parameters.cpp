@@ -222,9 +222,10 @@ VariationalParametersLite VariationalParameters::convert_to_lite() const {
 	vplite.s2_beta_sq = s2_beta_sq;
 	vplite.s2_gam_sq  = s2_gam_sq;
 
-
 	vplite.muc   = muc;
+	vplite.sc_sq   = sc_sq;
 	vplite.muw   = muw;
+	vplite.sw_sq   = sw_sq;
 	vplite.eta   = eta;
 	return vplite;
 }

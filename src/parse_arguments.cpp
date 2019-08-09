@@ -103,79 +103,99 @@ void print_compilation_details(){
 
 void parse_arguments(parameters &p, int argc, char **argv) {
 
-	cxxopts::Options options("LEMMA", "Software package to find GxE interactions with a common environmental profile.");
+	cxxopts::Options options("LEMMA", "Software package to find GxE interactions with a common environmental profile."
+	                         "\n\nLEMMA by default fits the bayesian whole genome regression model:"
+	                         "\nY = C alpha + G beta + diag(eta) G gamma + espilon"
+	                         "\nwhere eta = E w"
+	                         "\n\nLEMMA then estimates the heritability of the G and GxE components from the following model:"
+	                         "\nY sim N(C alpha, sigma_g GG^T / M + sigma_gxe Z(eta) Z(eta)^T / M + sigma I)"
+	                         "\nwhere Z(eta) = diag(eta) G"
+	                         "\nusing randomised HE regressionAfter estimating the posterior of parameters ");
 
-	options.add_options("Filetypes")
-	    ("raw_phenotypes", "")
-	    ("min_alpha_diff", "", cxxopts::value<double>(p.alpha_tol))
-	    ("mode_spike_slab", "")
-	    ("mode_calc_snpstats", "", cxxopts::value<bool>(p.mode_calc_snpstats))
-	    ("mode_vb", "")
-	    ("threads", "", cxxopts::value<unsigned int>(p.n_thread))
-	    ("info", "", cxxopts::value<double>(p.min_info))
-	    ("maf", "", cxxopts::value<double>(p.min_maf))
-	    ("min_spike_diff_factor", "", cxxopts::value<double>(p.min_spike_diff_factor))
-	    ("gam_spike_diff_factor", "", cxxopts::value<double>(p.gam_spike_diff_factor))
-	    ("beta_spike_diff_factor", "", cxxopts::value<double>(p.beta_spike_diff_factor))
-	    ("spike_diff_factor", "", cxxopts::value<double>())
-	    ("n_pve_samples", "", cxxopts::value<long>(p.n_pve_samples))
-	    ("vb_iter_start", "", cxxopts::value<long>(p.vb_iter_start))
-	    ("vb_iter_max", "", cxxopts::value<long>(p.vb_iter_max))
-	    ("init_weights_with_snpwise_scan", "", cxxopts::value<bool>(p.init_weights_with_snpwise_scan))
-	    ("main_chunk_size", "", cxxopts::value<unsigned int>(p.main_chunk_size))
-	    ("gxe_chunk_size", "", cxxopts::value<unsigned int>(p.gxe_chunk_size))
-	    ("chunk", "", cxxopts::value<long>(p.chunk_size))
-	    ("incl_rsids", "", cxxopts::value<std::string>(p.incl_rsids_file))
-	    ("incl_sample_ids", "", cxxopts::value<std::string>(p.incl_sids_file))
-	    ("min_elbo_diff", "", cxxopts::value<double>(p.elbo_tol))
-	    ("high_mem", "", cxxopts::value<bool>())
-	    ("low_mem", "", cxxopts::value<bool>())
+	options.add_options("General")
 	    ("verbose", "", cxxopts::value<bool>(p.verbose))
 	    ("xtra_verbose", "")
-	    ("mode_squarem", "")
-	    ("mode_constant_hyps", "")
-	    ("mode_debug", "")
-	    ("exclude_ones_from_env_sq", "", cxxopts::value<bool>(p.exclude_ones_from_env_sq))
-	    ("mode_alternating_updates", "", cxxopts::value<bool>(p.mode_alternating_updates))
-	    ("mode_regress_out_covars", "")
-	    ("pve_mog_weights", "", cxxopts::value<std::string>(p.mog_weights_file))
-	    ("use_vb_on_covars", "")
-	    ("mode_no_gxe", "", cxxopts::value<bool>(p.mode_no_gxe))
-	    ("mode_pve_est", "", cxxopts::value<bool>(p.mode_pve_est))
-	    ("incl_squared_envs", "")
-	    ("effects_prior_mog", "")
-	    ("maxBytesPerRank", "Maximum number of bytes of RAM available on each partition when using MPI (Default: 16GB)",
-	    cxxopts::value<long long>(p.maxBytesPerRank))
-	    ("suppress_squared_env_removal", "")
-	    ("loso_window_size", "", cxxopts::value<long>(p.LOSO_window))
-	    ("drop_loco", "", cxxopts::value<bool>(p.drop_loco))
-	    ("keep_constant_variants", "", cxxopts::value<bool>(p.keep_constant_variants))
-	    ("mode_empirical_bayes", "")
-	    ("bgen", "Path to bgen file", cxxopts::value<std::string>(p.bgen_file))
-	    ("pheno", "Path to file of coefficients", cxxopts::value<std::string>(p.pheno_file))
-	    ("covar", "", cxxopts::value<std::string>(p.covar_file))
-	    ("environment", "", cxxopts::value<std::string>(p.env_file))
+	    ("bgen", "(Optional) Path to BGEN file. This must be indexed (eg. with BGENIX). By default this is stored in RAM using O(NM) bytes.", cxxopts::value<std::string>(p.bgen_file))
+	    ("streamBgen", "(Optional) Path to BGEN file. This must be indexed (eg. with BGENIX). This can be used with --mode_rhe or mode_calc_snpstats.", cxxopts::value<std::string>(p.streamBgenFile))
+	    ("pheno", "Path to phenotype file. Must have a header and have the same number of rows as the BGEN file.", cxxopts::value<std::string>(p.pheno_file))
+	    ("covar", "Path to file of covariates. Must have a header and have the same number of rows as the BGEN file.", cxxopts::value<std::string>(p.covar_file))
+	    ("environment", "Path to file of environmental variables", cxxopts::value<std::string>(p.env_file))
 	    ("dxteex", "", cxxopts::value<std::string>(p.dxteex_file))
-	    ("hyps_grid", "", cxxopts::value<std::string>(p.hyps_grid_file))
-	    ("hyps_probs", "", cxxopts::value<std::string>(p.hyps_probs_file))
+	    ("hyps_grid", "Path to initial hyperparameters values", cxxopts::value<std::string>(p.hyps_grid_file))
 	    ("vb_init", "", cxxopts::value<std::string>(p.vb_init_file))
-	    ("covar_init", "", cxxopts::value<std::string>(p.covar_coeffs_file))
+	    ("covar_init", "Path to initial covariate weights", cxxopts::value<std::string>(p.covar_coeffs_file))
 	    ("extra_pve_covar", "Variables that are included as covariates in the PVE analysis but not in the VB algorithm (Eg. principle components).", cxxopts::value<std::string>(p.extra_pve_covar_file))
-	    ("snpwise_scan", "", cxxopts::value<std::string>(p.snpstats_file))
-	    ("environment_weights", "", cxxopts::value<std::string>(p.env_coeffs_file))
-	    ("resume_from_param_dump", "", cxxopts::value<std::string>(p.resume_prefix))
+	    ("environment_weights", "Path to initial environment weights", cxxopts::value<std::string>(p.env_coeffs_file))
 	    ("out", "Filepath to output", cxxopts::value<std::string>(p.out_file))
-	    ("joint_covar_update", "Perform batch update in VB algorithm when updating covariates", cxxopts::value<bool>(p.joint_covar_update))
-	    ("streamBgen", "Path to bgen file containing imputed variants", cxxopts::value<std::string>(p.streamBgenFile))
 	    ("streamOut", "Output file for tests on imputed variants", cxxopts::value<std::string>(p.streamBgenOutFile))
 	;
 
-	options.add_options("Other")
-	    ("random_seed", "Seed used when simulating a phenotype (default: random)",
+	options.add_options("Internal")
+	    ("snpwise_scan", "", cxxopts::value<std::string>(p.snpstats_file))
+	    ("pve_mog_weights", "", cxxopts::value<std::string>(p.mog_weights_file))
+	    ("rhe_random_vectors", "Random vectors used to calculate randomised matrix trace estimates. (Optional)", cxxopts::value<std::string>(p.rhe_random_vectors_file))
+	    ("use_vb_on_covars", "")
+	    ("keep_constant_variants", "", cxxopts::value<bool>(p.keep_constant_variants))
+	    ("mode_debug", "")
+	    ("raw_phenotypes", "")
+	    ("chunk", "", cxxopts::value<long>(p.chunk_size))
+	    ("high_mem", "", cxxopts::value<bool>())
+	    ("low_mem", "", cxxopts::value<bool>())
+	    ("joint_covar_update", "Perform batch update in VB algorithm when updating covariates", cxxopts::value<bool>(p.joint_covar_update))
+	    ("min_alpha_diff", "", cxxopts::value<double>(p.alpha_tol))
+	    ("vb_iter_start", "", cxxopts::value<long>(p.vb_iter_start))
+	    ("effects_prior_mog", "")
+	    ("mode_spike_slab", "")
+	    ("main_chunk_size", "", cxxopts::value<unsigned int>(p.main_chunk_size))
+	    ("gxe_chunk_size", "", cxxopts::value<unsigned int>(p.gxe_chunk_size))
+	    ("min_spike_diff_factor", "", cxxopts::value<double>(p.min_spike_diff_factor))
+	    ("mode_regress_out_covars", "QC: Regress covariates from phenotype instead of including in VB")
+	    ("exclude_ones_from_env_sq", "", cxxopts::value<bool>(p.exclude_ones_from_env_sq))
+	    ("mode_alternating_updates", "", cxxopts::value<bool>(p.mode_alternating_updates))
+	    ("threads", "", cxxopts::value<unsigned int>(p.n_thread))
+	    ("hyps_probs", "", cxxopts::value<std::string>(p.hyps_probs_file))
+	    ("maxBytesPerRank", "Maximum number of bytes of RAM available on each partition when using MPI (Default: 16GB)",
+			 cxxopts::value<long long>(p.maxBytesPerRank))
+	    ("loso_window_size", "", cxxopts::value<long>(p.LOSO_window))
+	    ("drop_loco", "", cxxopts::value<bool>(p.drop_loco))
+	    ("init_weights_with_snpwise_scan", "", cxxopts::value<bool>(p.init_weights_with_snpwise_scan))
+	;
+
+	options.add_options("Filtering")
+	    ("maf", "Exclude all SNPs whose minor allele frequency is below this threshold", cxxopts::value<double>(p.min_maf))
+	    ("info", "Exclude all SNPs whose IMPUTE info is below this threshold", cxxopts::value<double>(p.min_info))
+	    ("incl_rsids", "Exclude all SNPs whose RSID is not in the given file.", cxxopts::value<std::string>(p.incl_rsids_file))
+	    ("incl_sample_ids", "Exclude all samples whose sample ID is not in the BGEN file.", cxxopts::value<std::string>(p.incl_sids_file))
+	    ("suppress_squared_env_removal", "QC: Suppress test for significant squared environmental effects (SQE)")
+	    ("incl_squared_envs", "QC: Include significant squared environmental effects (SQE) as covariates")
+	;
+
+	options.add_options("VB")
+	    ("mode_vb", "Run VB algorithm.")
+	    ("mode_calc_snpstats", "Compute SNP association tests", cxxopts::value<bool>(p.mode_calc_snpstats))
+	    ("min_elbo_diff", "Convergence threshold for VB convergence.", cxxopts::value<double>(p.elbo_tol))
+	    ("mode_empirical_bayes", "Maximise ELBO wrt hyperparameters for hyperparameter updates.")
+	    ("mode_constant_hyps", "Keep hyperparameters constant.")
+	    ("mode_squarem", "Use SQUAREM algorithm for hyperparameter updates.")
+	    ("vb_iter_max", "Maximum number of VB iterations (default: 10000)", cxxopts::value<long>(p.vb_iter_max))
+	    ("spike_diff_factor", "", cxxopts::value<double>())
+	    ("gam_spike_diff_factor", "", cxxopts::value<double>(p.gam_spike_diff_factor))
+	    ("beta_spike_diff_factor", "", cxxopts::value<double>(p.beta_spike_diff_factor))
+	    ("resume_from_param_dump", "For use when resuming VB algorithm from previous run.", cxxopts::value<std::string>(p.resume_prefix))
+	    ("param_dump_interval", "Save VB state to file every N iterations (default: None)", cxxopts::value<long>(p.param_dump_interval))
+	;
+
+	options.add_options("RHE")
+	    ("mode_pve_est", "Run RHE algorithm", cxxopts::value<bool>(p.mode_pve_est))
+	    ("n_pve_samples", "Number of random vectors used in RHE algorithm", cxxopts::value<long>(p.n_pve_samples))
+	    ("n_jacknife", "Number of jacknife samples used in RHE algorithm", cxxopts::value<long>(p.n_jacknife))
+	    ("random_seed", "Seed used to draw random vectors in RHE algorithm (default: random)",
 	    cxxopts::value<unsigned int>(p.random_seed))
-	    ("param_dump_interval", "", cxxopts::value<long>(p.param_dump_interval))
+	;
+
+	options.add_options("Other")
+	    ("h, help", "Print help page")
 	    ("redo_ym_interval", "", cxxopts::value<long>(p.redo_ym_interval))
-	    ("h, help", "")
 	;
 
 	try{
@@ -183,7 +203,7 @@ void parse_arguments(parameters &p, int argc, char **argv) {
 		auto args = opts.arguments();
 
 		if (opts.count("help")) {
-			std::cout << options.help({""}) << std::endl;
+			std::cout << options.help({"General", "VB", "RHE", "Other"}) << std::endl;
 			std::exit(0);
 		} else {
 			print_compilation_details();
@@ -238,7 +258,7 @@ void parse_arguments(parameters &p, int argc, char **argv) {
 			check_file_exists(p.bgi_file);
 		}
 		if(p.streamBgenFile != "NULL") {
-			p.streamBgiFile = p.bgen_file + ".bgi";
+			p.streamBgiFile = p.streamBgenFile + ".bgi";
 			check_file_exists(p.streamBgenFile);
 			check_file_exists(p.streamBgiFile);
 		}
@@ -261,12 +281,18 @@ void parse_arguments(parameters &p, int argc, char **argv) {
 		if(opts.count("xtra_verbose")) {
 			p.verbose = true;
 			p.xtra_verbose = true;
-			p.param_dump_interval = 50;
+			if(!opts.count("param_dump_interval")) {
+				p.param_dump_interval = 50;
+			}
 		}
 
 		if(opts.count("mode_debug")) {
 			p.mode_debug = true;
 			p.verbose = true;
+			p.xtra_verbose = true;
+			if(!opts.count("param_dump_interval")) {
+				p.param_dump_interval = 50;
+			}
 		}
 		if(opts.count("raw_phenotypes")) {
 			p.scale_pheno = false;
@@ -353,7 +379,6 @@ void parse_arguments(parameters &p, int argc, char **argv) {
 		}
 
 		if(opts.count("incl_rsids")) {
-			p.select_snps = true;
 			check_file_exists(p.incl_rsids_file);
 		}
 	} catch (const cxxopts::OptionException& e) {
@@ -1017,14 +1042,28 @@ void parse_arguments(parameters &p, int argc, char **argv) {
 	}
 
 	// mode_vb specific options
-	bool has_bgen = p.bgen_file != "NULL";
-	bool has_out = p.out_file != "NULL";
-	bool has_pheno = p.pheno_file != "NULL";
-	bool has_all = (has_pheno && has_out && has_bgen);
-	if(!has_all) {
-		std::cout << "ERROR: bgen, pheno and out filepaths should all be ";
-		std::cout << "provided in conjunction with --mode_vb." << std::endl;
-		std::exit(EXIT_FAILURE);
+	if(p.mode_vb) {
+		bool has_bgen = p.bgen_file != "NULL";
+		bool has_out = p.out_file != "NULL";
+		bool has_pheno = p.pheno_file != "NULL";
+		bool has_all = (has_pheno && has_out && has_bgen);
+		if(!has_all) {
+			std::cout << "ERROR: bgen, pheno and out filepaths should all be ";
+			std::cout << "provided in conjunction with --mode_vb." << std::endl;
+			std::exit(EXIT_FAILURE);
+		}
+	}
+
+	if(p.mode_calc_snpstats) {
+		bool has_bgen = p.bgen_file != "NULL";
+		bool has_out = p.out_file != "NULL";
+		bool has_pheno = p.pheno_file != "NULL";
+		bool has_all = (has_pheno && has_out && has_bgen);
+		if(!has_all) {
+			std::cout << "ERROR: bgen, pheno and out filepaths should all be ";
+			std::cout << "provided in conjunction with --mode_vb." << std::endl;
+			std::exit(EXIT_FAILURE);
+		}
 	}
 
 	if(p.env_file == "NULL" && p.env_coeffs_file != "NULL") {

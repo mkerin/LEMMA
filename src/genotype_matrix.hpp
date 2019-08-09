@@ -25,10 +25,13 @@
 #include <limits>
 #include <cstdint>
 #include <cmath>
+#include <numeric>
 #include <random>
 #include <thread>
 #include <vector>
 #include <map>
+
+long op_pmax(long& ii);
 
 // Memory efficient class for storing dosage data
 // - Use uint instead of double to store dosage probabilities
@@ -49,10 +52,11 @@ public:
 	Eigen::Matrix<unsigned char, Eigen::Dynamic, Eigen::Dynamic> M;
 	EigenDataMatrix G;
 
-	std::vector< int > chromosome;
-	std::vector< std::string > al_0, al_1, rsid;
-	std::vector< std::uint32_t > position;
-	std::vector< double > maf, info;
+	std::vector<int> chromosome;
+	std::vector<std::string> al_0, al_1, rsid;
+	std::vector<std::uint32_t> position;
+	std::vector<long> cumulative_pos;
+	std::vector<double> maf, info;
 	// chr~pos~a0~a1
 	std::vector< std::string > SNPKEY;
 	std::vector< std::string > SNPID;
@@ -67,7 +71,8 @@ public:
 	typedef Eigen::Index Index;
 
 	// Constructors
-	GenotypeMatrix(const bool& use_low_mem) : low_mem(use_low_mem){
+	GenotypeMatrix(const parameters& my_params, const bool& use_low_mem) : low_mem(use_low_mem),
+																		   params(my_params){
 		scaling_performed = false;
 		nn = 0;
 		pp = 0;
@@ -86,24 +91,6 @@ public:
 
 	// Eigen element access
 	void assign_index(const long& ii, const long& jj, double x);
-
-//	// Replacement(s) for write-version of Eigen Method .col()
-//	template<typename T>
-//	void assign_col(const T& jj, Eigen::Ref<Eigen::VectorXd> vec){
-//		assert(vec.rows() == nn);
-//
-//		if(low_mem){
-//			for (Index ii = 0; ii < nn; ii++){
-//				M(ii, jj) = CompressDosage(vec[ii]);
-//			}
-//		} else {
-//			for (Index ii = 0; ii < nn; ii++){
-//				G(ii, jj) = vec[ii];
-//			}
-//		}
-//
-//		scaling_performed = false;
-//	}
 
 	/********** Output / Read access methods ************/
 
@@ -142,7 +129,7 @@ public:
 #endif
 
 	// Eigen read column
-	void col(long jj, EigenRefDataVector vec) const ;
+	void col(long jj, EigenRefDataVector vec) const;
 //
 //	void col(long jj, Eigen::Ref<Eigen::VectorXf> vec){
 //		assert(jj < pp);
@@ -250,6 +237,16 @@ public:
 	void standardise_matrix();
 
 	/********** Utility functions ************/
+	void compute_cumulative_pos(){
+		cumulative_pos.resize(pp);
+		cumulative_pos[0] = position[0];
+		for (long ii = 1; ii < pp; ii++){
+			long diff = position[ii] - position[ii-1];
+			if(diff < 0) diff = 1;
+			cumulative_pos[ii] = cumulative_pos[ii - 1] + diff;
+		}
+	}
+
 	inline Index rows() const {
 		return nn;
 	}

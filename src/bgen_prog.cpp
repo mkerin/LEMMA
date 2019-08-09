@@ -56,21 +56,9 @@ int main( int argc, char** argv ) {
 		// Also regresses out covariables if necessary
 		data.standardise_non_genetic_data();
 		data.read_full_bgen();
+		data.set_vb_init();
 
-		// For the HE-reg method
-		Eigen::VectorXd eta;
-		if (data.n_env == 1) {
-			eta = data.E.col(0);
-		}
-
-		if (p.mode_vb || p.mode_calc_snpstats || p.streamBgenFile != "NULL" || p.env_coeffs_file != "NULL") {
-			data.set_vb_init();
-			if(data.n_env > 1 && p.env_coeffs_file != "NULL") {
-				eta = data.E * data.vp_init.muw.matrix();
-			}
-		}
-
-		if (p.mode_vb || p.mode_calc_snpstats || p.streamBgenFile != "NULL") {
+		if (p.mode_vb || p.mode_calc_snpstats) {
 			VBayesX2 VB(data);
 			if (p.mode_vb) {
 				if (data.n_effects > 1) {
@@ -88,7 +76,6 @@ int main( int argc, char** argv ) {
 				VB.run();
 				auto vb_end = std::chrono::system_clock::now();
 				std::chrono::duration<double> elapsed_vb = vb_end - vb_start;
-				eta = VB.vp_init.eta.cast<double>();
 				data.vp_init = VB.vp_init;
 
 				std::cout << std::endl << "Time expenditure:" << std::endl;
@@ -101,8 +88,9 @@ int main( int argc, char** argv ) {
 				std::string ofile_map = VB.fstream_init(outf_time, "", "_time_elapsed");
 				outf_time << "function time" << std::endl;
 				outf_time << "read_data " << elapsed_reading_data.count() << std::endl;
-				outf_time << "full_inference " << elapsed_vb.count() << std::endl;
-				outf_time << "vb_outer_loop " << VB.elapsed_innerLoop.count() << std::endl;
+				outf_time << "VB_prepro " << elapsed_reading_data.count() << std::endl;
+				outf_time << "VB_inference " << elapsed_vb.count() << std::endl;
+				outf_time << "SNP_testing " << VB.elapsed_innerLoop.count() << std::endl;
 			}
 
 			if (p.mode_calc_snpstats) {
@@ -110,16 +98,9 @@ int main( int argc, char** argv ) {
 			}
 
 			if (p.streamBgenFile != "NULL") {
-				GenotypeMatrix Xstream(false);
+				GenotypeMatrix Xstream(p, false);
 				bool bgen_pass = true;
 				long n_var_parsed = 0;
-
-				genfile::bgen::IndexQuery::UniquePtr query = genfile::bgen::IndexQuery::create(p.bgi_file);
-				genfile::bgen::View::UniquePtr bgenView;
-				query->initialise();
-
-				bgenView->set_query(query);
-				bgenView->summarise(std::cout);
 
 				Eigen::VectorXd neglogp_beta(data.n_var);
 				Eigen::VectorXd neglogp_rgam(data.n_var);
@@ -143,7 +124,7 @@ int main( int argc, char** argv ) {
 					std::cout << "Computing single-snp hypothesis tests with LOCO strategy" << std::endl;
 				}
 
-				while (fileUtils::read_bgen_chunk(bgenView, Xstream, data.sample_is_invalid,
+				while (fileUtils::read_bgen_chunk(data.streamBgenView, Xstream, data.sample_is_invalid,
 				                                  data.n_samples, 128, p, bgen_pass, n_var_parsed)) {
 					VB.LOCO_pvals_v2(Xstream,
 					                 data.vp_init,
@@ -189,19 +170,12 @@ int main( int argc, char** argv ) {
 			if(data.n_env > 0) {
 				// If multi env; use VB to collapse to single
 				assert(data.n_env == 1 || p.mode_vb || p.env_coeffs_file != "NULL");
-				PVE pve(data, Y, C, eta);
-				pve.run(out_file);
-				pve.to_file(p.out_file);
-			} else if(p.mog_weights_file != "NULL") {
-				Eigen::VectorXd alpha_beta, alpha_gam;
-				data.read_mog_weights(p.mog_weights_file, alpha_beta, alpha_gam);
-				PVE pve(data, Y, C);
-				pve.set_mog_weights(alpha_beta, alpha_gam);
-				pve.run(out_file);
+				PVE pve(data, Y, C, data.vp_init.eta);
+				pve.run();
 				pve.to_file(p.out_file);
 			} else {
 				PVE pve(data, Y, C);
-				pve.run(out_file);
+				pve.run();
 				pve.to_file(p.out_file);
 			}
 		}

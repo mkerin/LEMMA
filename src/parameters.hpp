@@ -10,7 +10,7 @@ class parameters {
 public:
 	std::string bgen_file, chr, out_file, pheno_file, env_file, covar_file, bgi_file;
 	std::string incl_sids_file, incl_rsids_file, recombination_file;
-	std::string r1_hyps_grid_file, r1_probs_grid_file, hyps_grid_file;
+	std::string r1_hyps_grid_file, r1_probs_grid_file, hyps_grid_file, rhe_random_vectors_file;
 	std::string env_coeffs_file, covar_coeffs_file, hyps_probs_file, vb_init_file;
 	std::string dxteex_file, snpstats_file, mog_weights_file, resume_prefix;
 	std::string streamBgenFile, streamBgiFile, streamBgenOutFile, extra_pve_covar_file;
@@ -21,7 +21,7 @@ public:
 	int missing_code, env_update_repeats, n_gconf, n_bgen_thread;
 	unsigned int n_thread, main_chunk_size, gxe_chunk_size;
 	std::uint32_t range_start, range_end;
-	bool range, maf_lim, info_lim, select_snps, xtra_verbose, joint_covar_update;
+	bool range, maf_lim, info_lim, xtra_verbose, joint_covar_update;
 	bool geno_check, mode_vb, use_vb_on_covars;
 	bool select_rsid, interaction_analysis, verbose, low_mem;
 	bool elbo_tol_set_by_user, alpha_tol_set_by_user, mode_empirical_bayes;
@@ -35,7 +35,7 @@ public:
 	long redo_ym_interval;
 	double min_maf, min_info, elbo_tol, alpha_tol, gamma_updates_thresh;
 	double beta_spike_diff_factor, gam_spike_diff_factor, min_spike_diff_factor;
-	long LOSO_window;
+	long LOSO_window, n_jacknife;
 	std::vector < std::string > incl_sample_ids, gconf;
 
 // constructors/destructors
@@ -62,11 +62,13 @@ public:
 		env_coeffs_file("NULL"),
 		streamBgenFile("NULL"),
 		streamBgiFile("NULL"),
+		rhe_random_vectors_file("NULL"),
 		streamBgenOutFile("NULL") {
 		flip_high_maf_variants = false;
 		init_weights_with_snpwise_scan = false;
 		restrict_gamma_updates = false;
 		n_thread = 1;
+		n_jacknife = 2;
 		redo_ym_interval = -1;
 		n_bgen_thread = 1;
 		random_seed = -1;
@@ -110,7 +112,6 @@ public:
 		mode_debug = false;
 		mode_random_start = false;
 		mode_pve_est = false;
-		select_snps = false;
 		select_rsid = false;
 		// check allele probs sum to 1 by default
 		geno_check = true;

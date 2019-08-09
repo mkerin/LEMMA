@@ -86,7 +86,7 @@ public:
 
 
 //
-	parameters& p;
+	parameters p;
 	std::vector<long> fwd_pass;
 	std::vector<long> back_pass;
 //	std::vector< std::vector < std::uint32_t >> fwd_pass_chunks;
@@ -142,7 +142,7 @@ public:
 		vp_init(dat.vp_init){
 		MPI_Comm_rank(MPI_COMM_WORLD, &world_rank);
 #ifndef OSX
-		long long kbMax, kbGlobal, kbLocal = getValueRAM();
+		long long kbMax, kbGlobal, kbLocal = fileUtils::getValueRAM();
 		MPI_Allreduce(&kbLocal, &kbMax, 1, MPI_LONG_LONG, MPI_MAX, MPI_COMM_WORLD);
 		MPI_Allreduce(&kbLocal, &kbGlobal, 1, MPI_LONG_LONG, MPI_SUM, MPI_COMM_WORLD);
 		double gbGlobal = kbGlobal / 1000.0 / 1000.0;
@@ -342,6 +342,34 @@ public:
 			Ctylocal = C.transpose() * Y;
 			Cty.resize(Ctylocal.rows(), Ctylocal.cols());
 			mpiUtils::mpiReduce_double(Ctylocal.data(), Cty.data(), Ctylocal.size());
+		}
+
+		// Update main effects
+		cache_local_ldblocks(main_fwd_pass_chunks, true);
+		cache_local_ldblocks(main_back_pass_chunks, false);
+	}
+
+	void cache_local_ldblocks(std::vector<std::vector<long>>iter_chunks, bool is_fwd_pass){
+		EigenDataMatrix D;
+		for (std::uint32_t ch = 0; ch < iter_chunks.size(); ch++) {
+			std::vector<long> chunk = iter_chunks[ch];
+			int ee = chunk[0] / n_var;
+			long ch_len = chunk.size();
+			if (D.cols() != ch_len) {
+				D.resize(n_samples, ch_len);
+			}
+			X.col_block3(chunk, D);
+
+			unsigned long memoize_id = ((is_fwd_pass) ? ch : ch + iter_chunks.size());
+			if (XtX_block_cache.count(memoize_id) == 0) {
+				if (p.n_thread == 1) {
+					Eigen::MatrixXd D_corr(ch_len, ch_len);
+					D_corr.triangularView<Eigen::StrictlyUpper>() = (D.transpose() * D).template cast<double>();
+					XtX_block_cache[memoize_id] = D_corr;
+				} else {
+					XtX_block_cache[memoize_id] = (D.transpose() * D).template cast<double>();
+				}
+			}
 		}
 	}
 
@@ -1274,7 +1302,7 @@ public:
 		std::chrono::duration<double> elapsed_seconds = now-time_check;
 		std::cout << " (" << elapsed_seconds.count();
 		std::cout << " seconds since last timecheck, estimated RAM usage = ";
-		std::cout << getValueRAM() << "KB)" << std::endl;
+		std::cout << fileUtils::getValueRAM() << "KB)" << std::endl;
 		time_check = now;
 	}
 
@@ -1689,7 +1717,7 @@ public:
 			double rss_alt, rss_null;
 			Eigen::MatrixXd HtH(H.cols(), H.cols()), Hty(H.cols(), 1);
 			Eigen::MatrixXd HtH_inv(H.cols(), H.cols()), HtVH(H.cols(), H.cols());
-			if(n_effects == 1) {
+			if(n_env == 0) {
 
 				prep_lm(H, y_resid, HtH, HtH_inv, Hty, rss_alt);
 
@@ -1698,7 +1726,7 @@ public:
 
 				neglogp_beta(jj) = -1 * log10(beta_pval);
 				test_stat_beta(jj) = beta_tstat;
-			} else if (n_effects > 1) {
+			} else if (n_env > 0) {
 				H.col(1) = H.col(0).cwiseProduct(vp.eta.cast<double>());
 
 				prep_lm(H, y_resid, HtH, HtH_inv, Hty, rss_alt, HtVH);
@@ -1890,17 +1918,14 @@ public:
 
 		if(world_rank == 0) {
 			// weights to file
-			if (n_effects > 1) {
-				for (int ll = 0; ll < n_env; ll++) {
-					outf_weights << env_names[ll];
-					if (ll + 1 < n_env) outf_weights << " ";
+			if (n_env > 0) {
+				outf_weights << std::scientific << std::setprecision(7);
+				outf_weights << "env mu s_sq" << std::endl;
+				for (long ll = 0; ll < n_env; ll++) {
+					outf_weights << env_names[ll] << " ";
+					outf_weights << vp_init.muw(ll) << " ";
+					outf_weights << vp_init.sw_sq(ll) << std::endl;
 				}
-				outf_weights << std::endl;
-				for (int ll = 0; ll < n_env; ll++) {
-					outf_weights << vp_init.muw(ll);
-					if (ll + 1 < n_env) outf_weights << " ";
-				}
-				outf_weights << std::endl;
 			}
 		}
 
@@ -1969,36 +1994,6 @@ public:
 		}
 		my_outf.push(boost_io::file_sink(ofile));
 		return ofile;
-	}
-
-	long long parseLineRAM(char* line){
-		// This assumes that a digit will be found and the line ends in " Kb".
-		std::size_t i = strlen(line);
-		const char* p = line;
-		while (*p <'0' || *p > '9') p++;
-		line[i-3] = '\0';
-		char* s_end;
-		long long res = std::stoll(p);
-		return res;
-	}
-
-	long long getValueRAM(){
-#ifndef OSX
-		FILE* file = fopen("/proc/self/status", "r");
-		long long result = -1;
-		char line[128];
-
-		while (fgets(line, 128, file) != NULL) {
-			if (strncmp(line, "VmRSS:", 6) == 0) {
-				result = parseLineRAM(line);
-				break;
-			}
-		}
-		fclose(file);
-		return result;
-#else
-		return -1;
-#endif
 	}
 };
 
