@@ -30,6 +30,11 @@ void PVE::run() {
 		EigenUtils::scale_matrix_and_remove_constant_cols(eta, n_env, placeholder);
 	}
 
+	// Read in groups for multicomponent RHE if given from commandline
+	if(p.RHE_groups_file != "NULL"){
+		read_RHE_groups(p.RHE_groups_file);
+	}
+
 	// Compute variance components
 	initialise_components();
 	if(n_env > 0) {
@@ -65,6 +70,7 @@ void PVE::fill_gaussian_noise(unsigned int seed, Eigen::Ref<Eigen::MatrixXd> zz,
 void PVE::calc_RHE() {
 	// Compute randomised traces
 	if(p.bgen_file != "NULL") {
+		// p.bgen_file already read into RAM
 		n_var = data.n_var;
 		long n_main_segs;
 		n_main_segs = (data.n_var + p.main_chunk_size - 1) / p.main_chunk_size;
@@ -89,38 +95,90 @@ void PVE::calc_RHE() {
 				comp.add_to_trace_estimator(D, jacknife_index);
 			}
 		}
-	} else if (p.streamBgenFile != "NULL") {
+	} else if (!p.streamBgenFiles.empty()) {
 		n_var = 0;
-		Eigen::MatrixXd D;
-		bool bgen_pass = true;
+		long snp_group_index = 0;
 		long n_var_parsed = 0;
 		long ch = 0;
-		long print_interval = 100;
-		if(p.mode_debug) print_interval = 1;
-		long jack_block_size = (data.streamBgenView->number_of_variants() + p.n_jacknife) / p.n_jacknife;
-		while (fileUtils::read_bgen_chunk(data.streamBgenView, D, sample_is_invalid,
-										  n_samples, 128, p, bgen_pass, n_var_parsed)) {
-			n_var += D.cols();
-			if (ch % print_interval == 0 && ch > 0) {
-				std::cout << "Chunk " << ch << " read (size " << 128;
-				std::cout << ", " << n_var_parsed - 1 << "/" << data.streamBgenView->number_of_variants();
-				std::cout << " variants parsed)" << std::endl;
+		long print_interval = p.streamBgen_print_interval;;
+		if (p.mode_debug) print_interval = 1;
+		long long n_find_operations = 0;
+		std::vector<std::string> SNPIDS;
+		long long n_vars_tot = 0;
+		for (int ii = 0; ii < p.streamBgenFiles.size(); ii++) {
+			n_vars_tot += data.streamBgenViews[ii]->number_of_variants();
+		}
+		long jack_block_size = (n_vars_tot + p.n_jacknife) / p.n_jacknife;
+		std::cout << "jacknife block size = " << jack_block_size << std::endl;
+		for (int ii = 0; ii < p.streamBgenFiles.size(); ii++) {
+			std::cout << std::endl << "Streaming genotypes from " << p.streamBgenFiles[ii] << std::endl;
+			Eigen::MatrixXd D;
+			bool bgen_pass = true;
+			while (fileUtils::read_bgen_chunk(data.streamBgenViews[ii], D, sample_is_invalid,
+											  n_samples, 256, p, bgen_pass, n_var_parsed, SNPIDS)) {
+				n_var += D.cols();
+				if (ch % print_interval == 0 && ch > 0) {
+					std::cout << "Chunk " << ch << " read (size " << 128;
+					std::cout << ", " << n_var_parsed - 1 << "/" << n_vars_tot;
+					std::cout << " variants parsed)" << std::endl;
+				}
+
+				// Get jacknife block (just use block assignment of 1st snp)
+				long jacknife_index = n_var_parsed / jack_block_size;
+
+				long n_chunk = D.cols();
+				std::vector<std::string> placeholder(n_chunk, "col");
+				if (!p.mode_RHE_fast) {
+					EigenUtils::center_matrix(D);
+					EigenUtils::scale_matrix_and_remove_constant_cols(D, n_chunk, placeholder);
+				}
+
+				// parse which snp belongs to which group
+				std::vector<std::vector<int>> block_membership(n_components);
+				if(p.RHE_multicomponent){
+					for (long jj = 0; jj < D.cols(); jj ++) {
+						if(SNPGROUPS_snpid[snp_group_index] == SNPIDS[jj]) {
+							for (int kk = 0; kk < n_components; kk++) {
+								if (components[kk].group == SNPGROUPS_group[snp_group_index]) {
+									block_membership[kk].push_back(jj);
+								}
+							}
+						} else {
+							// find
+							auto it = std::find(SNPGROUPS_snpid.begin(), SNPGROUPS_snpid.end(), SNPIDS[jj]);
+							if(it == SNPGROUPS_snpid.end()){
+								// skip
+								n_var -= 1;
+							} else {
+								snp_group_index = it - SNPGROUPS_snpid.begin();
+								for (int kk = 0; kk < n_components; kk++){
+									if(components[kk].group == SNPGROUPS_group[snp_group_index]){
+										block_membership[kk].push_back(jj);
+									}
+								}
+							}
+							n_find_operations++;
+						}
+					}
+					for (int cc = 0; cc < n_components; cc++){
+						Eigen::MatrixXd D1(D.rows(), block_membership[cc].size());
+						if(D1.cols() > 0) {
+							for (int jjj = 0; jjj < block_membership[cc].size(); jjj++) {
+								D1.col(jjj) = D.col(block_membership[cc][jjj]);
+							}
+							components[cc].add_to_trace_estimator(D1, jacknife_index);
+						}
+					}
+				} else {
+					for (auto &comp : components) {
+						comp.add_to_trace_estimator(D, jacknife_index);
+					}
+				}
+				ch++;
 			}
-
-			// Get jacknife block (just use block assignment of 1st snp)
-			long jacknife_index = n_var_parsed / jack_block_size;
-
-			long n_chunk = D.cols();
-			std::vector<std::string> placeholder(n_chunk, "col");
-			EigenUtils::center_matrix(D);
-			EigenUtils::scale_matrix_and_remove_constant_cols(D, n_chunk, placeholder);
-
-			for (auto &comp : components) {
-				comp.add_to_trace_estimator(D, jacknife_index);
-			}
-			ch++;
 		}
 		if(p.verbose) std::cout << n_var << " variants pass QC filters" << std::endl;
+		if(p.xtra_verbose) std::cout << n_find_operations << " find operations performed" << std::endl;
 	}
 	for (long ii = 0; ii < n_components; ii++) {
 		components[ii].finalise();
@@ -138,8 +196,7 @@ void PVE::calc_RHE() {
 	std::cout << "A: " << std::endl << A << std::endl;
 	std::cout << "b: " << std::endl << bb << std::endl;
 	sigmas = A.colPivHouseholderQr().solve(bb);
-	h2 = calc_h2(A, bb, false);
-	h2b = calc_h2(A, bb, true);
+	h2 = calc_h2(A, bb, true);
 
 	boost_io::filtering_ostream outf;
 	if(p.mode_debug) {
@@ -152,8 +209,9 @@ void PVE::calc_RHE() {
 	// jacknife estimates
 	std::cout << "Computing standard errors using " << p.n_jacknife << " jacknife blocks" << std::endl;
 	sigmas_jack.resize(p.n_jacknife, n_components);
-	h2_jack.resize(p.n_jacknife, n_components);
-	h2b_jack.resize(p.n_jacknife, n_components);
+
+	// h2_jack contains total G and GxE heritabilities at end
+	h2_jack.resize(p.n_jacknife, n_components + 2);
 	n_var_jack.resize(p.n_jacknife);
 
 	for (long jj = 0; jj < p.n_jacknife; jj++) {
@@ -167,8 +225,7 @@ void PVE::calc_RHE() {
 		Eigen::VectorXd bb = CC.col(n_components);
 		Eigen::VectorXd ss = AA.colPivHouseholderQr().solve(bb);
 		sigmas_jack.row(jj) = ss;
-		h2b_jack.row(jj) = calc_h2(AA, bb, true);
-		h2_jack.row(jj) = calc_h2(AA, bb, false);
+		h2_jack.row(jj) = calc_h2(AA, bb, true);
 
 		if(p.mode_debug) {
 			Eigen::VectorXd tmp(Eigen::Map<Eigen::VectorXd>(CC.data(),CC.cols()*CC.rows()));
@@ -184,14 +241,22 @@ void PVE::calc_RHE() {
 
 	if(n_env > 0) {
 		// Main effects model
+		int ind_main, ind_noise;
+		for (int cc = 0; cc < n_components; cc++){
+			if (components[cc].effect_type == "G"){
+				ind_main = cc;
+			} else if (components[cc].effect_type == "noise"){
+				ind_noise = cc;
+			}
+		}
 		Eigen::MatrixXd A1(2, 2);
 		Eigen::VectorXd bb1(2);
-		A1(0, 0) = A(ind.main, ind.main);
-		A1(0, 1) = A(ind.main, ind.noise);
-		A1(1, 0) = A(ind.noise, ind.main);
-		A1(1, 1) = A(ind.noise, ind.noise);
+		A1(0, 0) = A(ind_main, ind_main);
+		A1(0, 1) = A(ind_main, ind_noise);
+		A1(1, 0) = A(ind_noise, ind_main);
+		A1(1, 1) = A(ind_noise, ind_noise);
 
-		bb1 << bb(ind.main), bb(ind.noise);
+		bb1 << bb(ind_main), bb(ind_noise);
 		Eigen::VectorXd sigmas1 = A1.colPivHouseholderQr().solve(bb1);
 		Eigen::VectorXd h2_1 = sigmas1 / sigmas1.sum();
 		std::cout << "h2-G = " << h2_1(0, 0) << " (main effects model only)" << std::endl;
@@ -219,30 +284,37 @@ Eigen::ArrayXd PVE::calc_h2(Eigen::Ref<Eigen::MatrixXd> AA, Eigen::Ref<Eigen::Ve
 	if(reweight_sigmas) {
 		ss *= (AA.row(AA.rows()-1)).array() / n_samples;
 	}
-	return ss / ss.sum();
+	ss = ss / ss.sum();
+	double h2_G_tot = 0, h2_GxE_tot = 0;
+	for (int cc = 0; cc < n_components; cc++){
+		if(components[cc].effect_type == "G"){
+			h2_G_tot += ss[cc];
+		} else if (components[cc].effect_type == "GxE"){
+			h2_GxE_tot += ss[cc];
+		}
+	}
+
+	Eigen::ArrayXd res(n_components + 2);
+	res << ss, h2_G_tot, h2_GxE_tot;
+	return res;
 }
 
 void PVE::process_jacknife_samples() {
 	// Rescale h2 to avoid bias
-	for (long ii = 0; ii < n_components - 1; ii++) {
+	for (long ii = 0; ii < h2_jack.cols(); ii++) {
 		h2_jack.col(ii) *= n_var / n_var_jack;
-		h2b_jack.col(ii) *= n_var / n_var_jack;
 	}
 
 	// SE of h2
-	h2_se_jack.resize(n_components);
-	h2b_se_jack.resize(n_components);
-	for (long ii = 0; ii < n_components; ii++) {
+	h2_se_jack.resize(h2_jack.cols());
+	for (long ii = 0; ii < h2_jack.cols(); ii++) {
 		h2_se_jack[ii] = std::sqrt(get_jacknife_var(h2_jack.col(ii)));
-		h2b_se_jack[ii] = std::sqrt(get_jacknife_var(h2b_jack.col(ii)));
 	}
 
 	// bias correction
-	h2_bias_corrected.resize(n_components);
-	h2b_bias_corrected.resize(n_components);
-	for (long ii = 0; ii < n_components; ii++) {
+	h2_bias_corrected.resize(h2_jack.cols());
+	for (long ii = 0; ii < h2_jack.cols(); ii++) {
 		h2_bias_corrected[ii] = get_jacknife_bias_correct(h2_jack.col(ii), h2(ii));
-		h2b_bias_corrected[ii] = get_jacknife_bias_correct(h2b_jack.col(ii), h2b(ii));
 	}
 }
 
@@ -277,14 +349,14 @@ void PVE::to_file(const std::string &file) {
 		outf << h2_se_jack[ii] << " ";
 		outf << h2_bias_corrected[ii] << std::endl;
 	}
-
-	for (int ii = 0; ii < n_components; ii++) {
-		outf << components[ii].label << "_v2 ";
-		outf << sigmas[ii] << " ";
-		outf << h2b[ii] << " ";
-		outf << h2b_se_jack[ii] << " ";
-		outf << h2b_bias_corrected[ii] << std::endl;
+	// Could actually remove this horrible hack; just use sum of SDs.
+	if(p.RHE_multicomponent){
+		outf << "G_tot NA " << h2[n_components] << " " << h2_se_jack[n_components] << " NA" << std::endl;
+		if(n_env > 0) {
+			outf << "GxE_tot NA " << h2[n_components + 1] << " " << h2_se_jack[n_components + 1] << " NA" << std::endl;
+		}
 	}
+
 	boost_io::close(outf);
 
 	if(p.xtra_verbose) {
@@ -300,25 +372,6 @@ void PVE::to_file(const std::string &file) {
 			outf << components[0].n_vars_local[jj];
 			for (long ii = 0; ii < n_components; ii++) {
 				outf << " " << h2_jack(jj, ii);
-			}
-			outf << std::endl;
-		}
-		boost_io::close(outf);
-	}
-
-	if(p.xtra_verbose) {
-		auto filename = fileUtils::fstream_init(outf, file, "", suffix + "_jacknife_scaled");
-		std::cout << "Writing rescaled jacknife estimates to " << filename << std::endl;
-
-		outf << "n_jack";
-		for (long ii = 0; ii < n_components; ii++) {
-			outf << " " << components[ii].label;
-		}
-		outf << std::endl;
-		for (long jj = 0; jj < p.n_jacknife; jj++) {
-			outf << components[0].n_vars_local[jj];
-			for (long ii = 0; ii < n_components; ii++) {
-				outf << " " << h2b_jack(jj, ii);
 			}
 			outf << std::endl;
 		}
@@ -349,29 +402,48 @@ void PVE::initialise_components() {
 
 	// Set variance components
 	if(true) {
-		PVE_Component comp(p, Y, zz, Wzz, C, CtC_inv, p.n_jacknife);
-		comp.label = "G";
-		components.push_back(comp);
+		if(p.RHE_multicomponent){
+			for (auto group : all_SNPGROUPS){
+				PVE_Component comp(p, Y, zz, Wzz, C, CtC_inv, p.n_jacknife);
+				comp.label = group + "_G";
+				comp.effect_type = "G";
+				comp.group = group;
+
+				components.push_back(comp);
+			}
+		} else {
+			PVE_Component comp(p, Y, zz, Wzz, C, CtC_inv, p.n_jacknife);
+			comp.label = "G";
+			comp.effect_type = "G";
+
+			components.push_back(comp);
+		}
 	}
 
 	if(n_env == 1) {
-		PVE_Component comp(p, Y, zz, Wzz, C, CtC_inv, p.n_jacknife);
-		comp.label = "GxE";
-		comp.set_eta(eta);
-		components.push_back(comp);
-
-		ind.main = 0;
-		ind.gxe = 1;
-		ind.noise = 2;
-	} else {
-		ind.main = 0;
-		ind.noise = 1;
+		if(p.RHE_multicomponent) {
+			for (auto group : all_SNPGROUPS) {
+				PVE_Component comp(p, Y, zz, Wzz, C, CtC_inv, p.n_jacknife);
+				comp.label = group + "_GxE";
+				comp.effect_type = "GxE";
+				comp.group = group;
+				comp.set_eta(eta);
+				components.push_back(comp);
+			}
+		} else {
+			PVE_Component comp(p, Y, zz, Wzz, C, CtC_inv, p.n_jacknife);
+			comp.label = "GxE";
+			comp.effect_type = "GxE";
+			comp.set_eta(eta);
+			components.push_back(comp);
+		}
 	}
 
 	if(true) {
 		PVE_Component comp(p, Y, zz, Wzz, C, CtC_inv, p.n_jacknife);
 		comp.set_inactive();
 		comp.label = "noise";
+		comp.effect_type = "noise";
 		components.push_back(comp);
 	}
 	n_components = components.size();
@@ -393,4 +465,52 @@ double PVE::get_jacknife_var(Eigen::ArrayXd jack_estimates) {
 double PVE::get_jacknife_bias_correct(Eigen::ArrayXd jack_estimates, double full_data_est) {
 	double res = p.n_jacknife * full_data_est - (p.n_jacknife - 1.0) * jack_estimates.mean();
 	return res;
+}
+
+void PVE::read_RHE_groups(const std::string& filename){
+	// File should have two columns; SNPID and group (both strings)
+	// Check has ex[ected header
+	std::vector<std::string> file_header;
+	read_file_header(filename, file_header);
+	std::vector< std::string > case1 = {"SNPID", "group"};
+	assert(file_header == case1);
+
+	// Reading from file
+	boost_io::filtering_istream fg;
+	std::string gz_str = ".gz";
+	if (filename.find(gz_str) != std::string::npos) {
+		fg.push(boost_io::gzip_decompressor());
+	}
+	fg.push(boost_io::file_source(filename));
+	if (!fg) {
+		std::cout << "ERROR: " << filename << " not opened." << std::endl;
+		std::exit(EXIT_FAILURE);
+	}
+
+	// Read file twice to ascertain number of lines
+	int n_lines = 0;
+	std::string line, s;
+	// skip header
+	getline(fg, line);
+
+	while (getline(fg, line)) {
+		std::stringstream ss(line);
+		int col_index = 0;
+		while (ss >> s) {
+			if(col_index == 0){
+				SNPGROUPS_snpid.push_back(s);
+			} else if (col_index == 1){
+				SNPGROUPS_group.push_back(s);
+			} else {
+				throw std::runtime_error(filename + " should only contain two columns");
+			}
+
+			col_index += 1;
+		}
+	}
+
+	std::cout << " Read component groups for " << SNPGROUPS_snpid.size() << " SNPs from " << filename << std::endl;
+	std::set<std::string> tmp_set(SNPGROUPS_group.begin(), SNPGROUPS_group.end());
+	std::vector<std::string> tmp_vec(tmp_set.begin(), tmp_set.end());
+	all_SNPGROUPS = tmp_vec;
 }

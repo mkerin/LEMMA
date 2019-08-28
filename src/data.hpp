@@ -98,7 +98,7 @@ public:
 
 	boost_io::filtering_ostream outf_scan;
 	genfile::bgen::View::UniquePtr bgenView;
-	genfile::bgen::View::UniquePtr streamBgenView;
+	std::vector<genfile::bgen::View::UniquePtr> streamBgenViews;
 
 	bool filters_applied;
 	std::unordered_map<long, bool> sample_is_invalid;
@@ -120,12 +120,17 @@ public:
 			n_samples = (long) bgenView->number_of_samples();
 			n_var     = bgenView->number_of_variants();
 		}
-		if(p.streamBgenFile != "NULL") {
-			streamBgenView = genfile::bgen::View::create(p.streamBgenFile);
-			n_samples = (long) streamBgenView->number_of_samples();
+		for (auto streamBgenFile : p.streamBgenFiles){
+			genfile::bgen::View::UniquePtr view = genfile::bgen::View::create(streamBgenFile);
+			n_samples = (long) view->number_of_samples();
+			streamBgenViews.push_back(move(view));
 		}
-		if(p.bgen_file != "NULL" && p.streamBgenFile != "NULL") {
-			assert(bgenView->number_of_samples() == streamBgenView->number_of_samples());
+		// Check all bgen files have the same number of samples
+		if(p.bgen_file != "NULL" && !p.streamBgenFiles.empty()) {
+			assert(n_samples == bgenView->number_of_samples());
+			for (int ii = 0; ii < p.streamBgenFiles.size(); ii++){
+				assert(n_samples == streamBgenViews[ii]->number_of_samples());
+			}
 		}
 
 		n_var_parsed = 0;
@@ -190,8 +195,9 @@ public:
 			bgenView->set_query(query);
 			bgenView->summarise(std::cout);
 		}
-		if(p.streamBgenFile != "NULL") {
-			genfile::bgen::IndexQuery::UniquePtr query = genfile::bgen::IndexQuery::create(p.streamBgiFile);
+
+		for (int ii = 0; ii < p.streamBgenFiles.size(); ii++){
+			genfile::bgen::IndexQuery::UniquePtr query = genfile::bgen::IndexQuery::create(p.streamBgiFiles[ii]);
 			if (p.range) {
 				genfile::bgen::IndexQuery::GenomicRange rr1(p.chr, p.range_start, p.range_end);
 				query->include_range( rr1 );
@@ -203,7 +209,7 @@ public:
 				query->include_rsids( p.rsid );
 			}
 			query->initialise();
-			streamBgenView->set_query(query);
+			streamBgenViews[ii]->set_query(query);
 		}
 
 		filters_applied = true;
@@ -223,7 +229,7 @@ public:
 			read_covar();
 		}
 
-		if (p.extra_pve_covar_file != "NULL" && p.mode_pve_est) {
+		if (p.extra_pve_covar_file != "NULL" && p.mode_RHE) {
 			read_extra_pve_covar();
 		}
 
@@ -476,8 +482,8 @@ public:
 				bgen_ids.push_back(id);
 			}
 				);
-		} else if (p.streamBgenFile != "NULL") {
-			streamBgenView->get_sample_ids(
+		} else if (!p.streamBgenFiles.empty()) {
+			streamBgenViews[0]->get_sample_ids(
 				[&]( std::string const& id ) {
 				bgen_ids.push_back(id);
 			}
@@ -1356,7 +1362,7 @@ public:
 		if(n_env > 0) {
 			E = reduce_mat_to_complete_cases( E, E_reduced, n_env, incomplete_cases );
 		}
-		if(p.extra_pve_covar_file != "NULL" && p.mode_pve_est) {
+		if(p.extra_pve_covar_file != "NULL" && p.mode_RHE) {
 			long n_extra_cols = C_extra_pve.cols();
 			bool placeholder = false;
 			C_extra_pve = reduce_mat_to_complete_cases(C_extra_pve, placeholder, n_extra_cols, incomplete_cases);

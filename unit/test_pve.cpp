@@ -10,7 +10,7 @@
 
 
 // Scenarios
-char* argv_pve1[] = { (char*) "--mode_pve_est",
+char* argv_pve1[] = { (char*) "--RHE",
 	                  (char*) "--random_seed", (char*) "1",
 	                  (char*) "--n_pve_samples", (char*) "3",
 	                  (char*) "--bgen", (char*) "data/io_test/n1000_p2000.bgen",
@@ -18,15 +18,25 @@ char* argv_pve1[] = { (char*) "--mode_pve_est",
 	                  (char*) "--environment", (char*) "data/io_test/case8/age.txt",
 	                  (char*) "--out", (char*) "data/io_test/case8/test_pve_est.out.gz"};
 
-char* argv_pve2[] = { (char*) "--mode_pve_est",
+char* argv_pve2[] = { (char*) "--RHE",
 	                  (char*) "--random_seed", (char*) "1",
 	                  (char*) "--n_pve_samples", (char*) "3",
+					  (char*) "--streamBgen-print-interval", (char*) "1",
 	                  (char*) "--streamBgen", (char*) "data/io_test/n1000_p2000.bgen",
 	                  (char*) "--pheno", (char*) "data/io_test/case8/pheno.txt",
 	                  (char*) "--environment", (char*) "data/io_test/case8/age.txt",
 	                  (char*) "--out", (char*) "data/io_test/case8/test_pve_est.out.gz"};
 
-char* argv_pve3[] = { (char*) "--mode_pve_est", (char*) "--maf", (char*) "0.01",
+char* argv_pve2b[] = { (char*) "--RHE",
+					  (char*) "--random_seed", (char*) "1",
+					  (char*) "--n_pve_samples", (char*) "3",
+					  (char*) "--streamBgen-print-interval", (char*) "1",
+					  (char*) "--mStreamBgen", (char*) "data/io_test/n1000_p2000_bgens.txt",
+					  (char*) "--pheno", (char*) "data/io_test/case8/pheno.txt",
+					  (char*) "--environment", (char*) "data/io_test/case8/age.txt",
+					  (char*) "--out", (char*) "data/io_test/case8/test_pve_est.out.gz"};
+
+char* argv_pve3[] = { (char*) "--RHE", (char*) "--maf", (char*) "0.01",
 					  (char*) "--random_seed", (char*) "1",
 					  (char*) "--n_jacknife", (char*) "2",
 					  (char*) "--n_pve_samples", (char*) "10",
@@ -35,28 +45,28 @@ char* argv_pve3[] = { (char*) "--mode_pve_est", (char*) "--maf", (char*) "0.01",
 					  (char*) "--environment", (char*) "data/io_test/case8/age.txt",
 					  (char*) "--out", (char*) "data/io_test/case8/test_pve_est.out.gz"};
 //
-char* argv_main1[] = { (char*) "--mode_pve_est",
+char* argv_main1[] = { (char*) "--RHE",
 	                   (char*) "--random_seed", (char*) "1",
 	                   (char*) "--n_pve_samples", (char*) "3",
-	                   (char*) "--bgen", (char*) "data/io_test/n1000_p2000.bgen",
+	                   (char*) "--streamBgen", (char*) "data/io_test/n1000_p2000.bgen",
+					   (char*) "--streamBgen-print-interval", (char*) "1",
 	                   (char*) "--pheno", (char*) "data/io_test/case8/pheno.txt",
 	                   (char*) "--out", (char*) "data/io_test/case8/test_pve_est.out.gz"};
 
-char* argv_main2[] = { (char*) "--mode_pve_est",
-	                   (char*) "--random_seed", (char*) "1",
-	                   (char*) "--n_pve_samples", (char*) "3",
-	                   (char*) "--bgen", (char*) "data/io_test/n1000_p2000.bgen",
-	                   (char*) "--pheno", (char*) "data/io_test/case8/pheno.txt",
-	                   (char*) "--pve_mog_weights", (char*) "data/io_test/case8/test_mog_weights.txt",
-	                   (char*) "--out", (char*) "data/io_test/case8/test_pve_est.out.gz"};
+char* argv_main2[] = { (char*) "--RHE",
+					   (char*) "--random_seed", (char*) "1",
+					   (char*) "--n_pve_samples", (char*) "3",
+					   (char*) "--bgen", (char*) "data/io_test/n1000_p2000.bgen",
+					   (char*) "--pheno", (char*) "data/io_test/case8/pheno.txt",
+					   (char*) "--out", (char*) "data/io_test/case8/test_pve_est.out.gz"};
 
 
-TEST_CASE("HE-reg"){
-	SECTION("GxE effects fit"){
+TEST_CASE("RHEreg-GxE") {
+	SECTION("GxE effects fit") {
 		parameters p;
-		int argc = sizeof(argv_pve1)/sizeof(argv_pve1[0]);
+		int argc = sizeof(argv_pve1) / sizeof(argv_pve1[0]);
 		parse_arguments(p, argc, argv_pve1);
-		Data data( p );
+		Data data(p);
 		data.read_non_genetic_data();
 		data.standardise_non_genetic_data();
 		data.read_full_bgen();
@@ -67,24 +77,23 @@ TEST_CASE("HE-reg"){
 		PVE pve(data, Y, C, eta);
 		pve.run();
 
-		CHECK(pve.sigmas(0)  == Approx(0.4755321728));
-		CHECK(pve.sigmas(1)  == Approx(0.0632032343));
-		CHECK(pve.sigmas(2)  == Approx(0.274279032));
-		CHECK(pve.h2(0)  == Approx(0.5849000337));
-		CHECK(pve.h2(1)  == Approx(0.0777393749));
-		CHECK(pve.h2(2)  == Approx(0.3373605914));
+		CHECK(pve.sigmas(0) == Approx(0.4755321728));
+		CHECK(pve.sigmas(1) == Approx(0.0632032343));
+		CHECK(pve.sigmas(2) == Approx(0.274279032));
+		CHECK(pve.h2(0) == Approx(0.5755724206));
+		CHECK(pve.h2(1) == Approx(0.0763488835));
+		CHECK(pve.h2(2) == Approx(0.3480786959));
 
-		CHECK(pve.h2_se_jack(0)  == Approx(0.2647600098));
-		CHECK(pve.h2_se_jack(1)  == Approx(0.0452209812));
-		CHECK(pve.h2_se_jack(2)  == Approx(0.2481256178));
+		CHECK(pve.h2_se_jack(0) == Approx(0.2604051586));
+		CHECK(pve.h2_se_jack(1) == Approx(0.0398316858));
 		pve.to_file(p.out_file);
 	}
 
-	SECTION("GxE effects fit (stream version)"){
+	SECTION("GxE effects fit (stream version)") {
 		parameters p;
-		int argc = sizeof(argv_pve2)/sizeof(argv_pve2[0]);
+		int argc = sizeof(argv_pve2) / sizeof(argv_pve2[0]);
 		parse_arguments(p, argc, argv_pve2);
-		Data data( p );
+		Data data(p);
 		data.read_non_genetic_data();
 		data.standardise_non_genetic_data();
 		data.read_full_bgen();
@@ -95,22 +104,117 @@ TEST_CASE("HE-reg"){
 		PVE pve(data, Y, C, eta);
 		pve.run();
 
-		CHECK(pve.sigmas(0)  == Approx(0.4751298802));
-		CHECK(pve.sigmas(1)  == Approx(0.0632593406));
-		CHECK(pve.sigmas(2)  == Approx(0.2745515453));
-		CHECK(pve.h2(0)  == Approx(0.5844581795));
-		CHECK(pve.h2(1)  == Approx(0.0778154366));
-		CHECK(pve.h2(2)  == Approx(0.337726384));
+		CHECK(pve.sigmas(0) == Approx(0.4751298802));
+		CHECK(pve.sigmas(1) == Approx(0.0632593406));
+		CHECK(pve.sigmas(2) == Approx(0.2745515453));
+		CHECK(pve.h2(0) == Approx(0.5751623131));
+		CHECK(pve.h2(1) == Approx(0.0764131531));
 
-		CHECK(pve.h2_se_jack(0)  == Approx(0.3175758074));
-		CHECK(pve.h2_se_jack(1)  == Approx(0.0125467466));
-		CHECK(pve.h2_se_jack(2)  == Approx(0.2169781382));
+		CHECK(pve.components[0].n_vars_local[0] == 768);
+		CHECK(pve.components[0].n_vars_local[1] == 1042);
+
+		CHECK(pve.h2_se_jack(0) == Approx(0.3105230791));
+		CHECK(pve.h2_se_jack(1) == Approx(0.0088804904));
 	}
 
-	SECTION("Main effects fit (gaussian prior)"){
+	SECTION("GxE effects fit (streaming from 2 files)") {
+		parameters p;
+		int argc = sizeof(argv_pve2b) / sizeof(argv_pve2b[0]);
+		parse_arguments(p, argc, argv_pve2b);
+		Data data(p);
+		data.read_non_genetic_data();
+		data.standardise_non_genetic_data();
+		data.read_full_bgen();
+
+		Eigen::VectorXd Y = data.Y.cast<double>();
+		Eigen::MatrixXd C = data.C.cast<double>();
+		Eigen::VectorXd eta = data.E.col(0);
+		PVE pve(data, Y, C, eta);
+		pve.run();
+
+		CHECK(pve.sigmas(0) == Approx(0.4751298802));
+		CHECK(pve.sigmas(1) == Approx(0.0632593406));
+		CHECK(pve.sigmas(2) == Approx(0.2745515453));
+		CHECK(pve.h2(0) == Approx(0.5751623131));
+		CHECK(pve.h2(1) == Approx(0.0764131531));
+
+		// Jacknife blocks cut off at gap between bgen files
+		CHECK(pve.components[0].n_vars_local[0] == 849);
+		CHECK(pve.components[0].n_vars_local[1] == 961);
+
+		CHECK(pve.h2_se_jack(0) == Approx(0.3572303602));
+		CHECK(pve.h2_se_jack(1) == Approx(0.0166284959));
+	}
+}
+
+TEST_CASE("RHEreg-multicomp"){
+	SECTION("Main (component 1)") {
 		parameters p;
 		int argc = sizeof(argv_main1)/sizeof(argv_main1[0]);
 		parse_arguments(p, argc, argv_main1);
+		p.incl_rsids_file = "data/io_test/n1000_p2000_rsids_group1.txt";
+		Data data(p);
+		data.read_non_genetic_data();
+		data.standardise_non_genetic_data();
+		data.read_full_bgen();
+
+		Eigen::VectorXd Y = data.Y.cast<double>();
+		Eigen::MatrixXd C = data.C.cast<double>();
+
+		PVE pve(data, Y, C);
+		pve.run();
+
+		CHECK(pve.components[0].n_var_local == 898);
+		CHECK(pve.components[0] * pve.components[0] == Approx(3239.2568992814));
+	}
+	SECTION("Main (component 2)") {
+		parameters p;
+		int argc = sizeof(argv_main1)/sizeof(argv_main1[0]);
+		parse_arguments(p, argc, argv_main1);
+		p.incl_rsids_file = "data/io_test/n1000_p2000_rsids_group2.txt";
+		Data data(p);
+		data.read_non_genetic_data();
+		data.standardise_non_genetic_data();
+		data.read_full_bgen();
+
+		Eigen::VectorXd Y = data.Y.cast<double>();
+		Eigen::MatrixXd C = data.C.cast<double>();
+
+		PVE pve(data, Y, C);
+		pve.run();
+
+		CHECK(pve.components[0].n_var_local == 912);
+		CHECK(pve.components[0] * pve.components[0] == Approx(3155.790469249));
+	}
+	SECTION("Main (multi-comp)") {
+		parameters p;
+		int argc = sizeof(argv_main1)/sizeof(argv_main1[0]);
+		parse_arguments(p, argc, argv_main1);
+		p.RHE_groups_file = "data/io_test/n1000_p2000_components.txt";
+		p.RHE_multicomponent = true;
+		Data data(p);
+		data.read_non_genetic_data();
+		data.standardise_non_genetic_data();
+		data.read_full_bgen();
+
+		Eigen::VectorXd Y = data.Y.cast<double>();
+		Eigen::MatrixXd C = data.C.cast<double>();
+
+		PVE pve(data, Y, C);
+		pve.run();
+
+		CHECK(pve.components[0].n_var_local == 898);
+		CHECK(pve.components[0] * pve.components[0] == Approx(3239.2568992814));
+		CHECK(pve.components[1].n_var_local == 912);
+		CHECK(pve.components[1] * pve.components[1] == Approx(3155.790469249));
+	}
+}
+
+TEST_CASE("RHEreg-G") {
+	SECTION("Main effects fit (gaussian prior)"){
+		parameters p;
+		int argc = sizeof(argv_main2)/sizeof(argv_main2[0]);
+		parse_arguments(p, argc, argv_main2);
 		Data data( p );
 		data.read_non_genetic_data();
 		data.standardise_non_genetic_data();
@@ -124,13 +228,13 @@ TEST_CASE("HE-reg"){
 
 		CHECK(pve.sigmas(0)  == Approx(0.5237752503));
 		CHECK(pve.sigmas(1)  == Approx(0.49942111));
-		CHECK(pve.h2(0)  == Approx(0.51190101));
-		CHECK(pve.h2(1)  == Approx(0.48809899));
+		CHECK(pve.h2(0)  == Approx(0.50057889));
+		CHECK(pve.h2(1)  == Approx(0.49942111));
 		std::cout << p.out_file << std::endl;
 		pve.to_file(p.out_file);
 
-		CHECK(pve.h2_se_jack(0)  == Approx(0.193659797));
-		CHECK(pve.h2_se_jack(1)  == Approx(0.1653581733));
+		CHECK(pve.h2_se_jack(0)  == Approx(0.1855704313));
+		CHECK(pve.h2_se_jack(1)  == Approx(0.8261286578));
 	}
 
 	SECTION("GxE Jacknife"){

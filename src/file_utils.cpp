@@ -462,7 +462,8 @@ bool fileUtils::read_bgen_chunk(genfile::bgen::View::UniquePtr &bgenView,
                                 const long &chunk_size,
                                 const parameters &p,
                                 bool &bgen_pass,
-                                long &n_var_parsed){
+                                long &n_var_parsed,
+                                std::vector<std::string>& SNPIDS){
 	// Wrapper around BgenView to read in a 'chunk' of data. Remembers
 	// if last call hit the EOF, and returns false if so.
 
@@ -481,6 +482,7 @@ bool fileUtils::read_bgen_chunk(genfile::bgen::View::UniquePtr &bgenView,
 
 	double chunk_missingness = 0;
 	long n_var_incomplete = 0;
+	SNPIDS.clear();
 
 	// Resize genotype matrix
 	G.resize(n_samples, chunk_size);
@@ -517,6 +519,8 @@ bool fileUtils::read_bgen_chunk(genfile::bgen::View::UniquePtr &bgenView,
 			n_constant_variance++;
 			continue;
 		}
+
+		SNPIDS.push_back(SNPID_j);
 
 		// filters passed; write contextual info
 		chunk_missingness += missingness_j;

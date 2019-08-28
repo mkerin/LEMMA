@@ -99,7 +99,8 @@ bool read_bgen_chunk(genfile::bgen::View::UniquePtr &bgenView,
                      const long &chunk_size,
                      const parameters &p,
                      bool &bgen_pass,
-                     long &n_var_parsed);
+                     long &n_var_parsed,
+                     std::vector<std::string> &SNPIDS);
 
 void dump_yhat_to_file(boost_io::filtering_ostream &outf,
                        const long &n_samples,
