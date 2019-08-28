@@ -13,17 +13,13 @@
 #include "data.hpp"
 #include "eigen_utils.hpp"
 
+#include "tools/eigen3.3/Dense"
+
 #include <boost/iostreams/filtering_stream.hpp>
 
 #include <random>
 
 namespace boost_io = boost::iostreams;
-
-struct Index_t {
-	Index_t() : main(0), noise(1) {
-	}
-	long main, gxe, noise;
-};
 
 class PVE_Component {
 public:
@@ -39,6 +35,8 @@ public:
 	double n_var_local;
 	parameters params;
 	bool is_active;
+	std::string group;
+	std::string effect_type;
 
 	// Storage for jacknife blocks
 	std::vector<Eigen::MatrixXd> _XXtzs, _XXtWzs;
@@ -224,9 +222,8 @@ public:
 	Eigen::MatrixXd& C;
 	Eigen::MatrixXd CtC_inv;
 	Eigen::ArrayXd sigmas, sigmasb;
-	Eigen::ArrayXXd sigmas_jack, h2_jack, h2b_jack;
+	Eigen::ArrayXXd sigmas_jack, h2_jack;
 	Eigen::ArrayXd h2, h2_se_jack, h2_bias_corrected;
-	Eigen::ArrayXd h2b, h2b_se_jack, h2b_bias_corrected;
 	Eigen::ArrayXd n_var_jack;
 
 	EigenDataMatrix zz;
@@ -236,7 +233,7 @@ public:
 
 	// std::vector<std::string> components;
 	std::vector<PVE_Component> components;
-	Index_t ind;
+	std::vector<std::string> SNPGROUPS_snpid, SNPGROUPS_group, all_SNPGROUPS;
 
 	PVE(Data& dat,
 	    Eigen::VectorXd& myY,
@@ -271,6 +268,8 @@ public:
 		MPI_Comm_size(MPI_COMM_WORLD, &world_size);
 	}
 
+	void run();
+
 	void initialise_components();
 
 	void calc_RHE();
@@ -285,14 +284,14 @@ public:
 
 	Eigen::MatrixXd project_out_covars(Eigen::Ref<Eigen::MatrixXd> rhs);
 
-	void run();
-
 	void fill_gaussian_noise(unsigned int seed,
 	                         Eigen::Ref<Eigen::MatrixXd> zz,
 	                         long nn,
 	                         long n_draws);
 
 	void to_file(const std::string& file);
+
+	void read_RHE_groups(const std::string& filename);
 
 	double get_jacknife_var(Eigen::ArrayXd jack_estimates);
 

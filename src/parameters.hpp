@@ -16,8 +16,10 @@ public:
 	std::string r1_hyps_grid_file, r1_probs_grid_file, hyps_grid_file, rhe_random_vectors_file;
 	std::string env_coeffs_file, covar_coeffs_file, hyps_probs_file, vb_init_file;
 	std::string dxteex_file, snpstats_file, mog_weights_file, resume_prefix;
-	std::string streamBgenFile, streamBgiFile, streamBgenOutFile, extra_pve_covar_file;
+	std::string streamBgenOutFile, extra_pve_covar_file, RHE_groups_file;
 	std::vector< std::string > rsid;
+//	std::string streamBgenFiles, streamBgiFiles;
+	std::vector< std::string > streamBgenFiles, streamBgiFiles;
 	unsigned int random_seed;
 	long chunk_size, vb_iter_max, vb_iter_start, param_dump_interval, n_pve_samples;
 	long long int maxBytesPerRank;
@@ -29,7 +31,7 @@ public:
 	bool select_rsid, interaction_analysis, verbose, low_mem;
 	bool elbo_tol_set_by_user, alpha_tol_set_by_user, mode_empirical_bayes;
 	bool keep_constant_variants, user_requests_round1, scale_pheno;
-	bool mode_alternating_updates, mode_pve_est;
+	bool mode_alternating_updates, mode_RHE, mode_RHE_fast;
 	bool restrict_gamma_updates, mode_no_gxe, mode_debug;
 	bool init_weights_with_snpwise_scan, flip_high_maf_variants, min_spike_diff_set;
 	bool mode_mog_prior_beta, mode_mog_prior_gam, mode_random_start, mode_calc_snpstats;
@@ -38,7 +40,8 @@ public:
 	long redo_ym_interval;
 	double min_maf, min_info, elbo_tol, alpha_tol, gamma_updates_thresh;
 	double beta_spike_diff_factor, gam_spike_diff_factor, min_spike_diff_factor;
-	long LOSO_window, n_jacknife;
+	long LOSO_window, n_jacknife, streamBgen_print_interval;
+	bool RHE_multicomponent;
 	std::vector < std::string > incl_sample_ids, gconf;
 
 // constructors/destructors
@@ -62,9 +65,8 @@ public:
 		mog_weights_file("NULL"),
 		covar_coeffs_file("NULL"),
 		resume_prefix("NULL"),
+		RHE_groups_file("NULL"),
 		env_coeffs_file("NULL"),
-		streamBgenFile("NULL"),
-		streamBgiFile("NULL"),
 		rhe_random_vectors_file("NULL"),
 		streamBgenOutFile("NULL") {
 		flip_high_maf_variants = false;
@@ -96,6 +98,7 @@ public:
 		beta_spike_diff_factor = 1000;
 		gam_spike_diff_factor = 1000;
 		param_dump_interval = 50;
+		streamBgen_print_interval = 100;
 		range = false;
 		min_spike_diff_set = false;
 		mode_remove_squared_envs = true;
@@ -114,7 +117,9 @@ public:
 		mode_mog_prior_gam = true;
 		mode_debug = false;
 		mode_random_start = false;
-		mode_pve_est = false;
+		mode_RHE = false;
+		mode_RHE_fast = false;
+		RHE_multicomponent = false;
 		select_rsid = false;
 		// check allele probs sum to 1 by default
 		geno_check = true;

@@ -18,6 +18,12 @@
 #include <regex>
 #include <stdexcept>
 
+#include <boost/iostreams/filtering_stream.hpp>
+#include <boost/iostreams/device/file.hpp>
+#include <boost/iostreams/filter/gzip.hpp>
+
+namespace boost_io = boost::iostreams;
+
 // For vectorise profiling
 void foo(const Eigen::VectorXi& aa1,
          const Eigen::VectorXi& aa2,
@@ -116,7 +122,8 @@ void parse_arguments(parameters &p, int argc, char **argv) {
 	    ("verbose", "", cxxopts::value<bool>(p.verbose))
 	    ("xtra_verbose", "")
 	    ("bgen", "(Optional) Path to BGEN file. This must be indexed (eg. with BGENIX). By default this is stored in RAM using O(NM) bytes.", cxxopts::value<std::string>(p.bgen_file))
-	    ("streamBgen", "(Optional) Path to BGEN file. This must be indexed (eg. with BGENIX). This can be used with --mode_rhe or mode_calc_snpstats.", cxxopts::value<std::string>(p.streamBgenFile))
+	    ("streamBgen", "(Optional) Path to BGEN file. This must be indexed (eg. with BGENIX). This can be used with --RHE or --mode_calc_snpstats.", cxxopts::value<std::string>())
+	    ("mStreamBgen", "(Optional) Path to text file containing paths to multiple BGEN files. They must all be indexed (eg. with BGENIX). This can be used with --RHE or --mode_calc_snpstats.", cxxopts::value<std::string>())
 	    ("pheno", "Path to phenotype file. Must have a header and have the same number of rows as the BGEN file.", cxxopts::value<std::string>(p.pheno_file))
 	    ("covar", "Path to file of covariates. Must have a header and have the same number of rows as the BGEN file.", cxxopts::value<std::string>(p.covar_file))
 	    ("environment", "Path to file of environmental variables", cxxopts::value<std::string>(p.env_file))
@@ -159,6 +166,8 @@ void parse_arguments(parameters &p, int argc, char **argv) {
 	    ("loso_window_size", "", cxxopts::value<long>(p.LOSO_window))
 	    ("drop_loco", "", cxxopts::value<bool>(p.drop_loco))
 	    ("init_weights_with_snpwise_scan", "", cxxopts::value<bool>(p.init_weights_with_snpwise_scan))
+	    ("mode_pve_est", "Depreciated: Run RHE algorithm", cxxopts::value<bool>())
+	    ("streamBgen-print-interval", "", cxxopts::value<long>(p.streamBgen_print_interval))
 	;
 
 	options.add_options("Filtering")
@@ -186,7 +195,9 @@ void parse_arguments(parameters &p, int argc, char **argv) {
 	;
 
 	options.add_options("RHE")
-	    ("mode_pve_est", "Run RHE algorithm", cxxopts::value<bool>(p.mode_pve_est))
+	("RHEreg", "Run randomised HE-regression algorithm", cxxopts::value<bool>())
+			("RHEreg-fast", "Run randomised HE-regression algorithm without centering and scaling genotype matrix (unnecessary with modified h2 conversion)")
+			("RHEreg-groups", "Text file containing group of each SNP for use with multicomponent randomised HE regression", cxxopts::value<std::string>(p.RHE_groups_file))
 	    ("n_pve_samples", "Number of random vectors used in RHE algorithm", cxxopts::value<long>(p.n_pve_samples))
 	    ("n_jacknife", "Number of jacknife samples used in RHE algorithm", cxxopts::value<long>(p.n_jacknife))
 	    ("random_seed", "Seed used to draw random vectors in RHE algorithm (default: random)",
@@ -214,7 +225,38 @@ void parse_arguments(parameters &p, int argc, char **argv) {
 			}
 			std::cout << std::endl;
 		}
-
+		if(opts.count("RHEreg-fast")) {
+			p.mode_RHE = true;
+			p.mode_RHE_fast = true;
+		}
+		if(opts.count("RHEreg")) {
+			p.mode_RHE = true;
+		}
+		if(opts.count("mode_pve_est")) {
+			p.mode_RHE = true;
+		}
+		if(opts.count("RHEreg-groups")){
+			p.RHE_multicomponent = true;
+		}
+		if(opts.count("streamBgen")) {
+			p.streamBgenFiles.push_back(opts["streamBgen"].as<std::string>());
+		}
+		if(opts.count("mStreamBgen")) {
+			boost_io::filtering_istream fg;
+			std::string filename = opts["mStreamBgen"].as<std::string>();
+			fg.push(boost_io::file_source(filename));
+			if (!fg) {
+				std::cout << "ERROR: " << filename << " not opened." << std::endl;
+				std::exit(EXIT_FAILURE);
+			}
+			std::string line, s;
+			while (getline(fg, line)) {
+				std::stringstream ss(line);
+				while (ss >> s) {
+					p.streamBgenFiles.push_back(s);
+				}
+			}
+		}
 		if(opts.count("loso_window_size")) {
 			p.drop_loco = true;
 		}
@@ -257,10 +299,11 @@ void parse_arguments(parameters &p, int argc, char **argv) {
 			check_file_exists(p.bgen_file);
 			check_file_exists(p.bgi_file);
 		}
-		if(p.streamBgenFile != "NULL") {
-			p.streamBgiFile = p.streamBgenFile + ".bgi";
-			check_file_exists(p.streamBgenFile);
-			check_file_exists(p.streamBgiFile);
+		for (auto streamBgenFile : p.streamBgenFiles) {
+			std::string bgi = streamBgenFile + ".bgi";
+			check_file_exists(streamBgenFile);
+			check_file_exists(bgi);
+			p.streamBgiFiles.push_back(bgi);
 		}
 
 		if(opts.count("mode_empirical_bayes")) {
@@ -443,7 +486,7 @@ void parse_arguments(parameters &p, int argc, char **argv) {
 	//  "--dxteex",
 	//  "--mode_mog_beta",
 	//  "--mode_mog_gamma",
-	//  "--mode_pve_est",
+	//  "--mode_RHE",
 	//  "--gxe_chunk_size",
 	//  "--main_chunk_size",
 	//  "--param_dump_interval",
@@ -664,8 +707,8 @@ void parse_arguments(parameters &p, int argc, char **argv) {
 	//          i += 0;
 	//      }
 	//
-	//      if(strcmp(in_str, "--mode_pve_est") == 0) {
-	//          p.mode_pve_est = true;
+	//      if(strcmp(in_str, "--mode_RHE") == 0) {
+	//          p.mode_RHE = true;
 	//          i += 0;
 	//      }
 	//

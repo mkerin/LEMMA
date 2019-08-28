@@ -97,10 +97,9 @@ int main( int argc, char** argv ) {
 				VB.write_map_stats_to_file("");
 			}
 
-			if (p.streamBgenFile != "NULL") {
+			if (!p.streamBgenFiles.empty()) {
 				GenotypeMatrix Xstream(p, false);
 				bool bgen_pass = true;
-				long n_var_parsed = 0;
 
 				Eigen::VectorXd neglogp_beta(data.n_var);
 				Eigen::VectorXd neglogp_rgam(data.n_var);
@@ -124,28 +123,47 @@ int main( int argc, char** argv ) {
 					std::cout << "Computing single-snp hypothesis tests with LOCO strategy" << std::endl;
 				}
 
-				while (fileUtils::read_bgen_chunk(data.streamBgenView, Xstream, data.sample_is_invalid,
-				                                  data.n_samples, 128, p, bgen_pass, n_var_parsed)) {
-					VB.LOCO_pvals_v2(Xstream,
-					                 data.vp_init,
-					                 p.LOSO_window, neglogp_beta, neglogp_rgam,
-					                 neglogp_joint,
-					                 test_stat_beta,
-					                 test_stat_rgam,
-					                 test_stat_joint);
+				long n_var_parsed = 0;
+				long ch = 0;
+				long print_interval = p.streamBgen_print_interval;;
+				if (p.mode_debug) print_interval = 1;
+				long long n_vars_tot = 0;
+				for (int ii = 0; ii < p.streamBgenFiles.size(); ii++) {
+					n_vars_tot += data.streamBgenViews[ii]->number_of_variants();
+				}
 
-					if(world_rank == 0) {
-						fileUtils::write_snp_stats_to_file(outf, data.n_effects, Xstream, append, neglogp_beta,
-														   neglogp_gam,
-														   neglogp_rgam, neglogp_joint, test_stat_beta, test_stat_gam,
-														   test_stat_rgam, test_stat_joint);
+				for (int ii = 0; ii < p.streamBgenFiles.size(); ii++){
+					std::cout << "Streaming genotypes from " << p.streamBgenFiles[ii] << std::endl;
+					while (fileUtils::read_bgen_chunk(data.streamBgenViews[ii], Xstream, data.sample_is_invalid,
+													  data.n_samples, 128, p, bgen_pass, n_var_parsed)) {
+						if (ch % print_interval == 0 && ch > 0) {
+							std::cout << "Chunk " << ch << " read (size " << 128;
+							std::cout << ", " << n_var_parsed - 1 << "/" << n_vars_tot;
+							std::cout << " variants parsed)" << std::endl;
+						}
+
+						VB.LOCO_pvals_v2(Xstream,
+										 data.vp_init,
+										 p.LOSO_window, neglogp_beta, neglogp_rgam,
+										 neglogp_joint,
+										 test_stat_beta,
+										 test_stat_rgam,
+										 test_stat_joint);
+
+						if (world_rank == 0) {
+							fileUtils::write_snp_stats_to_file(outf, data.n_effects, Xstream, append, neglogp_beta,
+															   neglogp_gam,
+															   neglogp_rgam, neglogp_joint, test_stat_beta,
+															   test_stat_gam,
+															   test_stat_rgam, test_stat_joint);
+						}
+						append = true;
 					}
-					append = true;
 				}
 			}
 		}
 
-		if(p.mode_pve_est) {
+		if(p.mode_RHE) {
 			if(p.random_seed == -1) {
 				if(world_rank == 0) {
 					std::random_device rd;

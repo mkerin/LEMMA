@@ -97,14 +97,15 @@ bool read_bgen_chunk(genfile::bgen::View::UniquePtr &bgenView,
                      bool &bgen_pass,
                      long &n_var_parsed);
 
-	bool read_bgen_chunk(genfile::bgen::View::UniquePtr &bgenView,
-						 Eigen::MatrixXd &G,
-						 const std::unordered_map<long, bool> &sample_is_invalid,
-						 const long &n_samples,
-						 const long &chunk_size,
-						 const parameters &p,
-						 bool &bgen_pass,
-						 long &n_var_parsed);
+bool read_bgen_chunk(genfile::bgen::View::UniquePtr &bgenView,
+					 Eigen::MatrixXd &G,
+					 const std::unordered_map<long, bool> &sample_is_invalid,
+					 const long &n_samples,
+					 const long &chunk_size,
+					 const parameters &p,
+					 bool &bgen_pass,
+					 long &n_var_parsed,
+					 std::vector<std::string> &SNPIDS);
 }
 
 #endif //FILE_UTILS_HPP
