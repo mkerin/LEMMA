@@ -372,34 +372,6 @@ public:
 				XtX_block_cache[memoize_id] = mpiUtils::mpiReduce_inplace(XtX_block_cache[memoize_id]);
 			}
 		}
-
-		// Update main effects
-		cache_local_ldblocks(main_fwd_pass_chunks, true);
-		cache_local_ldblocks(main_back_pass_chunks, false);
-	}
-
-	void cache_local_ldblocks(std::vector<std::vector<long>>iter_chunks, bool is_fwd_pass){
-		EigenDataMatrix D;
-		for (std::uint32_t ch = 0; ch < iter_chunks.size(); ch++) {
-			std::vector<long> chunk = iter_chunks[ch];
-			int ee = chunk[0] / n_var;
-			long ch_len = chunk.size();
-			if (D.cols() != ch_len) {
-				D.resize(n_samples, ch_len);
-			}
-			X.col_block3(chunk, D);
-
-			unsigned long memoize_id = ((is_fwd_pass) ? ch : ch + iter_chunks.size());
-			if (XtX_block_cache.count(memoize_id) == 0) {
-				if (p.n_thread == 1) {
-					Eigen::MatrixXd D_corr(ch_len, ch_len);
-					D_corr.triangularView<Eigen::StrictlyUpper>() = (D.transpose() * D).template cast<double>();
-					XtX_block_cache[memoize_id] = D_corr;
-				} else {
-					XtX_block_cache[memoize_id] = (D.transpose() * D).template cast<double>();
-				}
-			}
-		}
 	}
 
 	~VBayesX2(){

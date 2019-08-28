@@ -216,8 +216,6 @@ public:
 
 	std::map<long, int> sample_location;
 
-	parameters p;
-
 	const parameters& p;
 	const GenotypeMatrix& X;
 
