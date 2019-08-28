@@ -11,6 +11,7 @@
 #include "eigen_utils.hpp"
 #include "mpi_utils.hpp"
 #include "data.hpp"
+#include "eigen_utils.hpp"
 
 #include <boost/iostreams/filtering_stream.hpp>
 
@@ -217,6 +218,7 @@ public:
 
 	parameters p;
 
+	const parameters& p;
 	const GenotypeMatrix& X;
 
 	Eigen::VectorXd eta;
