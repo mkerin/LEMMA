@@ -123,7 +123,7 @@ void parse_arguments(parameters &p, int argc, char **argv) {
 	    ("xtra_verbose", "")
 	    ("bgen", "(Optional) Path to BGEN file. This must be indexed (eg. with BGENIX). By default this is stored in RAM using O(NM) bytes.", cxxopts::value<std::string>(p.bgen_file))
 	    ("streamBgen", "(Optional) Path to BGEN file. This must be indexed (eg. with BGENIX). This can be used with --RHE or --mode_calc_snpstats.", cxxopts::value<std::string>())
-	    ("mStreamBgen", "(Optional) Path to text file containing paths to multiple BGEN files. They must all be indexed (eg. with BGENIX). This can be used with --RHE or --mode_calc_snpstats.", cxxopts::value<std::string>())
+	    ("mStreamBgen", "Text file containing paths to multiple BGEN files. They must all be indexed (eg. with BGENIX). This can be used with --RHE or --mode_calc_snpstats.", cxxopts::value<std::string>())
 	    ("pheno", "Path to phenotype file. Must have a header and have the same number of rows as the BGEN file.", cxxopts::value<std::string>(p.pheno_file))
 	    ("covar", "Path to file of covariates. Must have a header and have the same number of rows as the BGEN file.", cxxopts::value<std::string>(p.covar_file))
 	    ("environment", "Path to file of environmental variables", cxxopts::value<std::string>(p.env_file))
@@ -162,12 +162,13 @@ void parse_arguments(parameters &p, int argc, char **argv) {
 	    ("threads", "", cxxopts::value<unsigned int>(p.n_thread))
 	    ("hyps_probs", "", cxxopts::value<std::string>(p.hyps_probs_file))
 	    ("maxBytesPerRank", "Maximum number of bytes of RAM available on each partition when using MPI (Default: 16GB)",
-			 cxxopts::value<long long>(p.maxBytesPerRank))
+	    cxxopts::value<long long>(p.maxBytesPerRank))
 	    ("loso_window_size", "", cxxopts::value<long>(p.LOSO_window))
 	    ("drop_loco", "", cxxopts::value<bool>(p.drop_loco))
 	    ("init_weights_with_snpwise_scan", "", cxxopts::value<bool>(p.init_weights_with_snpwise_scan))
 	    ("mode_pve_est", "Depreciated: Run RHE algorithm", cxxopts::value<bool>())
 	    ("streamBgen-print-interval", "", cxxopts::value<long>(p.streamBgen_print_interval))
+	    ("mode_dump_processed_data", "", cxxopts::value<bool>(p.mode_dump_processed_data))
 	;
 
 	options.add_options("Filtering")
@@ -195,9 +196,10 @@ void parse_arguments(parameters &p, int argc, char **argv) {
 	;
 
 	options.add_options("RHE")
-	("RHEreg", "Run randomised HE-regression algorithm", cxxopts::value<bool>())
-			("RHEreg-fast", "Run randomised HE-regression algorithm without centering and scaling genotype matrix (unnecessary with modified h2 conversion)")
-			("RHEreg-groups", "Text file containing group of each SNP for use with multicomponent randomised HE regression", cxxopts::value<std::string>(p.RHE_groups_file))
+	    ("RHEreg", "Run randomised HE-regression algorithm", cxxopts::value<bool>())
+	    ("RHEreg-fast", "Run randomised HE-regression algorithm without centering and scaling genotype matrix (unnecessary with modified h2 conversion)")
+	    ("RHEreg-groups", "Text file containing group of each SNP for use with multicomponent randomised HE regression", cxxopts::value<std::string>())
+	    ("mRHEreg-groups", "Text file to paths of --RHE-groups files. Each should correspond to the bgen files given in --mStreamBgen", cxxopts::value<std::string>())
 	    ("n_pve_samples", "Number of random vectors used in RHE algorithm", cxxopts::value<long>(p.n_pve_samples))
 	    ("n_jacknife", "Number of jacknife samples used in RHE algorithm", cxxopts::value<long>(p.n_jacknife))
 	    ("random_seed", "Seed used to draw random vectors in RHE algorithm (default: random)",
@@ -235,9 +237,28 @@ void parse_arguments(parameters &p, int argc, char **argv) {
 		if(opts.count("mode_pve_est")) {
 			p.mode_RHE = true;
 		}
-		if(opts.count("RHEreg-groups")){
+		if(opts.count("RHEreg-groups")) {
 			p.RHE_multicomponent = true;
+			p.RHE_groups_files.push_back(opts["RHEreg-groups"].as<std::string>());
 		}
+		if(opts.count("mRHEreg-groups")) {
+			p.RHE_multicomponent = true;
+			boost_io::filtering_istream fg;
+			std::string filename = opts["mRHEreg-groups"].as<std::string>();
+			fg.push(boost_io::file_source(filename));
+			if (!fg) {
+				std::cout << "ERROR: " << filename << " not opened." << std::endl;
+				std::exit(EXIT_FAILURE);
+			}
+			std::string line, s;
+			while (getline(fg, line)) {
+				std::stringstream ss(line);
+				while (ss >> s) {
+					p.RHE_groups_files.push_back(s);
+				}
+			}
+		}
+
 		if(opts.count("streamBgen")) {
 			p.streamBgenFiles.push_back(opts["streamBgen"].as<std::string>());
 		}

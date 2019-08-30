@@ -73,11 +73,9 @@ public:
 		_XXtzs.resize(n_jacknife_local);
 		_XXtWzs.resize(n_jacknife_local);
 		for(long ii = 0; ii < n_jacknife_local; ii++) {
-			Eigen::MatrixXd mm = Eigen::MatrixXd::Zero(n_samples, n_draws);
-			_XXtzs[ii] = mm;
-			_XXtWzs[ii] = mm;
+			_XXtzs[ii] = Eigen::MatrixXd::Zero(n_samples, n_draws);
+			_XXtWzs[ii] = Eigen::MatrixXd::Zero(n_samples, n_draws);
 		}
-
 	}
 
 	void set_eta(Eigen::Ref<Eigen::VectorXd> myeta){
@@ -98,6 +96,8 @@ public:
 		_XXtWz = Wzz;
 		n_var_local = 1;
 		ytXXty = mpiUtils::mpiReduce_inplace(Y.squaredNorm());
+		_XXtWzs.clear();
+		_XXtzs.clear();
 	}
 
 	void add_to_trace_estimator(Eigen::Ref<Eigen::MatrixXd> X,

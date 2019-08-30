@@ -123,7 +123,7 @@ public:
 			n_samples = (long) bgenView->number_of_samples();
 			n_var     = bgenView->number_of_variants();
 		}
-		for (auto streamBgenFile : p.streamBgenFiles){
+		for (auto streamBgenFile : p.streamBgenFiles) {
 			genfile::bgen::View::UniquePtr view = genfile::bgen::View::create(streamBgenFile);
 			n_samples = (long) view->number_of_samples();
 			streamBgenViews.push_back(move(view));
@@ -131,7 +131,7 @@ public:
 		// Check all bgen files have the same number of samples
 		if(p.bgen_file != "NULL" && !p.streamBgenFiles.empty()) {
 			assert(n_samples == bgenView->number_of_samples());
-			for (int ii = 0; ii < p.streamBgenFiles.size(); ii++){
+			for (int ii = 0; ii < p.streamBgenFiles.size(); ii++) {
 				assert(n_samples == streamBgenViews[ii]->number_of_samples());
 			}
 		}
@@ -199,7 +199,7 @@ public:
 			bgenView->summarise(std::cout);
 		}
 
-		for (int ii = 0; ii < p.streamBgenFiles.size(); ii++){
+		for (int ii = 0; ii < p.streamBgenFiles.size(); ii++) {
 			genfile::bgen::IndexQuery::UniquePtr query = genfile::bgen::IndexQuery::create(p.streamBgiFiles[ii]);
 			if (p.range) {
 				genfile::bgen::IndexQuery::GenomicRange rr1(p.chr, p.range_start, p.range_end);
@@ -1273,6 +1273,22 @@ public:
 			assign_vb_init_from_file(vp_init);
 		}
 		if (p.mode_debug) std::cout << "Done vb init" << std::endl;
+	}
+
+	void dump_processed_data(){
+		std::string path, header;
+		// std::cout << "Dumping processed data" << std::endl;
+		path = fileUtils::filepath_format(p.out_file, "", "_debug_processed_env");
+		std::cout << "Dumping processed E matrix to: " << path << std::endl;
+		fileUtils::dump_predicted_vec_to_file(E, path, env_names, sample_location);
+
+		path = fileUtils::filepath_format(p.out_file, "", "_debug_processed_pheno");
+		std::cout << "Dumping processed Y matrix to: " << path << std::endl;
+		fileUtils::dump_predicted_vec_to_file(Y, path, pheno_names, sample_location);
+
+		path = fileUtils::filepath_format(p.out_file, "", "_debug_processed_covar");
+		std::cout << "Dumping processed C matrix to: " << path << std::endl;
+		fileUtils::dump_predicted_vec_to_file(C, path, covar_names, sample_location);
 	}
 
 	void read_mog_weights(const std::string& filename,

@@ -16,10 +16,10 @@ public:
 	std::string r1_hyps_grid_file, r1_probs_grid_file, hyps_grid_file, rhe_random_vectors_file;
 	std::string env_coeffs_file, covar_coeffs_file, hyps_probs_file, vb_init_file;
 	std::string dxteex_file, snpstats_file, mog_weights_file, resume_prefix;
-	std::string streamBgenOutFile, extra_pve_covar_file, RHE_groups_file;
+	std::string streamBgenOutFile, extra_pve_covar_file;
 	std::vector< std::string > rsid;
 //	std::string streamBgenFiles, streamBgiFiles;
-	std::vector< std::string > streamBgenFiles, streamBgiFiles;
+	std::vector< std::string > streamBgenFiles, streamBgiFiles, RHE_groups_files;
 	unsigned int random_seed;
 	long chunk_size, vb_iter_max, vb_iter_start, param_dump_interval, n_pve_samples;
 	long long int maxBytesPerRank;
@@ -41,7 +41,7 @@ public:
 	double min_maf, min_info, elbo_tol, alpha_tol, gamma_updates_thresh;
 	double beta_spike_diff_factor, gam_spike_diff_factor, min_spike_diff_factor;
 	long LOSO_window, n_jacknife, streamBgen_print_interval;
-	bool RHE_multicomponent;
+	bool RHE_multicomponent, mode_dump_processed_data;
 	std::vector < std::string > incl_sample_ids, gconf;
 
 // constructors/destructors
@@ -65,7 +65,6 @@ public:
 		mog_weights_file("NULL"),
 		covar_coeffs_file("NULL"),
 		resume_prefix("NULL"),
-		RHE_groups_file("NULL"),
 		env_coeffs_file("NULL"),
 		rhe_random_vectors_file("NULL"),
 		streamBgenOutFile("NULL") {
@@ -121,6 +120,7 @@ public:
 		mode_RHE_fast = false;
 		RHE_multicomponent = false;
 		select_rsid = false;
+		mode_dump_processed_data = false;
 		// check allele probs sum to 1 by default
 		geno_check = true;
 		verbose = false;

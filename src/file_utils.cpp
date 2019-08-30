@@ -35,20 +35,20 @@ long long parseLineRAM(char* line){
 	return res;
 }
 
-long long fileUtils::getValueRAM(){
+long long fileUtils::getValueRAM(const std::string& field){
 #ifndef OSX
 	FILE* file = fopen("/proc/self/status", "r");
-		long long result = -1;
-		char line[128];
+	long long result = -1;
+	char line[128];
 
-		while (fgets(line, 128, file) != NULL) {
-			if (strncmp(line, "VmRSS:", 6) == 0) {
-				result = parseLineRAM(line);
-				break;
-			}
+	while (fgets(line, 128, file) != NULL) {
+		if (strncmp(line, field.c_str(), 6) == 0) {
+			result = parseLineRAM(line);
+			break;
 		}
-		fclose(file);
-		return result;
+	}
+	fclose(file);
+	return result;
 #else
 	return -1;
 #endif
@@ -92,6 +92,19 @@ std::string fileUtils::filepath_format(const std::string& orig,
 
 	std::string ofile      = dir + file_prefix + stem + file_suffix + ext;
 	return ofile;
+}
+
+void fileUtils::dump_predicted_vec_to_file(Eigen::Ref<Eigen::MatrixXd> mat,
+                                           const std::string& filename,
+                                           const std::vector<std::string>& header,
+                                           const std::map<long, int>& sample_location){
+	std::string header_string;
+	for (int ii = 0; ii < header.size() - 1; ii++) {
+		header_string += header[ii] + " ";
+	}
+	header_string += header[header.size() - 1];
+
+	fileUtils::dump_predicted_vec_to_file(mat, filename, header_string, sample_location);
 }
 
 void fileUtils::dump_predicted_vec_to_file(Eigen::Ref<Eigen::MatrixXd> mat,

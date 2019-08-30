@@ -55,6 +55,9 @@ int main( int argc, char** argv ) {
 
 		// Also regresses out covariables if necessary
 		data.standardise_non_genetic_data();
+		if(p.mode_dump_processed_data) {
+			data.dump_processed_data();
+		}
 		data.read_full_bgen();
 		data.set_vb_init();
 
@@ -132,10 +135,10 @@ int main( int argc, char** argv ) {
 					n_vars_tot += data.streamBgenViews[ii]->number_of_variants();
 				}
 
-				for (int ii = 0; ii < p.streamBgenFiles.size(); ii++){
+				for (int ii = 0; ii < p.streamBgenFiles.size(); ii++) {
 					std::cout << "Streaming genotypes from " << p.streamBgenFiles[ii] << std::endl;
 					while (fileUtils::read_bgen_chunk(data.streamBgenViews[ii], Xstream, data.sample_is_invalid,
-													  data.n_samples, 128, p, bgen_pass, n_var_parsed)) {
+					                                  data.n_samples, 128, p, bgen_pass, n_var_parsed)) {
 						if (ch % print_interval == 0 && ch > 0) {
 							std::cout << "Chunk " << ch << " read (size " << 128;
 							std::cout << ", " << n_var_parsed - 1 << "/" << n_vars_tot;
@@ -143,19 +146,19 @@ int main( int argc, char** argv ) {
 						}
 
 						VB.LOCO_pvals_v2(Xstream,
-										 data.vp_init,
-										 p.LOSO_window, neglogp_beta, neglogp_rgam,
-										 neglogp_joint,
-										 test_stat_beta,
-										 test_stat_rgam,
-										 test_stat_joint);
+						                 data.vp_init,
+						                 p.LOSO_window, neglogp_beta, neglogp_rgam,
+						                 neglogp_joint,
+						                 test_stat_beta,
+						                 test_stat_rgam,
+						                 test_stat_joint);
 
 						if (world_rank == 0) {
 							fileUtils::write_snp_stats_to_file(outf, data.n_effects, Xstream, append, neglogp_beta,
-															   neglogp_gam,
-															   neglogp_rgam, neglogp_joint, test_stat_beta,
-															   test_stat_gam,
-															   test_stat_rgam, test_stat_joint);
+							                                   neglogp_gam,
+							                                   neglogp_rgam, neglogp_joint, test_stat_beta,
+							                                   test_stat_gam,
+							                                   test_stat_rgam, test_stat_joint);
 						}
 						append = true;
 					}

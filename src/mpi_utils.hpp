@@ -46,6 +46,7 @@
 namespace mpiUtils {
 
 void sanitise_cout();
+std::string currentUsageRAM();
 
 // Partition samples across ranks
 void partition_valid_samples_across_ranks(const long& n_samples,
@@ -53,7 +54,7 @@ void partition_valid_samples_across_ranks(const long& n_samples,
                                           const long &n_env,
                                           const parameters &p,
                                           std::map<long, bool>& incomplete_cases,
-										  std::map<long, int>& sample_location);
+                                          std::map<long, int>& sample_location);
 
 void mpiReduce_double(void* local, void* global, long size);
 

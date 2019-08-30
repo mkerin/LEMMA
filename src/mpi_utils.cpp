@@ -4,6 +4,7 @@
 
 #include "mpi_utils.hpp"
 #include "parameters.hpp"
+#include "file_utils.hpp"
 
 #include <mpi.h>
 #include <map>
@@ -19,7 +20,7 @@ mpiUtils::partition_valid_samples_across_ranks(const long &n_samples,
                                                const long &n_env,
                                                const parameters &p,
                                                std::map<long, bool> &incomplete_cases,
-											   std::map<long, int> &sample_location) {
+                                               std::map<long, int> &sample_location) {
 	int rank, size;
 	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 	MPI_Comm_size(MPI_COMM_WORLD, &size);
@@ -49,7 +50,7 @@ mpiUtils::partition_valid_samples_across_ranks(const long &n_samples,
 	long rankZeroSamples;
 	if(rankZeroBytes > p.maxBytesPerRank) {
 		// Predicted to overflow maxBytesPerRank. Adjust accordingly.
-		if(p.verbose){
+		if(p.verbose) {
 			std::cout << "Reducing no. of samples stored on rank 0 from ";
 			std::cout << samplesPerRank << " to ";
 		}
@@ -67,7 +68,7 @@ mpiUtils::partition_valid_samples_across_ranks(const long &n_samples,
 	// store 'rank' that each sample is located in
 	// samples excluded due to missing data have location -1
 	long iiValid = diff;
-	for (long ii = 0; ii < n_samples; ii++){
+	for (long ii = 0; ii < n_samples; ii++) {
 		if (incomplete_cases.count(ii) == 0) {
 			sample_location[ii] = (int) (iiValid / samplesPerRank);
 			iiValid++;
@@ -77,7 +78,7 @@ mpiUtils::partition_valid_samples_across_ranks(const long &n_samples,
 	}
 	assert(iiValid == n_valid_sids + diff);
 
-	if(p.mode_debug){
+	if(p.mode_debug) {
 		std::vector<long> allii(size, 0);
 		for (const auto &kv : sample_location) {
 			if (kv.second != -1) {
@@ -86,7 +87,7 @@ mpiUtils::partition_valid_samples_across_ranks(const long &n_samples,
 			}
 		}
 		std::cout << "Samples stored on each rank: " << std::endl;
-		for (int rr = 0; rr < size; rr++){
+		for (int rr = 0; rr < size; rr++) {
 			std::cout << "Rank " << rr << ": " << allii[rr] << std::endl;
 		}
 	}
@@ -101,10 +102,6 @@ mpiUtils::partition_valid_samples_across_ranks(const long &n_samples,
 		}
 	}
 
-
-
-
-
 	// Check Nlocal sums to expected number of valid samples
 	long Nlocal = rank_cases.size();
 	long Nglobal;
@@ -112,6 +109,25 @@ mpiUtils::partition_valid_samples_across_ranks(const long &n_samples,
 	if(rank == 0) {
 		assert(Nglobal == n_valid_sids);
 	}
+}
+
+std::string mpiUtils::currentUsageRAM(){
+	int world_rank;
+	long long kbMax, kbGlobal, kbLocal = fileUtils::getValueRAM();
+	long long peakMax, peakLocal = fileUtils::getValueRAM("VmPeak:");
+	MPI_Comm_rank(MPI_COMM_WORLD, &world_rank);
+	MPI_Allreduce(&kbLocal, &kbMax, 1, MPI_LONG_LONG, MPI_MAX, MPI_COMM_WORLD);
+	MPI_Allreduce(&peakLocal, &peakMax, 1, MPI_LONG_LONG, MPI_MAX, MPI_COMM_WORLD);
+	MPI_Allreduce(&kbLocal, &kbGlobal, 1, MPI_LONG_LONG, MPI_SUM, MPI_COMM_WORLD);
+	double gbGlobal = kbGlobal / 1000.0 / 1000.0;
+	double gbMax = kbMax / 1000.0 / 1000.0;
+	double gbPeakMax = peakMax / 1000.0 / 1000.0;
+
+	char buffer [200];
+	int n;
+	n = sprintf(buffer, "RAM usage: %.2f GB in total; max current=%.2f GB and max peak=%.2f GB per rank", gbGlobal, gbMax, gbMax);
+	std::string res(buffer);
+	return res;
 }
 
 void mpiUtils::mpiReduce_double(void *local, void *global, long size) {

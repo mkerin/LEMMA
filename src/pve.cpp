@@ -33,9 +33,19 @@ void PVE::run() {
 		EigenUtils::scale_matrix_and_remove_constant_cols(eta, n_env, placeholder);
 	}
 
-	// Read in groups for multicomponent RHE if given from commandline
-	if(p.RHE_groups_file != "NULL"){
-		read_RHE_groups(p.RHE_groups_file);
+	// Parse RHE groups files once to get total number of groups
+	if(p.RHE_multicomponent) {
+		std::set<std::string> tmp_set;
+		for (auto ff : p.RHE_groups_files) {
+			read_RHE_groups(ff);
+			tmp_set.insert(SNPGROUPS_group.begin(), SNPGROUPS_group.end());
+		}
+		std::vector<std::string> tmp_vec(tmp_set.begin(), tmp_set.end());
+		all_SNPGROUPS = tmp_vec;
+		if(p.RHE_groups_files.size() > 1) {
+			SNPGROUPS_snpid.clear();
+			SNPGROUPS_group.clear();
+		}
 	}
 
 	// Compute variance components
@@ -136,7 +146,7 @@ void PVE::calc_RHE() {
 		}
 	} else if (!p.streamBgenFiles.empty()) {
 		n_var = 0;
-		long snp_group_index = 0;
+		long long snp_group_index = 0;
 		long n_var_parsed = 0;
 		long ch = 0;
 		long print_interval = p.streamBgen_print_interval;;
@@ -151,13 +161,19 @@ void PVE::calc_RHE() {
 		std::cout << "jacknife block size = " << jack_block_size << std::endl;
 		for (int ii = 0; ii < p.streamBgenFiles.size(); ii++) {
 			std::cout << std::endl << "Streaming genotypes from " << p.streamBgenFiles[ii] << std::endl;
+
+			if(p.RHE_groups_files.size() > 1) {
+				snp_group_index = 0;
+				read_RHE_groups(p.RHE_groups_files[ii]);
+			}
+
 			Eigen::MatrixXd D;
 			bool bgen_pass = true;
 			while (fileUtils::read_bgen_chunk(data.streamBgenViews[ii], D, sample_is_invalid,
-											  n_samples, 256, p, bgen_pass, n_var_parsed, SNPIDS)) {
+			                                  n_samples, 256, p, bgen_pass, n_var_parsed, SNPIDS)) {
 				n_var += D.cols();
 				if (ch % print_interval == 0 && ch > 0) {
-					std::cout << "Chunk " << ch << " read (size " << 128;
+					std::cout << "Chunk " << ch << " read (size " << 256;
 					std::cout << ", " << n_var_parsed - 1 << "/" << n_vars_tot;
 					std::cout << " variants parsed)" << std::endl;
 				}
@@ -173,9 +189,9 @@ void PVE::calc_RHE() {
 				}
 
 				// parse which snp belongs to which group
-				std::vector<std::vector<int>> block_membership(n_components);
-				if(p.RHE_multicomponent){
-					for (long jj = 0; jj < D.cols(); jj ++) {
+				std::vector<std::vector<int> > block_membership(n_components);
+				if(p.RHE_multicomponent) {
+					for (long jj = 0; jj < D.cols(); jj++) {
 						if(SNPGROUPS_snpid[snp_group_index] == SNPIDS[jj]) {
 							for (int kk = 0; kk < n_components; kk++) {
 								if (components[kk].group == SNPGROUPS_group[snp_group_index]) {
@@ -185,21 +201,22 @@ void PVE::calc_RHE() {
 						} else {
 							// find
 							auto it = std::find(SNPGROUPS_snpid.begin(), SNPGROUPS_snpid.end(), SNPIDS[jj]);
-							if(it == SNPGROUPS_snpid.end()){
+							if(it == SNPGROUPS_snpid.end()) {
 								// skip
 								n_var -= 1;
 							} else {
 								snp_group_index = it - SNPGROUPS_snpid.begin();
-								for (int kk = 0; kk < n_components; kk++){
-									if(components[kk].group == SNPGROUPS_group[snp_group_index]){
+								for (int kk = 0; kk < n_components; kk++) {
+									if(components[kk].group == SNPGROUPS_group[snp_group_index]) {
 										block_membership[kk].push_back(jj);
 									}
 								}
 							}
 							n_find_operations++;
 						}
+						snp_group_index++;
 					}
-					for (int cc = 0; cc < n_components; cc++){
+					for (int cc = 0; cc < n_components; cc++) {
 						Eigen::MatrixXd D1(D.rows(), block_membership[cc].size());
 						if(D1.cols() > 0) {
 							for (int jjj = 0; jjj < block_membership[cc].size(); jjj++) {
@@ -250,7 +267,7 @@ void PVE::calc_RHE() {
 	sigmas_jack.resize(p.n_jacknife, n_components);
 
 	// h2_jack contains total G and GxE heritabilities at end
-	h2_jack.resize(p.n_jacknife, n_components + 2);
+	h2_jack.resize(p.n_jacknife, n_components);
 	n_var_jack.resize(p.n_jacknife);
 
 	for (long jj = 0; jj < p.n_jacknife; jj++) {
@@ -281,10 +298,10 @@ void PVE::calc_RHE() {
 	if(n_env > 0) {
 		// Main effects model
 		int ind_main, ind_noise;
-		for (int cc = 0; cc < n_components; cc++){
-			if (components[cc].effect_type == "G"){
+		for (int cc = 0; cc < n_components; cc++) {
+			if (components[cc].effect_type == "G") {
 				ind_main = cc;
-			} else if (components[cc].effect_type == "noise"){
+			} else if (components[cc].effect_type == "noise") {
 				ind_noise = cc;
 			}
 		}
@@ -325,18 +342,7 @@ Eigen::ArrayXd PVE::calc_h2(Eigen::Ref<Eigen::MatrixXd> AA, Eigen::Ref<Eigen::Ve
 		ss *= (AA.row(AA.rows()-1)).array() / n_samples;
 	}
 	ss = ss / ss.sum();
-	double h2_G_tot = 0, h2_GxE_tot = 0;
-	for (int cc = 0; cc < n_components; cc++){
-		if(components[cc].effect_type == "G"){
-			h2_G_tot += ss[cc];
-		} else if (components[cc].effect_type == "GxE"){
-			h2_GxE_tot += ss[cc];
-		}
-	}
-
-	Eigen::ArrayXd res(n_components + 2);
-	res << ss, h2_G_tot, h2_GxE_tot;
-	return res;
+	return ss;
 }
 
 void PVE::process_jacknife_samples() {
@@ -391,11 +397,22 @@ void PVE::to_file(const std::string &file) {
 		outf << h2_se_jack[ii] << " ";
 		outf << h2_bias_corrected[ii] << std::endl;
 	}
-	// Could actually remove this horrible hack; just use sum of SDs.
-	if(p.RHE_multicomponent){
-		outf << "G_tot NA " << h2[n_components] << " " << h2_se_jack[n_components] << " NA" << std::endl;
+
+	if(p.RHE_multicomponent) {
+		double h2_G_tot = 0, h2_G_sd = 0, h2_GxE_tot = 0, h2_GxE_sd = 0;
+		for (int cc = 0; cc < n_components; cc++) {
+			if(components[cc].effect_type == "G") {
+				h2_G_tot += h2[cc];
+				h2_G_sd += h2_se_jack[cc];
+			} else if (components[cc].effect_type == "GxE") {
+				h2_GxE_tot += h2[cc];
+				h2_GxE_sd += h2_se_jack[cc];
+			}
+		}
+
+		outf << "G_tot NA " << h2_G_tot << " " << h2_G_sd << " NA" << std::endl;
 		if(n_env > 0) {
-			outf << "GxE_tot NA " << h2[n_components + 1] << " " << h2_se_jack[n_components + 1] << " NA" << std::endl;
+			outf << "GxE_tot NA " << h2_GxE_tot << " " << h2_GxE_sd << " NA" << std::endl;
 		}
 	}
 
@@ -430,12 +447,19 @@ void PVE::initialise_components() {
 		fill_gaussian_noise(p.random_seed, zz, n_samples, n_draws);
 	}
 
+	if(p.mode_debug) {
+		std::string ram = mpiUtils::currentUsageRAM();
+		std::cout << "Before initialising " << ram << std::endl;
+	}
+
 	std::cout << "Initialising HE-regression components with:" << std::endl;
 	std::cout << " - N-jacknife = " << p.n_jacknife << std::endl;
 	std::cout << " - N-draws = " << p.n_pve_samples << std::endl;
 	std::cout << " - N-samples = " << (long) Nglobal << std::endl;
 	std::cout << " - N-covars = " << n_covar << std::endl;
-
+	if(p.RHE_multicomponent) {
+		std::cout << " - N-annotations = " << all_SNPGROUPS.size() << std::endl;
+	}
 
 	if(n_covar > 0) {
 		Wzz = project_out_covars(zz);
@@ -445,23 +469,34 @@ void PVE::initialise_components() {
 	}
 
 	// Set variance components
+	long n_effects = (n_env == 0 ? 0 : 1);
+	components.reserve(1 + all_SNPGROUPS.size() * n_effects);
 	if(true) {
-		if(p.RHE_multicomponent){
-			for (auto group : all_SNPGROUPS){
+		if(p.RHE_multicomponent) {
+			for (auto group : all_SNPGROUPS) {
 				PVE_Component comp(p, Y, zz, Wzz, C, CtC_inv, p.n_jacknife);
 				comp.label = group + "_G";
 				comp.effect_type = "G";
 				comp.group = group;
+				components.push_back(std::move(comp));
 
-				components.push_back(comp);
+				if(p.mode_debug) {
+					std::string ram = mpiUtils::currentUsageRAM();
+					std::cout << "(" << ram << ")" << std::endl;
+				}
 			}
 		} else {
 			PVE_Component comp(p, Y, zz, Wzz, C, CtC_inv, p.n_jacknife);
 			comp.label = "G";
 			comp.effect_type = "G";
 
-			components.push_back(comp);
+			components.push_back(std::move(comp));
 		}
+	}
+
+	if(p.xtra_verbose) {
+		std::string ram = mpiUtils::currentUsageRAM();
+		std::cout << "Initialised main effects RHEreg components (" << ram << ")" << std::endl;
 	}
 
 	if(n_env == 1) {
@@ -472,14 +507,19 @@ void PVE::initialise_components() {
 				comp.effect_type = "GxE";
 				comp.group = group;
 				comp.set_eta(eta);
-				components.push_back(comp);
+				components.push_back(std::move(comp));
+
+				if(p.mode_debug) {
+					std::string ram = mpiUtils::currentUsageRAM();
+					std::cout << "(" << ram << ")" << std::endl;
+				}
 			}
 		} else {
 			PVE_Component comp(p, Y, zz, Wzz, C, CtC_inv, p.n_jacknife);
 			comp.label = "GxE";
 			comp.effect_type = "GxE";
 			comp.set_eta(eta);
-			components.push_back(comp);
+			components.push_back(std::move(comp));
 		}
 	}
 
@@ -488,16 +528,13 @@ void PVE::initialise_components() {
 		comp.set_inactive();
 		comp.label = "noise";
 		comp.effect_type = "noise";
-		components.push_back(comp);
+		components.push_back(std::move(comp));
 	}
 	n_components = components.size();
 
-	std::cout << " - N-components = " << n_components - 1 << std::endl;
-#ifndef OSX
-	std::cout << "Initialised with ";
-	std::cout << (double) fileUtils::getValueRAM() / 1000 / 1000;
-	std::cout << "GB of RAM" << std::endl;
-#endif
+	std::cout << " - N-RHEreg-components = " << n_components - 1 << std::endl;
+	std::string ram = mpiUtils::currentUsageRAM();
+	std::cout << "Initialised RHEreg (" << ram << ")" << std::endl;
 }
 
 double PVE::get_jacknife_var(Eigen::ArrayXd jack_estimates) {
@@ -518,6 +555,9 @@ void PVE::read_RHE_groups(const std::string& filename){
 	read_file_header(filename, file_header);
 	std::vector< std::string > case1 = {"SNPID", "group"};
 	assert(file_header == case1);
+
+	SNPGROUPS_snpid.clear();
+	SNPGROUPS_group.clear();
 
 	// Reading from file
 	boost_io::filtering_istream fg;
@@ -541,9 +581,9 @@ void PVE::read_RHE_groups(const std::string& filename){
 		std::stringstream ss(line);
 		int col_index = 0;
 		while (ss >> s) {
-			if(col_index == 0){
+			if(col_index == 0) {
 				SNPGROUPS_snpid.push_back(s);
-			} else if (col_index == 1){
+			} else if (col_index == 1) {
 				SNPGROUPS_group.push_back(s);
 			} else {
 				throw std::runtime_error(filename + " should only contain two columns");
@@ -554,7 +594,4 @@ void PVE::read_RHE_groups(const std::string& filename){
 	}
 
 	std::cout << " Read component groups for " << SNPGROUPS_snpid.size() << " SNPs from " << filename << std::endl;
-	std::set<std::string> tmp_set(SNPGROUPS_group.begin(), SNPGROUPS_group.end());
-	std::vector<std::string> tmp_vec(tmp_set.begin(), tmp_set.end());
-	all_SNPGROUPS = tmp_vec;
 }
