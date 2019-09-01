@@ -1,7 +1,7 @@
 //
 // Created by kerin on 2019-02-26.
 //
-#include "pve.hpp"
+#include "rhe_reg.hpp"
 #include "genotype_matrix.hpp"
 #include "typedefs.hpp"
 #include "file_utils.hpp"
@@ -13,7 +13,7 @@
 #include <random>
 #include <mpi.h>
 
-void PVE::run() {
+void RHEreg::run() {
 
 	// Add intercept to covariates
 	Eigen::MatrixXd ones = Eigen::MatrixXd::Constant(n_samples, 1, 1.0);
@@ -66,7 +66,7 @@ void PVE::run() {
 	std::cout << h2 << std::endl;
 }
 
-void PVE::fill_gaussian_noise(unsigned int seed, Eigen::Ref<Eigen::MatrixXd> zz, long nn, long n_draws) {
+void RHEreg::fill_gaussian_noise(unsigned int seed, Eigen::Ref<Eigen::MatrixXd> zz, long nn, long n_draws) {
 	assert(zz.rows() == nn);
 	assert(zz.cols() == n_draws);
 
@@ -115,7 +115,7 @@ void PVE::fill_gaussian_noise(unsigned int seed, Eigen::Ref<Eigen::MatrixXd> zz,
 	}
 }
 
-void PVE::calc_RHE() {
+void RHEreg::calc_RHE() {
 
 	// Compute randomised traces
 	if(p.bgen_file != "NULL") {
@@ -319,7 +319,7 @@ void PVE::calc_RHE() {
 	}
 }
 
-Eigen::MatrixXd PVE::construct_vc_system(const std::vector<PVE_Component> &components) {
+Eigen::MatrixXd RHEreg::construct_vc_system(const std::vector<RHEreg_Component> &components) {
 	Eigen::MatrixXd res(n_components, n_components + 1);
 	for (long ii = 0; ii < n_components; ii++) {
 		res(ii, n_components) = components[ii].get_bb_trace();
@@ -328,7 +328,6 @@ Eigen::MatrixXd PVE::construct_vc_system(const std::vector<PVE_Component> &compo
 				res(ii, jj) = Nglobal - n_covar;
 			} else {
 				res(ii, jj) = components[ii] * components[jj];
-				res(ii, jj) = mpiUtils::mpiReduce_inplace(res(ii, jj));
 				res(jj, ii) = res(ii, jj);
 			}
 		}
@@ -336,16 +335,16 @@ Eigen::MatrixXd PVE::construct_vc_system(const std::vector<PVE_Component> &compo
 	return res;
 }
 
-Eigen::ArrayXd PVE::calc_h2(Eigen::Ref<Eigen::MatrixXd> AA, Eigen::Ref<Eigen::VectorXd> bb, const bool &reweight_sigmas) {
+Eigen::ArrayXd RHEreg::calc_h2(Eigen::Ref<Eigen::MatrixXd> AA, Eigen::Ref<Eigen::VectorXd> bb, const bool &reweight_sigmas) {
 	Eigen::ArrayXd ss = AA.colPivHouseholderQr().solve(bb);
 	if(reweight_sigmas) {
-		ss *= (AA.row(AA.rows()-1)).array() / n_samples;
+		ss *= (AA.row(AA.rows()-1)).array() / Nglobal;
 	}
 	ss = ss / ss.sum();
 	return ss;
 }
 
-void PVE::process_jacknife_samples() {
+void RHEreg::process_jacknife_samples() {
 	// Rescale h2 to avoid bias
 	for (long ii = 0; ii < h2_jack.cols(); ii++) {
 		h2_jack.col(ii) *= n_var / n_var_jack;
@@ -364,7 +363,7 @@ void PVE::process_jacknife_samples() {
 	}
 }
 
-Eigen::MatrixXd PVE::project_out_covars(Eigen::Ref<Eigen::MatrixXd> rhs) {
+Eigen::MatrixXd RHEreg::project_out_covars(Eigen::Ref<Eigen::MatrixXd> rhs) {
 	if(n_covar > 0) {
 		if (CtC_inv.rows() != n_covar) {
 			if(p.mode_debug) std::cout << "Starting compute of CtC_inv" << std::endl;
@@ -379,7 +378,7 @@ Eigen::MatrixXd PVE::project_out_covars(Eigen::Ref<Eigen::MatrixXd> rhs) {
 	}
 }
 
-void PVE::to_file(const std::string &file) {
+void RHEreg::to_file(const std::string &file) {
 	boost_io::filtering_ostream outf;
 	std::string suffix = "";
 	if(p.mode_vb || p.mode_calc_snpstats) {
@@ -438,7 +437,7 @@ void PVE::to_file(const std::string &file) {
 	}
 }
 
-void PVE::initialise_components() {
+void RHEreg::initialise_components() {
 
 	zz.resize(n_samples, n_draws);
 	if(p.rhe_random_vectors_file != "NULL") {
@@ -474,7 +473,7 @@ void PVE::initialise_components() {
 	if(true) {
 		if(p.RHE_multicomponent) {
 			for (auto group : all_SNPGROUPS) {
-				PVE_Component comp(p, Y, zz, Wzz, C, CtC_inv, p.n_jacknife);
+				RHEreg_Component comp(p, Y, zz, Wzz, C, CtC_inv, p.n_jacknife);
 				comp.label = group + "_G";
 				comp.effect_type = "G";
 				comp.group = group;
@@ -486,7 +485,7 @@ void PVE::initialise_components() {
 				}
 			}
 		} else {
-			PVE_Component comp(p, Y, zz, Wzz, C, CtC_inv, p.n_jacknife);
+			RHEreg_Component comp(p, Y, zz, Wzz, C, CtC_inv, p.n_jacknife);
 			comp.label = "G";
 			comp.effect_type = "G";
 
@@ -502,7 +501,7 @@ void PVE::initialise_components() {
 	if(n_env == 1) {
 		if(p.RHE_multicomponent) {
 			for (auto group : all_SNPGROUPS) {
-				PVE_Component comp(p, Y, zz, Wzz, C, CtC_inv, p.n_jacknife);
+				RHEreg_Component comp(p, Y, zz, Wzz, C, CtC_inv, p.n_jacknife);
 				comp.label = group + "_GxE";
 				comp.effect_type = "GxE";
 				comp.group = group;
@@ -515,7 +514,7 @@ void PVE::initialise_components() {
 				}
 			}
 		} else {
-			PVE_Component comp(p, Y, zz, Wzz, C, CtC_inv, p.n_jacknife);
+			RHEreg_Component comp(p, Y, zz, Wzz, C, CtC_inv, p.n_jacknife);
 			comp.label = "GxE";
 			comp.effect_type = "GxE";
 			comp.set_eta(eta);
@@ -524,7 +523,7 @@ void PVE::initialise_components() {
 	}
 
 	if(true) {
-		PVE_Component comp(p, Y, zz, Wzz, C, CtC_inv, p.n_jacknife);
+		RHEreg_Component comp(p, Y, zz, Wzz, C, CtC_inv, p.n_jacknife);
 		comp.set_inactive();
 		comp.label = "noise";
 		comp.effect_type = "noise";
@@ -537,18 +536,18 @@ void PVE::initialise_components() {
 	std::cout << "Initialised RHEreg (" << ram << ")" << std::endl;
 }
 
-double PVE::get_jacknife_var(Eigen::ArrayXd jack_estimates) {
+double RHEreg::get_jacknife_var(Eigen::ArrayXd jack_estimates) {
 	double jack_var = (jack_estimates - jack_estimates.mean()).square().sum();
 	jack_var *= (p.n_jacknife - 1.0) / p.n_jacknife;
 	return jack_var;
 }
 
-double PVE::get_jacknife_bias_correct(Eigen::ArrayXd jack_estimates, double full_data_est) {
+double RHEreg::get_jacknife_bias_correct(Eigen::ArrayXd jack_estimates, double full_data_est) {
 	double res = p.n_jacknife * full_data_est - (p.n_jacknife - 1.0) * jack_estimates.mean();
 	return res;
 }
 
-void PVE::read_RHE_groups(const std::string& filename){
+void RHEreg::read_RHE_groups(const std::string& filename){
 	// File should have two columns; SNPID and group (both strings)
 	// Check has ex[ected header
 	std::vector<std::string> file_header;

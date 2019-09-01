@@ -349,7 +349,7 @@ public:
 		cache_local_ldblocks(main_back_pass_chunks, false);
 	}
 
-	void cache_local_ldblocks(std::vector<std::vector<long>>iter_chunks, bool is_fwd_pass){
+	void cache_local_ldblocks(std::vector<std::vector<long> >iter_chunks, bool is_fwd_pass){
 		EigenDataMatrix D;
 		for (std::uint32_t ch = 0; ch < iter_chunks.size(); ch++) {
 			std::vector<long> chunk = iter_chunks[ch];
@@ -1883,8 +1883,10 @@ public:
 		tmp.col(cc) = Y; cc++;
 		if (n_covar > 0) {
 			tmp.col(cc) = Ealpha; cc++;
+			tmp.col(cc) = vp_init.ym - Ealpha; cc++;
+		} else {
+			tmp.col(cc) = vp_init.ym; cc++;
 		}
-		tmp.col(cc) = vp_init.ym; cc++;
 		if (n_env > 0) {
 			tmp.col(cc) = vp_init.eta; cc++;
 			tmp.col(cc) = vp_init.yx; cc++;

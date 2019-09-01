@@ -5,7 +5,7 @@
 #include <iostream>
 #include "../src/tools/eigen3.3/Dense"
 #include "../src/parse_arguments.hpp"
-#include "../src/pve.hpp"
+#include "../src/rhe_reg.hpp"
 #include "../src/data.hpp"
 
 
@@ -21,44 +21,44 @@ char* argv_pve1[] = { (char*) "--RHE",
 char* argv_pve2[] = { (char*) "--RHE",
 	                  (char*) "--random_seed", (char*) "1",
 	                  (char*) "--n_pve_samples", (char*) "3",
-					  (char*) "--streamBgen-print-interval", (char*) "1",
+	                  (char*) "--streamBgen-print-interval", (char*) "1",
 	                  (char*) "--streamBgen", (char*) "data/io_test/n1000_p2000.bgen",
 	                  (char*) "--pheno", (char*) "data/io_test/case8/pheno.txt",
 	                  (char*) "--environment", (char*) "data/io_test/case8/age.txt",
 	                  (char*) "--out", (char*) "data/io_test/case8/test_pve_est.out.gz"};
 
 char* argv_pve2b[] = { (char*) "--RHE",
-					  (char*) "--random_seed", (char*) "1",
-					  (char*) "--n_pve_samples", (char*) "3",
-					  (char*) "--streamBgen-print-interval", (char*) "1",
-					  (char*) "--mStreamBgen", (char*) "data/io_test/n1000_p2000_bgens.txt",
-					  (char*) "--pheno", (char*) "data/io_test/case8/pheno.txt",
-					  (char*) "--environment", (char*) "data/io_test/case8/age.txt",
-					  (char*) "--out", (char*) "data/io_test/case8/test_pve_est.out.gz"};
+	                   (char*) "--random_seed", (char*) "1",
+	                   (char*) "--n_pve_samples", (char*) "3",
+	                   (char*) "--streamBgen-print-interval", (char*) "1",
+	                   (char*) "--mStreamBgen", (char*) "data/io_test/n1000_p2000_bgens.txt",
+	                   (char*) "--pheno", (char*) "data/io_test/case8/pheno.txt",
+	                   (char*) "--environment", (char*) "data/io_test/case8/age.txt",
+	                   (char*) "--out", (char*) "data/io_test/case8/test_pve_est.out.gz"};
 
 char* argv_pve3[] = { (char*) "--RHE", (char*) "--maf", (char*) "0.01",
-					  (char*) "--random_seed", (char*) "1",
-					  (char*) "--n_jacknife", (char*) "2",
-					  (char*) "--n_pve_samples", (char*) "10",
-					  (char*) "--streamBgen", (char*) "data/io_test/n1000_p2000.bgen",
-					  (char*) "--pheno", (char*) "data/io_test/case8/pheno.txt",
-					  (char*) "--environment", (char*) "data/io_test/case8/age.txt",
-					  (char*) "--out", (char*) "data/io_test/case8/test_pve_est.out.gz"};
+	                  (char*) "--random_seed", (char*) "1",
+	                  (char*) "--n_jacknife", (char*) "2",
+	                  (char*) "--n_pve_samples", (char*) "10",
+	                  (char*) "--streamBgen", (char*) "data/io_test/n1000_p2000.bgen",
+	                  (char*) "--pheno", (char*) "data/io_test/case8/pheno.txt",
+	                  (char*) "--environment", (char*) "data/io_test/case8/age.txt",
+	                  (char*) "--out", (char*) "data/io_test/case8/test_pve_est.out.gz"};
 //
 char* argv_main1[] = { (char*) "--RHE",
 	                   (char*) "--random_seed", (char*) "1",
 	                   (char*) "--n_pve_samples", (char*) "3",
 	                   (char*) "--streamBgen", (char*) "data/io_test/n1000_p2000.bgen",
-					   (char*) "--streamBgen-print-interval", (char*) "1",
+	                   (char*) "--streamBgen-print-interval", (char*) "1",
 	                   (char*) "--pheno", (char*) "data/io_test/case8/pheno.txt",
 	                   (char*) "--out", (char*) "data/io_test/case8/test_pve_est.out.gz"};
 
 char* argv_main2[] = { (char*) "--RHE",
-					   (char*) "--random_seed", (char*) "1",
-					   (char*) "--n_pve_samples", (char*) "3",
-					   (char*) "--bgen", (char*) "data/io_test/n1000_p2000.bgen",
-					   (char*) "--pheno", (char*) "data/io_test/case8/pheno.txt",
-					   (char*) "--out", (char*) "data/io_test/case8/test_pve_est.out.gz"};
+	                   (char*) "--random_seed", (char*) "1",
+	                   (char*) "--n_pve_samples", (char*) "3",
+	                   (char*) "--bgen", (char*) "data/io_test/n1000_p2000.bgen",
+	                   (char*) "--pheno", (char*) "data/io_test/case8/pheno.txt",
+	                   (char*) "--out", (char*) "data/io_test/case8/test_pve_est.out.gz"};
 
 
 TEST_CASE("RHEreg-GxE") {
@@ -74,7 +74,7 @@ TEST_CASE("RHEreg-GxE") {
 		Eigen::VectorXd Y = data.Y.cast<double>();
 		Eigen::MatrixXd C = data.C.cast<double>();
 		Eigen::VectorXd eta = data.E.col(0);
-		PVE pve(data, Y, C, eta);
+		RHEreg pve(data, Y, C, eta);
 		pve.run();
 
 		CHECK(pve.sigmas(0) == Approx(0.4755321728));
@@ -101,7 +101,7 @@ TEST_CASE("RHEreg-GxE") {
 		Eigen::VectorXd Y = data.Y.cast<double>();
 		Eigen::MatrixXd C = data.C.cast<double>();
 		Eigen::VectorXd eta = data.E.col(0);
-		PVE pve(data, Y, C, eta);
+		RHEreg pve(data, Y, C, eta);
 		pve.run();
 
 		CHECK(pve.sigmas(0) == Approx(0.4751298802));
@@ -129,7 +129,7 @@ TEST_CASE("RHEreg-GxE") {
 		Eigen::VectorXd Y = data.Y.cast<double>();
 		Eigen::MatrixXd C = data.C.cast<double>();
 		Eigen::VectorXd eta = data.E.col(0);
-		PVE pve(data, Y, C, eta);
+		RHEreg pve(data, Y, C, eta);
 		pve.run();
 
 		CHECK(pve.sigmas(0) == Approx(0.4751298802));
@@ -161,7 +161,7 @@ TEST_CASE("RHEreg-multicomp"){
 		Eigen::VectorXd Y = data.Y.cast<double>();
 		Eigen::MatrixXd C = data.C.cast<double>();
 
-		PVE pve(data, Y, C);
+		RHEreg pve(data, Y, C);
 		pve.run();
 
 		CHECK(pve.components[0].n_var_local == 898);
@@ -180,7 +180,7 @@ TEST_CASE("RHEreg-multicomp"){
 		Eigen::VectorXd Y = data.Y.cast<double>();
 		Eigen::MatrixXd C = data.C.cast<double>();
 
-		PVE pve(data, Y, C);
+		RHEreg pve(data, Y, C);
 		pve.run();
 
 		CHECK(pve.components[0].n_var_local == 912);
@@ -190,7 +190,7 @@ TEST_CASE("RHEreg-multicomp"){
 		parameters p;
 		int argc = sizeof(argv_main1)/sizeof(argv_main1[0]);
 		parse_arguments(p, argc, argv_main1);
-		p.RHE_groups_file = "data/io_test/n1000_p2000_components.txt";
+		p.RHE_groups_files.push_back("data/io_test/n1000_p2000_components.txt");
 		p.RHE_multicomponent = true;
 		Data data(p);
 		data.read_non_genetic_data();
@@ -200,7 +200,7 @@ TEST_CASE("RHEreg-multicomp"){
 		Eigen::VectorXd Y = data.Y.cast<double>();
 		Eigen::MatrixXd C = data.C.cast<double>();
 
-		PVE pve(data, Y, C);
+		RHEreg pve(data, Y, C);
 		pve.run();
 
 		CHECK(pve.components[0].n_var_local == 898);
@@ -223,7 +223,7 @@ TEST_CASE("RHEreg-G") {
 		Eigen::VectorXd Y = data.Y.cast<double>();
 		Eigen::MatrixXd C = data.C.cast<double>();
 
-		PVE pve(data, Y, C);
+		RHEreg pve(data, Y, C);
 		pve.run();
 
 		CHECK(pve.sigmas(0)  == Approx(0.5237752503));
@@ -250,7 +250,7 @@ TEST_CASE("RHEreg-G") {
 			data.set_vb_init();
 
 			Eigen::VectorXd Y = data.Y.cast<double>();
-			PVE pve(data, Y, data.C, data.vp_init.eta);
+			RHEreg pve(data, Y, data.C, data.vp_init.eta);
 			pve.run();
 
 			// RHE with 1st jacknife block removed
@@ -258,8 +258,8 @@ TEST_CASE("RHEreg-G") {
 				pve.components[ii].rm_jacknife_block = 0;
 			}
 			CHECK(pve.components[0].get_n_var_local() == Approx(924));
-			CHECK(pve.components[0].getXXtz().squaredNorm() == Approx(39653744616.7472076416));
-			CHECK(pve.components[1].getXXtz().squaredNorm() == Approx(60669447736.4095077515));
+			// CHECK(pve.components[0].getXXtz().squaredNorm() == Approx(39653744616.7472076416));
+			// CHECK(pve.components[1].getXXtz().squaredNorm() == Approx(60669447736.4095077515));
 
 			Eigen::MatrixXd CC = pve.construct_vc_system(pve.components);
 			Eigen::MatrixXd AA = CC.block(0, 0, pve.n_components, pve.n_components);
@@ -270,8 +270,13 @@ TEST_CASE("RHEreg-G") {
 			CHECK(CC(1, 1) == Approx(7041.18));
 			CHECK(CC(1, 0) == Approx(1128.3));
 			CHECK(CC(1, 2) == Approx(1036.74));
+			CHECK(pve.components[1] * pve.components[2] == Approx(1036.74));
+			CHECK(pve.components[1].get_n_var_local() == 924);
+			CHECK(pve.components[2].get_n_var_local() == 1);
+			CHECK(CC(0, 2) == Approx(1025.1771502818));
+			CHECK(CC(2, 2) == Approx(998.0));
 
-			CHECK(pve.components[0].zz.sum() == Approx(123.7670672474));
+			// CHECK(pve.components[0].zz.sum() == Approx(123.7670672474));
 			CHECK(!pve.components[2].is_active);
 			CHECK(pve.components[2].get_bb_trace() == Approx(786.4039860883));
 			CHECK(bb(0) == Approx(2009.8649365637));
@@ -287,7 +292,7 @@ TEST_CASE("RHEreg-G") {
 			data.set_vb_init();
 
 			Eigen::VectorXd Y = data.Y.cast<double>();
-			PVE pve(data, Y, data.C, data.vp_init.eta);
+			RHEreg pve(data, Y, data.C, data.vp_init.eta);
 			pve.run();
 
 			// RHE on full data with 1st block removed
@@ -295,8 +300,8 @@ TEST_CASE("RHEreg-G") {
 				pve.components[ii].rm_jacknife_block = -1;
 			}
 			CHECK(pve.components[0].get_n_var_local() == Approx(924));
-			CHECK(pve.components[0].getXXtz().squaredNorm() == Approx(39653744616.7472076416));
-			CHECK(pve.components[1].getXXtz().squaredNorm() == Approx(60669447736.4095077515));
+			// CHECK(pve.components[0].getXXtz().squaredNorm() == Approx(39653744616.7472076416));
+			// CHECK(pve.components[1].getXXtz().squaredNorm() == Approx(60669447736.4095077515));
 
 			Eigen::MatrixXd CC = pve.construct_vc_system(pve.components);
 			Eigen::MatrixXd AA = CC.block(0, 0, pve.n_components, pve.n_components);
@@ -310,5 +315,3 @@ TEST_CASE("RHEreg-G") {
 		}
 	}
 }
-
-

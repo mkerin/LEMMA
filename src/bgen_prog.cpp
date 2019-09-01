@@ -7,7 +7,7 @@
 #include "parameters.hpp"
 #include "data.hpp"
 #include "vbayes_x2.hpp"
-#include "pve.hpp"
+#include "rhe_reg.hpp"
 #include "genotype_matrix.hpp"
 #include "mpi_utils.hpp"
 
@@ -191,11 +191,11 @@ int main( int argc, char** argv ) {
 			if(data.n_env > 0) {
 				// If multi env; use VB to collapse to single
 				assert(data.n_env == 1 || p.mode_vb || p.env_coeffs_file != "NULL");
-				PVE pve(data, Y, C, data.vp_init.eta);
+				RHEreg pve(data, Y, C, data.vp_init.eta);
 				pve.run();
 				pve.to_file(p.out_file);
 			} else {
-				PVE pve(data, Y, C);
+				RHEreg pve(data, Y, C);
 				pve.run();
 				pve.to_file(p.out_file);
 			}
