@@ -22,7 +22,7 @@
 
 class RHEreg_Component {
 public:
-	Eigen::MatrixXd _XXtz, _XXtWz;
+	Eigen::MatrixXd _XXtWz;
 	double ytXXty;
 	std::string label;
 	long n_env;
@@ -38,16 +38,15 @@ public:
 	std::string effect_type;
 
 	// Storage for jacknife blocks
-	std::vector<Eigen::MatrixXd> _XXtzs, _XXtWzs;
+	std::vector<Eigen::MatrixXd> _XXtzs;
 	std::vector<double> n_vars_local;
 	std::vector<double> ytXXtys;
 
-	Eigen::MatrixXd& C, CtC_inv, zz, Wzz;
+	Eigen::MatrixXd& C, CtC_inv, zz;
 	Eigen::VectorXd Y;
 	Eigen::VectorXd eta;
 	RHEreg_Component(const parameters& myparams,
 	                 Eigen::VectorXd& myY,
-	                 Eigen::MatrixXd& myzz,
 	                 Eigen::MatrixXd& myWzz,
 	                 Eigen::MatrixXd& myC,
 	                 Eigen::MatrixXd& myCtC_inv,
@@ -63,8 +62,6 @@ public:
 	void finalise();
 
 	Eigen::MatrixXd getXXtz() const;
-
-	Eigen::MatrixXd getXXtWz() const;
 
 	double get_bb_trace() const;
 

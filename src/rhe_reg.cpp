@@ -7,11 +7,12 @@
 #include "file_utils.hpp"
 #include "parameters.hpp"
 #include "mpi_utils.hpp"
+#include "nelder_mead.hpp"
 
 #include "tools/eigen3.3/Dense"
 
 #include <random>
-#include <mpi.h>
+#include <cmath>
 
 void RHEreg::run() {
 
@@ -50,7 +51,9 @@ void RHEreg::run() {
 
 	// Compute variance components
 	initialise_components();
-	if(n_env > 0) {
+	if(p.mode_RHEreg_optim_LEMMA){
+		optim_RHE_LEMMA();
+	} else if(n_env > 0) {
 		std::cout << "G+GxE effects model (gaussian prior)" << std::endl;
 		calc_RHE();
 	} else {
@@ -319,6 +322,27 @@ void RHEreg::calc_RHE() {
 	}
 }
 
+double example_surface(Eigen::VectorXd vals_inp, void* grad_out) {
+	// https://www.benfrederickson.com/numerical-optimization/
+	const double x = vals_inp(0);
+	const double y = vals_inp(1);
+
+	double obj_val = x * x + y * y + x * std::sin(y) + y * std::sin(x);
+
+	//
+
+	return obj_val;
+}
+
+void RHEreg::optim_RHE_LEMMA() {
+	Eigen::VectorXd x(2);
+	x(0) = -4;
+	x(1) = 1;
+
+	bool success = optimNelderMead(x, example_surface, p);
+	std::cout << success << std::endl;
+}
+
 Eigen::MatrixXd RHEreg::construct_vc_system(const std::vector<RHEreg_Component> &components) {
 	Eigen::MatrixXd res(n_components, n_components + 1);
 	for (long ii = 0; ii < n_components; ii++) {
@@ -461,10 +485,10 @@ void RHEreg::initialise_components() {
 	}
 
 	if(n_covar > 0) {
-		Wzz = project_out_covars(zz);
+		zz = project_out_covars(zz);
 		Y = project_out_covars(Y);
 	} else {
-		Wzz = zz;
+//		Wzz = zz;
 	}
 
 	// Set variance components
@@ -473,7 +497,7 @@ void RHEreg::initialise_components() {
 	if(true) {
 		if(p.RHE_multicomponent) {
 			for (auto group : all_SNPGROUPS) {
-				RHEreg_Component comp(p, Y, zz, Wzz, C, CtC_inv, p.n_jacknife);
+				RHEreg_Component comp(p, Y, zz, C, CtC_inv, p.n_jacknife);
 				comp.label = group + "_G";
 				comp.effect_type = "G";
 				comp.group = group;
@@ -485,7 +509,7 @@ void RHEreg::initialise_components() {
 				}
 			}
 		} else {
-			RHEreg_Component comp(p, Y, zz, Wzz, C, CtC_inv, p.n_jacknife);
+			RHEreg_Component comp(p, Y, zz, C, CtC_inv, p.n_jacknife);
 			comp.label = "G";
 			comp.effect_type = "G";
 
@@ -501,7 +525,7 @@ void RHEreg::initialise_components() {
 	if(n_env == 1) {
 		if(p.RHE_multicomponent) {
 			for (auto group : all_SNPGROUPS) {
-				RHEreg_Component comp(p, Y, zz, Wzz, C, CtC_inv, p.n_jacknife);
+				RHEreg_Component comp(p, Y, zz, C, CtC_inv, p.n_jacknife);
 				comp.label = group + "_GxE";
 				comp.effect_type = "GxE";
 				comp.group = group;
@@ -514,7 +538,7 @@ void RHEreg::initialise_components() {
 				}
 			}
 		} else {
-			RHEreg_Component comp(p, Y, zz, Wzz, C, CtC_inv, p.n_jacknife);
+			RHEreg_Component comp(p, Y, zz, C, CtC_inv, p.n_jacknife);
 			comp.label = "GxE";
 			comp.effect_type = "GxE";
 			comp.set_eta(eta);
@@ -523,7 +547,7 @@ void RHEreg::initialise_components() {
 	}
 
 	if(true) {
-		RHEreg_Component comp(p, Y, zz, Wzz, C, CtC_inv, p.n_jacknife);
+		RHEreg_Component comp(p, Y, zz, C, CtC_inv, p.n_jacknife);
 		comp.set_inactive();
 		comp.label = "noise";
 		comp.effect_type = "noise";

@@ -97,6 +97,8 @@ public:
 
 	void calc_RHE();
 
+	void optim_RHE_LEMMA();
+
 	Eigen::MatrixXd construct_vc_system(const std::vector<RHEreg_Component>& components);
 
 	Eigen::ArrayXd calc_h2(Eigen::Ref<Eigen::MatrixXd> AA,

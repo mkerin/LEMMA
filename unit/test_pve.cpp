@@ -77,15 +77,15 @@ TEST_CASE("RHEreg-GxE") {
 		RHEreg pve(data, Y, C, eta);
 		pve.run();
 
-		CHECK(pve.sigmas(0) == Approx(0.4755321728));
-		CHECK(pve.sigmas(1) == Approx(0.0632032343));
-		CHECK(pve.sigmas(2) == Approx(0.274279032));
-		CHECK(pve.h2(0) == Approx(0.5755724206));
-		CHECK(pve.h2(1) == Approx(0.0763488835));
-		CHECK(pve.h2(2) == Approx(0.3480786959));
+		CHECK(pve.sigmas(0) == Approx(0.4768423518));
+		CHECK(pve.sigmas(1) == Approx(0.0629302327));
+		CHECK(pve.sigmas(2) == Approx(0.2739590655));
+		CHECK(pve.h2(0) == Approx(0.5762155215));
+		CHECK(pve.h2(1) == Approx(0.0761118418));
+		CHECK(pve.h2(2) == Approx(0.3476726367));
 
-		CHECK(pve.h2_se_jack(0) == Approx(0.2604051586));
-		CHECK(pve.h2_se_jack(1) == Approx(0.0398316858));
+		CHECK(pve.h2_se_jack(0) == Approx(0.2596384624));
+		CHECK(pve.h2_se_jack(1) == Approx(0.0391032891));
 		pve.to_file(p.out_file);
 	}
 
@@ -104,17 +104,17 @@ TEST_CASE("RHEreg-GxE") {
 		RHEreg pve(data, Y, C, eta);
 		pve.run();
 
-		CHECK(pve.sigmas(0) == Approx(0.4751298802));
-		CHECK(pve.sigmas(1) == Approx(0.0632593406));
-		CHECK(pve.sigmas(2) == Approx(0.2745515453));
-		CHECK(pve.h2(0) == Approx(0.5751623131));
-		CHECK(pve.h2(1) == Approx(0.0764131531));
+		CHECK(pve.sigmas(0) == Approx(0.4764408911));
+		CHECK(pve.sigmas(1) == Approx(0.062986786));
+		CHECK(pve.sigmas(2) == Approx(0.2742296405));
+		CHECK(pve.h2(0) == Approx(0.575807122));
+		CHECK(pve.h2(1) == Approx(0.0761768632));
 
 		CHECK(pve.components[0].n_vars_local[0] == 768);
 		CHECK(pve.components[0].n_vars_local[1] == 1042);
 
-		CHECK(pve.h2_se_jack(0) == Approx(0.3105230791));
-		CHECK(pve.h2_se_jack(1) == Approx(0.0088804904));
+		CHECK(pve.h2_se_jack(0) == Approx(0.309833704));
+		CHECK(pve.h2_se_jack(1) == Approx(0.007952951));
 	}
 
 	SECTION("GxE effects fit (streaming from 2 files)") {
@@ -132,18 +132,18 @@ TEST_CASE("RHEreg-GxE") {
 		RHEreg pve(data, Y, C, eta);
 		pve.run();
 
-		CHECK(pve.sigmas(0) == Approx(0.4751298802));
-		CHECK(pve.sigmas(1) == Approx(0.0632593406));
-		CHECK(pve.sigmas(2) == Approx(0.2745515453));
-		CHECK(pve.h2(0) == Approx(0.5751623131));
-		CHECK(pve.h2(1) == Approx(0.0764131531));
+		CHECK(pve.sigmas(0) == Approx(0.4764408911));
+		CHECK(pve.sigmas(1) == Approx(0.062986786));
+		CHECK(pve.sigmas(2) == Approx(0.2742296405));
+		CHECK(pve.h2(0) == Approx(0.575807122));
+		CHECK(pve.h2(1) == Approx(0.0761768632));
 
 		// Jacknife blocks cut off at gap between bgen files
 		CHECK(pve.components[0].n_vars_local[0] == 849);
 		CHECK(pve.components[0].n_vars_local[1] == 961);
 
-		CHECK(pve.h2_se_jack(0) == Approx(0.3572303602));
-		CHECK(pve.h2_se_jack(1) == Approx(0.0166284959));
+		CHECK(pve.h2_se_jack(0) == Approx(0.3566948701));
+		CHECK(pve.h2_se_jack(1) == Approx(0.0154807884));
 	}
 }
 
@@ -266,14 +266,14 @@ TEST_CASE("RHEreg-G") {
 			Eigen::VectorXd bb = CC.col(pve.n_components);
 			Eigen::VectorXd ss = AA.colPivHouseholderQr().solve(bb);
 
-			CHECK(CC(0, 0) == Approx(4621.41));
-			CHECK(CC(1, 1) == Approx(7041.18));
-			CHECK(CC(1, 0) == Approx(1128.3));
-			CHECK(CC(1, 2) == Approx(1036.74));
-			CHECK(pve.components[1] * pve.components[2] == Approx(1036.74));
+			CHECK(CC(0, 0) == Approx(4609.7761957246));
+			CHECK(CC(1, 1) == Approx(7042.7712505186));
+			CHECK(CC(1, 0) == Approx(1128.1258528109));
+			CHECK(CC(1, 2) == Approx(1035.3549637537));
+			CHECK(pve.components[1] * pve.components[2] == Approx(1035.3549637537));
 			CHECK(pve.components[1].get_n_var_local() == 924);
 			CHECK(pve.components[2].get_n_var_local() == 1);
-			CHECK(CC(0, 2) == Approx(1025.1771502818));
+			CHECK(CC(0, 2) == Approx(1023.9319930016));
 			CHECK(CC(2, 2) == Approx(998.0));
 
 			// CHECK(pve.components[0].zz.sum() == Approx(123.7670672474));
@@ -300,18 +300,16 @@ TEST_CASE("RHEreg-G") {
 				pve.components[ii].rm_jacknife_block = -1;
 			}
 			CHECK(pve.components[0].get_n_var_local() == Approx(924));
-			// CHECK(pve.components[0].getXXtz().squaredNorm() == Approx(39653744616.7472076416));
-			// CHECK(pve.components[1].getXXtz().squaredNorm() == Approx(60669447736.4095077515));
 
 			Eigen::MatrixXd CC = pve.construct_vc_system(pve.components);
 			Eigen::MatrixXd AA = CC.block(0, 0, pve.n_components, pve.n_components);
 			Eigen::VectorXd bb = CC.col(pve.n_components);
 			Eigen::VectorXd ss = AA.colPivHouseholderQr().solve(bb);
 
-			CHECK(CC(0, 0) == Approx(4621.41));
-			CHECK(CC(1, 1) == Approx(7041.18));
-			CHECK(CC(1, 0) == Approx(1128.3));
-			CHECK(CC(1, 2) == Approx(1036.74));
+			CHECK(CC(0, 0) == Approx(4609.7761957246));
+			CHECK(CC(1, 1) == Approx(7042.7712505186));
+			CHECK(CC(1, 0) == Approx(1128.1258528109));
+			CHECK(CC(1, 2) == Approx(1035.3549637537));
 		}
 	}
 }
