@@ -166,7 +166,7 @@ int main( int argc, char** argv ) {
 			}
 		}
 
-		if(p.mode_RHE) {
+		if(p.mode_RHE || p.mode_RHEreg_optim_LEMMA) {
 			if(p.random_seed == -1) {
 				if(world_rank == 0) {
 					std::random_device rd;
