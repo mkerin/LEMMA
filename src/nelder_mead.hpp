@@ -28,13 +28,25 @@
 
 #include "tools/eigen3.3/Dense"
 
-
 /*
  * Nelder-Mead
  */
 
 bool optimNelderMead(Eigen::Ref<Eigen::VectorXd> init_out_vals,
-                     std::function<double (Eigen::VectorXd vals_inp, void* grad_out)> opt_objfn,
-                     parameters p);
+                     std::function<double (Eigen::VectorXd parameters, void* grad_out)> opt_objfn,
+                     parameters p,
+                     const long& iter_max);
+
+void setupNelderMead(Eigen::VectorXd init_out_vals,
+                     std::function<double(Eigen::VectorXd vals_inp, void *grad_out)> opt_objfn,
+                     Eigen::MatrixXd& simplex_points,
+                     Eigen::VectorXd& simplex_fn_vals);
+
+void iterNelderMead(Eigen::Ref<Eigen::MatrixXd> simplex_points,
+                    Eigen::Ref<Eigen::VectorXd> simplex_fn_vals,
+                    std::function<double(Eigen::VectorXd vals_inp, void *grad_out)> opt_objfn,
+                    parameters p);
+
+long get_index_min(Eigen::Ref<Eigen::VectorXd> vec);
 
 #endif //LEMMA_NELDER_MEAD_HPP

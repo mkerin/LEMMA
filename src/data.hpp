@@ -1218,6 +1218,7 @@ public:
 		if(p.env_coeffs_file != "NULL") {
 			std::vector<std::string> col_names;
 			std::vector<std::string> case1 = {"env", "mu", "s_sq"};
+			std::vector<std::string> case2 = {"env", "mu"};
 			read_file_header(p.env_coeffs_file, col_names);
 
 			Eigen::MatrixXd coeffs;
@@ -1225,7 +1226,11 @@ public:
 				EigenUtils::read_matrix_and_skip_cols(p.env_coeffs_file, 1, coeffs, col_names);
 				vp_init.muw = coeffs.col(0);
 				vp_init.sw_sq = coeffs.col(1);
+			} else if(col_names == case2) {
+				EigenUtils::read_matrix_and_skip_cols(p.env_coeffs_file, 1, coeffs, col_names);
+				vp_init.muw = coeffs.col(0);
 			} else if(col_names.size() == 1) {
+
 				EigenUtils::read_matrix(p.env_coeffs_file, coeffs, col_names);
 				vp_init.muw = coeffs.col(0);
 			} else {

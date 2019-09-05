@@ -166,7 +166,7 @@ int main( int argc, char** argv ) {
 			}
 		}
 
-		if(p.mode_RHE || p.mode_RHEreg_optim_LEMMA) {
+		if(p.mode_RHE || p.mode_RHEreg_NLS) {
 			if(p.random_seed == -1) {
 				if(world_rank == 0) {
 					std::random_device rd;
@@ -190,10 +190,15 @@ int main( int argc, char** argv ) {
 			out_file = out_file.substr(0, out_file.find(".gz"));
 			if(data.n_env > 0) {
 				// If multi env; use VB to collapse to single
-				assert(data.n_env == 1 || p.mode_vb || p.env_coeffs_file != "NULL");
-				RHEreg pve(data, Y, C, data.vp_init.eta);
-				pve.run();
-				pve.to_file(p.out_file);
+				if(p.mode_vb || p.env_coeffs_file != "NULL") {
+					RHEreg pve(data, Y, C, data.vp_init.eta);
+					pve.run();
+					pve.to_file(p.out_file);
+				} else {
+					RHEreg pve(data, Y, C, data.E);
+					pve.run();
+					pve.to_file(p.out_file);
+				}
 			} else {
 				RHEreg pve(data, Y, C);
 				pve.run();

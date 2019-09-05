@@ -36,12 +36,12 @@ public:
 	bool init_weights_with_snpwise_scan, flip_high_maf_variants, min_spike_diff_set;
 	bool mode_mog_prior_beta, mode_mog_prior_gam, mode_random_start, mode_calc_snpstats;
 	bool mode_remove_squared_envs, mode_squarem, mode_incl_squared_envs, drop_loco;
-	bool exclude_ones_from_env_sq, mode_RHEreg_optim_LEMMA;
+	bool exclude_ones_from_env_sq, mode_RHEreg_NLS;
 	long redo_ym_interval;
 	double min_maf, min_info, elbo_tol, alpha_tol, gamma_updates_thresh;
 	double beta_spike_diff_factor, gam_spike_diff_factor, min_spike_diff_factor;
-	long LOSO_window, n_jacknife, streamBgen_print_interval;
-	bool RHE_multicomponent, mode_dump_processed_data;
+	long LOSO_window, n_jacknife, streamBgen_print_interval, nelderMead_max_iter;
+	bool RHE_multicomponent, mode_dump_processed_data, use_raw_env;
 	std::vector < std::string > incl_sample_ids, gconf;
 
 // constructors/destructors
@@ -80,6 +80,7 @@ public:
 		interaction_analysis = false;
 		joint_covar_update = false;
 		drop_loco = false;
+		use_raw_env = false;
 		chunk_size = 256;
 		main_chunk_size = 64;
 #ifdef DATA_AS_FLOAT
@@ -89,6 +90,7 @@ public:
 #endif
 		missing_code = -999;
 		vb_iter_max = 10000;
+		nelderMead_max_iter = 100;
 		maxBytesPerRank = 14500000000;
 		vb_iter_start = 0;
 		n_pve_samples = 50;
@@ -133,7 +135,7 @@ public:
 		keep_constant_variants = false;
 		user_requests_round1 = false;
 		scale_pheno = true;
-		mode_RHEreg_optim_LEMMA = false;
+		mode_RHEreg_NLS = false;
 	}
 
 	~parameters() = default;

@@ -12,8 +12,8 @@
 #include <random>
 
 
-RHEreg_Component::RHEreg_Component(const parameters &myparams, Eigen::VectorXd &myY,
-                                   Eigen::MatrixXd &myWzz, Eigen::MatrixXd &myC, Eigen::MatrixXd &myCtC_inv,
+RHEreg_Component::RHEreg_Component(const parameters &myparams, const Eigen::VectorXd &myY,
+                                   const Eigen::MatrixXd &myWzz, const Eigen::MatrixXd &myC, const Eigen::MatrixXd &myCtC_inv,
                                    const long &myNJacknifeLocal) : params(myparams), Y(myY),
 	zz(myWzz), C(myC), CtC_inv(myCtC_inv), n_jacknife_local(myNJacknifeLocal) {
 	assert(n_jacknife_local > 0);
@@ -38,13 +38,14 @@ RHEreg_Component::RHEreg_Component(const parameters &myparams, Eigen::VectorXd &
 	}
 }
 
-void RHEreg_Component::set_eta(Eigen::Ref <Eigen::VectorXd> myeta) {
+void RHEreg_Component::set_env_var(Eigen::Ref<Eigen::VectorXd> my_env_var) {
 	assert(is_active);
 	n_env = 1;
-	eta = myeta;
-	eta = myeta;
-	Y.array() *= eta.array();
-	zz.array().colwise() *= eta.array();
+	env_var = my_env_var;
+	Y.array() *= env_var.array();
+	if(zz.rows() > 0) {
+		zz.array().colwise() *= env_var.array();
+	}
 }
 
 void RHEreg_Component::set_inactive() {
@@ -77,7 +78,7 @@ void RHEreg_Component::finalise() {
 	if(is_active) {
 		if(n_env > 0) {
 			for (auto& mm : _XXtzs) {
-				mm.array().colwise() *= eta.array();
+				mm.array().colwise() *= env_var.array();
 			}
 		}
 
@@ -135,5 +136,33 @@ double RHEreg_Component::operator*(const RHEreg_Component &other) const {
 }
 
 Eigen::MatrixXd RHEreg_Component::project_out_covars(Eigen::Ref <Eigen::MatrixXd> rhs) const {
-	return EigenUtils::project_out_covars(rhs, C, CtC_inv, params.mode_debug);
+	return EigenUtils::project_out_covars(rhs, C, CtC_inv);
+}
+
+void aggregate_GxE_components(const std::vector<RHEreg_Component> &vec_of_components, RHEreg_Component &new_comp,
+							  const Eigen::Ref<const Eigen::MatrixXd> &E,
+							  const Eigen::Ref<const Eigen::VectorXd> &env_weights) {
+	long n_components = vec_of_components.size();
+	long n_samples = vec_of_components[0].n_samples;
+	long n_draws = vec_of_components[0].n_draws;
+
+	Eigen::VectorXd eta = E * env_weights;
+	Eigen::MatrixXd sum_WlVbl = Eigen::MatrixXd::Zero(n_samples, n_draws);
+	long GxE_comp_index;
+	for (int ii = 0; ii < n_components; ii++) {
+		if (vec_of_components[ii].effect_type == "GxE") {
+			assert(vec_of_components[ii].rm_jacknife_block == -1);
+			GxE_comp_index = ii;
+			long ll = vec_of_components[ii].env_var_index;
+			sum_WlVbl += env_weights[ll] * E.col(ll).asDiagonal().inverse() * vec_of_components[ii].getXXtz();
+		}
+	}
+	sum_WlVbl.array().colwise() *= eta.array();
+	new_comp._XXtWz = sum_WlVbl;
+
+	new_comp.set_env_var(eta);
+	new_comp.n_var_local = vec_of_components[GxE_comp_index].n_var_local;
+	new_comp.n_draws = vec_of_components[GxE_comp_index].n_draws;
+	new_comp.label = "GxE";
+	new_comp.effect_type = "GxE";
 }

@@ -10,7 +10,7 @@
 
 
 // Scenarios
-char* argv_pve1[] = { (char*) "--RHE",
+char* argv_pve1[] = { (char*) "--RHEreg",
 	                  (char*) "--random_seed", (char*) "1",
 	                  (char*) "--n_pve_samples", (char*) "3",
 	                  (char*) "--bgen", (char*) "data/io_test/n1000_p2000.bgen",
@@ -18,7 +18,7 @@ char* argv_pve1[] = { (char*) "--RHE",
 	                  (char*) "--environment", (char*) "data/io_test/case8/age.txt",
 	                  (char*) "--out", (char*) "data/io_test/case8/test_pve_est.out.gz"};
 
-char* argv_pve2[] = { (char*) "--RHE",
+char* argv_pve2[] = { (char*) "--RHEreg",
 	                  (char*) "--random_seed", (char*) "1",
 	                  (char*) "--n_pve_samples", (char*) "3",
 	                  (char*) "--streamBgen-print-interval", (char*) "1",
@@ -27,7 +27,7 @@ char* argv_pve2[] = { (char*) "--RHE",
 	                  (char*) "--environment", (char*) "data/io_test/case8/age.txt",
 	                  (char*) "--out", (char*) "data/io_test/case8/test_pve_est.out.gz"};
 
-char* argv_pve2b[] = { (char*) "--RHE",
+char* argv_pve2b[] = { (char*) "--RHEreg",
 	                   (char*) "--random_seed", (char*) "1",
 	                   (char*) "--n_pve_samples", (char*) "3",
 	                   (char*) "--streamBgen-print-interval", (char*) "1",
@@ -36,7 +36,7 @@ char* argv_pve2b[] = { (char*) "--RHE",
 	                   (char*) "--environment", (char*) "data/io_test/case8/age.txt",
 	                   (char*) "--out", (char*) "data/io_test/case8/test_pve_est.out.gz"};
 
-char* argv_pve3[] = { (char*) "--RHE", (char*) "--maf", (char*) "0.01",
+char* argv_pve3[] = { (char*) "--RHEreg", (char*) "--maf", (char*) "0.01",
 	                  (char*) "--random_seed", (char*) "1",
 	                  (char*) "--n_jacknife", (char*) "2",
 	                  (char*) "--n_pve_samples", (char*) "10",
@@ -44,8 +44,20 @@ char* argv_pve3[] = { (char*) "--RHE", (char*) "--maf", (char*) "0.01",
 	                  (char*) "--pheno", (char*) "data/io_test/case8/pheno.txt",
 	                  (char*) "--environment", (char*) "data/io_test/case8/age.txt",
 	                  (char*) "--out", (char*) "data/io_test/case8/test_pve_est.out.gz"};
+
+char* argv_rhe_nls[] = { (char*) "LEMMA",
+						 (char*) "--RHEreg-NLS",
+						 (char*) "--NM-max-ter", (char*) "5",
+						 (char*) "--maf", (char*) "0.01",
+					  (char*) "--random_seed", (char*) "1",
+					  (char*) "--n_jacknife", (char*) "1",
+					  (char*) "--n_pve_samples", (char*) "5",
+					  (char*) "--streamBgen", (char*) "data/io_test/n50_p100.bgen",
+					  (char*) "--pheno", (char*) "data/io_test/pheno.txt",
+					  (char*) "--environment", (char*) "data/io_test/n50_p100_env.txt",
+					  (char*) "--out", (char*) "data/io_test/test_RHEreg_NLS.out.gz"};
 //
-char* argv_main1[] = { (char*) "--RHE",
+char* argv_main1[] = { (char*) "--RHEreg",
 	                   (char*) "--random_seed", (char*) "1",
 	                   (char*) "--n_pve_samples", (char*) "3",
 	                   (char*) "--streamBgen", (char*) "data/io_test/n1000_p2000.bgen",
@@ -53,13 +65,89 @@ char* argv_main1[] = { (char*) "--RHE",
 	                   (char*) "--pheno", (char*) "data/io_test/case8/pheno.txt",
 	                   (char*) "--out", (char*) "data/io_test/case8/test_pve_est.out.gz"};
 
-char* argv_main2[] = { (char*) "--RHE",
+char* argv_main2[] = { (char*) "--RHEreg",
 	                   (char*) "--random_seed", (char*) "1",
 	                   (char*) "--n_pve_samples", (char*) "3",
 	                   (char*) "--bgen", (char*) "data/io_test/n1000_p2000.bgen",
 	                   (char*) "--pheno", (char*) "data/io_test/case8/pheno.txt",
 	                   (char*) "--out", (char*) "data/io_test/case8/test_pve_est.out.gz"};
 
+TEST_CASE("RHE-NLS") {
+	SECTION("NLS fit") {
+		parameters p;
+		int argc = sizeof(argv_rhe_nls) / sizeof(argv_rhe_nls[0]);
+		parse_arguments(p, argc, argv_rhe_nls);
+		Data data(p);
+		data.read_non_genetic_data();
+		data.standardise_non_genetic_data();
+		data.read_full_bgen();
+
+		Eigen::VectorXd Y = data.Y.cast<double>();
+		Eigen::MatrixXd C = data.C.cast<double>();
+		RHEreg pve(data, Y, C, data.E);
+		pve.run();
+
+		CHECK(pve.nls_env_weights(0) == Approx(0.1997146606));
+		CHECK(pve.nls_env_weights(1) == Approx(0.2400074005));
+		CHECK(pve.nls_env_weights(2) == Approx(0.2800617218));
+		CHECK(pve.nls_env_weights(3) == Approx(0.2779132843));
+
+		CHECK(pve.sigmas(0) == Approx(0.9035918828));
+		CHECK(pve.sigmas(1) == Approx(-0.2454259288));
+		CHECK(pve.sigmas(2) == Approx(0.2260331139));
+
+		Eigen::MatrixXd CC = pve.construct_vc_system(pve.components);
+		Eigen::MatrixXd AA = CC.block(0, 0, pve.n_components, pve.n_components);
+		Eigen::VectorXd bb = CC.col(pve.n_components);
+		Eigen::VectorXd ss = AA.colPivHouseholderQr().solve(bb);
+
+		CHECK(pve.components[1].label == "GxE");
+		CHECK(pve.components[1].env_var.squaredNorm() == Approx(12.5613741447));
+		CHECK(pve.components[1].n_covar == 5);
+		CHECK(pve.components[1]._XXtWz(0, 0) == Approx(43.5766851234));
+		CHECK(pve.components[0]._XXtWz(0, 0) == Approx(-256.5077451498));
+		CHECK(pve.n_components == 3);
+	}
+
+	SECTION("RHEreg with env_weights from NLS") {
+		// gunzip -c data/io_test/test_RHEreg_NLS_NM_env_weights.out.gz > data/io_test/n50_p100_nls_env_weights.txt
+		parameters p;
+		int argc = sizeof(argv_rhe_nls) / sizeof(argv_rhe_nls[0]);
+		parse_arguments(p, argc, argv_rhe_nls);
+		p.mode_RHE = true;
+		p.mode_RHEreg_NLS = false;
+		p.env_coeffs_file = "data/io_test/n50_p100_nls_env_weights.txt";
+		p.use_raw_env = true;
+
+		Data data(p);
+		data.read_non_genetic_data();
+		data.standardise_non_genetic_data();
+		data.read_full_bgen();
+		data.set_vb_init();
+
+		Eigen::VectorXd Y = data.Y.cast<double>();
+		Eigen::MatrixXd C = data.C.cast<double>();
+		RHEreg pve(data, Y, C, data.vp_init.eta);
+		pve.run();
+
+		CHECK(pve.sigmas(0) == Approx(0.9035918828));
+		CHECK(pve.sigmas(1) == Approx(-0.2454259288));
+		CHECK(pve.sigmas(2) == Approx(0.2260331139));
+
+		Eigen::MatrixXd CC = pve.construct_vc_system(pve.components);
+		Eigen::MatrixXd AA = CC.block(0, 0, pve.n_components, pve.n_components);
+		Eigen::VectorXd bb = CC.col(pve.n_components);
+		Eigen::VectorXd ss = AA.colPivHouseholderQr().solve(bb);
+
+		CHECK(pve.components[1].label == "GxE(0)");
+		CHECK(pve.components[1].env_var.squaredNorm() == Approx(12.5613741447));
+		CHECK(pve.components[1].n_covar == 5);
+		CHECK(pve.components[1]._XXtWz(0, 0) == Approx(43.5766851234));
+		CHECK(pve.components[0]._XXtWz(0, 0) == Approx(-256.5077451498));
+
+		CHECK(pve.n_components == 3);
+	}
+}
 
 TEST_CASE("RHEreg-GxE") {
 	SECTION("GxE effects fit") {
@@ -266,6 +354,7 @@ TEST_CASE("RHEreg-G") {
 			Eigen::VectorXd bb = CC.col(pve.n_components);
 			Eigen::VectorXd ss = AA.colPivHouseholderQr().solve(bb);
 
+			CHECK(pve.n_components == 3);
 			CHECK(CC(0, 0) == Approx(4609.7761957246));
 			CHECK(CC(1, 1) == Approx(7042.7712505186));
 			CHECK(CC(1, 0) == Approx(1128.1258528109));

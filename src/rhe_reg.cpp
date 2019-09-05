@@ -13,9 +13,9 @@
 
 #include <random>
 #include <cmath>
+#include <functional>
 
 void RHEreg::run() {
-
 	// Add intercept to covariates
 	Eigen::MatrixXd ones = Eigen::MatrixXd::Constant(n_samples, 1, 1.0);
 	if(n_covar > 0) {
@@ -28,10 +28,9 @@ void RHEreg::run() {
 	n_covar = C.cols();
 
 	// Center and scale eta
-	if(n_env > 0) {
-		std::vector<std::string> placeholder = {"eta"};
-		EigenUtils::center_matrix(eta);
-		EigenUtils::scale_matrix_and_remove_constant_cols(eta, n_env, placeholder);
+	if(n_env > 0 && !p.use_raw_env) {
+		EigenUtils::center_matrix(E);
+		EigenUtils::scale_matrix_and_remove_constant_cols(E, n_env, env_names);
 	}
 
 	// Parse RHE groups files once to get total number of groups
@@ -51,14 +50,15 @@ void RHEreg::run() {
 
 	// Compute variance components
 	initialise_components();
-	if(p.mode_RHEreg_optim_LEMMA){
-		optim_RHE_LEMMA();
+	compute_RHE_trace_operators();
+	if(p.mode_RHEreg_NLS){
+		nls_env_weights = optim_RHE_LEMMA();
 	} else if(n_env > 0) {
 		std::cout << "G+GxE effects model (gaussian prior)" << std::endl;
-		calc_RHE();
+		solve_RHE();
 	} else {
 		std::cout << "Main effects model (gaussian prior)" << std::endl;
-		calc_RHE();
+		solve_RHE();
 	}
 
 	std::cout << "Variance components estimates" << std::endl;
@@ -69,73 +69,122 @@ void RHEreg::run() {
 	std::cout << h2 << std::endl;
 }
 
-void RHEreg::fill_gaussian_noise(unsigned int seed, Eigen::Ref<Eigen::MatrixXd> zz, long nn, long n_draws) {
-	assert(zz.rows() == nn);
-	assert(zz.cols() == n_draws);
+void RHEreg::initialise_components() {
 
-	std::mt19937 generator{seed};
-	std::normal_distribution<scalarData> noise_normal(0.0, 1);
+	zz.resize(n_samples, n_draws);
+	if(p.rhe_random_vectors_file != "NULL") {
+		EigenUtils::read_matrix(p.rhe_random_vectors_file, zz);
+	} else {
+		fill_gaussian_noise(p.random_seed, zz, n_samples, n_draws);
+	}
 
-	// for (int bb = 0; bb < pp; bb++) {
-	//  for (std::size_t ii = 0; ii < nn; ii++) {
-	//      zz(ii, bb) = noise_normal(generator);
-	//  }
-	// }
+	if(p.mode_debug) {
+		std::string ram = mpiUtils::currentUsageRAM();
+		std::cout << "Before initialising " << ram << std::endl;
+	}
 
-	// fill gaussian noise
-	if(world_rank == 0) {
-		std::vector<long> all_n_samples(world_size);
-		for (const auto &kv : sample_location) {
-			if (kv.second != -1) {
-				all_n_samples[kv.second]++;
-			}
-		}
+	std::cout << "Initialising HE-regression components with:" << std::endl;
+	std::cout << " - N-jacknife = " << p.n_jacknife << std::endl;
+	std::cout << " - N-draws = " << p.n_pve_samples << std::endl;
+	std::cout << " - N-samples = " << (long) Nglobal << std::endl;
+	std::cout << " - N-covars = " << n_covar << std::endl;
+	if(p.RHE_multicomponent) {
+		std::cout << " - N-annotations = " << all_SNPGROUPS.size() << std::endl;
+	}
 
-		std::vector<Eigen::MatrixXd> allzz(world_size);
-		for (int ii = 0; ii < world_size; ii++) {
-			allzz[ii].resize(all_n_samples[ii], n_draws);
-		}
+	if(n_covar > 0) {
+		zz = project_out_covars(zz);
+		Y = project_out_covars(Y);
+	}
 
-		for (int bb = 0; bb < n_draws; bb++) {
-			std::vector<long> allii(world_size, 0);
-			for (const auto &kv : sample_location) {
-				if (kv.second != -1) {
-					int local_rank = kv.second;
-					long local_ii = allii[local_rank];
-					allzz[local_rank](local_ii, bb) = noise_normal(generator);
-					allii[local_rank]++;
+	// Set variance components
+	components.reserve(1 + all_SNPGROUPS.size() * (n_env + 1));
+	if(true) {
+		if(p.RHE_multicomponent) {
+			for (auto group : all_SNPGROUPS) {
+				RHEreg_Component comp(p, Y, zz, C, CtC_inv, p.n_jacknife);
+				comp.label = group + "_G";
+				comp.effect_type = "G";
+				comp.group = group;
+				components.push_back(std::move(comp));
+
+				if(p.mode_debug) {
+					std::string ram = mpiUtils::currentUsageRAM();
+					std::cout << "(" << ram << ")" << std::endl;
 				}
 			}
-		}
+		} else {
+			RHEreg_Component comp(p, Y, zz, C, CtC_inv, p.n_jacknife);
+			comp.label = "G";
+			comp.effect_type = "G";
 
-		for (int ii = 1; ii < world_size; ii++) {
-//			allzz[ii].resize(all_n_samples[ii], n_draws);
-			MPI_Send(allzz[ii].data(), allzz[ii].size(), MPI_DOUBLE, ii, 0, MPI_COMM_WORLD);
+			components.push_back(std::move(comp));
 		}
-		zz = allzz[0];
-	} else {
-		MPI_Recv(zz.data(), n_samples * n_draws, MPI_DOUBLE, 0, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
 	}
+
+	if(p.xtra_verbose) {
+		std::string ram = mpiUtils::currentUsageRAM();
+		std::cout << "Initialised main effects RHEreg components (" << ram << ")" << std::endl;
+	}
+
+	for (long ee = 0; ee < n_env; ee++) {
+		if(p.RHE_multicomponent) {
+			assert(n_env == 1);
+			for (auto group : all_SNPGROUPS) {
+				RHEreg_Component comp(p, Y, zz, C, CtC_inv, p.n_jacknife);
+				comp.label = group + "_GxE";
+				comp.effect_type = "GxE";
+				comp.group = group;
+				comp.env_var_index = ee;
+				comp.set_env_var(E.col(ee));
+				components.push_back(std::move(comp));
+
+				if(p.mode_debug) {
+					std::string ram = mpiUtils::currentUsageRAM();
+					std::cout << "(" << ram << ")" << std::endl;
+				}
+			}
+		} else {
+			RHEreg_Component comp(p, Y, zz, C, CtC_inv, p.n_jacknife);
+			comp.label = "GxE(" + std::to_string(ee) + ")";
+			comp.effect_type = "GxE";
+			comp.env_var_index = ee;
+			comp.set_env_var(E.col(ee));
+			components.push_back(std::move(comp));
+		}
+	}
+
+	if(true) {
+		RHEreg_Component comp(p, Y, zz, C, CtC_inv, p.n_jacknife);
+		comp.set_inactive();
+		comp.label = "noise";
+		comp.effect_type = "noise";
+		components.push_back(std::move(comp));
+	}
+	n_components = components.size();
+
+	std::cout << " - N-RHEreg-components = " << n_components - 1 << std::endl;
+	std::string ram = mpiUtils::currentUsageRAM();
+	std::cout << "Initialised RHEreg (" << ram << ")" << std::endl;
 }
 
-void RHEreg::calc_RHE() {
-
+void RHEreg::compute_RHE_trace_operators() {
 	// Compute randomised traces
-	if(p.bgen_file != "NULL") {
+	if (p.bgen_file != "NULL") {
 		// p.bgen_file already read into RAM
 		n_var = data.n_var;
 		long n_main_segs;
 		n_main_segs = (data.n_var + p.main_chunk_size - 1) / p.main_chunk_size;
-		std::vector< std::vector <long> > main_fwd_pass_chunks(n_main_segs);
-		for(long kk = 0; kk < data.n_var; kk++) {
+		std::vector<std::vector<long> > main_fwd_pass_chunks(n_main_segs);
+		for (long kk = 0; kk < data.n_var; kk++) {
 			long main_ch_index = kk / p.main_chunk_size;
 			main_fwd_pass_chunks[main_ch_index].push_back(kk);
 		}
 
 		EigenDataMatrix D;
 		long jknf_block_size = (X.cumulative_pos[data.n_var - 1] + p.n_jacknife - 1) / p.n_jacknife;
-		for (auto& iter_chunk : main_fwd_pass_chunks) {
-			if(D.cols() != iter_chunk.size()) {
+		for (auto &iter_chunk : main_fwd_pass_chunks) {
+			if (D.cols() != iter_chunk.size()) {
 				D.resize(n_samples, iter_chunk.size());
 			}
 			X.col_block3(iter_chunk, D);
@@ -143,7 +192,7 @@ void RHEreg::calc_RHE() {
 			// Get jacknife block (just use block assignment of 1st snp)
 			long jacknife_index = X.cumulative_pos[iter_chunk[0]] / jknf_block_size;
 
-			for (auto& comp : components) {
+			for (auto &comp : components) {
 				comp.add_to_trace_estimator(D, jacknife_index);
 			}
 		}
@@ -165,7 +214,7 @@ void RHEreg::calc_RHE() {
 		for (int ii = 0; ii < p.streamBgenFiles.size(); ii++) {
 			std::cout << std::endl << "Streaming genotypes from " << p.streamBgenFiles[ii] << std::endl;
 
-			if(p.RHE_groups_files.size() > 1) {
+			if (p.RHE_groups_files.size() > 1) {
 				snp_group_index = 0;
 				read_RHE_groups(p.RHE_groups_files[ii]);
 			}
@@ -173,7 +222,7 @@ void RHEreg::calc_RHE() {
 			Eigen::MatrixXd D;
 			bool bgen_pass = true;
 			while (fileUtils::read_bgen_chunk(data.streamBgenViews[ii], D, sample_is_invalid,
-			                                  n_samples, 256, p, bgen_pass, n_var_parsed, SNPIDS)) {
+											  n_samples, 256, p, bgen_pass, n_var_parsed, SNPIDS)) {
 				n_var += D.cols();
 				if (ch % print_interval == 0 && ch > 0) {
 					std::cout << "Chunk " << ch << " read (size " << 256;
@@ -193,9 +242,9 @@ void RHEreg::calc_RHE() {
 
 				// parse which snp belongs to which group
 				std::vector<std::vector<int> > block_membership(n_components);
-				if(p.RHE_multicomponent) {
+				if (p.RHE_multicomponent) {
 					for (long jj = 0; jj < D.cols(); jj++) {
-						if(SNPGROUPS_snpid[snp_group_index] == SNPIDS[jj]) {
+						if (SNPGROUPS_snpid[snp_group_index] == SNPIDS[jj]) {
 							for (int kk = 0; kk < n_components; kk++) {
 								if (components[kk].group == SNPGROUPS_group[snp_group_index]) {
 									block_membership[kk].push_back(jj);
@@ -204,13 +253,13 @@ void RHEreg::calc_RHE() {
 						} else {
 							// find
 							auto it = std::find(SNPGROUPS_snpid.begin(), SNPGROUPS_snpid.end(), SNPIDS[jj]);
-							if(it == SNPGROUPS_snpid.end()) {
+							if (it == SNPGROUPS_snpid.end()) {
 								// skip
 								n_var -= 1;
 							} else {
 								snp_group_index = it - SNPGROUPS_snpid.begin();
 								for (int kk = 0; kk < n_components; kk++) {
-									if(components[kk].group == SNPGROUPS_group[snp_group_index]) {
+									if (components[kk].group == SNPGROUPS_group[snp_group_index]) {
 										block_membership[kk].push_back(jj);
 									}
 								}
@@ -221,7 +270,7 @@ void RHEreg::calc_RHE() {
 					}
 					for (int cc = 0; cc < n_components; cc++) {
 						Eigen::MatrixXd D1(D.rows(), block_membership[cc].size());
-						if(D1.cols() > 0) {
+						if (D1.cols() > 0) {
 							for (int jjj = 0; jjj < block_membership[cc].size(); jjj++) {
 								D1.col(jjj) = D.col(block_membership[cc][jjj]);
 							}
@@ -236,13 +285,15 @@ void RHEreg::calc_RHE() {
 				ch++;
 			}
 		}
-		if(p.verbose) std::cout << n_var << " variants pass QC filters" << std::endl;
-		if(p.xtra_verbose) std::cout << n_find_operations << " find operations performed" << std::endl;
+		if (p.verbose) std::cout << n_var << " variants pass QC filters" << std::endl;
+		if (p.xtra_verbose) std::cout << n_find_operations << " find operations performed" << std::endl;
 	}
 	for (long ii = 0; ii < n_components; ii++) {
 		components[ii].finalise();
 	}
+}
 
+void RHEreg::solve_RHE() {
 	// Solve system to estimate sigmas
 	long n_components = components.size();
 	for (long ii = 0; ii < n_components; ii++) {
@@ -266,36 +317,37 @@ void RHEreg::calc_RHE() {
 	}
 
 	// jacknife estimates
-	std::cout << "Computing standard errors using " << p.n_jacknife << " jacknife blocks" << std::endl;
-	sigmas_jack.resize(p.n_jacknife, n_components);
+	if(p.n_jacknife > 1) {
+		std::cout << "Computing standard errors using " << p.n_jacknife << " jacknife blocks" << std::endl;
+		sigmas_jack.resize(p.n_jacknife, n_components);
 
-	// h2_jack contains total G and GxE heritabilities at end
-	h2_jack.resize(p.n_jacknife, n_components);
-	n_var_jack.resize(p.n_jacknife);
+		// h2_jack contains total G and GxE heritabilities at end
+		h2_jack.resize(p.n_jacknife, n_components);
+		n_var_jack.resize(p.n_jacknife);
+		for (long jj = 0; jj < p.n_jacknife; jj++) {
+			for (long ii = 0; ii < n_components; ii++) {
+				components[ii].rm_jacknife_block = jj;
+			}
+			n_var_jack[jj] = components[0].get_n_var_local();
 
-	for (long jj = 0; jj < p.n_jacknife; jj++) {
+			Eigen::MatrixXd CC = construct_vc_system(components);
+			Eigen::MatrixXd AA = CC.block(0, 0, n_components, n_components);
+			Eigen::VectorXd bb = CC.col(n_components);
+			Eigen::VectorXd ss = AA.colPivHouseholderQr().solve(bb);
+			sigmas_jack.row(jj) = ss;
+			h2_jack.row(jj) = calc_h2(AA, bb, true);
+
+			if (p.mode_debug) {
+				Eigen::VectorXd tmp(Eigen::Map<Eigen::VectorXd>(CC.data(), CC.cols() * CC.rows()));
+				outf << jj << " " << tmp.transpose() << std::endl;
+			}
+		}
 		for (long ii = 0; ii < n_components; ii++) {
-			components[ii].rm_jacknife_block = jj;
+			components[ii].rm_jacknife_block = -1;
 		}
-		n_var_jack[jj] = components[0].get_n_var_local();
-
-		Eigen::MatrixXd CC = construct_vc_system(components);
-		Eigen::MatrixXd AA = CC.block(0, 0, n_components, n_components);
-		Eigen::VectorXd bb = CC.col(n_components);
-		Eigen::VectorXd ss = AA.colPivHouseholderQr().solve(bb);
-		sigmas_jack.row(jj) = ss;
-		h2_jack.row(jj) = calc_h2(AA, bb, true);
-
-		if(p.mode_debug) {
-			Eigen::VectorXd tmp(Eigen::Map<Eigen::VectorXd>(CC.data(),CC.cols()*CC.rows()));
-			outf << jj << " " << tmp.transpose() << std::endl;
+		if (p.mode_debug) {
+			boost_io::close(outf);
 		}
-	}
-	for (long ii = 0; ii < n_components; ii++) {
-		components[ii].rm_jacknife_block = -1;
-	}
-	if(p.mode_debug) {
-		boost_io::close(outf);
 	}
 
 	if(n_env > 0) {
@@ -322,36 +374,117 @@ void RHEreg::calc_RHE() {
 	}
 }
 
-double example_surface(Eigen::VectorXd vals_inp, void* grad_out) {
-	// https://www.benfrederickson.com/numerical-optimization/
-	const double x = vals_inp(0);
-	const double y = vals_inp(1);
+Eigen::VectorXd RHEreg::optim_RHE_LEMMA() {
+	Eigen::VectorXd env_weights = Eigen::VectorXd::Constant(n_env, 1.0);
+	env_weights *= 1.0 / n_env;
 
-	double obj_val = x * x + y * y + x * std::sin(y) + y * std::sin(x);
+	/* Nelder Mead */
+	// Create simplex
+	const long n_vals = env_weights.rows();
+	Eigen::VectorXd simplex_fn_vals(n_vals+1);
+	Eigen::MatrixXd simplex_points(n_vals+1,n_vals);
+	setupNelderMead(env_weights,
+			std::bind(&RHEreg::optim_RHE_LEMMA_objective, this, std::placeholders::_1, std::placeholders::_2),
+			simplex_points, simplex_fn_vals);
 
-	//
+	// Run algorithm
+	long iter = 0;
+	const double err_tol = 1E-08;
+	double err = 2*err_tol, min_val = simplex_fn_vals.minCoeff();
 
-	return obj_val;
+	while (err > err_tol && iter < p.nelderMead_max_iter) {
+		iter++;
+
+		iterNelderMead(simplex_points, simplex_fn_vals,
+					   std::bind(&RHEreg::optim_RHE_LEMMA_objective, this, std::placeholders::_1, std::placeholders::_2),
+					   p);
+
+		// Update function values
+		for (size_t i=0; i < n_vals + 1; i++) {
+			simplex_fn_vals(i) = optim_RHE_LEMMA_objective(simplex_points.row(i).transpose(),nullptr);
+		}
+
+		err = std::abs(min_val - simplex_fn_vals.maxCoeff());
+		min_val = simplex_fn_vals.minCoeff();
+
+		long index_min = get_index_min(simplex_fn_vals);
+		env_weights = simplex_points.row(index_min);
+	}
+
+	// Dump env weights to file
+	boost_io::filtering_ostream outf;
+	auto filename = fileUtils::fstream_init(outf, p.out_file, "", "_NM_env_weights");
+	std::cout << "Writing env weights to " << filename << std::endl;
+	std::vector<std::string> header = {"env", "mu"};
+	EigenUtils::write_matrix(outf, env_weights, header, env_names);
+
+	// Use weights to collapse GxE component and continue with rest of algorithm
+	Eigen::MatrixXd placeholder = Eigen::MatrixXd::Zero(n_samples, n_draws);
+	RHEreg_Component combined_comp(p, Y, C, CtC_inv, placeholder);
+	aggregate_GxE_components(components, combined_comp, E, env_weights);
+
+	// Delete old
+	std::vector<long> to_erase;
+	for (long ii = n_components - 1; ii>= 0; ii--) {
+		if (components[ii].effect_type == "GxE") {
+			components.erase(components.begin() + ii);
+		}
+	}
+	components.insert(components.begin() + 1, std::move(combined_comp));
+	n_components = components.size();
+
+	// Solve system to estimate sigmas
+	solve_RHE();
+
+	return env_weights;
 }
 
-void RHEreg::optim_RHE_LEMMA() {
-	Eigen::VectorXd x(2);
-	x(0) = -4;
-	x(1) = 1;
+double RHEreg::optim_RHE_LEMMA_objective(Eigen::VectorXd env_weights, void* grad_out) const {
+	// Take in env_weights
+	// Solve to find best sigma's
+	// Give back solution.
 
-	bool success = optimNelderMead(x, example_surface, p);
-	std::cout << success << std::endl;
+	std::vector<RHEreg_Component> my_components;
+	my_components.reserve(3);
+
+	// Get main and noise components
+	for (int ii = 0; ii < n_components; ii++){
+		if(components[ii].effect_type == "G"){
+			my_components.push_back(components[ii]);
+		} else if (components[ii].effect_type == "noise"){
+			my_components.push_back(components[ii]);
+		}
+	}
+	assert(my_components.size() == 2);
+
+	// Create component for \diag{Ew} \left( \sum_l w_l \bm{v}_{b, l} \right)
+	Eigen::MatrixXd placeholder = Eigen::MatrixXd::Zero(n_samples, n_draws);
+	RHEreg_Component combined_comp(p, Y, C, CtC_inv, placeholder);
+	aggregate_GxE_components(components, combined_comp, E, env_weights);
+
+	my_components.push_back(std::move(combined_comp));
+
+	// Solve
+	long n_components = my_components.size();
+	Eigen::MatrixXd CC = construct_vc_system(my_components);
+	Eigen::MatrixXd AA = CC.block(0, 0, n_components, n_components);
+	Eigen::VectorXd bb = CC.col(n_components);
+	Eigen::VectorXd sigmas = AA.colPivHouseholderQr().solve(bb);
+
+	double obj = std::pow(Y.squaredNorm(), 2) -2 * sigmas.dot(bb) + sigmas.dot(AA * sigmas);
+	return obj;
 }
 
-Eigen::MatrixXd RHEreg::construct_vc_system(const std::vector<RHEreg_Component> &components) {
+Eigen::MatrixXd RHEreg::construct_vc_system(const std::vector<RHEreg_Component> &vec_of_components) const {
+	long n_components = vec_of_components.size();
 	Eigen::MatrixXd res(n_components, n_components + 1);
 	for (long ii = 0; ii < n_components; ii++) {
-		res(ii, n_components) = components[ii].get_bb_trace();
+		res(ii, n_components) = vec_of_components[ii].get_bb_trace();
 		for (long jj = 0; jj <= ii; jj++) {
-			if(ii == jj && components[ii].label == "noise") {
+			if(ii == jj && vec_of_components[ii].label == "noise") {
 				res(ii, jj) = Nglobal - n_covar;
 			} else {
-				res(ii, jj) = components[ii] * components[jj];
+				res(ii, jj) = vec_of_components[ii] * vec_of_components[jj];
 				res(jj, ii) = res(ii, jj);
 			}
 		}
@@ -359,7 +492,9 @@ Eigen::MatrixXd RHEreg::construct_vc_system(const std::vector<RHEreg_Component> 
 	return res;
 }
 
-Eigen::ArrayXd RHEreg::calc_h2(Eigen::Ref<Eigen::MatrixXd> AA, Eigen::Ref<Eigen::VectorXd> bb, const bool &reweight_sigmas) {
+Eigen::ArrayXd RHEreg::calc_h2(const Eigen::Ref<const Eigen::MatrixXd>& AA,
+		const Eigen::Ref<const Eigen::VectorXd>& bb,
+		const bool &reweight_sigmas) const {
 	Eigen::ArrayXd ss = AA.colPivHouseholderQr().solve(bb);
 	if(reweight_sigmas) {
 		ss *= (AA.row(AA.rows()-1)).array() / Nglobal;
@@ -396,7 +531,7 @@ Eigen::MatrixXd RHEreg::project_out_covars(Eigen::Ref<Eigen::MatrixXd> rhs) {
 			CtC_inv = CtC.inverse();
 			if(p.mode_debug) std::cout << "Ending compute of CtC_inv" << std::endl;
 		}
-		return EigenUtils::project_out_covars(rhs, C, CtC_inv, p.mode_debug);
+		return EigenUtils::project_out_covars(rhs, C, CtC_inv);
 	} else {
 		return rhs;
 	}
@@ -417,8 +552,12 @@ void RHEreg::to_file(const std::string &file) {
 		outf << components[ii].label << " ";
 		outf << sigmas[ii] << " ";
 		outf << h2[ii] << " ";
-		outf << h2_se_jack[ii] << " ";
-		outf << h2_bias_corrected[ii] << std::endl;
+		if(p.n_jacknife > 1) {
+			outf << h2_se_jack[ii] << " ";
+			outf << h2_bias_corrected[ii] << std::endl;
+		} else {
+			outf << "NA NA" << std::endl;
+		}
 	}
 
 	if(p.RHE_multicomponent) {
@@ -441,7 +580,7 @@ void RHEreg::to_file(const std::string &file) {
 
 	boost_io::close(outf);
 
-	if(p.xtra_verbose) {
+	if(p.xtra_verbose && p.n_jacknife > 1) {
 		auto filename = fileUtils::fstream_init(outf, file, "", suffix + "_jacknife");
 		std::cout << "Writing jacknife estimates to " << filename << std::endl;
 
@@ -459,105 +598,6 @@ void RHEreg::to_file(const std::string &file) {
 		}
 		boost_io::close(outf);
 	}
-}
-
-void RHEreg::initialise_components() {
-
-	zz.resize(n_samples, n_draws);
-	if(p.rhe_random_vectors_file != "NULL") {
-		EigenUtils::read_matrix(p.rhe_random_vectors_file, zz);
-	} else {
-		fill_gaussian_noise(p.random_seed, zz, n_samples, n_draws);
-	}
-
-	if(p.mode_debug) {
-		std::string ram = mpiUtils::currentUsageRAM();
-		std::cout << "Before initialising " << ram << std::endl;
-	}
-
-	std::cout << "Initialising HE-regression components with:" << std::endl;
-	std::cout << " - N-jacknife = " << p.n_jacknife << std::endl;
-	std::cout << " - N-draws = " << p.n_pve_samples << std::endl;
-	std::cout << " - N-samples = " << (long) Nglobal << std::endl;
-	std::cout << " - N-covars = " << n_covar << std::endl;
-	if(p.RHE_multicomponent) {
-		std::cout << " - N-annotations = " << all_SNPGROUPS.size() << std::endl;
-	}
-
-	if(n_covar > 0) {
-		zz = project_out_covars(zz);
-		Y = project_out_covars(Y);
-	} else {
-//		Wzz = zz;
-	}
-
-	// Set variance components
-	long n_effects = (n_env == 0 ? 0 : 1);
-	components.reserve(1 + all_SNPGROUPS.size() * n_effects);
-	if(true) {
-		if(p.RHE_multicomponent) {
-			for (auto group : all_SNPGROUPS) {
-				RHEreg_Component comp(p, Y, zz, C, CtC_inv, p.n_jacknife);
-				comp.label = group + "_G";
-				comp.effect_type = "G";
-				comp.group = group;
-				components.push_back(std::move(comp));
-
-				if(p.mode_debug) {
-					std::string ram = mpiUtils::currentUsageRAM();
-					std::cout << "(" << ram << ")" << std::endl;
-				}
-			}
-		} else {
-			RHEreg_Component comp(p, Y, zz, C, CtC_inv, p.n_jacknife);
-			comp.label = "G";
-			comp.effect_type = "G";
-
-			components.push_back(std::move(comp));
-		}
-	}
-
-	if(p.xtra_verbose) {
-		std::string ram = mpiUtils::currentUsageRAM();
-		std::cout << "Initialised main effects RHEreg components (" << ram << ")" << std::endl;
-	}
-
-	if(n_env == 1) {
-		if(p.RHE_multicomponent) {
-			for (auto group : all_SNPGROUPS) {
-				RHEreg_Component comp(p, Y, zz, C, CtC_inv, p.n_jacknife);
-				comp.label = group + "_GxE";
-				comp.effect_type = "GxE";
-				comp.group = group;
-				comp.set_eta(eta);
-				components.push_back(std::move(comp));
-
-				if(p.mode_debug) {
-					std::string ram = mpiUtils::currentUsageRAM();
-					std::cout << "(" << ram << ")" << std::endl;
-				}
-			}
-		} else {
-			RHEreg_Component comp(p, Y, zz, C, CtC_inv, p.n_jacknife);
-			comp.label = "GxE";
-			comp.effect_type = "GxE";
-			comp.set_eta(eta);
-			components.push_back(std::move(comp));
-		}
-	}
-
-	if(true) {
-		RHEreg_Component comp(p, Y, zz, C, CtC_inv, p.n_jacknife);
-		comp.set_inactive();
-		comp.label = "noise";
-		comp.effect_type = "noise";
-		components.push_back(std::move(comp));
-	}
-	n_components = components.size();
-
-	std::cout << " - N-RHEreg-components = " << n_components - 1 << std::endl;
-	std::string ram = mpiUtils::currentUsageRAM();
-	std::cout << "Initialised RHEreg (" << ram << ")" << std::endl;
 }
 
 double RHEreg::get_jacknife_var(Eigen::ArrayXd jack_estimates) {
@@ -617,4 +657,53 @@ void RHEreg::read_RHE_groups(const std::string& filename){
 	}
 
 	std::cout << " Read component groups for " << SNPGROUPS_snpid.size() << " SNPs from " << filename << std::endl;
+}
+
+void RHEreg::fill_gaussian_noise(unsigned int seed, Eigen::Ref<Eigen::MatrixXd> zz, long nn, long n_draws) {
+	assert(zz.rows() == nn);
+	assert(zz.cols() == n_draws);
+
+	std::mt19937 generator{seed};
+	std::normal_distribution<scalarData> noise_normal(0.0, 1);
+
+	// for (int bb = 0; bb < pp; bb++) {
+	//  for (std::size_t ii = 0; ii < nn; ii++) {
+	//      zz(ii, bb) = noise_normal(generator);
+	//  }
+	// }
+
+	// fill gaussian noise
+	if(world_rank == 0) {
+		std::vector<long> all_n_samples(world_size);
+		for (const auto &kv : sample_location) {
+			if (kv.second != -1) {
+				all_n_samples[kv.second]++;
+			}
+		}
+
+		std::vector<Eigen::MatrixXd> allzz(world_size);
+		for (int ii = 0; ii < world_size; ii++) {
+			allzz[ii].resize(all_n_samples[ii], n_draws);
+		}
+
+		for (int bb = 0; bb < n_draws; bb++) {
+			std::vector<long> allii(world_size, 0);
+			for (const auto &kv : sample_location) {
+				if (kv.second != -1) {
+					int local_rank = kv.second;
+					long local_ii = allii[local_rank];
+					allzz[local_rank](local_ii, bb) = noise_normal(generator);
+					allii[local_rank]++;
+				}
+			}
+		}
+
+		for (int ii = 1; ii < world_size; ii++) {
+//			allzz[ii].resize(all_n_samples[ii], n_draws);
+			MPI_Send(allzz[ii].data(), allzz[ii].size(), MPI_DOUBLE, ii, 0, MPI_COMM_WORLD);
+		}
+		zz = allzz[0];
+	} else {
+		MPI_Recv(zz.data(), n_samples * n_draws, MPI_DOUBLE, 0, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+	}
 }

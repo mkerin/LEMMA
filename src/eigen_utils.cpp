@@ -19,7 +19,8 @@
 
 namespace boost_io = boost::iostreams;
 
-Eigen::MatrixXd EigenUtils::subset_matrix(const Eigen::MatrixXd &orig, const std::vector<int> &valid_points) {
+Eigen::MatrixXd EigenUtils::subset_matrix(const Eigen::MatrixXd &orig,
+                                          const std::vector<int> &valid_points) {
 	long n_cols = orig.cols(), n_rows = valid_points.size();
 	Eigen::MatrixXd subset(n_rows, n_cols);
 
@@ -32,7 +33,44 @@ Eigen::MatrixXd EigenUtils::subset_matrix(const Eigen::MatrixXd &orig, const std
 }
 
 template <typename EigenMat>
-void EigenUtils::read_matrix(const std::string &filename, const long &n_rows, EigenMat &M, std::vector<std::string> &col_names,
+void EigenUtils::write_matrix(boost_io::filtering_ostream& outf,
+                              EigenMat& M,
+                              std::vector<std::string >& col_names,
+                              std::vector<std::string>& row_names){
+	if(!col_names.empty()) {
+		if (row_names.size() > 0) assert(col_names.size() == M.cols() + 1);
+		if (row_names.size() == 0) assert(col_names.size() == M.cols());
+		for (int jj = 0; jj < col_names.size(); jj++) {
+			outf << col_names[jj];
+			if (jj < col_names.size() - 1) {
+				outf << " ";
+			}
+		}
+		outf << std::endl;
+	}
+
+	if(!row_names.empty()) {
+		assert(row_names.size() == M.rows());
+		for (long ii = 0; ii < M.rows(); ii++) {
+			outf << row_names[ii] << " ";
+			for (long jj = 0; jj < M.cols(); jj++) {
+				outf << M(ii, jj);
+				if (jj < M.cols() - 1) {
+					outf << " ";
+				}
+			}
+			outf << std::endl;
+		}
+	} else {
+		outf << M;
+	}
+}
+
+template <typename EigenMat>
+void EigenUtils::read_matrix(const std::string &filename,
+                             const long &n_rows,
+                             EigenMat &M,
+                             std::vector<std::string> &col_names,
                              std::map<long, bool> &incomplete_row) {
 	/* Assumptions:
 	   - n_rows constant (number of samples constant across files)
@@ -101,7 +139,9 @@ void EigenUtils::read_matrix(const std::string &filename, const long &n_rows, Ei
 	}
 }
 
-void EigenUtils::read_matrix(const std::string &filename, Eigen::MatrixXd &M, std::vector <std::string> &col_names) {
+void EigenUtils::read_matrix(const std::string &filename,
+                             Eigen::MatrixXd &M,
+                             std::vector <std::string> &col_names) {
 	/* Assumptions:
 	   - dimensions unknown
 	   - assume no missing values
@@ -368,21 +408,16 @@ void EigenUtils::center_matrix(EigenMat& M){
 	}
 }
 
-Eigen::MatrixXd EigenUtils::project_out_covars(Eigen::Ref<Eigen::MatrixXd> rhs,
-                                               Eigen::Ref<Eigen::MatrixXd> C,
-
-                                               const Eigen::Ref<const Eigen::MatrixXd> &CtC_inv,
-                                               const bool &mode_debug) {
+Eigen::MatrixXd EigenUtils::project_out_covars(Eigen::Ref<Eigen::MatrixXd> rhs, const Eigen::Ref<const Eigen::MatrixXd> &C,
+                                               const Eigen::Ref<const Eigen::MatrixXd> &CtC_inv) {
 	assert(CtC_inv.cols() == C.cols());
 	assert(CtC_inv.rows() == C.cols());
 	assert(C.rows() == rhs.rows());
-	if(mode_debug) std::cout << "Starting project_out_covars" << std::endl;
 	Eigen::MatrixXd CtRHS = C.transpose() * rhs;
 	CtRHS = mpiUtils::mpiReduce_inplace(CtRHS);
 	Eigen::MatrixXd beta = CtC_inv * CtRHS;
 	Eigen::MatrixXd yhat = C * beta;
 	Eigen::MatrixXd res = rhs - yhat;
-	if(mode_debug) std::cout << "Ending project_out_covars" << std::endl;
 	return res;
 }
 
@@ -393,6 +428,14 @@ template void EigenUtils::read_matrix(const std::string&, const long&,
                                       Eigen::MatrixXf&, std::vector<std::string>&, std::map<long, bool>&);
 template void EigenUtils::read_matrix(const std::string&, const long&,
                                       Eigen::MatrixXd&, std::vector<std::string>&, std::map<long, bool>&);
+template void EigenUtils::write_matrix(boost_io::filtering_ostream&,
+                                       Eigen::VectorXd&,
+                                       std::vector<std::string>&,
+                                       std::vector<std::string>&);
+template void EigenUtils::write_matrix(boost_io::filtering_ostream&,
+                                       Eigen::MatrixXd&,
+                                       std::vector<std::string>&,
+                                       std::vector<std::string>&);
 template void EigenUtils::center_matrix(Eigen::MatrixXd&);
 template void EigenUtils::center_matrix(Eigen::MatrixXf&);
 template void EigenUtils::center_matrix(Eigen::VectorXd&);

@@ -34,23 +34,26 @@ public:
 	long n_var;
 	double Nglobal;
 	int world_rank, world_size;
+	std::vector<std::string> env_names;
 
 	std::map<long, int> sample_location;
+
+	// RHEreg-NLS
+	Eigen::VectorXd nls_env_weights;
 
 	const parameters& p;
 	const GenotypeMatrix& X;
 
 	Eigen::VectorXd eta;
 	Eigen::VectorXd Y;
-	Eigen::MatrixXd& C;
+	Eigen::MatrixXd& C, E;
 	Eigen::MatrixXd CtC_inv;
-	Eigen::ArrayXd sigmas, sigmasb;
+	Eigen::ArrayXd sigmas;
 	Eigen::ArrayXXd sigmas_jack, h2_jack;
 	Eigen::ArrayXd h2, h2_se_jack, h2_bias_corrected;
 	Eigen::ArrayXd n_var_jack;
 
 	EigenDataMatrix zz;
-	EigenDataMatrix Wzz;
 	const std::unordered_map<long, bool>& sample_is_invalid;
 	Data& data;
 
@@ -61,15 +64,16 @@ public:
 	RHEreg(Data& dat,
 	    Eigen::VectorXd& myY,
 	    Eigen::MatrixXd& myC,
-	    Eigen::VectorXd& myeta) : p(dat.p), X(dat.G), eta(myeta), Y(myY), C(myC),
+	    Eigen::MatrixXd myE) : p(dat.p), X(dat.G), E(myE), Y(myY), C(myC),
 		sample_is_invalid(dat.sample_is_invalid),
-		sample_location(dat.sample_location), data(dat) {
+		sample_location(dat.sample_location), data(dat),
+		env_names(dat.env_names) {
 		n_samples = data.n_samples;
 		Nglobal = mpiUtils::mpiReduce_inplace(n_samples);
 		n_draws = p.n_pve_samples;
 
 		n_covar = C.cols();
-		n_env = 1;
+		n_env = E.cols();
 
 		MPI_Comm_rank(MPI_COMM_WORLD, &world_rank);
 		MPI_Comm_size(MPI_COMM_WORLD, &world_size);
@@ -79,7 +83,8 @@ public:
 	    Eigen::VectorXd& myY,
 	    Eigen::MatrixXd& myC) : p(dat.p), X(dat.G), Y(myY), C(myC),
 		sample_is_invalid(dat.sample_is_invalid),
-		sample_location(dat.sample_location), data(dat) {
+		sample_location(dat.sample_location), data(dat),
+								env_names(dat.env_names)  {
 		n_samples = data.n_samples;
 		Nglobal = mpiUtils::mpiReduce_inplace(n_samples);
 		n_draws = p.n_pve_samples;
@@ -95,15 +100,19 @@ public:
 
 	void initialise_components();
 
-	void calc_RHE();
+	void compute_RHE_trace_operators();
 
-	void optim_RHE_LEMMA();
+	void solve_RHE();
 
-	Eigen::MatrixXd construct_vc_system(const std::vector<RHEreg_Component>& components);
+	Eigen::VectorXd optim_RHE_LEMMA();
 
-	Eigen::ArrayXd calc_h2(Eigen::Ref<Eigen::MatrixXd> AA,
-	                       Eigen::Ref<Eigen::VectorXd> bb,
-	                       const bool& reweight_sigmas = false);
+	double optim_RHE_LEMMA_objective(Eigen::VectorXd env_weights, void* grad_out) const;
+
+	Eigen::MatrixXd construct_vc_system(const std::vector<RHEreg_Component>& vec_of_components) const;
+
+	Eigen::ArrayXd calc_h2(const Eigen::Ref<const Eigen::MatrixXd>& AA,
+			const Eigen::Ref<const Eigen::VectorXd>& bb,
+			const bool &reweight_sigmas) const;
 
 	void process_jacknife_samples();
 

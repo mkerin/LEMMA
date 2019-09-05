@@ -33,7 +33,7 @@ TEST_CASE("NelderMead") {
 		Eigen::VectorXd x(2);
 		x(0) = -4;
 		x(1) = 1;
-		bool success = optimNelderMead(x, example_surface_1, p);
+		bool success = optimNelderMead(x, example_surface_1, p, 2000);
 		CHECK(x(0) == Approx(-0.0050957943));
 		CHECK(x(1) == Approx(0.0051339533));
 	}
@@ -43,7 +43,7 @@ TEST_CASE("NelderMead") {
 		Eigen::VectorXd x(2);
 		x(0) = 1;
 		x(1) = 1;
-		bool success = optimNelderMead(x, example_surface_2, p);
+		bool success = optimNelderMead(x, example_surface_2, p, 2000);
 		CHECK(x(0) == Approx(3));
 		CHECK(x(1) == Approx(2));
 	}
