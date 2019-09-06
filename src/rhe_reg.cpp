@@ -169,6 +169,10 @@ void RHEreg::initialise_components() {
 }
 
 void RHEreg::compute_RHE_trace_operators() {
+	if(p.mode_RHEreg_NLS){
+		ytEXXtEy = Eigen::MatrixXd::Zero(n_env, n_env);
+	}
+
 	// Compute randomised traces
 	if (p.bgen_file != "NULL") {
 		// p.bgen_file already read into RAM
@@ -194,6 +198,21 @@ void RHEreg::compute_RHE_trace_operators() {
 
 			for (auto &comp : components) {
 				comp.add_to_trace_estimator(D, jacknife_index);
+			}
+
+			if(p.mode_RHEreg_NLS){
+				Eigen::MatrixXd XtEy(D.cols(), n_env);
+				for (long ll = 0; ll < n_env; ll++) {
+					XtEy.col(ll) = D.transpose() * E.col(ll).asDiagonal() * Y;
+				}
+				XtEy = mpiUtils::mpiReduce_inplace(XtEy);
+
+				for (long ll = 0; ll < n_env; ll++) {
+					for (long mm = 0; mm <= ll; mm++){
+						ytEXXtEy(mm, ll) += XtEy.col(ll).dot(XtEy.col(mm));
+						ytEXXtEy(ll, mm) = ytEXXtEy(mm, ll);
+					}
+				}
 			}
 		}
 	} else if (!p.streamBgenFiles.empty()) {
@@ -280,6 +299,21 @@ void RHEreg::compute_RHE_trace_operators() {
 				} else {
 					for (auto &comp : components) {
 						comp.add_to_trace_estimator(D, jacknife_index);
+					}
+
+					if(p.mode_RHEreg_NLS){
+						Eigen::MatrixXd XtEy(D.cols(), n_env);
+						for (long ll = 0; ll < n_env; ll++) {
+							XtEy.col(ll) = D.transpose() * E.col(ll).asDiagonal() * Y;
+						}
+						XtEy = mpiUtils::mpiReduce_inplace(XtEy);
+
+						for (long ll = 0; ll < n_env; ll++) {
+							for (long mm = 0; mm <= ll; mm++){
+								ytEXXtEy(mm, ll) += XtEy.col(ll).dot(XtEy.col(mm));
+								ytEXXtEy(ll, mm) = ytEXXtEy(mm, ll);
+							}
+						}
 					}
 				}
 				ch++;
@@ -421,7 +455,7 @@ Eigen::VectorXd RHEreg::optim_RHE_LEMMA() {
 	// Use weights to collapse GxE component and continue with rest of algorithm
 	Eigen::MatrixXd placeholder = Eigen::MatrixXd::Zero(n_samples, n_draws);
 	RHEreg_Component combined_comp(p, Y, C, CtC_inv, placeholder);
-	aggregate_GxE_components(components, combined_comp, E, env_weights);
+	aggregate_GxE_components(components, combined_comp, E, env_weights, ytEXXtEy);
 
 	// Delete old
 	std::vector<long> to_erase;
@@ -460,7 +494,7 @@ double RHEreg::optim_RHE_LEMMA_objective(Eigen::VectorXd env_weights, void* grad
 	// Create component for \diag{Ew} \left( \sum_l w_l \bm{v}_{b, l} \right)
 	Eigen::MatrixXd placeholder = Eigen::MatrixXd::Zero(n_samples, n_draws);
 	RHEreg_Component combined_comp(p, Y, C, CtC_inv, placeholder);
-	aggregate_GxE_components(components, combined_comp, E, env_weights);
+	aggregate_GxE_components(components, combined_comp, E, env_weights, ytEXXtEy);
 
 	my_components.push_back(std::move(combined_comp));
 

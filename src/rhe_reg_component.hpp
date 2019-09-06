@@ -100,6 +100,7 @@ public:
 void aggregate_GxE_components(const std::vector<RHEreg_Component>& vec_of_components,
 							  RHEreg_Component& new_comp,
 							  const Eigen::Ref<const Eigen::MatrixXd>& E,
-							  const Eigen::Ref<const Eigen::VectorXd>& env_weights);
+							  const Eigen::Ref<const Eigen::VectorXd>& env_weights,
+							  const Eigen::Ref<const Eigen::MatrixXd>& ytEXXtEy);
 
 #endif

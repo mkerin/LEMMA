@@ -87,14 +87,14 @@ TEST_CASE("RHE-NLS") {
 		RHEreg pve(data, Y, C, data.E);
 		pve.run();
 
-		CHECK(pve.nls_env_weights(0) == Approx(0.1997146606));
-		CHECK(pve.nls_env_weights(1) == Approx(0.2400074005));
-		CHECK(pve.nls_env_weights(2) == Approx(0.2800617218));
-		CHECK(pve.nls_env_weights(3) == Approx(0.2779132843));
+		CHECK(pve.nls_env_weights(0) == Approx(0.2758712769));
+		CHECK(pve.nls_env_weights(1) == Approx(0.2737228394));
+		CHECK(pve.nls_env_weights(2) == Approx(0.2487106323));
+		CHECK(pve.nls_env_weights(3) == Approx(0.2035827637));
 
-		CHECK(pve.sigmas(0) == Approx(0.9035918828));
-		CHECK(pve.sigmas(1) == Approx(-0.2454259288));
-		CHECK(pve.sigmas(2) == Approx(0.2260331139));
+		CHECK(pve.sigmas(0) == Approx(0.9144633026));
+		CHECK(pve.sigmas(1) == Approx(0.3501067212));
+		CHECK(pve.sigmas(2) == Approx(0.1056419562));
 
 		Eigen::MatrixXd CC = pve.construct_vc_system(pve.components);
 		Eigen::MatrixXd AA = CC.block(0, 0, pve.n_components, pve.n_components);
@@ -102,11 +102,17 @@ TEST_CASE("RHE-NLS") {
 		Eigen::VectorXd ss = AA.colPivHouseholderQr().solve(bb);
 
 		CHECK(pve.components[1].label == "GxE");
-		CHECK(pve.components[1].env_var.squaredNorm() == Approx(12.5613741447));
+		CHECK(pve.components[1].env_var.squaredNorm() == Approx(11.6668265209));
 		CHECK(pve.components[1].n_covar == 5);
-		CHECK(pve.components[1]._XXtWz(0, 0) == Approx(43.5766851234));
+		CHECK(pve.components[1]._XXtWz(0, 0) == Approx(27.9665520576));
 		CHECK(pve.components[0]._XXtWz(0, 0) == Approx(-256.5077451498));
 		CHECK(pve.n_components == 3);
+
+		CHECK(CC(1, 3) == Approx(8.5117714361));
+		CHECK(CC(0, 0) == Approx(359.6916692608));
+		CHECK(CC(1, 1) == Approx(18.6609027716));
+		CHECK(CC(1, 0) == Approx(1.205905603));
+		CHECK(CC(1, 2) == Approx(8.2893914717));
 	}
 
 	SECTION("RHEreg with env_weights from NLS") {
@@ -130,9 +136,9 @@ TEST_CASE("RHE-NLS") {
 		RHEreg pve(data, Y, C, data.vp_init.eta);
 		pve.run();
 
-		CHECK(pve.sigmas(0) == Approx(0.9035918828));
-		CHECK(pve.sigmas(1) == Approx(-0.2454259288));
-		CHECK(pve.sigmas(2) == Approx(0.2260331139));
+		CHECK(pve.sigmas(0) == Approx(0.9144633026));
+		CHECK(pve.sigmas(1) == Approx(0.3501067212));
+		CHECK(pve.sigmas(2) == Approx(0.1056419562));
 
 		Eigen::MatrixXd CC = pve.construct_vc_system(pve.components);
 		Eigen::MatrixXd AA = CC.block(0, 0, pve.n_components, pve.n_components);
@@ -140,12 +146,17 @@ TEST_CASE("RHE-NLS") {
 		Eigen::VectorXd ss = AA.colPivHouseholderQr().solve(bb);
 
 		CHECK(pve.components[1].label == "GxE(0)");
-		CHECK(pve.components[1].env_var.squaredNorm() == Approx(12.5613741447));
+		CHECK(pve.components[1].env_var.squaredNorm() == Approx(11.6668265209));
 		CHECK(pve.components[1].n_covar == 5);
-		CHECK(pve.components[1]._XXtWz(0, 0) == Approx(43.5766851234));
+		CHECK(pve.components[1]._XXtWz(0, 0) == Approx(27.9665520576));
 		CHECK(pve.components[0]._XXtWz(0, 0) == Approx(-256.5077451498));
-
 		CHECK(pve.n_components == 3);
+
+		CHECK(CC(1, 3) == Approx(8.5117714361));
+		CHECK(CC(0, 0) == Approx(359.6916692608));
+		CHECK(CC(1, 1) == Approx(18.6609027716));
+		CHECK(CC(1, 0) == Approx(1.205905603));
+		CHECK(CC(1, 2) == Approx(8.2893914717));
 	}
 }
 

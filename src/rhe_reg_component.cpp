@@ -141,7 +141,8 @@ Eigen::MatrixXd RHEreg_Component::project_out_covars(Eigen::Ref <Eigen::MatrixXd
 
 void aggregate_GxE_components(const std::vector<RHEreg_Component> &vec_of_components, RHEreg_Component &new_comp,
 							  const Eigen::Ref<const Eigen::MatrixXd> &E,
-							  const Eigen::Ref<const Eigen::VectorXd> &env_weights) {
+							  const Eigen::Ref<const Eigen::VectorXd> &env_weights,
+							  const Eigen::Ref<const Eigen::MatrixXd>& ytEXXtEy) {
 	long n_components = vec_of_components.size();
 	long n_samples = vec_of_components[0].n_samples;
 	long n_draws = vec_of_components[0].n_draws;
@@ -160,9 +161,15 @@ void aggregate_GxE_components(const std::vector<RHEreg_Component> &vec_of_compon
 	sum_WlVbl.array().colwise() *= eta.array();
 	new_comp._XXtWz = sum_WlVbl;
 
+	new_comp.ytXXty = env_weights.transpose() * ytEXXtEy * env_weights;
+
 	new_comp.set_env_var(eta);
 	new_comp.n_var_local = vec_of_components[GxE_comp_index].n_var_local;
 	new_comp.n_draws = vec_of_components[GxE_comp_index].n_draws;
+	new_comp.n_covar = vec_of_components[GxE_comp_index].n_covar;
+	new_comp.Y = vec_of_components[GxE_comp_index].Y;
+	new_comp.C = vec_of_components[GxE_comp_index].C;
+	new_comp.CtC_inv = vec_of_components[GxE_comp_index].CtC_inv;
 	new_comp.label = "GxE";
 	new_comp.effect_type = "GxE";
 }
