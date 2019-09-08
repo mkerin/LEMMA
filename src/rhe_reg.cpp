@@ -51,7 +51,7 @@ void RHEreg::run() {
 	// Compute variance components
 	initialise_components();
 	compute_RHE_trace_operators();
-	if(p.mode_RHEreg_NLS){
+	if(p.mode_RHEreg_NLS) {
 		nls_env_weights = optim_RHE_LEMMA();
 	} else if(n_env > 0) {
 		std::cout << "G+GxE effects model (gaussian prior)" << std::endl;
@@ -60,9 +60,6 @@ void RHEreg::run() {
 		std::cout << "Main effects model (gaussian prior)" << std::endl;
 		solve_RHE();
 	}
-
-	std::cout << "Variance components estimates" << std::endl;
-	std::cout << sigmas << std::endl;
 
 	process_jacknife_samples();
 	std::cout << "PVE estimates" << std::endl;
@@ -169,7 +166,7 @@ void RHEreg::initialise_components() {
 }
 
 void RHEreg::compute_RHE_trace_operators() {
-	if(p.mode_RHEreg_NLS){
+	if(p.mode_RHEreg_NLS) {
 		ytEXXtEy = Eigen::MatrixXd::Zero(n_env, n_env);
 	}
 
@@ -200,7 +197,7 @@ void RHEreg::compute_RHE_trace_operators() {
 				comp.add_to_trace_estimator(D, jacknife_index);
 			}
 
-			if(p.mode_RHEreg_NLS){
+			if(p.mode_RHEreg_NLS) {
 				Eigen::MatrixXd XtEy(D.cols(), n_env);
 				for (long ll = 0; ll < n_env; ll++) {
 					XtEy.col(ll) = D.transpose() * E.col(ll).asDiagonal() * Y;
@@ -208,7 +205,7 @@ void RHEreg::compute_RHE_trace_operators() {
 				XtEy = mpiUtils::mpiReduce_inplace(XtEy);
 
 				for (long ll = 0; ll < n_env; ll++) {
-					for (long mm = 0; mm <= ll; mm++){
+					for (long mm = 0; mm <= ll; mm++) {
 						ytEXXtEy(mm, ll) += XtEy.col(ll).dot(XtEy.col(mm));
 						ytEXXtEy(ll, mm) = ytEXXtEy(mm, ll);
 					}
@@ -241,7 +238,7 @@ void RHEreg::compute_RHE_trace_operators() {
 			Eigen::MatrixXd D;
 			bool bgen_pass = true;
 			while (fileUtils::read_bgen_chunk(data.streamBgenViews[ii], D, sample_is_invalid,
-											  n_samples, 256, p, bgen_pass, n_var_parsed, SNPIDS)) {
+			                                  n_samples, 256, p, bgen_pass, n_var_parsed, SNPIDS)) {
 				n_var += D.cols();
 				if (ch % print_interval == 0 && ch > 0) {
 					std::cout << "Chunk " << ch << " read (size " << 256;
@@ -301,7 +298,7 @@ void RHEreg::compute_RHE_trace_operators() {
 						comp.add_to_trace_estimator(D, jacknife_index);
 					}
 
-					if(p.mode_RHEreg_NLS){
+					if(p.mode_RHEreg_NLS) {
 						Eigen::MatrixXd XtEy(D.cols(), n_env);
 						for (long ll = 0; ll < n_env; ll++) {
 							XtEy.col(ll) = D.transpose() * E.col(ll).asDiagonal() * Y;
@@ -309,7 +306,7 @@ void RHEreg::compute_RHE_trace_operators() {
 						XtEy = mpiUtils::mpiReduce_inplace(XtEy);
 
 						for (long ll = 0; ll < n_env; ll++) {
-							for (long mm = 0; mm <= ll; mm++){
+							for (long mm = 0; mm <= ll; mm++) {
 								ytEXXtEy(mm, ll) += XtEy.col(ll).dot(XtEy.col(mm));
 								ytEXXtEy(ll, mm) = ytEXXtEy(mm, ll);
 							}
@@ -328,6 +325,8 @@ void RHEreg::compute_RHE_trace_operators() {
 }
 
 void RHEreg::solve_RHE() {
+	boost_io::filtering_ostream outf;
+
 	// Solve system to estimate sigmas
 	long n_components = components.size();
 	for (long ii = 0; ii < n_components; ii++) {
@@ -337,18 +336,51 @@ void RHEreg::solve_RHE() {
 	Eigen::MatrixXd A = CC.block(0, 0, n_components, n_components);
 	Eigen::VectorXd bb = CC.col(n_components);
 
-	std::cout << "A: " << std::endl << A << std::endl;
-	std::cout << "b: " << std::endl << bb << std::endl;
+	if(world_rank == 0) {
+		auto filename = fileUtils::fstream_init(outf, p.out_file, "", "_h2_dump");
+		std::cout << "Dumping RHEreg linear system to " << filename << std::endl;
+		outf << CC << std::endl;
+		boost_io::close(outf);
+	}
+	if(!p.RHE_multicomponent) {
+		std::cout << "A: " << std::endl << A << std::endl;
+		std::cout << "b: " << std::endl << bb << std::endl;
+	}
 	sigmas = A.colPivHouseholderQr().solve(bb);
 	h2 = calc_h2(A, bb, true);
 
-	boost_io::filtering_ostream outf;
-	if(p.mode_debug) {
-		auto filename = fileUtils::fstream_init(outf, p.out_file, "", "_rhe_debug");
-		std::cout << "Writing RHE debugging info to " << filename << std::endl;
-		Eigen::VectorXd tmp(Eigen::Map<Eigen::VectorXd>(CC.data(),CC.cols()*CC.rows()));
-		outf << -1 << " " << tmp.transpose() << std::endl;
+	if(p.RHE_multicomponent) {
+		double h2_G_tot = 0, h2_GxE_tot = 0;
+		for (int cc = 0; cc < n_components; cc++) {
+			if(components[cc].effect_type == "G") {
+				h2_G_tot += h2[cc];
+			} else if (components[cc].effect_type == "GxE") {
+				h2_GxE_tot += h2[cc];
+			}
+		}
+
+		std::cout << "Additive and multiplicative interaction h2 estimates:" << std::endl;
+		std::cout << "h2_G = " << h2_G_tot << std::endl;
+		if(n_env > 0) {
+			std::cout << "h2_GxE = " << h2_GxE_tot << std::endl;
+		}
+	} else {
+		std::cout << "Heritability estimates:" << std::endl;
+		std::cout << h2 << std::endl;
 	}
+
+	// Write to file
+	if(world_rank == 0 && p.xtra_verbose) {
+		auto filename = fileUtils::fstream_init(outf, p.out_file, "", "_h2_dump");
+		std::cout << "Dumping Heritability to " << filename << std::endl;
+		Eigen::VectorXd tmp(Eigen::Map<Eigen::VectorXd>(CC.data(),CC.cols()*CC.rows()));
+		outf << "Component h2" << std::endl;
+		for (long ii = 0; ii < n_components; ii++) {
+			outf << components[ii].label << " " << h2[ii] << std::endl;
+		}
+		boost_io::close(outf);
+	}
+
 
 	// jacknife estimates
 	if(p.n_jacknife > 1) {
@@ -371,9 +403,9 @@ void RHEreg::solve_RHE() {
 			sigmas_jack.row(jj) = ss;
 			h2_jack.row(jj) = calc_h2(AA, bb, true);
 
-			if (p.mode_debug) {
-				Eigen::VectorXd tmp(Eigen::Map<Eigen::VectorXd>(CC.data(), CC.cols() * CC.rows()));
-				outf << jj << " " << tmp.transpose() << std::endl;
+			if(p.xtra_verbose && jj % 10 == 0 && jj > 0) {
+				std::cout << "Computed " << jj << " of ";
+				std::cout << p.n_jacknife << " jacknife blocks" << std::endl;
 			}
 		}
 		for (long ii = 0; ii < n_components; ii++) {
@@ -418,8 +450,8 @@ Eigen::VectorXd RHEreg::optim_RHE_LEMMA() {
 	Eigen::VectorXd simplex_fn_vals(n_vals+1);
 	Eigen::MatrixXd simplex_points(n_vals+1,n_vals);
 	setupNelderMead(env_weights,
-			std::bind(&RHEreg::optim_RHE_LEMMA_objective, this, std::placeholders::_1, std::placeholders::_2),
-			simplex_points, simplex_fn_vals);
+	                std::bind(&RHEreg::optim_RHE_LEMMA_objective, this, std::placeholders::_1, std::placeholders::_2),
+	                simplex_points, simplex_fn_vals);
 
 	// Run algorithm
 	long iter = 0;
@@ -430,8 +462,8 @@ Eigen::VectorXd RHEreg::optim_RHE_LEMMA() {
 		iter++;
 
 		iterNelderMead(simplex_points, simplex_fn_vals,
-					   std::bind(&RHEreg::optim_RHE_LEMMA_objective, this, std::placeholders::_1, std::placeholders::_2),
-					   p);
+		               std::bind(&RHEreg::optim_RHE_LEMMA_objective, this, std::placeholders::_1, std::placeholders::_2),
+		               p);
 
 		// Update function values
 		for (size_t i=0; i < n_vals + 1; i++) {
@@ -482,10 +514,10 @@ double RHEreg::optim_RHE_LEMMA_objective(Eigen::VectorXd env_weights, void* grad
 	my_components.reserve(3);
 
 	// Get main and noise components
-	for (int ii = 0; ii < n_components; ii++){
-		if(components[ii].effect_type == "G"){
+	for (int ii = 0; ii < n_components; ii++) {
+		if(components[ii].effect_type == "G") {
 			my_components.push_back(components[ii]);
-		} else if (components[ii].effect_type == "noise"){
+		} else if (components[ii].effect_type == "noise") {
 			my_components.push_back(components[ii]);
 		}
 	}
@@ -527,8 +559,8 @@ Eigen::MatrixXd RHEreg::construct_vc_system(const std::vector<RHEreg_Component> 
 }
 
 Eigen::ArrayXd RHEreg::calc_h2(const Eigen::Ref<const Eigen::MatrixXd>& AA,
-		const Eigen::Ref<const Eigen::VectorXd>& bb,
-		const bool &reweight_sigmas) const {
+                               const Eigen::Ref<const Eigen::VectorXd>& bb,
+                               const bool &reweight_sigmas) const {
 	Eigen::ArrayXd ss = AA.colPivHouseholderQr().solve(bb);
 	if(reweight_sigmas) {
 		ss *= (AA.row(AA.rows()-1)).array() / Nglobal;
