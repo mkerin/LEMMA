@@ -68,7 +68,8 @@ std::string fileUtils::fstream_init(boost_io::filtering_ostream &my_outf, const 
 
 	// Allows prefix to contain subfolders
 	boost::filesystem::path bfilepath(ofile);
-	if(!boost::filesystem::exists(bfilepath.parent_path())) {
+	if(bfilepath.parent_path() != "" && !boost::filesystem::exists(bfilepath.parent_path())) {
+		std::cout << "Creating parent path " << bfilepath.parent_path() << std::endl;
 		boost::filesystem::create_directories(bfilepath.parent_path());
 	}
 

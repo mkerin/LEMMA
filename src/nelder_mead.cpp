@@ -120,14 +120,14 @@ void iterNelderMead(Eigen::Ref<Eigen::MatrixXd> simplex_points,
 	bool next_iter = false;
 
 	// expansion / contraction parameters
-	const double par_alpha = 1.0;
-	const double par_beta  = 0.75 - 1.0 / (2.0*n_vals);
-	const double par_gamma = 1.0 + 2.0 / n_vals;
-	const double par_delta = 1.0 - 1.0 / n_vals;
-	// double par_alpha = 1.0;     // reflection parameter
-	// double par_beta  = 0.5;     // contraction parameter
-	// double par_gamma = 2.0;     // expansion parameter
-	// double par_delta = 0.5;     // shrinkage parameter
+	// const double par_alpha = 1.0;
+	// const double par_beta  = 0.75 - 1.0 / (2.0*n_vals);
+	// const double par_gamma = 1.0 + 2.0 / n_vals;
+	// const double par_delta = 1.0 - 1.0 / n_vals;
+	double par_alpha = 1.0;         // reflection parameter
+	double par_beta  = 0.5;         // contraction parameter
+	double par_gamma = 2.0;         // expansion parameter
+	double par_delta = 0.5;         // shrinkage parameter
 
 
 	if(p.mode_debug) {

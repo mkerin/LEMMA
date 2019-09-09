@@ -317,7 +317,9 @@ void RHEreg::compute_RHE_trace_operators() {
 			}
 		}
 		if (p.verbose) std::cout << n_var << " variants pass QC filters" << std::endl;
-		if (p.xtra_verbose) std::cout << n_find_operations << " find operations performed" << std::endl;
+		if (p.xtra_verbose && p.RHE_multicomponent) {
+			std::cout << n_find_operations << " find operations performed" << std::endl;
+		}
 	}
 	for (long ii = 0; ii < n_components; ii++) {
 		components[ii].finalise();
@@ -337,7 +339,7 @@ void RHEreg::solve_RHE() {
 	Eigen::VectorXd bb = CC.col(n_components);
 
 	if(world_rank == 0) {
-		auto filename = fileUtils::fstream_init(outf, p.out_file, "", "_h2_dump");
+		auto filename = fileUtils::fstream_init(outf, p.out_file, "", "_linSystem_dump");
 		std::cout << "Dumping RHEreg linear system to " << filename << std::endl;
 		outf << CC << std::endl;
 		boost_io::close(outf);
@@ -374,13 +376,13 @@ void RHEreg::solve_RHE() {
 		auto filename = fileUtils::fstream_init(outf, p.out_file, "", "_h2_dump");
 		std::cout << "Dumping Heritability to " << filename << std::endl;
 		Eigen::VectorXd tmp(Eigen::Map<Eigen::VectorXd>(CC.data(),CC.cols()*CC.rows()));
-		outf << "Component h2" << std::endl;
+		outf << "Component h2 n_var" << std::endl;
 		for (long ii = 0; ii < n_components; ii++) {
-			outf << components[ii].label << " " << h2[ii] << std::endl;
+			outf << components[ii].label << " " << h2[ii];
+			outf << " " << components[ii].n_var_local << std::endl;
 		}
 		boost_io::close(outf);
 	}
-
 
 	// jacknife estimates
 	if(p.n_jacknife > 1) {
@@ -441,10 +443,24 @@ void RHEreg::solve_RHE() {
 }
 
 Eigen::VectorXd RHEreg::optim_RHE_LEMMA() {
+	std::cout << std::endl << "Optimising env-weights with Nelder Mead" << std::endl;
+	boost_io::filtering_ostream outf_env, outf_obj;
+	auto filename_env = fileUtils::fstream_init(outf_env, p.out_file, ".lemma_files/", "_nm_env_iter");
+	auto filename_obj = fileUtils::fstream_init(outf_obj, p.out_file, ".lemma_files/", "_nm_obj_iter");
+	outf_env << "count ";
+	for (long ll = 0; ll < n_env; ll++) {
+		outf_env << env_names[ll];
+		if (ll < n_env - 1) {
+			outf_env << " ";
+		}
+	}
+	outf_env << std::endl;
+	outf_obj << "count value" << std::endl;
+
+	/* Nelder Mead */
 	Eigen::VectorXd env_weights = Eigen::VectorXd::Constant(n_env, 1.0);
 	env_weights *= 1.0 / n_env;
 
-	/* Nelder Mead */
 	// Create simplex
 	const long n_vals = env_weights.rows();
 	Eigen::VectorXd simplex_fn_vals(n_vals+1);
@@ -458,8 +474,21 @@ Eigen::VectorXd RHEreg::optim_RHE_LEMMA() {
 	const double err_tol = 1E-08;
 	double err = 2*err_tol, min_val = simplex_fn_vals.minCoeff();
 
+
 	while (err > err_tol && iter < p.nelderMead_max_iter) {
-		iter++;
+		if(iter % 10 == 0) {
+			std::cout << "Starting NM iteration " << iter << ", best SumOfSquares = " << min_val << std::endl;
+			// std::cout << "Env-weights: " << env_weights.transpose() << std::endl;
+		}
+		outf_env << iter << " ";
+		for (long ll = 0; ll < n_env; ll++) {
+			outf_env << env_weights[ll];
+			if (ll < n_env - 1) {
+				outf_env << " ";
+			}
+		}
+		outf_env << std::endl;
+		outf_obj << iter << " " << min_val << std::endl;
 
 		iterNelderMead(simplex_points, simplex_fn_vals,
 		               std::bind(&RHEreg::optim_RHE_LEMMA_objective, this, std::placeholders::_1, std::placeholders::_2),
@@ -475,7 +504,11 @@ Eigen::VectorXd RHEreg::optim_RHE_LEMMA() {
 
 		long index_min = get_index_min(simplex_fn_vals);
 		env_weights = simplex_points.row(index_min);
+		iter++;
 	}
+	std::cout << "Completed NM iteration " << iter << ", best SumOfSquares = " << min_val << std::endl << std::endl;
+	outf_env << iter << " " << env_weights.transpose() << std::endl;
+	outf_obj << iter << " " << min_val << std::endl;
 
 	// Dump env weights to file
 	boost_io::filtering_ostream outf;
