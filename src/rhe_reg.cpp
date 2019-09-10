@@ -8,6 +8,7 @@
 #include "parameters.hpp"
 #include "mpi_utils.hpp"
 #include "nelder_mead.hpp"
+#include "levenberg_marquardt.hpp"
 
 #include "tools/eigen3.3/Dense"
 
@@ -51,8 +52,10 @@ void RHEreg::run() {
 	// Compute variance components
 	initialise_components();
 	compute_RHE_trace_operators();
-	if(p.mode_RHEreg_NLS) {
-		nls_env_weights = optim_RHE_LEMMA();
+	if(p.mode_RHEreg_NM) {
+		nls_env_weights = run_RHE_nelderMead();
+	} else if(p.mode_RHEreg_LM) {
+		nls_env_weights = run_RHE_levenburgMarquardt();
 	} else if(n_env > 0) {
 		std::cout << "G+GxE effects model (gaussian prior)" << std::endl;
 		solve_RHE();
@@ -166,7 +169,7 @@ void RHEreg::initialise_components() {
 }
 
 void RHEreg::compute_RHE_trace_operators() {
-	if(p.mode_RHEreg_NLS) {
+	if(p.mode_RHEreg_NM || p.mode_RHEreg_LM) {
 		ytEXXtEy = Eigen::MatrixXd::Zero(n_env, n_env);
 	}
 
@@ -197,7 +200,7 @@ void RHEreg::compute_RHE_trace_operators() {
 				comp.add_to_trace_estimator(D, jacknife_index);
 			}
 
-			if(p.mode_RHEreg_NLS) {
+			if(p.mode_RHEreg_NM || p.mode_RHEreg_LM) {
 				Eigen::MatrixXd XtEy(D.cols(), n_env);
 				for (long ll = 0; ll < n_env; ll++) {
 					XtEy.col(ll) = D.transpose() * E.col(ll).asDiagonal() * Y;
@@ -298,7 +301,7 @@ void RHEreg::compute_RHE_trace_operators() {
 						comp.add_to_trace_estimator(D, jacknife_index);
 					}
 
-					if(p.mode_RHEreg_NLS) {
+					if(p.mode_RHEreg_NM ||  p.mode_RHEreg_LM) {
 						Eigen::MatrixXd XtEy(D.cols(), n_env);
 						for (long ll = 0; ll < n_env; ll++) {
 							XtEy.col(ll) = D.transpose() * E.col(ll).asDiagonal() * Y;
@@ -442,7 +445,75 @@ void RHEreg::solve_RHE() {
 	}
 }
 
-Eigen::VectorXd RHEreg::optim_RHE_LEMMA() {
+Eigen::VectorXd RHEreg::run_RHE_levenburgMarquardt(){
+	std::cout << std::endl << "Optimising env-weights with Levenburg-Marquardt" << std::endl;
+
+	// Initialise weights
+	Eigen::VectorXd env_weights = Eigen::VectorXd::Constant(n_env, 1.0);
+	env_weights *= 1.0 / n_env;
+
+	std::vector<RHEreg_Component> my_components;
+	my_components.reserve(3);
+
+	// Get main and noise components
+	for (int ii = 0; ii < n_components; ii++) {
+		if(components[ii].effect_type == "G") {
+			my_components.push_back(components[ii]);
+		} else if (components[ii].effect_type == "noise") {
+			my_components.push_back(components[ii]);
+		}
+	}
+	assert(my_components.size() == 2);
+
+	// Create component for \diag{Ew} \left( \sum_l w_l \bm{v}_{b, l} \right)
+	Eigen::MatrixXd placeholder = Eigen::MatrixXd::Zero(n_samples, n_draws);
+	RHEreg_Component combined_comp(p, Y, C, CtC_inv, placeholder);
+	aggregate_GxE_components(components, combined_comp, E, env_weights, ytEXXtEy);
+
+	my_components.push_back(std::move(combined_comp));
+
+	// Solve
+	long my_n_components = my_components.size();
+	Eigen::MatrixXd CC = construct_vc_system(my_components);
+	Eigen::MatrixXd AA = CC.block(0, 0, my_n_components, my_n_components);
+	Eigen::VectorXd bb = CC.col(my_n_components);
+	Eigen::VectorXd sigmas = AA.colPivHouseholderQr().solve(bb);
+
+	Eigen::VectorXd initial_params(1 + n_env);
+	initial_params.segment(1, n_env) = env_weights * sigmas[1];
+	initial_params[0] = sigmas[0];
+
+	LevenbergMarquardt LM(p, components, Y, E, C, CtC_inv, ytEXXtEy, env_names);
+	Eigen::VectorXd params = LM.solveLM(initial_params);
+	env_weights = params.segment(1, n_env);
+
+	// Dump env weights to file
+	boost_io::filtering_ostream outf;
+	auto filename = fileUtils::fstream_init(outf, p.out_file, "", "_LM_env_weights");
+	std::cout << "Writing env weights to " << filename << std::endl;
+	std::vector<std::string> header = {"env", "mu"};
+	EigenUtils::write_matrix(outf, env_weights, header, env_names);
+
+	// Use weights to collapse GxE component and continue with rest of algorithm
+	RHEreg_Component combined_comp2(p, Y, C, CtC_inv, placeholder);
+	aggregate_GxE_components(components, combined_comp2, E, env_weights, ytEXXtEy);
+
+	// Delete old
+	for (long ii = n_components - 1; ii>= 0; ii--) {
+		if (components[ii].effect_type == "GxE") {
+			components.erase(components.begin() + ii);
+		}
+	}
+	components.insert(components.begin() + 1, std::move(combined_comp2));
+	n_components = components.size();
+
+	// Solve system to estimate sigmas
+	solve_RHE();
+
+	return env_weights;
+}
+
+Eigen::VectorXd RHEreg::run_RHE_nelderMead() {
 	std::cout << std::endl << "Optimising env-weights with Nelder Mead" << std::endl;
 	boost_io::filtering_ostream outf_env, outf_obj;
 	auto filename_env = fileUtils::fstream_init(outf_env, p.out_file, ".lemma_files/", "_nm_env_iter");
@@ -466,7 +537,7 @@ Eigen::VectorXd RHEreg::optim_RHE_LEMMA() {
 	Eigen::VectorXd simplex_fn_vals(n_vals+1);
 	Eigen::MatrixXd simplex_points(n_vals+1,n_vals);
 	setupNelderMead(env_weights,
-	                std::bind(&RHEreg::optim_RHE_LEMMA_objective, this, std::placeholders::_1, std::placeholders::_2),
+	                std::bind(&RHEreg::RHE_nelderMead_obj, this, std::placeholders::_1, std::placeholders::_2),
 	                simplex_points, simplex_fn_vals);
 
 	// Run algorithm
@@ -491,12 +562,12 @@ Eigen::VectorXd RHEreg::optim_RHE_LEMMA() {
 		outf_obj << iter << " " << min_val << std::endl;
 
 		iterNelderMead(simplex_points, simplex_fn_vals,
-		               std::bind(&RHEreg::optim_RHE_LEMMA_objective, this, std::placeholders::_1, std::placeholders::_2),
+		               std::bind(&RHEreg::RHE_nelderMead_obj, this, std::placeholders::_1, std::placeholders::_2),
 		               p);
 
 		// Update function values
 		for (size_t i=0; i < n_vals + 1; i++) {
-			simplex_fn_vals(i) = optim_RHE_LEMMA_objective(simplex_points.row(i).transpose(),nullptr);
+			simplex_fn_vals(i) = RHE_nelderMead_obj(simplex_points.row(i).transpose(), nullptr);
 		}
 
 		err = std::abs(min_val - simplex_fn_vals.maxCoeff());
@@ -538,7 +609,7 @@ Eigen::VectorXd RHEreg::optim_RHE_LEMMA() {
 	return env_weights;
 }
 
-double RHEreg::optim_RHE_LEMMA_objective(Eigen::VectorXd env_weights, void* grad_out) const {
+double RHEreg::RHE_nelderMead_obj(Eigen::VectorXd env_weights, void *grad_out) const {
 	// Take in env_weights
 	// Solve to find best sigma's
 	// Give back solution.

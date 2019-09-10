@@ -555,7 +555,7 @@ public:
 						Hyps theta = theta0[nn] - 2 * step * rr + step * step * vv;
 
 						// check all hyps in theta remain in valid domain
-						while(!theta.domain_is_valid()) {
+						while(!theta.domain_is_valid() || std::abs(theta.sigma - theta2[nn].sigma) >= 0.05) {
 							step = std::min(step * 0.5, -1.0);
 							theta = theta0[nn] - 2 * step * rr + step * step * vv;
 						}

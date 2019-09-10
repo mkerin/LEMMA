@@ -63,9 +63,9 @@ public:
 	std::vector<std::string> SNPGROUPS_snpid, SNPGROUPS_group, all_SNPGROUPS;
 
 	RHEreg(Data& dat,
-	    Eigen::VectorXd& myY,
-	    Eigen::MatrixXd& myC,
-	    Eigen::MatrixXd myE) : p(dat.p), X(dat.G), E(myE), Y(myY), C(myC),
+	       Eigen::VectorXd& myY,
+	       Eigen::MatrixXd& myC,
+	       Eigen::MatrixXd myE) : p(dat.p), X(dat.G), E(myE), Y(myY), C(myC),
 		sample_is_invalid(dat.sample_is_invalid),
 		sample_location(dat.sample_location), data(dat),
 		env_names(dat.env_names) {
@@ -81,11 +81,11 @@ public:
 	}
 
 	RHEreg(Data& dat,
-	    Eigen::VectorXd& myY,
-	    Eigen::MatrixXd& myC) : p(dat.p), X(dat.G), Y(myY), C(myC),
+	       Eigen::VectorXd& myY,
+	       Eigen::MatrixXd& myC) : p(dat.p), X(dat.G), Y(myY), C(myC),
 		sample_is_invalid(dat.sample_is_invalid),
 		sample_location(dat.sample_location), data(dat),
-								env_names(dat.env_names)  {
+		env_names(dat.env_names)  {
 		n_samples = data.n_samples;
 		Nglobal = mpiUtils::mpiReduce_inplace(n_samples);
 		n_draws = p.n_pve_samples;
@@ -105,15 +105,17 @@ public:
 
 	void solve_RHE();
 
-	Eigen::VectorXd optim_RHE_LEMMA();
+	Eigen::VectorXd run_RHE_levenburgMarquardt();
 
-	double optim_RHE_LEMMA_objective(Eigen::VectorXd env_weights, void* grad_out) const;
+	Eigen::VectorXd run_RHE_nelderMead();
+
+	double RHE_nelderMead_obj(Eigen::VectorXd env_weights, void *grad_out) const;
 
 	Eigen::MatrixXd construct_vc_system(const std::vector<RHEreg_Component>& vec_of_components) const;
 
 	Eigen::ArrayXd calc_h2(const Eigen::Ref<const Eigen::MatrixXd>& AA,
-			const Eigen::Ref<const Eigen::VectorXd>& bb,
-			const bool &reweight_sigmas) const;
+	                       const Eigen::Ref<const Eigen::VectorXd>& bb,
+	                       const bool &reweight_sigmas) const;
 
 	void process_jacknife_samples();
 

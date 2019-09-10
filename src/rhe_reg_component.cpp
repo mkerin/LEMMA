@@ -11,7 +11,6 @@
 
 #include <random>
 
-
 RHEreg_Component::RHEreg_Component(const parameters &myparams, const Eigen::VectorXd &myY,
                                    const Eigen::MatrixXd &myWzz, const Eigen::MatrixXd &myC, const Eigen::MatrixXd &myCtC_inv,
                                    const long &myNJacknifeLocal) : params(myparams), Y(myY),
@@ -21,9 +20,10 @@ RHEreg_Component::RHEreg_Component(const parameters &myparams, const Eigen::Vect
 	n_samples = zz.rows();
 	n_draws = zz.cols();
 
-	n_env = 0;
 	label = "";
+	is_gxe = false;
 	is_active = true;
+	is_finalised = false;
 	rm_jacknife_block = -1;
 
 	ytXXty = 0;
@@ -38,9 +38,9 @@ RHEreg_Component::RHEreg_Component(const parameters &myparams, const Eigen::Vect
 	}
 }
 
-void RHEreg_Component::set_env_var(Eigen::Ref<Eigen::VectorXd> my_env_var) {
+void RHEreg_Component::set_env_var(const Eigen::Ref<const Eigen::VectorXd>& my_env_var) {
 	assert(is_active);
-	n_env = 1;
+	is_gxe = true;
 	env_var = my_env_var;
 	Y.array() *= env_var.array();
 	if(zz.rows() > 0) {
@@ -48,10 +48,22 @@ void RHEreg_Component::set_env_var(Eigen::Ref<Eigen::VectorXd> my_env_var) {
 	}
 }
 
+void RHEreg_Component::change_env_var(const Eigen::Ref<const Eigen::VectorXd>& new_env_var) {
+	assert(is_active);
+	assert(is_gxe);
+	Y.array() /= env_var.array();
+	Y.array() *= new_env_var.array();
+	if(zz.rows() > 0) {
+		zz.array().colwise() /= env_var.array();
+		zz.array().colwise() *= new_env_var.array();
+	}
+	env_var = new_env_var;
+}
+
 void RHEreg_Component::set_inactive() {
 	// The inactive component corresponds to sigma_e
 	// Ie the 'noise' component
-	assert(n_env == 0);
+	assert(!is_gxe);
 	is_active = false;
 	_XXtWz = zz;
 	n_var_local = 1;
@@ -76,12 +88,6 @@ void RHEreg_Component::add_to_trace_estimator(Eigen::Ref <Eigen::MatrixXd> X, lo
 void RHEreg_Component::finalise() {
 	// Sum over the different jacknife blocks;
 	if(is_active) {
-		if(n_env > 0) {
-			for (auto& mm : _XXtzs) {
-				mm.array().colwise() *= env_var.array();
-			}
-		}
-
 		_XXtWz = Eigen::MatrixXd::Zero(n_samples, n_draws);
 		for (auto& mm : _XXtzs) {
 			_XXtWz += mm;
@@ -89,15 +95,21 @@ void RHEreg_Component::finalise() {
 
 		n_var_local = std::accumulate(n_vars_local.begin(), n_vars_local.end(), 0.0);
 		ytXXty = std::accumulate(ytXXtys.begin(), ytXXtys.end(), 0.0);
+		is_finalised = true;
 	}
 }
 
 Eigen::MatrixXd RHEreg_Component::getXXtz() const {
+	Eigen::MatrixXd res;
 	if(rm_jacknife_block >= 0) {
-		return (_XXtWz - _XXtzs[rm_jacknife_block]);
+		res = _XXtWz - _XXtzs[rm_jacknife_block];
 	} else {
-		return _XXtWz;
+		res = _XXtWz;
 	}
+	if(is_gxe){
+		res.array().colwise() *= env_var.array();
+	}
+	return res;
 }
 
 double RHEreg_Component::get_bb_trace() const {
@@ -140,9 +152,9 @@ Eigen::MatrixXd RHEreg_Component::project_out_covars(Eigen::Ref <Eigen::MatrixXd
 }
 
 void aggregate_GxE_components(const std::vector<RHEreg_Component> &vec_of_components, RHEreg_Component &new_comp,
-							  const Eigen::Ref<const Eigen::MatrixXd> &E,
-							  const Eigen::Ref<const Eigen::VectorXd> &env_weights,
-							  const Eigen::Ref<const Eigen::MatrixXd>& ytEXXtEy) {
+                              const Eigen::Ref<const Eigen::MatrixXd> &E,
+                              const Eigen::Ref<const Eigen::VectorXd> &env_weights,
+                              const Eigen::Ref<const Eigen::MatrixXd>& ytEXXtEy) {
 	long n_components = vec_of_components.size();
 	long n_samples = vec_of_components[0].n_samples;
 	long n_draws = vec_of_components[0].n_draws;
@@ -158,10 +170,9 @@ void aggregate_GxE_components(const std::vector<RHEreg_Component> &vec_of_compon
 			sum_WlVbl += env_weights[ll] * E.col(ll).asDiagonal().inverse() * vec_of_components[ii].getXXtz();
 		}
 	}
-	sum_WlVbl.array().colwise() *= eta.array();
 	new_comp._XXtWz = sum_WlVbl;
-
 	new_comp.ytXXty = env_weights.transpose() * ytEXXtEy * env_weights;
+	new_comp.is_finalised = true;
 
 	new_comp.set_env_var(eta);
 	new_comp.n_var_local = vec_of_components[GxE_comp_index].n_var_local;

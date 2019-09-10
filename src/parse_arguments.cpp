@@ -169,8 +169,10 @@ void parse_arguments(parameters &p, int argc, char **argv) {
 	    ("mode_pve_est", "Depreciated: Run RHE algorithm", cxxopts::value<bool>())
 	    ("streamBgen-print-interval", "", cxxopts::value<long>(p.streamBgen_print_interval))
 	    ("mode_dump_processed_data", "", cxxopts::value<bool>(p.mode_dump_processed_data))
-	    ("RHEreg-NLS", "", cxxopts::value<bool>(p.mode_RHEreg_NLS))
-	    ("NM-max-ter", "", cxxopts::value<long>(p.nelderMead_max_iter))
+	    ("RHEreg-NM", "", cxxopts::value<bool>(p.mode_RHEreg_NM))
+	    ("RHEreg-LM", "", cxxopts::value<bool>(p.mode_RHEreg_LM))
+	    ("NM-max-iter", "", cxxopts::value<long>(p.nelderMead_max_iter))
+	    ("LM-max-iter", "", cxxopts::value<long>(p.levenburgMarquardt_max_iter))
 	;
 
 	options.add_options("Filtering")
@@ -234,6 +236,12 @@ void parse_arguments(parameters &p, int argc, char **argv) {
 			p.mode_RHE_fast = true;
 		}
 		if(opts.count("RHEreg")) {
+			p.mode_RHE = true;
+		}
+		if(opts.count("RHEreg-NM")){
+			p.mode_RHE = true;
+		}
+		if(opts.count("RHEreg-LM")){
 			p.mode_RHE = true;
 		}
 		if(opts.count("mode_pve_est")) {

@@ -26,7 +26,7 @@ public:
 	int missing_code, env_update_repeats, n_gconf, n_bgen_thread;
 	unsigned int n_thread, main_chunk_size, gxe_chunk_size;
 	std::uint32_t range_start, range_end;
-	bool range, maf_lim, info_lim, xtra_verbose, joint_covar_update;
+	bool range, maf_lim, info_lim, xtra_verbose, joint_covar_update, mode_RHEreg_LM;
 	bool geno_check, mode_vb, use_vb_on_covars;
 	bool select_rsid, interaction_analysis, verbose, low_mem;
 	bool elbo_tol_set_by_user, alpha_tol_set_by_user, mode_empirical_bayes;
@@ -36,8 +36,8 @@ public:
 	bool init_weights_with_snpwise_scan, flip_high_maf_variants, min_spike_diff_set;
 	bool mode_mog_prior_beta, mode_mog_prior_gam, mode_random_start, mode_calc_snpstats;
 	bool mode_remove_squared_envs, mode_squarem, mode_incl_squared_envs, drop_loco;
-	bool exclude_ones_from_env_sq, mode_RHEreg_NLS;
-	long redo_ym_interval;
+	bool exclude_ones_from_env_sq, mode_RHEreg_NM;
+	long redo_ym_interval, levenburgMarquardt_max_iter;
 	double min_maf, min_info, elbo_tol, alpha_tol, gamma_updates_thresh;
 	double beta_spike_diff_factor, gam_spike_diff_factor, min_spike_diff_factor;
 	long LOSO_window, n_jacknife, streamBgen_print_interval, nelderMead_max_iter;
@@ -90,7 +90,6 @@ public:
 #endif
 		missing_code = -999;
 		vb_iter_max = 10000;
-		nelderMead_max_iter = 100;
 		maxBytesPerRank = 14500000000;
 		vb_iter_start = 0;
 		n_pve_samples = 50;
@@ -120,6 +119,10 @@ public:
 		mode_random_start = false;
 		mode_RHE = false;
 		mode_RHE_fast = false;
+		mode_RHEreg_NM = false;
+		mode_RHEreg_LM = false;
+		levenburgMarquardt_max_iter = 100;
+		nelderMead_max_iter = 100;
 		RHE_multicomponent = false;
 		select_rsid = false;
 		mode_dump_processed_data = false;
@@ -135,7 +138,6 @@ public:
 		keep_constant_variants = false;
 		user_requests_round1 = false;
 		scale_pheno = true;
-		mode_RHEreg_NLS = false;
 	}
 
 	~parameters() = default;

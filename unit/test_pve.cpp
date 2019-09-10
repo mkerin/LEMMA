@@ -45,9 +45,9 @@ char* argv_pve3[] = { (char*) "--RHEreg", (char*) "--maf", (char*) "0.01",
 	                  (char*) "--environment", (char*) "data/io_test/case8/age.txt",
 	                  (char*) "--out", (char*) "data/io_test/case8/test_pve_est.out.gz"};
 
-char* argv_rhe_nls[] = { (char*) "LEMMA",
-						 (char*) "--RHEreg-NLS",
-						 (char*) "--NM-max-ter", (char*) "5",
+char* argv_rhe_nm[] = { (char*) "LEMMA",
+						 (char*) "--RHEreg-NM",
+						 (char*) "--NM-max-iter", (char*) "5",
 						 (char*) "--maf", (char*) "0.01",
 					  (char*) "--random_seed", (char*) "1",
 					  (char*) "--n_jacknife", (char*) "1",
@@ -55,7 +55,19 @@ char* argv_rhe_nls[] = { (char*) "LEMMA",
 					  (char*) "--streamBgen", (char*) "data/io_test/n50_p100.bgen",
 					  (char*) "--pheno", (char*) "data/io_test/pheno.txt",
 					  (char*) "--environment", (char*) "data/io_test/n50_p100_env.txt",
-					  (char*) "--out", (char*) "data/io_test/test_RHEreg_NLS.out.gz"};
+					  (char*) "--out", (char*) "data/io_test/test_RHEreg_NM.out.gz"};
+
+char* argv_rhe_lm[] = { (char*) "LEMMA",
+						(char*) "--RHEreg-LM",
+						(char*) "--LM-max-iter", (char*) "5",
+						(char*) "--maf", (char*) "0.01",
+						(char*) "--random_seed", (char*) "1",
+						(char*) "--n_jacknife", (char*) "1",
+						(char*) "--n_pve_samples", (char*) "5",
+						(char*) "--streamBgen", (char*) "data/io_test/n50_p100.bgen",
+						(char*) "--pheno", (char*) "data/io_test/pheno.txt",
+						(char*) "--environment", (char*) "data/io_test/n50_p100_env.txt",
+						(char*) "--out", (char*) "data/io_test/test_RHEreg_LM.out.gz"};
 //
 char* argv_main1[] = { (char*) "--RHEreg",
 	                   (char*) "--random_seed", (char*) "1",
@@ -72,11 +84,11 @@ char* argv_main2[] = { (char*) "--RHEreg",
 	                   (char*) "--pheno", (char*) "data/io_test/case8/pheno.txt",
 	                   (char*) "--out", (char*) "data/io_test/case8/test_pve_est.out.gz"};
 
-TEST_CASE("RHE-NLS") {
-	SECTION("NLS fit") {
+TEST_CASE("RHE-LevenburgMarquardt") {
+	SECTION("LevenburgMarquardt fit") {
 		parameters p;
-		int argc = sizeof(argv_rhe_nls) / sizeof(argv_rhe_nls[0]);
-		parse_arguments(p, argc, argv_rhe_nls);
+		int argc = sizeof(argv_rhe_lm) / sizeof(argv_rhe_lm[0]);
+		parse_arguments(p, argc, argv_rhe_lm);
 		Data data(p);
 		data.read_non_genetic_data();
 		data.standardise_non_genetic_data();
@@ -87,42 +99,70 @@ TEST_CASE("RHE-NLS") {
 		RHEreg pve(data, Y, C, data.E);
 		pve.run();
 
-		CHECK(pve.nls_env_weights(0) == Approx(0.2758712769));
-		CHECK(pve.nls_env_weights(1) == Approx(0.2737228394));
-		CHECK(pve.nls_env_weights(2) == Approx(0.2487106323));
-		CHECK(pve.nls_env_weights(3) == Approx(0.2035827637));
+		CHECK(pve.nls_env_weights(0) == Approx(0.5965538632));
+		CHECK(pve.nls_env_weights(1) == Approx(0.3111667933));
+		CHECK(pve.nls_env_weights(2) == Approx(-0.1885003074));
+		CHECK(pve.nls_env_weights(3) == Approx(-0.2660677429));
 
-		CHECK(pve.sigmas(0) == Approx(0.9144633026));
+		CHECK(pve.sigmas(0) == Approx(0.8692067162));
 		CHECK(pve.sigmas(1) == Approx(0.3501067212));
 		CHECK(pve.sigmas(2) == Approx(0.1056419562));
+	}
+}
 
-		Eigen::MatrixXd CC = pve.construct_vc_system(pve.components);
-		Eigen::MatrixXd AA = CC.block(0, 0, pve.n_components, pve.n_components);
-		Eigen::VectorXd bb = CC.col(pve.n_components);
-		Eigen::VectorXd ss = AA.colPivHouseholderQr().solve(bb);
 
-		CHECK(pve.components[1].label == "GxE");
-		CHECK(pve.components[1].env_var.squaredNorm() == Approx(11.6668265209));
-		CHECK(pve.components[1].n_covar == 5);
-		CHECK(pve.components[1]._XXtWz(0, 0) == Approx(27.9665520576));
-		CHECK(pve.components[0]._XXtWz(0, 0) == Approx(-256.5077451498));
-		CHECK(pve.n_components == 3);
 
-		CHECK(CC(1, 3) == Approx(8.5117714361));
-		CHECK(CC(0, 0) == Approx(359.6916692608));
-		CHECK(CC(1, 1) == Approx(18.6609027716));
-		CHECK(CC(1, 0) == Approx(1.205905603));
-		CHECK(CC(1, 2) == Approx(8.2893914717));
+TEST_CASE("RHE-NelderMead") {
+	SECTION("NelderMead fit") {
+		parameters p;
+		int argc = sizeof(argv_rhe_nm) / sizeof(argv_rhe_nm[0]);
+		parse_arguments(p, argc, argv_rhe_nm);
+		Data data(p);
+		data.read_non_genetic_data();
+		data.standardise_non_genetic_data();
+		data.read_full_bgen();
+
+		Eigen::VectorXd Y = data.Y.cast<double>();
+		Eigen::MatrixXd C = data.C.cast<double>();
+		RHEreg pve(data, Y, C, data.E);
+		pve.run();
+
+		CHECK(pve.nls_env_weights(0) == Approx(0.2911621094));
+		CHECK(pve.nls_env_weights(1) == Approx(0.2802246094));
+		CHECK(pve.nls_env_weights(2) == Approx(0.2530761719));
+		CHECK(pve.nls_env_weights(3) == Approx(0.176171875));
+
+		CHECK(pve.sigmas(0) == Approx(0.9156208775));
+		CHECK(pve.sigmas(1) == Approx(0.4171651285));
+		CHECK(pve.sigmas(2) == Approx(0.0932642134));
+
+		//		Eigen::MatrixXd CC = pve.construct_vc_system(pve.components);
+		//		Eigen::MatrixXd AA = CC.block(0, 0, pve.n_components, pve.n_components);
+		//		Eigen::VectorXd bb = CC.col(pve.n_components);
+		//		Eigen::VectorXd ss = AA.colPivHouseholderQr().solve(bb);
+		//
+		//		CHECK(pve.components[1].label == "GxE");
+		//		CHECK(pve.components[1].env_var.squaredNorm() == Approx(11.6668265209));
+		//		CHECK(pve.components[1].n_covar == 5);
+		//		CHECK(pve.components[1]._XXtWz(0, 0) == Approx(27.9665520576));
+		//		CHECK(pve.components[0]._XXtWz(0, 0) == Approx(-256.5077451498));
+		//		CHECK(pve.n_components == 3);
+		//
+		//		CHECK(CC(1, 3) == Approx(8.5117714361));
+		//		CHECK(CC(0, 0) == Approx(359.6916692608));
+		//		CHECK(CC(1, 1) == Approx(18.6609027716));
+		//		CHECK(CC(1, 0) == Approx(1.205905603));
+		//		CHECK(CC(1, 2) == Approx(8.2893914717));
 	}
 
 	SECTION("RHEreg with env_weights from NLS") {
-		// gunzip -c data/io_test/test_RHEreg_NLS_NM_env_weights.out.gz > data/io_test/n50_p100_nls_env_weights.txt
+		// gunzip -c data/io_test/test_RHEreg_NM_NM_env_weights.out.gz > data/io_test/n50_p100_nm_env_weights.txt
 		parameters p;
-		int argc = sizeof(argv_rhe_nls) / sizeof(argv_rhe_nls[0]);
-		parse_arguments(p, argc, argv_rhe_nls);
+		int argc = sizeof(argv_rhe_nm) / sizeof(argv_rhe_nm[0]);
+		parse_arguments(p, argc, argv_rhe_nm);
 		p.mode_RHE = true;
-		p.mode_RHEreg_NLS = false;
-		p.env_coeffs_file = "data/io_test/n50_p100_nls_env_weights.txt";
+		p.mode_RHEreg_NM = false;
+		p.env_coeffs_file = "data/io_test/n50_p100_nm_env_weights.txt";
 		p.use_raw_env = true;
 
 		Data data(p);
@@ -136,27 +176,27 @@ TEST_CASE("RHE-NLS") {
 		RHEreg pve(data, Y, C, data.vp_init.eta);
 		pve.run();
 
-		CHECK(pve.sigmas(0) == Approx(0.9144633026));
-		CHECK(pve.sigmas(1) == Approx(0.3501067212));
-		CHECK(pve.sigmas(2) == Approx(0.1056419562));
+		CHECK(pve.sigmas(0) == Approx(0.9156208775));
+		CHECK(pve.sigmas(1) == Approx(0.4171651285));
+		CHECK(pve.sigmas(2) == Approx(0.0932642134));
 
-		Eigen::MatrixXd CC = pve.construct_vc_system(pve.components);
-		Eigen::MatrixXd AA = CC.block(0, 0, pve.n_components, pve.n_components);
-		Eigen::VectorXd bb = CC.col(pve.n_components);
-		Eigen::VectorXd ss = AA.colPivHouseholderQr().solve(bb);
-
-		CHECK(pve.components[1].label == "GxE(0)");
-		CHECK(pve.components[1].env_var.squaredNorm() == Approx(11.6668265209));
-		CHECK(pve.components[1].n_covar == 5);
-		CHECK(pve.components[1]._XXtWz(0, 0) == Approx(27.9665520576));
-		CHECK(pve.components[0]._XXtWz(0, 0) == Approx(-256.5077451498));
-		CHECK(pve.n_components == 3);
-
-		CHECK(CC(1, 3) == Approx(8.5117714361));
-		CHECK(CC(0, 0) == Approx(359.6916692608));
-		CHECK(CC(1, 1) == Approx(18.6609027716));
-		CHECK(CC(1, 0) == Approx(1.205905603));
-		CHECK(CC(1, 2) == Approx(8.2893914717));
+//		Eigen::MatrixXd CC = pve.construct_vc_system(pve.components);
+//		Eigen::MatrixXd AA = CC.block(0, 0, pve.n_components, pve.n_components);
+//		Eigen::VectorXd bb = CC.col(pve.n_components);
+//		Eigen::VectorXd ss = AA.colPivHouseholderQr().solve(bb);
+//
+//		CHECK(pve.components[1].label == "GxE(0)");
+//		CHECK(pve.components[1].env_var.squaredNorm() == Approx(11.6668265209));
+//		CHECK(pve.components[1].n_covar == 5);
+//		CHECK(pve.components[1]._XXtWz(0, 0) == Approx(27.9665520576));
+//		CHECK(pve.components[0]._XXtWz(0, 0) == Approx(-256.5077451498));
+//		CHECK(pve.n_components == 3);
+//
+//		CHECK(CC(1, 3) == Approx(8.5117714361));
+//		CHECK(CC(0, 0) == Approx(359.6916692608));
+//		CHECK(CC(1, 1) == Approx(18.6609027716));
+//		CHECK(CC(1, 0) == Approx(1.205905603));
+//		CHECK(CC(1, 2) == Approx(8.2893914717));
 	}
 }
 

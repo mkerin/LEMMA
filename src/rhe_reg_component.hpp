@@ -23,7 +23,6 @@ class RHEreg_Component {
 public:
 	Eigen::MatrixXd _XXtWz;
 	double ytXXty;
-	long n_env;
 	long n_covar;
 	long n_samples;
 	long n_draws;
@@ -34,7 +33,9 @@ public:
 
 	// Identifiers
 	std::string label;
+	bool is_gxe;
 	bool is_active;
+	bool is_finalised;
 	std::string group;
 	std::string effect_type;
 	long env_var_index;
@@ -71,13 +72,16 @@ public:
 
 		ytXXty = 0;
 		n_var_local = 0;
-		n_env = 0;
 		label = "";
 		is_active = true;
+		is_gxe = false;
+		is_finalised = false;
 		rm_jacknife_block = -1;
 	}
 
-	void set_env_var(Eigen::Ref<Eigen::VectorXd> my_env_var);
+	void set_env_var(const Eigen::Ref<const Eigen::VectorXd>& my_env_var);
+
+	void change_env_var(const Eigen::Ref<const Eigen::VectorXd>& my_env_var);
 
 	void set_inactive();
 
@@ -98,9 +102,10 @@ public:
 };
 
 void aggregate_GxE_components(const std::vector<RHEreg_Component>& vec_of_components,
-							  RHEreg_Component& new_comp,
-							  const Eigen::Ref<const Eigen::MatrixXd>& E,
-							  const Eigen::Ref<const Eigen::VectorXd>& env_weights,
-							  const Eigen::Ref<const Eigen::MatrixXd>& ytEXXtEy);
+                              RHEreg_Component& new_comp,
+                              const Eigen::Ref<const Eigen::MatrixXd>& E,
+                              const Eigen::Ref<const Eigen::VectorXd>& env_weights,
+                              const Eigen::Ref<const Eigen::MatrixXd>& ytEXXtEy);
+
 
 #endif
