@@ -394,7 +394,7 @@ void fileUtils::write_snp_stats_to_file(boost_io::filtering_ostream &ofile, cons
 	long n_var = X.cols();
 
 	if(!append) {
-		ofile << "chr rsid pos a0 a1 maf info";
+		ofile << "SNPID chr rsid pos a0 a1 maf info";
 		ofile << " loco_t_stat0 loco_t_neglogp0";
 		if(n_effects > 1) {
 			if (neglogp_gam.size() > 0) ofile << " loco_t_stat1";
@@ -407,7 +407,7 @@ void fileUtils::write_snp_stats_to_file(boost_io::filtering_ostream &ofile, cons
 
 	ofile << std::scientific << std::setprecision(7);
 	for (std::uint32_t kk = 0; kk < n_var; kk++) {
-		ofile << X.chromosome[kk] << " " << X.rsid[kk] << " " << X.position[kk];
+		ofile << X.SNPID[kk] << " " << X.chromosome[kk] << " " << X.rsid[kk] << " " << X.position[kk];
 		ofile << " " << X.al_0[kk] << " " << X.al_1[kk] << " " << X.maf[kk] << " " << X.info[kk];
 
 		// main effects

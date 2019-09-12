@@ -58,10 +58,10 @@ void RHEreg::run() {
 		nls_env_weights = run_RHE_levenburgMarquardt();
 	} else if(n_env > 0) {
 		std::cout << "G+GxE effects model (gaussian prior)" << std::endl;
-		solve_RHE();
+		solve_RHE(components);
 	} else {
 		std::cout << "Main effects model (gaussian prior)" << std::endl;
-		solve_RHE();
+		solve_RHE(components);
 	}
 
 	process_jacknife_samples();
@@ -329,11 +329,11 @@ void RHEreg::compute_RHE_trace_operators() {
 	}
 }
 
-void RHEreg::solve_RHE() {
+void RHEreg::solve_RHE(std::vector<RHEreg_Component>& components) {
 	boost_io::filtering_ostream outf;
 
 	// Solve system to estimate sigmas
-	long n_components = components.size();
+	n_components = components.size();
 	for (long ii = 0; ii < n_components; ii++) {
 		components[ii].rm_jacknife_block = -1;
 	}
@@ -453,24 +453,7 @@ Eigen::VectorXd RHEreg::run_RHE_levenburgMarquardt(){
 	env_weights *= 1.0 / n_env;
 
 	std::vector<RHEreg_Component> my_components;
-	my_components.reserve(3);
-
-	// Get main and noise components
-	for (int ii = 0; ii < n_components; ii++) {
-		if(components[ii].effect_type == "G") {
-			my_components.push_back(components[ii]);
-		} else if (components[ii].effect_type == "noise") {
-			my_components.push_back(components[ii]);
-		}
-	}
-	assert(my_components.size() == 2);
-
-	// Create component for \diag{Ew} \left( \sum_l w_l \bm{v}_{b, l} \right)
-	Eigen::MatrixXd placeholder = Eigen::MatrixXd::Zero(n_samples, n_draws);
-	RHEreg_Component combined_comp(p, Y, C, CtC_inv, placeholder);
-	aggregate_GxE_components(components, combined_comp, E, env_weights, ytEXXtEy);
-
-	my_components.push_back(std::move(combined_comp));
+	get_GxE_collapsed_system(components, my_components, E, env_weights, ytEXXtEy);
 
 	// Solve
 	long my_n_components = my_components.size();
@@ -495,20 +478,10 @@ Eigen::VectorXd RHEreg::run_RHE_levenburgMarquardt(){
 	EigenUtils::write_matrix(outf, env_weights, header, env_names);
 
 	// Use weights to collapse GxE component and continue with rest of algorithm
-	RHEreg_Component combined_comp2(p, Y, C, CtC_inv, placeholder);
-	aggregate_GxE_components(components, combined_comp2, E, env_weights, ytEXXtEy);
-
-	// Delete old
-	for (long ii = n_components - 1; ii>= 0; ii--) {
-		if (components[ii].effect_type == "GxE") {
-			components.erase(components.begin() + ii);
-		}
-	}
-	components.insert(components.begin() + 1, std::move(combined_comp2));
-	n_components = components.size();
+	get_GxE_collapsed_system(components, my_components, E, env_weights, ytEXXtEy);
 
 	// Solve system to estimate sigmas
-	solve_RHE();
+	solve_RHE(my_components);
 
 	return env_weights;
 }
@@ -591,7 +564,7 @@ Eigen::VectorXd RHEreg::run_RHE_nelderMead() {
 	// Use weights to collapse GxE component and continue with rest of algorithm
 	Eigen::MatrixXd placeholder = Eigen::MatrixXd::Zero(n_samples, n_draws);
 	RHEreg_Component combined_comp(p, Y, C, CtC_inv, placeholder);
-	aggregate_GxE_components(components, combined_comp, E, env_weights, ytEXXtEy);
+	get_GxE_collapsed_component(components, combined_comp, E, env_weights, ytEXXtEy);
 
 	// Delete old
 	std::vector<long> to_erase;
@@ -604,7 +577,7 @@ Eigen::VectorXd RHEreg::run_RHE_nelderMead() {
 	n_components = components.size();
 
 	// Solve system to estimate sigmas
-	solve_RHE();
+	solve_RHE(components);
 
 	return env_weights;
 }
@@ -630,7 +603,7 @@ double RHEreg::RHE_nelderMead_obj(Eigen::VectorXd env_weights, void *grad_out) c
 	// Create component for \diag{Ew} \left( \sum_l w_l \bm{v}_{b, l} \right)
 	Eigen::MatrixXd placeholder = Eigen::MatrixXd::Zero(n_samples, n_draws);
 	RHEreg_Component combined_comp(p, Y, C, CtC_inv, placeholder);
-	aggregate_GxE_components(components, combined_comp, E, env_weights, ytEXXtEy);
+	get_GxE_collapsed_component(components, combined_comp, E, env_weights, ytEXXtEy);
 
 	my_components.push_back(std::move(combined_comp));
 

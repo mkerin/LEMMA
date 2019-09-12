@@ -7,6 +7,7 @@
 #include "../src/parse_arguments.hpp"
 #include "../src/rhe_reg.hpp"
 #include "../src/data.hpp"
+#include "../src/levenberg_marquardt.hpp"
 
 
 // Scenarios
@@ -68,6 +69,18 @@ char* argv_rhe_lm[] = { (char*) "LEMMA",
 						(char*) "--pheno", (char*) "data/io_test/pheno.txt",
 						(char*) "--environment", (char*) "data/io_test/n50_p100_env.txt",
 						(char*) "--out", (char*) "data/io_test/test_RHEreg_LM.out.gz"};
+
+char* argv_rhe_lm2[] = { (char*) "LEMMA",
+						(char*) "--RHEreg-LM",
+						(char*) "--LM-max-iter", (char*) "5",
+						(char*) "--maf", (char*) "0.01",
+						(char*) "--random_seed", (char*) "1",
+						(char*) "--n_jacknife", (char*) "1",
+						(char*) "--n_pve_samples", (char*) "5",
+						(char*) "--streamBgen", (char*) "data/io_test/n1000_p2000.bgen",
+						(char*) "--pheno", (char*) "data/io_test/case8/pheno.txt",
+						(char*) "--environment", (char*) "data/io_test/case8/env.txt",
+						(char*) "--out", (char*) "data/io_test/test_RHEreg_LM.out.gz"};
 //
 char* argv_main1[] = { (char*) "--RHEreg",
 	                   (char*) "--random_seed", (char*) "1",
@@ -87,8 +100,8 @@ char* argv_main2[] = { (char*) "--RHEreg",
 TEST_CASE("RHE-LevenburgMarquardt") {
 	SECTION("LevenburgMarquardt fit") {
 		parameters p;
-		int argc = sizeof(argv_rhe_lm) / sizeof(argv_rhe_lm[0]);
-		parse_arguments(p, argc, argv_rhe_lm);
+		int argc = sizeof(argv_rhe_lm2) / sizeof(argv_rhe_lm2[0]);
+		parse_arguments(p, argc, argv_rhe_lm2);
 		Data data(p);
 		data.read_non_genetic_data();
 		data.standardise_non_genetic_data();
@@ -97,16 +110,71 @@ TEST_CASE("RHE-LevenburgMarquardt") {
 		Eigen::VectorXd Y = data.Y.cast<double>();
 		Eigen::MatrixXd C = data.C.cast<double>();
 		RHEreg pve(data, Y, C, data.E);
+
 		pve.run();
 
-		CHECK(pve.nls_env_weights(0) == Approx(0.5965538632));
-		CHECK(pve.nls_env_weights(1) == Approx(0.3111667933));
-		CHECK(pve.nls_env_weights(2) == Approx(-0.1885003074));
-		CHECK(pve.nls_env_weights(3) == Approx(-0.2660677429));
+		SECTION("Detailed check"){
+			LevenbergMarquardt LM(p, pve.components, pve.Y, pve.E, pve.C, pve.CtC_inv, pve.ytEXXtEy, pve.env_names);
+			LM.setupLM();
+			CHECK(LM.count == 0);
+			CHECK(LM.theta(0) == Approx(0.5115335783));
+			CHECK(LM.theta(1) == Approx(0.0611898124));
+			CHECK(LM.theta(2) == Approx(0.0611898124));
 
-		CHECK(pve.sigmas(0) == Approx(0.8692067162));
-		CHECK(pve.sigmas(1) == Approx(0.3501067212));
-		CHECK(pve.sigmas(2) == Approx(0.1056419562));
+			CHECK(LM.gradient_components[0].getXXtz().squaredNorm() == Approx(43889003974.5111541748));
+			CHECK(LM.gradient_components[0].get_n_var_local() == 1692);
+			CHECK(LM.gradient_components[0].get_bb_trace() == Approx(1622.3184653974));
+			CHECK(LM.gradient_components[1].getXXtz().squaredNorm() == Approx(978745776.537383914));
+			CHECK(LM.gradient_components[1].get_n_var_local() == 1692);
+			CHECK(LM.gradient_components[1].get_bb_trace() == Approx(63.436505965));
+			CHECK(LM.gradient_components[2].getXXtz().squaredNorm() == Approx(911375979.8285791874));
+			CHECK(LM.gradient_components[2].get_n_var_local() == 1692);
+			CHECK(LM.gradient_components[2].get_bb_trace() == Approx(37.9409430894));
+
+			CHECK(LM.gradient_components[0] * LM.gradient_components[1] == Approx(60.5861104159));
+
+			CHECK(LM.JtJ(0, 1) == Approx(60.5861104159));
+			CHECK(LM.JtJ(1, 1) == Approx(67.6449954847));
+			CHECK(LM.JtJ(2, 1) == Approx(3.7887243901));
+			CHECK(LM.Jte(2, 0) == Approx(-0.1753723376));
+			CHECK(LM.u == Approx(305.8836944502));
+
+			CHECK(LM.gradient_components[1].get_bb_trace() == Approx(63.436505965));
+			CHECK(LM.gradient_components[2].get_bb_trace() == Approx(37.9409430894));
+			CHECK(LM.gradient_components[3].get_bb_trace() == Approx(49.468627348));
+
+			auto I = Eigen::MatrixXd::Identity(LM.JtJ.rows(), LM.JtJ.cols());
+			Eigen::MatrixXd A = LM.JtJ + LM.u * I;
+			Eigen::JacobiSVD<Eigen::MatrixXd> svd(A);
+			double cond = svd.singularValues()(0)
+						  / svd.singularValues()(svd.singularValues().size()-1);
+			CHECK(cond == Approx(9.4839148626));
+
+			LM.iterLM();
+			CHECK(LM.delta(0) == Approx(0.0095191666));
+			CHECK(LM.delta(1) == Approx(0.0694444864));
+			CHECK(LM.delta(2) == Approx(-0.0036397566));
+			CHECK(LM.delta(3) == Approx(0.0553676568));
+			CHECK(LM.delta(4) == Approx(0.0398503025));
+			CHECK(LM.theta(0) == Approx(0.5210527448));
+			CHECK(LM.theta(1) == Approx(0.1306342988));
+			CHECK(LM.theta(2) == Approx(0.0575500558));
+			CHECK(LM.count == 1);
+			CHECK(LM.rho == Approx(4.8223521145));
+			CHECK(LM.u == Approx(101.9612314834));
+			CHECK(LM.v == Approx(2.0));
+			CHECK(LM.JtJ(1, 1) == Approx(174.6727371923));
+			CHECK(LM.Jte(2, 0) == Approx(-10.5693720588));
+		}
+
+		CHECK(pve.nls_env_weights(0) == Approx(0.2867807064));
+		CHECK(pve.nls_env_weights(1) == Approx(-0.0618967416));
+		CHECK(pve.nls_env_weights(2) == Approx(0.0652884497));
+		CHECK(pve.nls_env_weights(3) == Approx(0.1501547214));
+
+		CHECK(pve.sigmas(0) == Approx(0.4061257651));
+		CHECK(pve.sigmas(1) == Approx(0.3214543503));
+		CHECK(pve.sigmas(2) == Approx(0.5659973756));
 	}
 }
 

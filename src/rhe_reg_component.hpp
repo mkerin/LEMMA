@@ -101,11 +101,17 @@ public:
 	Eigen::MatrixXd project_out_covars(Eigen::Ref<Eigen::MatrixXd> rhs) const;
 };
 
-void aggregate_GxE_components(const std::vector<RHEreg_Component>& vec_of_components,
-                              RHEreg_Component& new_comp,
-                              const Eigen::Ref<const Eigen::MatrixXd>& E,
-                              const Eigen::Ref<const Eigen::VectorXd>& env_weights,
-                              const Eigen::Ref<const Eigen::MatrixXd>& ytEXXtEy);
+void get_GxE_collapsed_component(const std::vector<RHEreg_Component> &vec_of_components,
+								 RHEreg_Component &new_comp,
+								 const Eigen::Ref<const Eigen::MatrixXd> &E,
+								 const Eigen::Ref<const Eigen::VectorXd> &env_weights,
+								 const Eigen::Ref<const Eigen::MatrixXd> &ytEXXtEy);
+
+void get_GxE_collapsed_system(const std::vector<RHEreg_Component> &vec_of_components,
+							  std::vector<RHEreg_Component> &new_components,
+								 const Eigen::Ref<const Eigen::MatrixXd> &E,
+								 const Eigen::Ref<const Eigen::VectorXd> &env_weights,
+								 const Eigen::Ref<const Eigen::MatrixXd> &ytEXXtEy);
 
 
 #endif

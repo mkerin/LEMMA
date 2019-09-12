@@ -103,7 +103,7 @@ public:
 
 	void compute_RHE_trace_operators();
 
-	void solve_RHE();
+	void solve_RHE(std::vector<RHEreg_Component>& components);
 
 	Eigen::VectorXd run_RHE_levenburgMarquardt();
 

@@ -151,10 +151,10 @@ Eigen::MatrixXd RHEreg_Component::project_out_covars(Eigen::Ref <Eigen::MatrixXd
 	return EigenUtils::project_out_covars(rhs, C, CtC_inv);
 }
 
-void aggregate_GxE_components(const std::vector<RHEreg_Component> &vec_of_components, RHEreg_Component &new_comp,
-                              const Eigen::Ref<const Eigen::MatrixXd> &E,
-                              const Eigen::Ref<const Eigen::VectorXd> &env_weights,
-                              const Eigen::Ref<const Eigen::MatrixXd>& ytEXXtEy) {
+void get_GxE_collapsed_component(const std::vector<RHEreg_Component> &vec_of_components, RHEreg_Component &new_comp,
+								 const Eigen::Ref<const Eigen::MatrixXd> &E,
+								 const Eigen::Ref<const Eigen::VectorXd> &env_weights,
+								 const Eigen::Ref<const Eigen::MatrixXd> &ytEXXtEy) {
 	long n_components = vec_of_components.size();
 	long n_samples = vec_of_components[0].n_samples;
 	long n_draws = vec_of_components[0].n_draws;
@@ -183,4 +183,37 @@ void aggregate_GxE_components(const std::vector<RHEreg_Component> &vec_of_compon
 	new_comp.CtC_inv = vec_of_components[GxE_comp_index].CtC_inv;
 	new_comp.label = "GxE";
 	new_comp.effect_type = "GxE";
+}
+
+void get_GxE_collapsed_system(const std::vector<RHEreg_Component> &vec_of_components,
+							  std::vector<RHEreg_Component> &new_components,
+							  const Eigen::Ref<const Eigen::MatrixXd> &E,
+							  const Eigen::Ref<const Eigen::VectorXd> &env_weights,
+							  const Eigen::Ref<const Eigen::MatrixXd> &ytEXXtEy){
+
+	long n_components = vec_of_components.size();
+	long n_samples = vec_of_components[0].n_samples;
+	long n_draws = vec_of_components[0].n_draws;
+
+	new_components.clear();
+	new_components.reserve(3);
+
+	// Get main and noise components
+	for (int ii = 0; ii < n_components; ii++) {
+		if(vec_of_components[ii].effect_type == "G") {
+			new_components.push_back(vec_of_components[ii]);
+		} else if (vec_of_components[ii].effect_type == "noise") {
+			new_components.push_back(vec_of_components[ii]);
+		}
+	}
+	assert(new_components.size() == 2);
+
+	// Create component for \diag{Ew} \left( \sum_l w_l \bm{v}_{b, l} \right)
+	Eigen::MatrixXd placeholder = Eigen::MatrixXd::Zero(n_samples, n_draws);
+	RHEreg_Component combined_comp(vec_of_components[0].params, vec_of_components[0].Y,
+			vec_of_components[0].C, vec_of_components[0].CtC_inv,
+			placeholder);
+	get_GxE_collapsed_component(vec_of_components, combined_comp, E, env_weights, ytEXXtEy);
+
+	new_components.push_back(std::move(combined_comp));
 }

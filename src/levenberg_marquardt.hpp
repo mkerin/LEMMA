@@ -43,6 +43,13 @@ public:
 	double e3;
 	double damping;
 
+	// Used in LM updates
+	double u, v, ete, rho;
+	long count;
+	Eigen::MatrixXd JtJ, Jte;
+	Eigen::VectorXd theta, delta;
+
+
 	LevenbergMarquardt(parameters params,
 	                   std::vector<RHEreg_Component>& my_components,
 	                   const Eigen::VectorXd& myY,
@@ -51,7 +58,7 @@ public:
 	                   const Eigen::MatrixXd& myCtC_inv,
 	                   const Eigen::MatrixXd& my_ytEXXtEy,
 	                   const std::vector<std::string>& my_env_names) :
-		tau(10e-3), e1(10e-15), e2(10e-15), e3(10e-15),
+		tau(10e-2), e1(10e-15), e2(10e-15), e3(10e-15),
 		damping(2.0), p(params), components(my_components),
 		ytEXXtEy(my_ytEXXtEy), Y(myY), E(myE), C(myC),
 		CtC_inv(myCtC_inv), env_names(my_env_names){
@@ -90,13 +97,122 @@ public:
 		boost_io::close(outf_env);
 	}
 
+	Eigen::VectorXd runLM(){
+
+		setupLM();
+		bool stop = Jte.cwiseAbs().maxCoeff() <= e1;
+		while(count < p.levenburgMarquardt_max_iter && !stop) {
+			stop = iterLM();
+		}
+		std::cout << "LM terminated after " << count;
+		std::cout << " iterations, best SumOfSquares = " << ete;
+		std::cout << std::endl << std::endl;
+
+		if (std::isnan(u) || std::isinf(u)) {
+			throw std::domain_error("LevenbergMarquardt: µ is NAN or INF.");
+		}
+
+		return theta;
+	}
+
+	void setupLM(){
+		// Init: u, v, theta, JtJ, Jte, ete, count
+
+		// Use optimal variance comp fit with uniform weighting over envs
+		Eigen::VectorXd env_weights = Eigen::VectorXd::Constant(n_env, 1.0 / n_env);
+		Eigen::VectorXd initialGuess = Eigen::VectorXd::Zero(n_params);
+		initialGuess.segment(1, n_env) = env_weights;
+		update_aggregated_components(initialGuess, false);
+
+		Eigen::VectorXd bb(3);
+		Eigen::MatrixXd AA(3, 3);
+		for (long ii = 0; ii < 3; ii++) {
+			for (long jj = 0; jj <= ii; jj++){
+				AA(ii, jj) = gxe_collapsed_components[ii] * gxe_collapsed_components[jj];
+				AA(jj, ii) = AA(ii, jj);
+			}
+			bb(ii) = gxe_collapsed_components[ii].get_bb_trace();
+		}
+		Eigen::VectorXd sigmas = AA.colPivHouseholderQr().solve(bb);
+		initialGuess.segment(1, n_env) = env_weights * sigmas[1];
+		initialGuess[0] = sigmas[0];
+		assert(initialGuess.rows() == n_params);
+
+		theta = initialGuess;
+		update_aggregated_components(theta);
+		JtJ = getJtJ();
+		Jte = getJte(theta, JtJ);
+		ete = getete(theta);
+
+		v = damping;
+		u = tau * JtJ.diagonal().maxCoeff();
+		count = 0;
+	}
+
+	bool iterLM(){
+		auto I = Eigen::MatrixXd::Identity(JtJ.rows(), JtJ.cols());
+		bool stop = false;
+
+		delta = (JtJ + u*I).colPivHouseholderQr().solve(Jte);
+
+		if (delta.norm() <= e2*theta.norm()) {
+			std::cout << "LM terminated as relative change in delta < " << e2 << std::endl;
+			stop = true;
+		} else {
+			// Attempt new step
+			Eigen::VectorXd newGuess = theta + delta;
+
+			update_aggregated_components(newGuess);
+			Eigen::MatrixXd newJtJ = getJtJ();
+			Eigen::MatrixXd newJte = getJte(newGuess, newJtJ);
+			double newete = getete(newGuess);
+
+			rho = ete - newete;
+			double denom = 0.5 * (delta.transpose() * (u*delta+Jte))[0];
+			rho /= denom;
+
+			if (rho > 0) {
+				// Accept step
+				theta = newGuess;
+				JtJ = newJtJ;
+				Jte = newJte;
+				ete = newete;
+				count++;
+
+				// Reduce damping
+				u *= std::max(1.0/3.0, 1.0 - std::pow(2.0*rho-1.0, 3.0));
+				v = damping;
+
+
+				push_interim_update(count, newGuess);
+
+				// Additional stop conditions
+				// max(g) <= e1 OR length(error)^2 <= e3
+				if(Jte.cwiseAbs().maxCoeff() <= e1) {
+					std::cout << "LM terminated as magnitude of the gradient Jte < " << e1 << std::endl;
+					stop = true;
+				}
+				if(ete <= e3) {
+					std::cout << "LM terminated as error dropped below < " << e3 << std::endl;
+					stop = true;
+				}
+			} else {
+				// Increase damping
+				u *= v;
+				v *= damping;
+			}
+			if(p.mode_debug) std::cout << "LM: rho = " << rho << "; damping = " << u << ", denom = " << denom << std::endl;
+		}
+		return stop;
+	}
+
 	Eigen::VectorXd solveLM(const Eigen::Ref<const Eigen::VectorXd>& initialGuess){
 		assert(initialGuess.rows() == n_params);
 		double v = damping;
 		Eigen::VectorXd theta = initialGuess;
 
 		update_aggregated_components(theta);
-		Eigen::MatrixXd JtJ = getJtJ(theta);
+		Eigen::MatrixXd JtJ = getJtJ();
 		Eigen::MatrixXd Jte = getJte(theta, JtJ);
 		double ete = getete(theta);
 
@@ -104,65 +220,64 @@ public:
 		double u = tau * JtJ.diagonal().maxCoeff();
 		const auto I = Eigen::MatrixXd::Identity(JtJ.rows(), JtJ.cols());
 
+		// u, v, theta, JtJ, Jte, ete, count
 		long count = 0;
 		while(count < p.levenburgMarquardt_max_iter && !stop) {
-			double rho = 0;
 			if(count % 10 == 0) {
 				std::cout << "Starting LM iteration " << count << ", best SumOfSquares = " << ete << std::endl;
 			}
 
-			do {
-				Eigen::VectorXd delta = (JtJ + u*I).colPivHouseholderQr().solve(Jte);
+			Eigen::VectorXd delta = (JtJ + u*I).colPivHouseholderQr().solve(Jte);
 
-				if (delta.norm() <= e2*theta.norm()) {
-					std::cout << "LM terminated as relative change in delta < " << e2 << std::endl;
-					stop = true;
-				} else {
-					// Attempt new step
-					Eigen::VectorXd newGuess = theta + delta;
+			if (delta.norm() <= e2*theta.norm()) {
+				std::cout << "LM terminated as relative change in delta < " << e2 << std::endl;
+				stop = true;
+			} else {
+				// Attempt new step
+				Eigen::VectorXd newGuess = theta + delta;
 
-					update_aggregated_components(newGuess);
-					Eigen::MatrixXd newJtJ = getJtJ(newGuess);
-					Eigen::MatrixXd newJte = getJte(newGuess, newJtJ);
-					double newete = getete(newGuess);
+				update_aggregated_components(newGuess);
+				Eigen::MatrixXd newJtJ = getJtJ();
+				Eigen::MatrixXd newJte = getJte(newGuess, newJtJ);
+				double newete = getete(newGuess);
 
-					rho = ete - newete;
-					double denom = 0.5 * (delta.transpose() * (u*delta+Jte))[0];
-					rho /= denom;
+				double rho = ete - newete;
+				double denom = 0.5 * (delta.transpose() * (u*delta+Jte))[0];
+				rho /= denom;
 
-					if (rho > 0) {
-						push_interim_update(count, newGuess);
+				if (rho > 0) {
+					// Accept step
+					theta = newGuess;
+					JtJ = newJtJ;
+					Jte = newJte;
+					ete = newete;
+					count++;
 
-						// Accept step
-						theta = newGuess;
-						JtJ = newJtJ;
-						Jte = newJte;
-						ete = newete;
+					// Reduce damping
+					u *= std::max(1.0/3.0, 1.0 - std::pow(2.0*rho-1.0, 3.0));
+					v = damping;
 
-						// max(g) <= e1 OR length(error)^2 <= e3
-						if(Jte.cwiseAbs().maxCoeff() <= e1) {
-							std::cout << "LM terminated as magnitude of the gradient Jte < " << e1 << std::endl;
-							stop = true;
-						}
-						if(ete <= e3) {
-							std::cout << "LM terminated as error dropped below < " << e3 << std::endl;
-							stop = true;
-						}
 
-						// Reduce damping
-						// u*max(1/3, (2*rho-1)^3)
-						u *= std::max(1.0/3.0, 1.0 - std::pow(2.0*rho-1.0, 3.0));
-						v = damping;
-						if(p.mode_debug) std::cout << "LM: rho > 0 (" << rho << "); damping = " << u << ", denom = " << denom << std::endl;
-					} else {
-						// Increase damping
-						u *= v;
-						v *= damping;
-						if(p.mode_debug) std::cout << "LM: rho <= 0 (" << rho << "); damping = " << u << ", denom = " << denom << std::endl;
+					push_interim_update(count, newGuess);
+
+					// Additional stop conditions
+					// max(g) <= e1 OR length(error)^2 <= e3
+					if(Jte.cwiseAbs().maxCoeff() <= e1) {
+						std::cout << "LM terminated as magnitude of the gradient Jte < " << e1 << std::endl;
+						stop = true;
 					}
+					if(ete <= e3) {
+						std::cout << "LM terminated as error dropped below < " << e3 << std::endl;
+						stop = true;
+					}
+				} else {
+					// Increase damping
+					u *= v;
+					v *= damping;
 				}
-			} while(rho > 0 && !stop && !std::isnan(u) && !std::isinf(u));
-			count++;
+				if(p.mode_debug) std::cout << "LM: rho = " << rho << "; damping = " << u << ", denom = " << denom << std::endl;
+			}
+			stop = stop && !std::isnan(u) && !std::isinf(u);
 		}
 		std::cout << "LM terminated after " << count;
 		std::cout << " iterations, best SumOfSquares = " << ete;
@@ -188,13 +303,14 @@ public:
 		outf_env << std::endl;
 	}
 
-	void update_aggregated_components(const Eigen::Ref<const Eigen::VectorXd>& params){
+	void update_aggregated_components(const Eigen::Ref<const Eigen::VectorXd>& params,
+			bool update_gradient_comps = true){
 		// agg comps
 		Eigen::VectorXd env_weights = params.segment(1, n_env);
 
 		Eigen::MatrixXd placeholder = Eigen::MatrixXd::Zero(n_samples, n_draws);
 		RHEreg_Component combined_comp(p, Y, C, CtC_inv, placeholder);
-		aggregate_GxE_components(components, combined_comp, E, env_weights, ytEXXtEy);
+		get_GxE_collapsed_component(components, combined_comp, E, env_weights, ytEXXtEy);
 
 		// Components with gxe term collapsed for getting sum of squared errors
 		gxe_collapsed_components.clear();
@@ -222,28 +338,28 @@ public:
 		}
 	}
 
-	Eigen::MatrixXd getJtJ(const Eigen::Ref<const Eigen::VectorXd>& params){
+	Eigen::MatrixXd getJtJ() const {
 		Eigen::MatrixXd A(n_params, n_params);
 		for (long ii = 0; ii < n_params; ii++) {
 			for (long jj = 0; jj <= ii; jj++) {
 				A(ii, jj) = gradient_components[ii] * gradient_components[jj];
-				A(ii, jj) = A(jj, ii);
+				A(jj, ii) = A(ii, jj);
 			}
 		}
-		return(A);
+		return A;
 	}
 
 	Eigen::MatrixXd getJte(const Eigen::Ref<const Eigen::VectorXd>& params,
-	                       const Eigen::Ref<const Eigen::MatrixXd>& JtJ){
+	                       const Eigen::Ref<const Eigen::MatrixXd>& JtJ) const {
 		Eigen::VectorXd gg(n_params);
 		for (long ii = 0; ii < n_params; ii++) {
 			gg(ii) = gradient_components[ii].get_bb_trace();
 		}
 		gg -= JtJ * params;
-		return(gg);
+		return gg;
 	}
 
-	double getete(const Eigen::Ref<const Eigen::VectorXd>& params){
+	double getete(const Eigen::Ref<const Eigen::VectorXd>& params) const {
 		Eigen::VectorXd bb(3);
 		Eigen::MatrixXd AA(3, 3);
 
