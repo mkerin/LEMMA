@@ -11,8 +11,11 @@
 
 #include <random>
 
-RHEreg_Component::RHEreg_Component(const parameters &myparams, const Eigen::VectorXd &myY,
-                                   const Eigen::MatrixXd &myWzz, const Eigen::MatrixXd &myC, const Eigen::MatrixXd &myCtC_inv,
+RHEreg_Component::RHEreg_Component(const parameters &myparams,
+                                   const Eigen::VectorXd &myY,
+                                   const Eigen::MatrixXd &myWzz,
+                                   const Eigen::MatrixXd &myC,
+                                   const Eigen::MatrixXd &myCtC_inv,
                                    const long &myNJacknifeLocal) : params(myparams), Y(myY),
 	zz(myWzz), C(myC), CtC_inv(myCtC_inv), n_jacknife_local(myNJacknifeLocal) {
 	assert(n_jacknife_local > 0);
@@ -70,7 +73,8 @@ void RHEreg_Component::set_inactive() {
 	ytXXty = mpiUtils::mpiReduce_inplace(Y.squaredNorm());
 }
 
-void RHEreg_Component::add_to_trace_estimator(Eigen::Ref <Eigen::MatrixXd> X, long jacknife_index) {
+void RHEreg_Component::add_to_trace_estimator(Eigen::Ref <Eigen::MatrixXd> X,
+                                              long jacknife_index) {
 	assert(jacknife_index < n_jacknife_local);
 	if(is_active) {
 		Eigen::MatrixXd Xty = X.transpose() * Y;
@@ -106,7 +110,7 @@ Eigen::MatrixXd RHEreg_Component::getXXtz() const {
 	} else {
 		res = _XXtWz;
 	}
-	if(is_gxe){
+	if(is_gxe) {
 		res.array().colwise() *= env_var.array();
 	}
 	return res;
@@ -151,13 +155,16 @@ Eigen::MatrixXd RHEreg_Component::project_out_covars(Eigen::Ref <Eigen::MatrixXd
 	return EigenUtils::project_out_covars(rhs, C, CtC_inv);
 }
 
-void get_GxE_collapsed_component(const std::vector<RHEreg_Component> &vec_of_components, RHEreg_Component &new_comp,
-								 const Eigen::Ref<const Eigen::MatrixXd> &E,
-								 const Eigen::Ref<const Eigen::VectorXd> &env_weights,
-								 const Eigen::Ref<const Eigen::MatrixXd> &ytEXXtEy) {
+void get_GxE_collapsed_component(const std::vector<RHEreg_Component> &vec_of_components,
+                                 RHEreg_Component &new_comp,
+                                 const Eigen::Ref<const Eigen::MatrixXd> &E,
+                                 const Eigen::Ref<const Eigen::VectorXd> &env_weights,
+                                 const std::vector<Eigen::MatrixXd> &ytEXXtEy,
+                                 const bool& copy_jacknife_partitions) {
 	long n_components = vec_of_components.size();
 	long n_samples = vec_of_components[0].n_samples;
 	long n_draws = vec_of_components[0].n_draws;
+	long n_jacknife = new_comp.params.n_jacknife;
 
 	Eigen::VectorXd eta = E * env_weights;
 	Eigen::MatrixXd sum_WlVbl = Eigen::MatrixXd::Zero(n_samples, n_draws);
@@ -171,8 +178,31 @@ void get_GxE_collapsed_component(const std::vector<RHEreg_Component> &vec_of_com
 		}
 	}
 	new_comp._XXtWz = sum_WlVbl;
-	new_comp.ytXXty = env_weights.transpose() * ytEXXtEy * env_weights;
+	new_comp.ytXXty = 0;
+	for (long jj = 0; jj < n_jacknife; jj++) {
+		new_comp.ytXXty += env_weights.transpose() * ytEXXtEy[jj] * env_weights;
+	}
 	new_comp.is_finalised = true;
+
+	if(copy_jacknife_partitions) {
+		new_comp.n_vars_local.resize(n_jacknife);
+		new_comp.ytXXtys.resize(n_jacknife);
+		new_comp._XXtzs.resize(n_jacknife);
+		for(long ii = 0; ii < n_jacknife; ii++) {
+			new_comp._XXtzs[ii] = Eigen::MatrixXd::Zero(n_samples, n_draws);
+		}
+
+		for(long jj = 0; jj < n_jacknife; jj++) {
+			for (int ii = 0; ii < n_components; ii++) {
+				if (vec_of_components[ii].effect_type == "GxE") {
+					long ll = vec_of_components[ii].env_var_index;
+					new_comp._XXtzs[jj] += env_weights[ll] * vec_of_components[ii]._XXtzs[jj];
+				}
+			}
+			new_comp.n_vars_local[jj] = vec_of_components[0].n_vars_local[jj];
+			new_comp.ytXXtys[jj] = env_weights.transpose() * ytEXXtEy[jj] * env_weights;
+		}
+	}
 
 	new_comp.set_env_var(eta);
 	new_comp.n_var_local = vec_of_components[GxE_comp_index].n_var_local;
@@ -186,34 +216,34 @@ void get_GxE_collapsed_component(const std::vector<RHEreg_Component> &vec_of_com
 }
 
 void get_GxE_collapsed_system(const std::vector<RHEreg_Component> &vec_of_components,
-							  std::vector<RHEreg_Component> &new_components,
-							  const Eigen::Ref<const Eigen::MatrixXd> &E,
-							  const Eigen::Ref<const Eigen::VectorXd> &env_weights,
-							  const Eigen::Ref<const Eigen::MatrixXd> &ytEXXtEy){
+                              std::vector<RHEreg_Component> &new_components,
+                              const Eigen::Ref<const Eigen::MatrixXd> &E,
+                              const Eigen::Ref<const Eigen::VectorXd> &env_weights,
+                              const std::vector<Eigen::MatrixXd> &ytEXXtEy,
+                              const bool& copy_jacknife_partitions){
 
 	long n_components = vec_of_components.size();
 	long n_samples = vec_of_components[0].n_samples;
 	long n_draws = vec_of_components[0].n_draws;
 
-	new_components.clear();
-	new_components.reserve(3);
-
-	// Get main and noise components
-	for (int ii = 0; ii < n_components; ii++) {
-		if(vec_of_components[ii].effect_type == "G") {
-			new_components.push_back(vec_of_components[ii]);
-		} else if (vec_of_components[ii].effect_type == "noise") {
-			new_components.push_back(vec_of_components[ii]);
-		}
-	}
-	assert(new_components.size() == 2);
-
 	// Create component for \diag{Ew} \left( \sum_l w_l \bm{v}_{b, l} \right)
 	Eigen::MatrixXd placeholder = Eigen::MatrixXd::Zero(n_samples, n_draws);
 	RHEreg_Component combined_comp(vec_of_components[0].params, vec_of_components[0].Y,
-			vec_of_components[0].C, vec_of_components[0].CtC_inv,
-			placeholder);
-	get_GxE_collapsed_component(vec_of_components, combined_comp, E, env_weights, ytEXXtEy);
+	                               vec_of_components[0].C, vec_of_components[0].CtC_inv,
+	                               placeholder);
+	get_GxE_collapsed_component(vec_of_components, combined_comp, E, env_weights, ytEXXtEy,
+	                            copy_jacknife_partitions);
 
-	new_components.push_back(std::move(combined_comp));
+	// Get main and noise components
+	new_components.clear();
+	new_components.reserve(3);
+	bool transfered_gxe = false;
+	for (int ii = 0; ii < n_components; ii++) {
+		if(vec_of_components[ii].effect_type != "GxE") {
+			new_components.push_back(vec_of_components[ii]);
+		} else if (!transfered_gxe) {
+			transfered_gxe = true;
+			new_components.push_back(std::move(combined_comp));
+		}
+	}
 }

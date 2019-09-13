@@ -40,7 +40,7 @@ public:
 
 	// RHEreg-NLS
 	Eigen::VectorXd nls_env_weights;
-	Eigen::MatrixXd ytEXXtEy;
+	std::vector<Eigen::MatrixXd> ytEXXtEys;
 
 	const parameters& p;
 	const GenotypeMatrix& X;

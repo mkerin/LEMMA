@@ -29,7 +29,8 @@ public:
 	std::vector<RHEreg_Component> gradient_components;
 	std::vector<RHEreg_Component> gxe_collapsed_components;
 
-	const Eigen::MatrixXd& ytEXXtEy;
+	const std::vector<Eigen::MatrixXd> ytEXXtEys;
+	Eigen::MatrixXd ytEXXtEy;
 	const Eigen::MatrixXd& E, C, CtC_inv;
 	const Eigen::VectorXd& Y;
 
@@ -56,13 +57,19 @@ public:
 	                   const Eigen::MatrixXd& myE,
 	                   const Eigen::MatrixXd& myC,
 	                   const Eigen::MatrixXd& myCtC_inv,
-	                   const Eigen::MatrixXd& my_ytEXXtEy,
+	                   const std::vector<Eigen::MatrixXd>& my_ytEXXtEys,
 	                   const std::vector<std::string>& my_env_names) :
-		tau(10e-2), e1(10e-15), e2(10e-15), e3(10e-15),
-		damping(2.0), p(params), components(my_components),
-		ytEXXtEy(my_ytEXXtEy), Y(myY), E(myE), C(myC),
+		p(params), components(my_components),
+		ytEXXtEys(my_ytEXXtEys), Y(myY), E(myE), C(myC),
 		CtC_inv(myCtC_inv), env_names(my_env_names){
 		assert(!p.RHE_multicomponent);
+
+		// Hardcoded parameters
+		tau = 10e-2;
+		e1 = 10e-15;
+		e2 = 10e-15;
+		e3 = 10e-15;
+		damping = 2.0;
 
 		// WARNING: Have hardcoded assumptions about the order of parameters
 		n_components = my_components.size();
@@ -70,6 +77,11 @@ public:
 		n_env = E.cols();
 		n_samples = E.rows();
 		n_draws = components[0].n_draws;
+
+		ytEXXtEy = Eigen::MatrixXd::Zero(n_env, n_env);
+		for (long jj = 0; jj < ytEXXtEys.size(); jj++){
+			ytEXXtEy += ytEXXtEys[jj];
+		}
 
 		for (long ii = 0; ii < n_components; ii++) {
 			if(ii == 0) {
@@ -133,6 +145,8 @@ public:
 			}
 			bb(ii) = gxe_collapsed_components[ii].get_bb_trace();
 		}
+		std::cout << std::endl << AA << std::endl << bb << std::endl;
+
 		Eigen::VectorXd sigmas = AA.colPivHouseholderQr().solve(bb);
 		initialGuess.segment(1, n_env) = env_weights * sigmas[1];
 		initialGuess[0] = sigmas[0];
@@ -144,9 +158,13 @@ public:
 		Jte = getJte(theta, JtJ);
 		ete = getete(theta);
 
+		std::cout << std::endl << initialGuess << std::endl;
+
 		v = damping;
 		u = tau * JtJ.diagonal().maxCoeff();
 		count = 0;
+
+		push_interim_update(count, theta);
 	}
 
 	bool iterLM(){
@@ -210,6 +228,7 @@ public:
 		assert(initialGuess.rows() == n_params);
 		double v = damping;
 		Eigen::VectorXd theta = initialGuess;
+		std::cout << std::endl << initialGuess << std::endl;
 
 		update_aggregated_components(theta);
 		Eigen::MatrixXd JtJ = getJtJ();
@@ -292,7 +311,6 @@ public:
 
 	void push_interim_update(const long& iter, const Eigen::Ref<const Eigen::VectorXd>& params){
 		Eigen::VectorXd env_weights = params.segment(1, n_env);
-//		env_weights /= env_weights.norm();
 		outf_env << iter << " ";
 		for (long ll = 0; ll < n_env; ll++) {
 			outf_env << env_weights[ll];
@@ -310,16 +328,18 @@ public:
 
 		Eigen::MatrixXd placeholder = Eigen::MatrixXd::Zero(n_samples, n_draws);
 		RHEreg_Component combined_comp(p, Y, C, CtC_inv, placeholder);
-		get_GxE_collapsed_component(components, combined_comp, E, env_weights, ytEXXtEy);
+		get_GxE_collapsed_component(components, combined_comp, E, env_weights, ytEXXtEys);
 
 		// Components with gxe term collapsed for getting sum of squared errors
 		gxe_collapsed_components.clear();
 		gxe_collapsed_components.reserve(3);
+		bool transfered_gxe = false;
 		for (long ii = 0; ii < n_components; ii++) {
-			if(components[ii].effect_type == "GxE") {
-				gxe_collapsed_components.push_back(combined_comp);
-			} else {
+			if(components[ii].effect_type != "GxE") {
 				gxe_collapsed_components.push_back(components[ii]);
+			} else if(!transfered_gxe){
+				transfered_gxe = true;
+				gxe_collapsed_components.push_back(combined_comp);
 			}
 		}
 

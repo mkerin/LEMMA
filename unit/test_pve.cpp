@@ -114,67 +114,47 @@ TEST_CASE("RHE-LevenburgMarquardt") {
 		pve.run();
 
 		SECTION("Detailed check"){
-			LevenbergMarquardt LM(p, pve.components, pve.Y, pve.E, pve.C, pve.CtC_inv, pve.ytEXXtEy, pve.env_names);
+			LevenbergMarquardt LM(p, pve.components, pve.Y, pve.E, pve.C, pve.CtC_inv, pve.ytEXXtEys, pve.env_names);
 			LM.setupLM();
 			CHECK(LM.count == 0);
-			CHECK(LM.theta(0) == Approx(0.5115335783));
-			CHECK(LM.theta(1) == Approx(0.0611898124));
-			CHECK(LM.theta(2) == Approx(0.0611898124));
-
-			CHECK(LM.gradient_components[0].getXXtz().squaredNorm() == Approx(43889003974.5111541748));
-			CHECK(LM.gradient_components[0].get_n_var_local() == 1692);
-			CHECK(LM.gradient_components[0].get_bb_trace() == Approx(1622.3184653974));
-			CHECK(LM.gradient_components[1].getXXtz().squaredNorm() == Approx(978745776.537383914));
-			CHECK(LM.gradient_components[1].get_n_var_local() == 1692);
-			CHECK(LM.gradient_components[1].get_bb_trace() == Approx(63.436505965));
-			CHECK(LM.gradient_components[2].getXXtz().squaredNorm() == Approx(911375979.8285791874));
-			CHECK(LM.gradient_components[2].get_n_var_local() == 1692);
-			CHECK(LM.gradient_components[2].get_bb_trace() == Approx(37.9409430894));
-
-			CHECK(LM.gradient_components[0] * LM.gradient_components[1] == Approx(60.5861104159));
-
-			CHECK(LM.JtJ(0, 1) == Approx(60.5861104159));
-			CHECK(LM.JtJ(1, 1) == Approx(67.6449954847));
-			CHECK(LM.JtJ(2, 1) == Approx(3.7887243901));
-			CHECK(LM.Jte(2, 0) == Approx(-0.1753723376));
+			CHECK(LM.theta(0) == Approx(0.4070208966));
+			CHECK(LM.theta(1) == Approx(0.0072421961));
+			CHECK(LM.theta(2) == Approx(0.0072421961));
 			CHECK(LM.u == Approx(305.8836944502));
-
-			CHECK(LM.gradient_components[1].get_bb_trace() == Approx(63.436505965));
-			CHECK(LM.gradient_components[2].get_bb_trace() == Approx(37.9409430894));
-			CHECK(LM.gradient_components[3].get_bb_trace() == Approx(49.468627348));
 
 			auto I = Eigen::MatrixXd::Identity(LM.JtJ.rows(), LM.JtJ.cols());
 			Eigen::MatrixXd A = LM.JtJ + LM.u * I;
 			Eigen::JacobiSVD<Eigen::MatrixXd> svd(A);
 			double cond = svd.singularValues()(0)
 						  / svd.singularValues()(svd.singularValues().size()-1);
-			CHECK(cond == Approx(9.4839148626));
+			CHECK(cond == Approx(10.9753723566));
 
 			LM.iterLM();
-			CHECK(LM.delta(0) == Approx(0.0095191666));
-			CHECK(LM.delta(1) == Approx(0.0694444864));
-			CHECK(LM.delta(2) == Approx(-0.0036397566));
-			CHECK(LM.delta(3) == Approx(0.0553676568));
-			CHECK(LM.delta(4) == Approx(0.0398503025));
-			CHECK(LM.theta(0) == Approx(0.5210527448));
-			CHECK(LM.theta(1) == Approx(0.1306342988));
-			CHECK(LM.theta(2) == Approx(0.0575500558));
 			CHECK(LM.count == 1);
-			CHECK(LM.rho == Approx(4.8223521145));
-			CHECK(LM.u == Approx(101.9612314834));
+			CHECK(LM.delta(0) == Approx(0.1119979952));
+			CHECK(LM.delta(1) == Approx(0.0123046495));
+			CHECK(LM.delta(2) == Approx(0.0016997138));
+			CHECK(LM.delta(3) == Approx(0.0098594516));
+			CHECK(LM.delta(4) == Approx(0.0077037012));
+			CHECK(LM.rho == Approx(0.1741373777));
+			CHECK(LM.u == Approx(390.5576713745));
 			CHECK(LM.v == Approx(2.0));
-			CHECK(LM.JtJ(1, 1) == Approx(174.6727371923));
-			CHECK(LM.Jte(2, 0) == Approx(-10.5693720588));
 		}
 
-		CHECK(pve.nls_env_weights(0) == Approx(0.2867807064));
-		CHECK(pve.nls_env_weights(1) == Approx(-0.0618967416));
-		CHECK(pve.nls_env_weights(2) == Approx(0.0652884497));
-		CHECK(pve.nls_env_weights(3) == Approx(0.1501547214));
+		// CHECK(pve.nls_env_weights(0) == Approx(0.2420927487));
+		// CHECK(pve.nls_env_weights(1) == Approx(-0.0455278895));
+		// CHECK(pve.nls_env_weights(2) == Approx(0.0630682751));
+		// CHECK(pve.nls_env_weights(3) == Approx(0.1215544902));
 
-		CHECK(pve.sigmas(0) == Approx(0.4061257651));
-		CHECK(pve.sigmas(1) == Approx(0.3214543503));
-		CHECK(pve.sigmas(2) == Approx(0.5659973756));
+		CHECK(pve.nls_env_weights(0) == Approx(0.8559937408));
+		CHECK(pve.nls_env_weights(1) == Approx(-0.1609779253));
+		CHECK(pve.nls_env_weights(2) == Approx(0.22299738));
+		CHECK(pve.nls_env_weights(3) == Approx(0.429793471));
+
+		CHECK(pve.sigmas(0) == Approx(0.4060720538));
+		// CHECK(pve.sigmas(1) == Approx(0.80262135));
+		CHECK(pve.sigmas(1) == Approx(0.0641997139));
+		CHECK(pve.sigmas(2) == Approx(0.3217218348));
 	}
 }
 

@@ -105,13 +105,15 @@ void get_GxE_collapsed_component(const std::vector<RHEreg_Component> &vec_of_com
 								 RHEreg_Component &new_comp,
 								 const Eigen::Ref<const Eigen::MatrixXd> &E,
 								 const Eigen::Ref<const Eigen::VectorXd> &env_weights,
-								 const Eigen::Ref<const Eigen::MatrixXd> &ytEXXtEy);
+								 const std::vector<Eigen::MatrixXd> &ytEXXtEy,
+								 const bool& copy_jacknife_partitions = false);
 
 void get_GxE_collapsed_system(const std::vector<RHEreg_Component> &vec_of_components,
 							  std::vector<RHEreg_Component> &new_components,
 								 const Eigen::Ref<const Eigen::MatrixXd> &E,
 								 const Eigen::Ref<const Eigen::VectorXd> &env_weights,
-								 const Eigen::Ref<const Eigen::MatrixXd> &ytEXXtEy);
+								 const std::vector<Eigen::MatrixXd> &ytEXXtEy,
+								 const bool& copy_jacknife_partitions = false);
 
 
 #endif

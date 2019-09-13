@@ -170,7 +170,10 @@ void RHEreg::initialise_components() {
 
 void RHEreg::compute_RHE_trace_operators() {
 	if(p.mode_RHEreg_NM || p.mode_RHEreg_LM) {
-		ytEXXtEy = Eigen::MatrixXd::Zero(n_env, n_env);
+		ytEXXtEys.resize(p.n_jacknife);
+		for (long jj = 0; jj < p.n_jacknife; jj++) {
+			ytEXXtEys[jj] = Eigen::MatrixXd::Zero(n_env, n_env);
+		}
 	}
 
 	// Compute randomised traces
@@ -209,8 +212,8 @@ void RHEreg::compute_RHE_trace_operators() {
 
 				for (long ll = 0; ll < n_env; ll++) {
 					for (long mm = 0; mm <= ll; mm++) {
-						ytEXXtEy(mm, ll) += XtEy.col(ll).dot(XtEy.col(mm));
-						ytEXXtEy(ll, mm) = ytEXXtEy(mm, ll);
+						ytEXXtEys[jacknife_index](mm, ll) += XtEy.col(ll).dot(XtEy.col(mm));
+						ytEXXtEys[jacknife_index](ll, mm) = ytEXXtEys[jacknife_index](mm, ll);
 					}
 				}
 			}
@@ -310,8 +313,8 @@ void RHEreg::compute_RHE_trace_operators() {
 
 						for (long ll = 0; ll < n_env; ll++) {
 							for (long mm = 0; mm <= ll; mm++) {
-								ytEXXtEy(mm, ll) += XtEy.col(ll).dot(XtEy.col(mm));
-								ytEXXtEy(ll, mm) = ytEXXtEy(mm, ll);
+								ytEXXtEys[jacknife_index](mm, ll) += XtEy.col(ll).dot(XtEy.col(mm));
+								ytEXXtEys[jacknife_index](ll, mm) = ytEXXtEys[jacknife_index](mm, ll);
 							}
 						}
 					}
@@ -445,30 +448,23 @@ void RHEreg::solve_RHE(std::vector<RHEreg_Component>& components) {
 	}
 }
 
-Eigen::VectorXd RHEreg::run_RHE_levenburgMarquardt(){
+Eigen::VectorXd RHEreg::run_RHE_levenburgMarquardt() {
 	std::cout << std::endl << "Optimising env-weights with Levenburg-Marquardt" << std::endl;
 
-	// Initialise weights
-	Eigen::VectorXd env_weights = Eigen::VectorXd::Constant(n_env, 1.0);
-	env_weights *= 1.0 / n_env;
+	LevenbergMarquardt LM(p, components, Y, E, C, CtC_inv, ytEXXtEys, env_names);
+	LM.setupLM();
+	Eigen::VectorXd params = LM.runLM();
+	Eigen::VectorXd env_weights = params.segment(1, n_env);
 
-	std::vector<RHEreg_Component> my_components;
-	get_GxE_collapsed_system(components, my_components, E, env_weights, ytEXXtEy);
-
-	// Solve
-	long my_n_components = my_components.size();
-	Eigen::MatrixXd CC = construct_vc_system(my_components);
-	Eigen::MatrixXd AA = CC.block(0, 0, my_n_components, my_n_components);
-	Eigen::VectorXd bb = CC.col(my_n_components);
-	Eigen::VectorXd sigmas = AA.colPivHouseholderQr().solve(bb);
-
-	Eigen::VectorXd initial_params(1 + n_env);
-	initial_params.segment(1, n_env) = env_weights * sigmas[1];
-	initial_params[0] = sigmas[0];
-
-	LevenbergMarquardt LM(p, components, Y, E, C, CtC_inv, ytEXXtEy, env_names);
-	Eigen::VectorXd params = LM.solveLM(initial_params);
-	env_weights = params.segment(1, n_env);
+	// Rescale env weights
+	Eigen::ArrayXd eta = E * env_weights;
+	double sd = std::sqrt((eta - eta.mean()).square().sum() / (eta.rows() - 1.0));
+	env_weights /= sd;
+	if(p.mode_debug) {
+		Eigen::ArrayXd eta = E * env_weights;
+		std::cout << "Eta-mean = " << eta.mean() << std::endl;
+		std::cout << "Eta-SD = " << std::sqrt((eta - eta.mean()).square().sum() / (eta.rows() - 1.0)) << std::endl;
+	}
 
 	// Dump env weights to file
 	boost_io::filtering_ostream outf;
@@ -478,7 +474,8 @@ Eigen::VectorXd RHEreg::run_RHE_levenburgMarquardt(){
 	EigenUtils::write_matrix(outf, env_weights, header, env_names);
 
 	// Use weights to collapse GxE component and continue with rest of algorithm
-	get_GxE_collapsed_system(components, my_components, E, env_weights, ytEXXtEy);
+	std::vector<RHEreg_Component> my_components;
+	get_GxE_collapsed_system(components, my_components, E, env_weights, ytEXXtEys, true);
 
 	// Solve system to estimate sigmas
 	solve_RHE(my_components);
@@ -564,7 +561,7 @@ Eigen::VectorXd RHEreg::run_RHE_nelderMead() {
 	// Use weights to collapse GxE component and continue with rest of algorithm
 	Eigen::MatrixXd placeholder = Eigen::MatrixXd::Zero(n_samples, n_draws);
 	RHEreg_Component combined_comp(p, Y, C, CtC_inv, placeholder);
-	get_GxE_collapsed_component(components, combined_comp, E, env_weights, ytEXXtEy);
+	get_GxE_collapsed_component(components, combined_comp, E, env_weights, ytEXXtEys);
 
 	// Delete old
 	std::vector<long> to_erase;
@@ -603,7 +600,7 @@ double RHEreg::RHE_nelderMead_obj(Eigen::VectorXd env_weights, void *grad_out) c
 	// Create component for \diag{Ew} \left( \sum_l w_l \bm{v}_{b, l} \right)
 	Eigen::MatrixXd placeholder = Eigen::MatrixXd::Zero(n_samples, n_draws);
 	RHEreg_Component combined_comp(p, Y, C, CtC_inv, placeholder);
-	get_GxE_collapsed_component(components, combined_comp, E, env_weights, ytEXXtEy);
+	get_GxE_collapsed_component(components, combined_comp, E, env_weights, ytEXXtEys);
 
 	my_components.push_back(std::move(combined_comp));
 
