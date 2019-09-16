@@ -40,7 +40,7 @@ public:
 	long redo_ym_interval, levenburgMarquardt_max_iter;
 	double min_maf, min_info, elbo_tol, alpha_tol, gamma_updates_thresh;
 	double beta_spike_diff_factor, gam_spike_diff_factor, min_spike_diff_factor;
-	long LOSO_window, n_jacknife, streamBgen_print_interval, nelderMead_max_iter;
+	long LOSO_window, n_jacknife, streamBgen_print_interval, nelderMead_max_iter, n_LM_starts;
 	bool RHE_multicomponent, mode_dump_processed_data, use_raw_env;
 	std::vector < std::string > incl_sample_ids, gconf;
 
@@ -121,7 +121,8 @@ public:
 		mode_RHE_fast = false;
 		mode_RHEreg_NM = false;
 		mode_RHEreg_LM = false;
-		levenburgMarquardt_max_iter = 100;
+		levenburgMarquardt_max_iter = 200;
+		n_LM_starts = 10;
 		nelderMead_max_iter = 100;
 		RHE_multicomponent = false;
 		select_rsid = false;

@@ -61,6 +61,7 @@ char* argv_rhe_nm[] = { (char*) "LEMMA",
 char* argv_rhe_lm[] = { (char*) "LEMMA",
 						(char*) "--RHEreg-LM",
 						(char*) "--LM-max-iter", (char*) "5",
+						(char*) "--LM-random-starts", (char*) "1",
 						(char*) "--maf", (char*) "0.01",
 						(char*) "--random_seed", (char*) "1",
 						(char*) "--n_jacknife", (char*) "1",
@@ -73,6 +74,7 @@ char* argv_rhe_lm[] = { (char*) "LEMMA",
 char* argv_rhe_lm2[] = { (char*) "LEMMA",
 						(char*) "--RHEreg-LM",
 						(char*) "--LM-max-iter", (char*) "5",
+						(char*) "--LM-random-starts", (char*) "1",
 						(char*) "--maf", (char*) "0.01",
 						(char*) "--random_seed", (char*) "1",
 						(char*) "--n_jacknife", (char*) "1",
@@ -122,39 +124,30 @@ TEST_CASE("RHE-LevenburgMarquardt") {
 			CHECK(LM.theta(2) == Approx(0.0072421961));
 			CHECK(LM.u == Approx(305.8836944502));
 
-			auto I = Eigen::MatrixXd::Identity(LM.JtJ.rows(), LM.JtJ.cols());
-			Eigen::MatrixXd A = LM.JtJ + LM.u * I;
-			Eigen::JacobiSVD<Eigen::MatrixXd> svd(A);
-			double cond = svd.singularValues()(0)
-						  / svd.singularValues()(svd.singularValues().size()-1);
-			CHECK(cond == Approx(10.9753723566));
+			CHECK(LM.JtJ(0,0) == Approx(3058.8369445019));
+			CHECK(LM.JtJ(0,1) == Approx(7.1707442261));
+			CHECK(LM.JtJ(1,1) == Approx(0.9475845954));
+			CHECK(LM.JtJ(1,2) == Approx(0.0530732073));
+			CHECK(LM.JtJ(6,6) == Approx(996.0307218357));
+			CHECK(LM.JtJ(5,6) == Approx(8.7081577861));
 
 			LM.iterLM();
 			CHECK(LM.count == 1);
-			CHECK(LM.delta(0) == Approx(0.1119979952));
-			CHECK(LM.delta(1) == Approx(0.0123046495));
-			CHECK(LM.delta(2) == Approx(0.0016997138));
-			CHECK(LM.delta(3) == Approx(0.0098594516));
-			CHECK(LM.delta(4) == Approx(0.0077037012));
-			CHECK(LM.rho == Approx(0.1741373777));
-			CHECK(LM.u == Approx(390.5576713745));
+			CHECK(LM.delta(0) == Approx(0.0005510248));
+			CHECK(LM.delta(1) == Approx(0.0069916094));
+			CHECK(LM.rho == Approx(179.2808200079));
+			CHECK(LM.u == Approx(101.9612314834));
 			CHECK(LM.v == Approx(2.0));
 		}
 
-		// CHECK(pve.nls_env_weights(0) == Approx(0.2420927487));
-		// CHECK(pve.nls_env_weights(1) == Approx(-0.0455278895));
-		// CHECK(pve.nls_env_weights(2) == Approx(0.0630682751));
-		// CHECK(pve.nls_env_weights(3) == Approx(0.1215544902));
+		CHECK(pve.nls_env_weights(0) == Approx(0.9043327453));
+		CHECK(pve.nls_env_weights(1) == Approx(-0.168489224));
+		CHECK(pve.nls_env_weights(2) == Approx(0.132827769));
+		CHECK(pve.nls_env_weights(3) == Approx(0.3664790639));
 
-		CHECK(pve.nls_env_weights(0) == Approx(0.8559937408));
-		CHECK(pve.nls_env_weights(1) == Approx(-0.1609779253));
-		CHECK(pve.nls_env_weights(2) == Approx(0.22299738));
-		CHECK(pve.nls_env_weights(3) == Approx(0.429793471));
-
-		CHECK(pve.sigmas(0) == Approx(0.4060720538));
-		// CHECK(pve.sigmas(1) == Approx(0.80262135));
-		CHECK(pve.sigmas(1) == Approx(0.0641997139));
-		CHECK(pve.sigmas(2) == Approx(0.3217218348));
+		CHECK(pve.sigmas(0) == Approx(0.4055622097));
+		CHECK(pve.sigmas(1) == Approx(0.0641332563));
+		CHECK(pve.sigmas(2) == Approx(0.3216200555));
 	}
 }
 

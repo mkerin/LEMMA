@@ -15,6 +15,7 @@
 #include <random>
 #include <cmath>
 #include <functional>
+#include <limits>
 
 void RHEreg::run() {
 	// Add intercept to covariates
@@ -451,19 +452,50 @@ void RHEreg::solve_RHE(std::vector<RHEreg_Component>& components) {
 Eigen::VectorXd RHEreg::run_RHE_levenburgMarquardt() {
 	std::cout << std::endl << "Optimising env-weights with Levenburg-Marquardt" << std::endl;
 
-	LevenbergMarquardt LM(p, components, Y, E, C, CtC_inv, ytEXXtEys, env_names);
-	LM.setupLM();
-	Eigen::VectorXd params = LM.runLM();
-	Eigen::VectorXd env_weights = params.segment(1, n_env);
+	Eigen::VectorXd env_weights;
+	double best_rss = std::numeric_limits<double>::max();
+	std::mt19937 generator{p.random_seed};
+	std::normal_distribution<scalarData> noise_normal(0.0, 1.0 / n_env / n_env);
+	for (long ii = 0; ii < p.n_LM_starts; ii++){
+		std::cout << "Computing LM " << ii << " of " << p.n_LM_starts << std::endl;
+		Eigen::VectorXd tmp_env_weights;
+		double tmp_rss;
+		LevenbergMarquardt LM(p, components, Y, E, C, CtC_inv, ytEXXtEys, env_names);
+		if(ii == 0) {
+			Eigen::VectorXd params = LM.runLM();
+			tmp_env_weights = params.segment(1, n_env);
+			tmp_rss = LM.getete();
+		} else {
+			Eigen::VectorXd env_noise(n_env);
+			for (long ll = 0; ll < n_env; ll++) {
+				env_noise(ll) = noise_normal(generator);
+			}
+
+			Eigen::VectorXd params = LM.runLM(env_noise);
+			tmp_env_weights = params.segment(1, n_env);
+			tmp_rss = LM.getete();
+		}
+
+		if(tmp_rss < best_rss){
+			std::cout << "Updating best LM; SumOfSquares = " << tmp_rss;
+			std::cout << " after " << LM.count << " iterations" << std::endl;
+			best_rss = tmp_rss;
+			env_weights = tmp_env_weights;
+			LM.push_interim_updates();
+		}
+	}
 
 	// Rescale env weights
 	Eigen::ArrayXd eta = E * env_weights;
-	double sd = std::sqrt((eta - eta.mean()).square().sum() / (eta.rows() - 1.0));
+	double mean, sd;
+	mean = mpiUtils::mpiReduce_inplace(eta.sum()) / Nglobal;
+	sd = mpiUtils::mpiReduce_inplace((eta - mean).square().sum());
+	sd /= (Nglobal - 1.0);
+	sd = std::sqrt(sd);
 	env_weights /= sd;
 	if(p.mode_debug) {
-		Eigen::ArrayXd eta = E * env_weights;
-		std::cout << "Eta-mean = " << eta.mean() << std::endl;
-		std::cout << "Eta-SD = " << std::sqrt((eta - eta.mean()).square().sum() / (eta.rows() - 1.0)) << std::endl;
+		std::cout << "Eta-mean = " << mean << std::endl;
+		std::cout << "Eta-SD = " << sd << std::endl;
 	}
 
 	// Dump env weights to file

@@ -173,6 +173,7 @@ void parse_arguments(parameters &p, int argc, char **argv) {
 	    ("RHEreg-LM", "", cxxopts::value<bool>(p.mode_RHEreg_LM))
 	    ("NM-max-iter", "", cxxopts::value<long>(p.nelderMead_max_iter))
 	    ("LM-max-iter", "", cxxopts::value<long>(p.levenburgMarquardt_max_iter))
+	    ("LM-random-starts", "", cxxopts::value<long>(p.n_LM_starts))
 	;
 
 	options.add_options("Filtering")
