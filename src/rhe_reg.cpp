@@ -456,7 +456,7 @@ Eigen::VectorXd RHEreg::run_RHE_levenburgMarquardt() {
 	double best_rss = std::numeric_limits<double>::max();
 	std::mt19937 generator{p.random_seed};
 	std::normal_distribution<scalarData> noise_normal(0.0, 1.0 / n_env / n_env);
-	for (long ii = 0; ii < p.n_LM_starts; ii++){
+	for (long ii = 0; ii < p.n_LM_starts; ii++) {
 		std::cout << "Computing LM " << ii << " of " << p.n_LM_starts << std::endl;
 		Eigen::VectorXd tmp_env_weights;
 		double tmp_rss;
@@ -476,7 +476,7 @@ Eigen::VectorXd RHEreg::run_RHE_levenburgMarquardt() {
 			tmp_rss = LM.getete();
 		}
 
-		if(tmp_rss < best_rss){
+		if(tmp_rss < best_rss) {
 			std::cout << "Updating best LM; SumOfSquares = " << tmp_rss;
 			std::cout << " after " << LM.count << " iterations" << std::endl;
 			best_rss = tmp_rss;
@@ -504,6 +504,14 @@ Eigen::VectorXd RHEreg::run_RHE_levenburgMarquardt() {
 	std::cout << "Writing env weights to " << filename << std::endl;
 	std::vector<std::string> header = {"env", "mu"};
 	EigenUtils::write_matrix(outf, env_weights, header, env_names);
+
+	if(p.xtra_verbose) {
+		if (n_env > 0) {
+			std::string path = fileUtils::filepath_format(p.out_file, "", "_LM_converged_eta");
+			std::cout << "Writing eta to file: " << path << std::endl;
+			fileUtils::dump_predicted_vec_to_file(eta, path, "eta", sample_location);
+		}
+	}
 
 	// Use weights to collapse GxE component and continue with rest of algorithm
 	std::vector<RHEreg_Component> my_components;
