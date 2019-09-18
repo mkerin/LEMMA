@@ -99,6 +99,8 @@ public:
 
 	void run();
 
+	void standardise_non_genetic_data();
+
 	void initialise_components();
 
 	void compute_RHE_trace_operators();

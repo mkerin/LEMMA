@@ -18,22 +18,7 @@
 #include <limits>
 
 void RHEreg::run() {
-	// Add intercept to covariates
-	Eigen::MatrixXd ones = Eigen::MatrixXd::Constant(n_samples, 1, 1.0);
-	if(n_covar > 0) {
-		Eigen::MatrixXd C1(n_samples, n_covar + 1);
-		C1 << C, ones;
-		C = C1;
-	} else {
-		C = ones;
-	}
-	n_covar = C.cols();
-
-	// Center and scale eta
-	if(n_env > 0 && !p.use_raw_env) {
-		EigenUtils::center_matrix(E);
-		EigenUtils::scale_matrix_and_remove_constant_cols(E, n_env, env_names);
-	}
+	standardise_non_genetic_data();
 
 	// Parse RHE groups files once to get total number of groups
 	if(p.RHE_multicomponent) {
@@ -70,6 +55,25 @@ void RHEreg::run() {
 	std::cout << h2 << std::endl;
 }
 
+void RHEreg::standardise_non_genetic_data(){
+	// Add intercept to covariates
+	Eigen::MatrixXd ones = Eigen::MatrixXd::Constant(n_samples, 1, 1.0);
+	if(n_covar > 0) {
+		Eigen::MatrixXd C1(n_samples, n_covar + 1);
+		C1 << C, ones;
+		C = C1;
+	} else {
+		C = ones;
+	}
+	n_covar = C.cols();
+
+	// Center and scale eta
+	if(n_env > 0 && !p.use_raw_env) {
+		EigenUtils::center_matrix(E);
+		EigenUtils::scale_matrix_and_remove_constant_cols(E, n_env, env_names);
+	}
+}
+
 void RHEreg::initialise_components() {
 
 	zz.resize(n_samples, n_draws);
@@ -89,6 +93,7 @@ void RHEreg::initialise_components() {
 	std::cout << " - N-draws = " << p.n_pve_samples << std::endl;
 	std::cout << " - N-samples = " << (long) Nglobal << std::endl;
 	std::cout << " - N-covars = " << n_covar << std::endl;
+	std::cout << " - N-env = " << n_env << std::endl;
 	if(p.RHE_multicomponent) {
 		std::cout << " - N-annotations = " << all_SNPGROUPS.size() << std::endl;
 	}
@@ -147,7 +152,11 @@ void RHEreg::initialise_components() {
 			}
 		} else {
 			RHEreg_Component comp(p, Y, zz, C, CtC_inv, p.n_jacknife);
-			comp.label = "GxE(" + std::to_string(ee) + ")";
+			if(n_env == 1){
+				comp.label = "GxE";
+			} else {
+				comp.label = "GxE_" + env_names[ee];
+			}
 			comp.effect_type = "GxE";
 			comp.env_var_index = ee;
 			comp.set_env_var(E.col(ee));
@@ -520,6 +529,10 @@ Eigen::VectorXd RHEreg::run_RHE_levenburgMarquardt() {
 	// Solve system to estimate sigmas
 	solve_RHE(my_components);
 
+	// WARNING: overwriting original components
+	// Not possible to use mutliple methods in same run with this
+	components = my_components;
+
 	return env_weights;
 }
 
@@ -745,12 +758,14 @@ void RHEreg::to_file(const std::string &file) {
 		for (int cc = 0; cc < n_components; cc++) {
 			if(components[cc].effect_type == "G") {
 				h2_G_tot += h2[cc];
-				h2_G_sd += h2_se_jack[cc];
+				h2_G_sd += h2_se_jack[cc] * h2_se_jack[cc];
 			} else if (components[cc].effect_type == "GxE") {
 				h2_GxE_tot += h2[cc];
-				h2_GxE_sd += h2_se_jack[cc];
+				h2_GxE_sd += h2_se_jack[cc] * h2_se_jack[cc];
 			}
 		}
+		h2_GxE_sd = std::sqrt(h2_GxE_sd);
+		h2_G_sd = std::sqrt(h2_G_sd);
 
 		outf << "G_tot NA " << h2_G_tot << " " << h2_G_sd << " NA" << std::endl;
 		if(n_env > 0) {
