@@ -51,7 +51,6 @@ public:
 	Eigen::VectorXd theta, delta;
 	Eigen::MatrixXd historic_env_weights;
 
-
 	LevenbergMarquardt(parameters params,
 	                   std::vector<RHEreg_Component>& my_components,
 	                   const Eigen::VectorXd& myY,
@@ -66,7 +65,7 @@ public:
 		assert(!p.RHE_multicomponent);
 
 		// Hardcoded parameters
-		tau = 10e-2;
+		tau = 10e-3;
 		e1 = 10e-15;
 		e2 = 10e-15;
 		e3 = 10e-15;
@@ -74,7 +73,6 @@ public:
 
 		// WARNING: Have hardcoded assumptions about the order of parameters
 		n_components = my_components.size();
-//		n_params = my_components.size() - 1;
 		n_params = my_components.size();
 		n_env = E.cols();
 		n_samples = E.rows();
@@ -95,16 +93,6 @@ public:
 				assert(components[ii].effect_type == "noise");
 			}
 		}
-
-//		auto filename_env = fileUtils::fstream_init(outf_env, p.out_file, ".lemma_files/", "_lm_env_iter");
-//		outf_env << "count ";
-//		for (long ll = 0; ll < n_env; ll++) {
-//			outf_env << env_names[ll];
-//			if (ll < n_env - 1) {
-//				outf_env << " ";
-//			}
-//		}
-//		outf_env << std::endl;
 	}
 
 	~LevenbergMarquardt(){
@@ -123,9 +111,6 @@ public:
 		while(count < p.levenburgMarquardt_max_iter && !stop) {
 			stop = iterLM();
 		}
-//		std::cout << "LM terminated after " << count;
-//		std::cout << " iterations, best SumOfSquares = " << ete;
-//		std::cout << std::endl << std::endl;
 
 		if (std::isnan(u) || std::isinf(u)) {
 			throw std::domain_error("LevenbergMarquardt: µ is NAN or INF.");
@@ -188,7 +173,7 @@ public:
 
 		delta = (JtJ + u*I).colPivHouseholderQr().solve(Jte);
 
-		if (delta.norm() <= e2*theta.norm()) {
+		if (delta.norm() <= e2*(theta.norm() + e2)) {
 			std::cout << "LM terminated as L2(delta) < " << e2*theta.norm() << std::endl;
 			stop = true;
 		} else {
@@ -233,8 +218,8 @@ public:
 				u *= v;
 				v *= damping;
 			}
-			if(p.mode_debug) std::cout << "LM: rho = " << rho << "; damping = " << u << ", denom = " << denom << std::endl;
 		}
+		if(p.mode_debug) std::cout << "LM: rho = " << rho << "; damping = " << u << std::endl;
 		return stop;
 	}
 
@@ -264,7 +249,7 @@ public:
 		}
 		outf_env << std::endl;
 
-		for (long ii = 0; ii < count; ii++){
+		for (long ii = 0; ii < count; ii++) {
 			outf_env << ii << " ";
 			for (long ll = 0; ll < n_env; ll++) {
 				outf_env << historic_env_weights(ii, ll);

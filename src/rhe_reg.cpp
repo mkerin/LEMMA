@@ -37,7 +37,12 @@ void RHEreg::run() {
 
 	// Compute variance components
 	initialise_components();
+	auto start = std::chrono::system_clock::now();
 	compute_RHE_trace_operators();
+	auto end = std::chrono::system_clock::now();
+	elapsed_streamBgen = end - start;
+
+	start = std::chrono::system_clock::now();
 	if(p.mode_RHEreg_NM) {
 		nls_env_weights = run_RHE_nelderMead();
 	} else if(p.mode_RHEreg_LM) {
@@ -49,8 +54,14 @@ void RHEreg::run() {
 		std::cout << "Main effects model (gaussian prior)" << std::endl;
 		solve_RHE(components);
 	}
+	end = std::chrono::system_clock::now();
+	elapsed_solveRHE = end - start;
 
+	start = std::chrono::system_clock::now();
 	process_jacknife_samples();
+	end = std::chrono::system_clock::now();
+	elapsed_solveJacknife = end - start;
+
 	std::cout << "PVE estimates" << std::endl;
 	std::cout << h2 << std::endl;
 }

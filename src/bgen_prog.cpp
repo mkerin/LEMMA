@@ -194,15 +194,39 @@ int main( int argc, char** argv ) {
 					RHEreg pve(data, Y, C, data.vp_init.eta);
 					pve.run();
 					pve.to_file(p.out_file);
+
+					// Write time log to file
+					boost_io::filtering_ostream outf_time;
+					std::string ofile_map = fileUtils::fstream_init(outf_time, p.out_file, "", "_time_elapsed");
+					outf_time << "function time" << std::endl;
+					outf_time << "streamBgen " << pve.elapsed_streamBgen.count() << std::endl;
+					outf_time << "solveRHE " << pve.elapsed_solveRHE.count() << std::endl;
+					outf_time << "solveJacknife " << pve.elapsed_solveJacknife.count() << std::endl;
 				} else {
 					RHEreg pve(data, Y, C, data.E);
 					pve.run();
 					pve.to_file(p.out_file);
+
+					// Write time log to file
+					boost_io::filtering_ostream outf_time;
+					std::string ofile_map = fileUtils::fstream_init(outf_time, p.out_file, "", "_time_elapsed");
+					outf_time << "function time" << std::endl;
+					outf_time << "streamBgen " << pve.elapsed_streamBgen.count() << std::endl;
+					outf_time << "solveRHE " << pve.elapsed_solveRHE.count() << std::endl;
+					outf_time << "solveJacknife " << pve.elapsed_solveJacknife.count() << std::endl;
 				}
 			} else {
 				RHEreg pve(data, Y, C);
 				pve.run();
 				pve.to_file(p.out_file);
+
+				// Write time log to file
+				boost_io::filtering_ostream outf_time;
+				std::string ofile_map = fileUtils::fstream_init(outf_time, p.out_file, "", "_time_elapsed");
+				outf_time << "function time" << std::endl;
+				outf_time << "streamBgen " << pve.elapsed_streamBgen.count() << std::endl;
+				outf_time << "solveRHE " << pve.elapsed_solveRHE.count() << std::endl;
+				outf_time << "solveJacknife " << pve.elapsed_solveJacknife.count() << std::endl;
 			}
 		}
 	}

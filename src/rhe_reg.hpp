@@ -38,6 +38,8 @@ public:
 
 	std::map<long, int> sample_location;
 
+	std::chrono::duration<double> elapsed_streamBgen, elapsed_solveRHE, elapsed_solveJacknife;
+
 	// RHEreg-NLS
 	Eigen::VectorXd nls_env_weights;
 	std::vector<Eigen::MatrixXd> ytEXXtEys;
