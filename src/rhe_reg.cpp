@@ -163,7 +163,7 @@ void RHEreg::initialise_components() {
 			}
 		} else {
 			RHEreg_Component comp(p, Y, zz, C, CtC_inv, p.n_jacknife);
-			if(n_env == 1){
+			if(n_env == 1) {
 				comp.label = "GxE";
 			} else {
 				comp.label = "GxE_" + env_names[ee];
@@ -475,7 +475,7 @@ Eigen::VectorXd RHEreg::run_RHE_levenburgMarquardt() {
 	Eigen::VectorXd env_weights;
 	double best_rss = std::numeric_limits<double>::max();
 	std::mt19937 generator{p.random_seed};
-	std::normal_distribution<scalarData> noise_normal(0.0, 1.0 / n_env / n_env);
+	std::normal_distribution<scalarData> noise_normal(0.0, 2.0 / n_env / n_env);
 	for (long ii = 0; ii < p.n_LM_starts; ii++) {
 		std::cout << "Computing LM " << ii << " of " << p.n_LM_starts << std::endl;
 		Eigen::VectorXd tmp_env_weights;
