@@ -39,6 +39,7 @@ public:
 	std::map<long, int> sample_location;
 
 	std::chrono::duration<double> elapsed_streamBgen, elapsed_solveRHE, elapsed_solveJacknife;
+	double elapsed_LM, elapsed_LM_copyData;
 
 	// RHEreg-NLS
 	Eigen::VectorXd nls_env_weights;
@@ -80,6 +81,9 @@ public:
 
 		MPI_Comm_rank(MPI_COMM_WORLD, &world_rank);
 		MPI_Comm_size(MPI_COMM_WORLD, &world_size);
+
+		elapsed_LM = 0;
+		elapsed_LM_copyData = 0;
 	}
 
 	RHEreg(Data& dat,
@@ -97,6 +101,9 @@ public:
 
 		MPI_Comm_rank(MPI_COMM_WORLD, &world_rank);
 		MPI_Comm_size(MPI_COMM_WORLD, &world_size);
+
+		elapsed_LM = 0;
+		elapsed_LM_copyData = 0;
 	}
 
 	void run();

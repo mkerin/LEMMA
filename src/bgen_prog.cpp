@@ -202,6 +202,8 @@ int main( int argc, char** argv ) {
 					outf_time << "streamBgen " << pve.elapsed_streamBgen.count() << std::endl;
 					outf_time << "solveRHE " << pve.elapsed_solveRHE.count() << std::endl;
 					outf_time << "solveJacknife " << pve.elapsed_solveJacknife.count() << std::endl;
+					outf_time << "LevMar " << pve.elapsed_LM << std::endl;
+					outf_time << "LevMar_copyData " << pve.elapsed_LM_copyData << std::endl;
 				} else {
 					RHEreg pve(data, Y, C, data.E);
 					pve.run();
@@ -214,6 +216,8 @@ int main( int argc, char** argv ) {
 					outf_time << "streamBgen " << pve.elapsed_streamBgen.count() << std::endl;
 					outf_time << "solveRHE " << pve.elapsed_solveRHE.count() << std::endl;
 					outf_time << "solveJacknife " << pve.elapsed_solveJacknife.count() << std::endl;
+					outf_time << "LevMar " << pve.elapsed_LM << std::endl;
+					outf_time << "LevMar_copyData " << pve.elapsed_LM_copyData << std::endl;
 				}
 			} else {
 				RHEreg pve(data, Y, C);
@@ -227,6 +231,8 @@ int main( int argc, char** argv ) {
 				outf_time << "streamBgen " << pve.elapsed_streamBgen.count() << std::endl;
 				outf_time << "solveRHE " << pve.elapsed_solveRHE.count() << std::endl;
 				outf_time << "solveJacknife " << pve.elapsed_solveJacknife.count() << std::endl;
+				outf_time << "LevMar " << pve.elapsed_LM << std::endl;
+				outf_time << "LevMar_copyData " << pve.elapsed_LM_copyData << std::endl;
 			}
 		}
 	}

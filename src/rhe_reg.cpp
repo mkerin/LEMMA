@@ -481,6 +481,8 @@ Eigen::VectorXd RHEreg::run_RHE_levenburgMarquardt() {
 		Eigen::VectorXd tmp_env_weights;
 		double tmp_rss;
 		LevenbergMarquardt LM(p, components, Y, E, C, CtC_inv, ytEXXtEys, env_names);
+
+		auto start = std::chrono::system_clock::now();
 		if(ii == 0) {
 			Eigen::VectorXd params = LM.runLM();
 			tmp_env_weights = params.segment(1, n_env);
@@ -495,6 +497,10 @@ Eigen::VectorXd RHEreg::run_RHE_levenburgMarquardt() {
 			tmp_env_weights = params.segment(1, n_env);
 			tmp_rss = LM.getete();
 		}
+		auto end = std::chrono::system_clock::now();
+		auto diff = end - start;
+		elapsed_LM += diff.count();
+		elapsed_LM_copyData += LM.elapsed_copyData;
 
 		if(tmp_rss < best_rss) {
 			std::cout << "Updating best LM; SumOfSquares = " << tmp_rss;

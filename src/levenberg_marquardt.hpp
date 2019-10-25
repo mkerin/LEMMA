@@ -38,11 +38,10 @@ public:
 	boost_io::filtering_ostream outf_env;
 
 	long n_components, n_params, n_samples, n_env, n_draws;
-	double tau;
-	double e1;
-	double e2;
-	double e3;
-	double damping;
+	double tau, e1, e2, e3, damping;
+
+	// Time code
+	double elapsed_copyData;
 
 	// Used in LM updates
 	double u, v, ete, rho;
@@ -70,6 +69,9 @@ public:
 		e2 = 10e-15;
 		e3 = 10e-15;
 		damping = 2.0;
+
+		// Time code
+		elapsed_copyData = 0;
 
 		// WARNING: Have hardcoded assumptions about the order of parameters
 		n_components = my_components.size();
@@ -227,15 +229,6 @@ public:
 		Eigen::VectorXd env_weights = params.segment(1, n_env);
 
 		historic_env_weights.row(iter) = env_weights;
-
-//		outf_env << iter << " ";
-//		for (long ll = 0; ll < n_env; ll++) {
-//			outf_env << env_weights[ll];
-//			if (ll < n_env - 1) {
-//				outf_env << " ";
-//			}
-//		}
-//		outf_env << std::endl;
 	}
 
 	void push_interim_updates(){
@@ -270,6 +263,8 @@ public:
 		RHEreg_Component combined_comp(p, Y, C, CtC_inv, placeholder);
 		get_GxE_collapsed_component(components, combined_comp, E, env_weights, ytEXXtEys);
 
+		auto start = std::chrono::system_clock::now();
+
 		// Components with gxe term collapsed for getting sum of squared errors
 		gxe_collapsed_components.clear();
 		gxe_collapsed_components.reserve(3);
@@ -296,6 +291,10 @@ public:
 				gradient_components.push_back(components[ii]);
 			}
 		}
+
+		auto end = std::chrono::system_clock::now();
+		auto diff = end - start;
+		elapsed_copyData += diff.count();
 	}
 
 	Eigen::MatrixXd getJtJ() const {
