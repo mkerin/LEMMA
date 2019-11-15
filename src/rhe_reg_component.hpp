@@ -77,6 +77,11 @@ public:
 		is_gxe = false;
 		is_finalised = false;
 		rm_jacknife_block = -1;
+
+		if(params.mode_debug) {
+			std::string ram = mpiUtils::currentUsageRAM();
+			std::cout << "(" << ram << ")" << std::endl;
+		}
 	}
 
 	void set_env_var(const Eigen::Ref<const Eigen::VectorXd>& my_env_var);
@@ -102,18 +107,18 @@ public:
 };
 
 void get_GxE_collapsed_component(const std::vector<RHEreg_Component> &vec_of_components,
-								 RHEreg_Component &new_comp,
-								 const Eigen::Ref<const Eigen::MatrixXd> &E,
-								 const Eigen::Ref<const Eigen::VectorXd> &env_weights,
-								 const std::vector<Eigen::MatrixXd> &ytEXXtEy,
-								 const bool& copy_jacknife_partitions = false);
+                                 RHEreg_Component &new_comp,
+                                 const Eigen::Ref<const Eigen::MatrixXd> &E,
+                                 const Eigen::Ref<const Eigen::VectorXd> &env_weights,
+                                 const std::vector<Eigen::MatrixXd> &ytEXXtEy,
+                                 const bool& copy_jacknife_partitions = false);
 
 void get_GxE_collapsed_system(const std::vector<RHEreg_Component> &vec_of_components,
-							  std::vector<RHEreg_Component> &new_components,
-								 const Eigen::Ref<const Eigen::MatrixXd> &E,
-								 const Eigen::Ref<const Eigen::VectorXd> &env_weights,
-								 const std::vector<Eigen::MatrixXd> &ytEXXtEy,
-								 const bool& copy_jacknife_partitions = false);
+                              std::vector<RHEreg_Component> &new_components,
+                              const Eigen::Ref<const Eigen::MatrixXd> &E,
+                              const Eigen::Ref<const Eigen::VectorXd> &env_weights,
+                              const std::vector<Eigen::MatrixXd> &ytEXXtEy,
+                              const bool& copy_jacknife_partitions = false);
 
 
 #endif

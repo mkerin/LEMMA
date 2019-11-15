@@ -39,6 +39,11 @@ RHEreg_Component::RHEreg_Component(const parameters &myparams,
 	for(long ii = 0; ii < n_jacknife_local; ii++) {
 		_XXtzs[ii] = Eigen::MatrixXd::Zero(n_samples, n_draws);
 	}
+
+	if(params.mode_debug) {
+		std::string ram = mpiUtils::currentUsageRAM();
+		std::cout << "(" << ram << ")" << std::endl;
+	}
 }
 
 void RHEreg_Component::set_env_var(const Eigen::Ref<const Eigen::VectorXd>& my_env_var) {

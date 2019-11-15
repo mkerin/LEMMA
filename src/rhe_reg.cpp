@@ -155,11 +155,6 @@ void RHEreg::initialise_components() {
 				comp.env_var_index = ee;
 				comp.set_env_var(E.col(ee));
 				components.push_back(std::move(comp));
-
-				if(p.mode_debug) {
-					std::string ram = mpiUtils::currentUsageRAM();
-					std::cout << "(" << ram << ")" << std::endl;
-				}
 			}
 		} else {
 			RHEreg_Component comp(p, Y, zz, C, CtC_inv, p.n_jacknife);
