@@ -420,7 +420,7 @@ TEST_CASE("Resume from multi-env + mog + emp_bayes + incl_covars"){
 			CHECK(neglogp_gam(0) == Approx(1.6241936617));
 			CHECK(neglogp_rgam(0) == Approx(2.9866331893));
 		}
-		VB.write_map_stats_to_file("");
+		VB.output_results("");
 	}
 
 

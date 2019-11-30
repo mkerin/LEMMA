@@ -3,7 +3,6 @@
 #define DATA_H
 
 #include "genotype_matrix.hpp"
-#include "my_timer.hpp"
 #include "parameters.hpp"
 #include "typedefs.hpp"
 #include "stats_tests.hpp"
@@ -19,6 +18,7 @@
 
 #include <iostream>
 #include <algorithm>
+#include <cassert>
 #include <cmath>
 #include <cstddef>
 #include <chrono>
@@ -92,7 +92,6 @@ public:
 	std::vector<Hyps> hyps_inits;
 
 // For gxe genome-wide scan
-// cols neglogp-main, neglogp-gxe, coeff-gxe-main, coeff-gxe-env..
 	Eigen::ArrayXXd snpstats;
 	Eigen::ArrayXXd external_snpstats;
 	std::vector< std::string > external_snpstats_SNPID;
@@ -105,15 +104,13 @@ public:
 	bool filters_applied;
 	std::unordered_map<long, bool> sample_is_invalid;
 
-// grid things for vbayes
+// grids for vbayes
 	std::vector< std::string > hyps_names;
 	Eigen::MatrixXd hyps_grid;
 	Eigen::ArrayXXd alpha_init, mu_init;
 
-	explicit Data( parameters& p ) : p(p), G(p), vp_init(p) {
+	explicit Data(parameters& p) : p(p), G(p), vp_init(p) {
 		Eigen::setNbThreads(p.n_thread);
-		int n = Eigen::nbThreads( );
-		std::cout << "Threads used by eigen: " << n << std::endl;
 
 		// Create vector of bgen views for mutlithreading
 		n_var = 0;
@@ -148,10 +145,6 @@ public:
 		W_reduced = false;
 	}
 
-	~Data() {
-		// system time at end
-	}
-
 	void apply_filters(){
 		// filter - incl sample ids
 		if(p.incl_sids_file != "NULL") {
@@ -160,7 +153,7 @@ public:
 
 		// filter - range
 		if (p.range) {
-			std::cout << "Selecting snps in range " << p.chr << ": " << p.range_start << " - " << p.range_end << std::endl;
+			std::cout << "Selecting snps in range " << p.range_chr << ": " << p.range_start << " - " << p.range_end << std::endl;
 		}
 
 		// filter - incl rsids
@@ -182,7 +175,7 @@ public:
 		if(p.bgen_file != "NULL") {
 			genfile::bgen::IndexQuery::UniquePtr query = genfile::bgen::IndexQuery::create(p.bgi_file);
 			if (p.range) {
-				genfile::bgen::IndexQuery::GenomicRange rr1(p.chr, p.range_start, p.range_end);
+				genfile::bgen::IndexQuery::GenomicRange rr1(p.range_chr, p.range_start, p.range_end);
 				query->include_range( rr1 );
 			}
 			if(p.incl_rsids_file != "NULL") {
@@ -201,7 +194,7 @@ public:
 		for (int ii = 0; ii < p.streamBgenFiles.size(); ii++) {
 			genfile::bgen::IndexQuery::UniquePtr query = genfile::bgen::IndexQuery::create(p.streamBgiFiles[ii]);
 			if (p.range) {
-				genfile::bgen::IndexQuery::GenomicRange rr1(p.chr, p.range_start, p.range_end);
+				genfile::bgen::IndexQuery::GenomicRange rr1(p.range_chr, p.range_start, p.range_end);
 				query->include_range( rr1 );
 			}
 			if(p.incl_rsids_file != "NULL") {
@@ -263,17 +256,14 @@ public:
 	void standardise_non_genetic_data(){
 		// Step 3; Center phenos, normalise covars
 		EigenUtils::center_matrix(Y);
-		if(p.scale_pheno) {
-			std::cout << "Scaling phenotype" << std::endl;
-			EigenUtils::scale_matrix_and_remove_constant_cols( Y, n_pheno, pheno_names );
-		}
+		EigenUtils::scale_matrix_and_remove_constant_cols(Y, n_pheno, pheno_names);
 		if(n_covar > 0) {
 			EigenUtils::center_matrix(C);
-			EigenUtils::scale_matrix_and_remove_constant_cols( C, n_covar, covar_names );
+			EigenUtils::scale_matrix_and_remove_constant_cols(C, n_covar, covar_names);
 		}
 		if(n_env > 0) {
 			EigenUtils::center_matrix(E);
-			EigenUtils::scale_matrix_and_remove_constant_cols( E, n_env, env_names );
+			EigenUtils::scale_matrix_and_remove_constant_cols(E, n_env, env_names);
 		}
 
 		/* Regression rules
@@ -319,8 +309,8 @@ public:
 				H << tmp, ones, C;
 			}
 
-			std::cout << "Checking for squared dependance: " << std::endl;
-			std::cout << "Name\t-log10(p-val)" << std::endl;
+			if (p.verbose) std::cout << "Checking for squared dependance: " << std::endl;
+			if (p.verbose) std::cout << "Name\t-log10(p-val)" << std::endl;
 			long n_signif_envs_sq = 0;
 			for (int ee = 0; ee < n_env; ee++) {
 				// H.col(0) = E.col(ee);
@@ -331,8 +321,8 @@ public:
 					prep_lm(H, Y, HtH, HtH_inv, Hty, rss_alt);
 					student_t_test(n_samples, HtH_inv, Hty, rss_alt, 0, tstat, pval);
 
-					std::cout << env_names[ee] << "\t";
-					std::cout << -1 * std::log10(pval) << std::endl;
+					if (p.verbose) std::cout << env_names[ee] << "\t";
+					if (p.verbose) std::cout << -1 * std::log10(pval) << std::endl;
 
 					if (pval < 0.01 / (double) n_env) {
 						cols_to_remove.push_back(ee);
@@ -346,7 +336,6 @@ public:
 						std::cout << e.what() << std::endl;
 					}
 				}
-
 			}
 			if (n_signif_envs_sq > 0) {
 				Eigen::MatrixXd E_sq(n_samples, n_signif_envs_sq);
@@ -357,7 +346,8 @@ public:
 				}
 
 				if (p.mode_incl_squared_envs) {
-					std::cout << "Including squared env effects from: " << std::endl;
+					std::cout << "Including the squared effects from " << cols_to_remove.size();
+					std::cout << " environmental variables:" << std::endl;
 					for (int ee : cols_to_remove) {
 						std::cout << env_names[ee] << std::endl;
 					}
@@ -391,11 +381,11 @@ public:
 
 					Y -= E_sq * beta.block(0, 0, n_signif_envs_sq, 1);
 				} else {
-					std::cout << "Warning: Projection of significant square envs (";
+					std::cout << "Warning: Environments with significant squared effects detected (";
 					for (const auto& env_sq_name : env_sq_names) {
 						std::cout << env_sq_name << ", ";
 					}
-					std::cout << ") suppressed" << std::endl;
+					std::cout << ") but mitigation suppressed" << std::endl;
 				}
 			}
 
@@ -409,7 +399,7 @@ public:
 
 	void read_full_bgen(){
 		if(p.bgen_file != "NULL") {
-			std::cout << "Reading in BGEN" << std::endl;
+			std::cout << "Reading in BGEN data" << std::endl;
 			if (p.flip_high_maf_variants) {
 				std::cout << " - Flipping variants with MAF > 0.5" << std::endl;
 			}
@@ -421,8 +411,8 @@ public:
 			auto end = std::chrono::system_clock::now();
 			std::chrono::duration<double> elapsed = end - start;
 			n_var = G.cols();
-			std::cout << " - BGEN contained " << n_var << " variants." << std::endl;
-			std::cout << " - BGEN parsed in " << elapsed.count() << "s" << std::endl;
+			std::cout << " - BGEN file contained " << n_var << " valid variants." << std::endl;
+			std::cout << " - BGEN file parsed in " << elapsed.count() << "s" << std::endl;
 
 			G.calc_scaled_values();
 			G.compute_cumulative_pos();
@@ -498,8 +488,6 @@ public:
 			std::runtime_error("No valid bgen file found.");
 		}
 
-		// Want to read in a sid to be included, and skip along bgen_ids until
-		// we find it.
 		std::stringstream ss;
 		std::string line;
 		std::set<std::string> user_sample_ids;
@@ -613,10 +601,8 @@ public:
 		// Read phenotypes to Eigen matrix Y
 		EigenUtils::read_matrix(p.pheno_file, Y, pheno_names, missing_phenos);
 		assert(Y.rows() == n_samples);
+		assert(Y.cols() == 1);
 		n_pheno = Y.cols();
-		if(n_pheno != 1) {
-			std::cout << "ERROR: Only expecting one phenotype at a time." << std::endl;
-		}
 		Y_reduced = false;
 	}
 
@@ -801,7 +787,7 @@ public:
 
 	void calc_snpstats(){
 		std::cout << "Reordering/computing snpwise scan...";
-		MyTimer my_timer("snpwise scan constructed in %ts \n");
+		auto start = std::chrono::system_clock::now();
 		snpstats.resize(n_var, n_env + 3);
 		std::vector<std::string>::iterator it;
 		n_snpstats_computed = 0;
@@ -874,17 +860,18 @@ public:
 			}
 			boost_io::close(outf_scan);
 		}
+
+		auto end = std::chrono::system_clock::now();
+		std::chrono::duration<double> elapsed = end - start;
+		std::cout << "snpwise scan constructed in " << elapsed.count() << " seconds" << std::endl;
 	}
 
 	void calc_dxteex(){
 		int world_rank;
 		MPI_Comm_rank(MPI_COMM_WORLD, &world_rank);
-		std::cout << "Reordering/building dXtEEX array...";
-		MyTimer t_calcDXtEEX("dXtEEX array constructed in %ts \n");
-		t_calcDXtEEX.resume();
-		// if(world_rank == 0) {
+		std::cout << "Building dXtEEX array" << std::endl;
+		auto start = std::chrono::system_clock::now();
 		dXtEEX_lowertri.resize(n_var, n_env * (n_env + 1) / 2);
-		// }
 
 		// Unfilled snp indexes;
 		std::unordered_set<long> unfilled_indexes;
@@ -904,18 +891,16 @@ public:
 			int dxteex_check = 0, se_cnt = 0;
 			double mean_ae = 0, max_ae = 0;
 			long ii = 0;
+			std::cout << " - processing precomputed entries from " << p.dxteex_file << std::endl;
 			while(read_dxteex_line(6, fg, dxteex_row, n_cols, snpid, ii)) {
 				auto it = std::find(G.SNPID.begin(), G.SNPID.end(), snpid);
 				if(it == G.SNPID.end()) {
-					// std::cout << "WARNING: SNPID " << snpid << " not found" << std::endl;
 					nNotFound++;
 				} else {
 					long jj = it - G.SNPID.begin();
 					for (int ll = 0; ll < n_env; ll++) {
 						for (int mm = 0; mm <= ll; mm++) {
-							// if(world_rank == 0) {
 							dXtEEX_lowertri(jj, dXtEEX_col_ind(ll, mm, n_env)) = dxteex_row(ll * n_env + mm);
-							// }
 						}
 					}
 					unfilled_indexes.erase(jj);
@@ -939,14 +924,19 @@ public:
 					} else if (dxteex_check == 100) {
 						dxteex_check++;
 						mean_ae /= (double) se_cnt;
-						std::cout << "Checking correlations from first 100 SNPs" << std::endl;
-						std::cout << " - max absolute error = " << max_ae << std::endl;
-						std::cout << " - mean absolute error = " << mean_ae << std::endl;
+						if (p.debug) {
+							std::cout << " -- Double checking data for the first 100 SNPs suggests ";
+							std::cout << "max absolute error = " << max_ae << ", ";
+							std::cout << "mean absolute error = " << mean_ae << std::endl;
+						}
 					}
 				}
 			}
-			std::cout << ii << " lines read from " << p.dxteex_file << std::endl;
-			if (nNotFound > 0) std::cout << nNotFound << " match SNPIDs not present in bgen file" << std::endl;
+			if (nNotFound > 0 && p.verbose) {
+				std::cout << " -- " << nNotFound << " SNPIDs from " << p.dxteex_file;
+				std::cout << " not present in bgen file" << std::endl;
+
+			}
 		}
 
 		// Compute correlations not available in file
@@ -965,7 +955,11 @@ public:
 			}
 		}
 
-		std::cout << " (" << n_dxteex_computed << " computed from raw data, " << n_var - n_dxteex_computed << " read from file)" << std::endl;
+		std::cout << " - entries for " << n_dxteex_computed << " variants computed from raw data" << std::endl;
+		std::cout << " - entries for " << n_var - n_dxteex_computed << " variants read from file" << std::endl;
+		auto end = std::chrono::system_clock::now();
+		std::chrono::duration<double> elapsed = end - start;
+		std::cout << " - dXtEEX array constructed in " << elapsed.count() << " seconds" << std::endl;
 	}
 
 	void read_hyps(){
@@ -1233,7 +1227,6 @@ public:
 				EigenUtils::read_matrix_and_skip_cols(p.env_coeffs_file, 1, coeffs, col_names);
 				vp_init.muw = coeffs.col(0);
 			} else if(col_names.size() == 1) {
-
 				EigenUtils::read_matrix(p.env_coeffs_file, coeffs, col_names);
 				vp_init.muw = coeffs.col(0);
 			} else {
@@ -1430,9 +1423,9 @@ public:
 		int world_rank;
 		MPI_Comm_rank(MPI_COMM_WORLD, &world_rank);
 
-		std::cout << "Reduced to " << Nglobal << " samples with complete data";
-		std::cout << " across covariates";
-		if(p.env_file != "NULL") std::cout << ", env-variables" << std::endl;
+		std::cout << "Reduced to " << Nglobal;
+		std::cout << " samples with complete data across covariates";
+		if(p.env_file != "NULL") std::cout << ", env-variables";
 		std::cout << " and phenotype";
 		std::cout << " (" << n_samples << " on rank " << world_rank << ")." << std::endl << std::endl;
 	}

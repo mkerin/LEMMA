@@ -6,6 +6,7 @@ archive/*
 src/tools/*
 data/*
 tests/data/*
+example/inference*
 
 cmake-build*
 CMakeFiles/*

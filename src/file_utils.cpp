@@ -427,6 +427,50 @@ void fileUtils::write_snp_stats_to_file(boost_io::filtering_ostream &ofile, cons
 	}
 }
 
+void fileUtils::write_snp_stats_to_file(boost_io::filtering_ostream &ofile, const int &n_effects,
+										const GenotypeMatrix &X,
+										const bool &append,
+										const Eigen::Ref<const Eigen::VectorXd> &neglogp_beta,
+										const Eigen::Ref<const Eigen::VectorXd> &neglogp_gam,
+										const Eigen::Ref<const Eigen::VectorXd> &neglogp_rgam,
+										const Eigen::Ref<const Eigen::VectorXd> &test_stat_beta,
+										const Eigen::Ref<const Eigen::VectorXd> &test_stat_gam,
+										const Eigen::Ref<const Eigen::VectorXd> &test_stat_rgam) {
+	// Function to write parameter values from genetic effects to file
+	// Assumes ofile has been initialised
+	long n_var = X.cols();
+
+	if(!append) {
+		ofile << "SNPID chr rsid pos a0 a1 maf info";
+		ofile << " main_standardSE_chisq main_standardSE_neglogp";
+		if(n_effects > 1) {
+			if (neglogp_gam.size() > 0) ofile << " gxe_standardSE_chisq";
+			if (test_stat_gam.size() > 0) ofile << " gxe_standardSE_neglogp";
+			ofile << " gxe_robustSE_chisq" << " gxe_robustSE_neglogp";
+		}
+		ofile << std::endl;
+	}
+
+	ofile << std::scientific << std::setprecision(7);
+	for (std::uint32_t kk = 0; kk < n_var; kk++) {
+		ofile << X.SNPID[kk] << " " << X.chromosome[kk] << " " << X.rsid[kk] << " " << X.position[kk];
+		ofile << " " << X.al_0[kk] << " " << X.al_1[kk] << " " << X.maf[kk] << " " << X.info[kk];
+
+		// main effects
+		ofile << " " << test_stat_beta(kk);
+		ofile << " " << neglogp_beta(kk);
+
+		// Interaction effects
+		if(n_effects > 1) {
+			if (test_stat_gam.size() > 0) ofile << " " << test_stat_gam(kk);
+			if (neglogp_gam.size() > 0) ofile << " " << neglogp_gam(kk);
+			ofile << " " << test_stat_rgam(kk);
+			ofile << " " << neglogp_rgam(kk);
+		}
+		ofile << std::endl;
+	}
+}
+
 bool fileUtils::read_bgen_chunk(genfile::bgen::View::UniquePtr &bgenView,
                                 GenotypeMatrix &G,
                                 const std::unordered_map<long, bool> &sample_is_invalid,

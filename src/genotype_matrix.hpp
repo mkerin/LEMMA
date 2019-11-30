@@ -16,7 +16,6 @@
 #ifndef GENOTYPE_MATRIX
 #define GENOTYPE_MATRIX
 
-#include "my_timer.hpp"
 #include "parameters.hpp"
 #include "typedefs.hpp"
 #include "tools/eigen3.3/Dense"

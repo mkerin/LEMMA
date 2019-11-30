@@ -3,8 +3,6 @@
 //
 
 #include "genotype_matrix.hpp"
-
-#include "my_timer.hpp"
 #include "parameters.hpp"
 #include "typedefs.hpp"
 #include "mpi_utils.hpp"

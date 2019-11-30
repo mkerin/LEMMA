@@ -12,7 +12,6 @@
 #include "parameters.hpp"
 #include "data.hpp"
 #include "eigen_utils.hpp"
-#include "my_timer.hpp"
 #include "typedefs.hpp"
 #include "file_utils.hpp"
 #include "variational_parameters.hpp"
@@ -115,11 +114,6 @@ public:
 	VariationalParametersLite vp_init;
 	std::vector<Hyps> hyps_inits;
 
-// boost fstreams
-	boost_io::filtering_ostream outf, outf_map, outf_inits;
-	boost_io::filtering_ostream outf_weights;
-	boost_io::filtering_ostream outf_map_covar;
-
 // Monitoring
 	std::chrono::system_clock::time_point time_check;
 	std::chrono::duration<double> elapsed_innerLoop;
@@ -136,22 +130,9 @@ public:
 		sample_is_invalid(dat.sample_is_invalid),
 		vp_init(dat.vp_init){
 		MPI_Comm_rank(MPI_COMM_WORLD, &world_rank);
-#ifndef OSX
-		long long kbMax, kbGlobal, kbLocal = fileUtils::getValueRAM();
-		MPI_Allreduce(&kbLocal, &kbMax, 1, MPI_LONG_LONG, MPI_MAX, MPI_COMM_WORLD);
-		MPI_Allreduce(&kbLocal, &kbGlobal, 1, MPI_LONG_LONG, MPI_SUM, MPI_COMM_WORLD);
-		double gbGlobal = kbGlobal / 1000.0 / 1000.0;
-		double gbMax = kbMax / 1000.0 / 1000.0;
-		if(world_rank == 0) {
-			printf("Initialising vbayes object (RAM usage: %.2f GB in total; max of %.2f GB per rank)\n", gbGlobal, gbMax);
-		}
-#else
-		if(world_rank == 0) {
-			printf("Initialising vbayes object\n");
-		}
-#endif
+#ifdef EIGEN_USE_MKL_ALL
 		mkl_set_num_threads_local(p.n_thread);
-
+#endif
 		// Data size params
 		n_effects      = dat.n_effects;
 		n_var          = dat.n_var;
@@ -189,14 +170,6 @@ public:
 
 		p.main_chunk_size = (unsigned int) std::min((long int) p.main_chunk_size, (long int) n_var);
 		p.gxe_chunk_size = (unsigned int) std::min((long int) p.gxe_chunk_size, (long int) n_var);
-
-		// Cache XtE
-//		if(p.mode_vb && n_env > 0) {
-//			std::cout << "Computing XtE" << std::endl;
-//			XtE = X.transpose_multiply(E);
-//			std::cout << "XtE computed" << std::endl;
-//			XtE = mpiUtils::mpiReduce_inplace(XtE);
-//		}
 
 		// When n_env > 1 this gets set when in updateEnvWeights
 		if(n_env == 0) {
@@ -309,41 +282,21 @@ public:
 		}
 	}
 
-	~VBayesX2(){
-		// Close all ostreams
-		boost_io::close(outf);
-		boost_io::close(outf_map);
-		boost_io::close(outf_inits);
-		boost_io::close(outf_map_covar);
-	}
-
 	void run(){
-		std::cout << "Starting variational inference" << std::endl;
+		std::cout << std::endl << "Starting variational inference";
+#ifndef OSX
+		long long kbMax, kbGlobal, kbLocal = fileUtils::getValueRAM();
+		MPI_Allreduce(&kbLocal, &kbMax, 1, MPI_LONG_LONG, MPI_MAX, MPI_COMM_WORLD);
+		MPI_Allreduce(&kbLocal, &kbGlobal, 1, MPI_LONG_LONG, MPI_SUM, MPI_COMM_WORLD);
+		double gbGlobal = kbGlobal / 1000.0 / 1000.0;
+		double gbMax = kbMax / 1000.0 / 1000.0;
+		if(world_rank == 0) {
+			printf(" (RAM usage: %.2f GB in total; max of %.2f GB per rank)", gbGlobal, gbMax);
+		}
+#endif
+		std::cout << std::endl;
+
 		time_check = std::chrono::system_clock::now();
-		// Parrallel starts swapped for multithreaded inference
-		int n_thread = 1;
-
-		// Round 1; looking for best start point
-		if(run_round1) {
-
-			std::vector< VbTracker > trackers(n_thread, p);
-			long n_grid = hyps_inits.size();
-			run_inference(hyps_inits, true, 1, trackers);
-
-			// gen initial predicted effects
-			calcPredEffects(vp_init);
-
-			print_time_check();
-		}
-
-		// Write inits to file - exclude covar values
-		if(p.verbose) {
-			std::string ofile_inits = fstream_init(outf_inits, "", "_inits");
-			std::cout << "Writing start points for alpha and mu to " << ofile_inits << std::endl;
-			fileUtils::write_snp_stats_to_file(outf_inits, n_effects, n_var, vp_init, X, p, false);
-			boost_io::close(outf_inits);
-		}
-
 		long n_grid = hyps_inits.size();
 		std::vector< VbTracker > trackers(n_grid, p);
 		run_inference(hyps_inits, false, 2, trackers);
@@ -396,6 +349,14 @@ public:
 		runInnerLoop(random_init, round_index, all_hyps, all_tracker);
 		auto innerLoop_end = std::chrono::system_clock::now();
 		elapsed_innerLoop = innerLoop_end - innerLoop_start;
+
+		long max_count = 0;
+		for (const auto& tracker : all_tracker) {
+			max_count = std::max(max_count, tracker.count);
+		}
+		std::cout << "Variational inference finished after " << max_count;
+		std::cout << " iterations and " << elapsed_innerLoop.count() << " seconds.";
+		std::cout << std::endl << std::endl;
 	}
 
 	void runInnerLoop(const bool random_init,
@@ -403,12 +364,10 @@ public:
 	                  std::vector<Hyps>& all_hyps,
 	                  std::vector<VbTracker>& all_tracker){
 		// minimise KL Divergence and assign elbo estimate
-		// Assumes vp_init already exist
-		// TODO: re intergrate random starts
 		if (p.xtra_verbose) std::cout << "Starting inner loop" << std::endl;
 		int print_interval = 25;
 		if(random_init) {
-			throw std::logic_error("Random starts no longer implemented");
+			throw std::logic_error("Random start depreciated.");
 		}
 		unsigned long n_grid = all_hyps.size();
 
@@ -443,33 +402,6 @@ public:
 				if(n_env > 1) w_prev[nn] = all_vp[nn].mean_weights().array();
 			}
 			std::vector<double> logw_prev = i_logw;
-
-			if(count > 0 && p.redo_ym_interval > 0 && count % p.redo_ym_interval == 0) {
-				if(p.xtra_verbose) {
-					std::cout << "Recomputing ym to reduce numerical error" << std::endl;
-				}
-				Eigen::VectorXd yhat_old, yhat_new;
-				for (int nn = 0; nn < n_grid; nn++) {
-					yhat_old = all_vp[nn].ym + all_vp[nn].yx.cwiseProduct(all_vp[nn].eta);
-					Eigen::VectorXd ym_old = all_vp[nn].ym;
-					Eigen::VectorXd yx_old = all_vp[nn].yx;
-					Eigen::VectorXd eta_old = all_vp[nn].eta;
-
-					calcPredEffects(all_vp[nn]);
-					yhat_new = all_vp[nn].ym + all_vp[nn].yx.cwiseProduct(all_vp[nn].eta);
-					Eigen::VectorXd ym_new = all_vp[nn].ym;
-					Eigen::VectorXd yx_new = all_vp[nn].yx;
-					Eigen::VectorXd eta_new = all_vp[nn].eta;
-					yhat_old.array() -= yhat_old.mean();
-					yhat_new.array() -= yhat_new.mean();
-					double corr = yhat_old.dot(yhat_new) / yhat_old.norm() / yhat_new.norm();
-
-					std::cout << "Correlation between old and new yhat: " << get_corr(yhat_old, yhat_new) << std::endl;
-					std::cout << "Correlation between old and new ym: " << get_corr(ym_old, ym_new) << std::endl;
-					std::cout << "Correlation between old and new yx: " << get_corr(yx_old, yx_new) << std::endl;
-					std::cout << "Correlation between old and new eta: " << get_corr(eta_old, eta_new) << std::endl;
-				}
-			}
 
 			if (p.debug) std::cout << " - update params" << std::endl;
 			updateAllParams(count, round_index, all_vp, all_hyps, logw_prev);
@@ -604,8 +536,6 @@ public:
 			all_tracker[nn].vp = all_vp[nn].convert_to_lite();
 			all_tracker[nn].hyps = all_hyps[nn];
 		}
-
-		std::cout << "Variational inference finished after " << count << " iterations." << std::endl;
 	}
 
 	void setup_variational_params(const std::vector<Hyps>& all_hyps,
@@ -1554,10 +1484,8 @@ public:
 			Eigen::MatrixXd HtH(H.cols(), H.cols()), Hty(H.cols(), 1);
 			Eigen::MatrixXd HtH_inv(H.cols(), H.cols()), HtVH(H.cols(), H.cols());
 			if(n_effects == 1) {
-
-				prep_lm(H, chr_residuals[cc], HtH, HtH_inv, Hty, rss_alt);
-
 				double beta_tstat, beta_pval;
+				prep_lm(H, chr_residuals[cc], HtH, HtH_inv, Hty, rss_alt);
 				student_t_test(n_samples, HtH_inv, Hty, rss_alt, 0, beta_tstat, beta_pval);
 
 				neglogp_beta(jj) = -1 * log10(beta_pval);
@@ -1565,42 +1493,32 @@ public:
 			} else if (n_effects > 1) {
 				H.col(1) = H.col(0).cwiseProduct(vp.eta.cast<double>());
 
-				prep_lm(H, chr_residuals[cc], HtH, HtH_inv, Hty, rss_alt, HtVH);
-				rss_null = chr_residuals[cc].squaredNorm();
-				rss_null = mpiUtils::mpiReduce_inplace(&rss_null);
-
 				// Single-var tests
 				double beta_tstat, gam_tstat, rgam_stat, beta_pval, gam_pval, rgam_pval;
+				prep_lm(H, chr_residuals[cc], HtH, HtH_inv, Hty, rss_alt, HtVH);
 				hetero_chi_sq(HtH_inv, Hty, HtVH, 1, rgam_stat, rgam_pval);
 				student_t_test(n_samples, HtH_inv, Hty, rss_alt, 1, gam_tstat, gam_pval);
 				student_t_test(n_samples, HtH_inv, Hty, rss_alt, 0, beta_tstat, beta_pval);
 
-				// // T-test on beta
-				// double beta_tstat = tau[0] / sqrt(rss_alt * HtH_inv(0, 0) / (N - 3.0));
-				// double beta_pval  = 2 * boost_m::cdf(boost_m::complement(t_dist, fabs(beta_tstat)));
-				//
-				// // T-test on gamma
-				// double gam_tstat  = tau[1] / sqrt(rss_alt * HtH_inv(1, 1) / (N - 3.0));
-				// double gam_pval   = 2 * boost_m::cdf(boost_m::complement(t_dist, fabs(gam_tstat)));
-
 				// F-test over main+int effects of snp_j
 				double joint_fstat, joint_pval;
+				rss_null = chr_residuals[cc].squaredNorm();
+				rss_null = mpiUtils::mpiReduce_inplace(&rss_null);
 				joint_fstat       = (rss_null - rss_alt) / 2.0;
 				joint_fstat      /= rss_alt / (Nglobal - 3.0);
 				joint_pval        = 1.0 - boost_m::cdf(f_dist, joint_fstat);
 
-				neglogp_beta[jj]  = -1 * std::log10(beta_pval);
-				neglogp_gam[jj]   = -1 * std::log10(gam_pval);
-				neglogp_gam_robust[jj]   = -1 * std::log10(rgam_pval);
-				neglogp_joint[jj] = -1 * std::log10(joint_pval);
-				test_stat_beta[jj]  = beta_tstat;
-				test_stat_gam[jj]   = gam_tstat;
-				test_stat_gam_robust[jj]   = rgam_stat;
-				test_stat_joint[jj] = joint_fstat;
+				neglogp_beta[jj]       = -1 * std::log10(beta_pval);
+				neglogp_gam[jj]        = -1 * std::log10(gam_pval);
+				neglogp_gam_robust[jj] = -1 * std::log10(rgam_pval);
+				neglogp_joint[jj]      = -1 * std::log10(joint_pval);
+				test_stat_beta[jj]     = beta_tstat;
+				test_stat_gam[jj]      = gam_tstat;
+				test_stat_gam_robust[jj] = rgam_stat;
+				test_stat_joint[jj]    = joint_fstat;
 			}
 		}
 	}
-
 
 	void LOCO_pvals_v2(GenotypeMatrix &Xtest,
 	                   const VariationalParametersLite &vp,
@@ -1633,7 +1551,6 @@ public:
 		for(uint32_t jj = 0; jj < n_var; jj++ ) {
 			int chr_test = Xtest.chromosome[jj];
 			long pos_test = Xtest.position[jj];
-
 
 			while (front < n_var && X.position[front] < pos_test + LOSO_window && X.chromosome[front] == chr_test) {
 				y_resid += vp.mean_beta(front) * X.col(front);
@@ -1694,6 +1611,7 @@ public:
 	void write_converged_hyperparams_to_file(const std::string& file_prefix,
 	                                         const std::vector< VbTracker >& trackers,
 	                                         const long& my_n_grid){
+		boost_io::filtering_ostream outf;
 		std::string ofile       = fstream_init(outf, file_prefix, "");
 		std::cout << "Writing converged hyperparameter values to " << ofile << std::endl;
 
@@ -1762,28 +1680,11 @@ public:
 			}
 			outf << std::endl;
 		}
+		boost_io::close(outf);
 	}
 
-	void write_map_stats_to_file(const std::string &file_prefix) {
-		if(world_rank == 0) {
-			output_init(file_prefix);
-		}
-		output_results();
-	}
 
-	void output_init(const std::string& file_prefix){
-		// Initialise files ready to write;
-		std::string ofile_w, ofile_map_covar;
-
-		std::string ofile_map   = fstream_init(outf_map, file_prefix, "_map_snp_stats");
-		if (n_env > 0) ofile_w = fstream_init(outf_weights, file_prefix, "_env_weights");
-		if (n_covar > 0) ofile_map_covar = fstream_init(outf_map_covar, file_prefix, "_map_covar");
-		std::cout << "Writing MAP snp stats to " << ofile_map << std::endl;
-		if (n_covar > 0) std::cout << "Writing MAP covar coefficients to " << ofile_map_covar << std::endl;
-		if (n_env > 0) std::cout << "Writing env weights to " << ofile_w << std::endl;
-	}
-
-	void output_results(){
+	void output_results(const std::string& file_prefix){
 
 		/*********** Stats from MAP to file ************/
 		std::vector<Eigen::VectorXd> resid_loco(n_chrs), pred_main(n_chrs), pred_int(n_chrs);
@@ -1830,48 +1731,65 @@ public:
 		}
 		assert(cc == n_cols);
 
-		std::string path = fileUtils::filepath_format(p.out_file, "", "_map_yhat");
-		std::cout << "Writing yhat to file: " << path << std::endl;
+		std::string path = fileUtils::filepath_format(p.out_file, "", "_converged_yhat");
+		std::cout << "Writing predicted and residualised phenotypes to " << path << std::endl;
 		fileUtils::dump_predicted_vec_to_file(tmp, path, header, sample_location);
 
 		// Save eta & residual phenotypes to separate files
-		if(p.xtra_verbose) {
-			boost_io::filtering_ostream tmp_outf;
-			if (n_env > 0) {
-				std::string path = fileUtils::filepath_format(p.out_file, "", "_converged_eta");
-				std::cout << "Writing eta to file: " << path << std::endl;
-				fileUtils::dump_predicted_vec_to_file(vp_init.eta, path, "eta", sample_location);
-			}
-
-			for (long cc = 0; cc < n_chrs; cc++) {
-				std::string path = fileUtils::filepath_format(p.out_file, "",
-				                                              "_converged_resid_pheno_chr" + std::to_string(chrs_present[cc]));
-				std::cout << "Writing resid pheno to file: " << path << std::endl;
-				fileUtils::dump_predicted_vec_to_file(resid_loco[cc], path,
-				                                      "chr" + std::to_string(chrs_present[cc]),
-				                                      sample_location);
-			}
+		boost_io::filtering_ostream tmp_outf;
+		if (n_env > 0) {
+			std::string path = fileUtils::filepath_format(p.out_file, "", "_converged_eta");
+			std::cout << "Writing eta to " << path << std::endl;
+			fileUtils::dump_predicted_vec_to_file(vp_init.eta, path, "eta", sample_location);
 		}
 
-		if(world_rank == 0) {
-			// weights to file
-			if (n_env > 0) {
-				outf_weights << std::scientific << std::setprecision(7);
-				outf_weights << "env mu s_sq" << std::endl;
-				for (long ll = 0; ll < n_env; ll++) {
-					outf_weights << env_names[ll] << " ";
-					outf_weights << vp_init.muw(ll) << " ";
-					outf_weights << vp_init.sw_sq(ll) << std::endl;
-				}
+		for (long cc = 0; cc < n_chrs; cc++) {
+			std::string path = fileUtils::filepath_format(p.out_file, "",
+														  "_converged_resid_pheno_chr" + std::to_string(chrs_present[cc]));
+			std::cout << "Writing residualised pheno to " << path << std::endl;
+			fileUtils::dump_predicted_vec_to_file(resid_loco[cc], path,
+												  "chr" + std::to_string(chrs_present[cc]),
+												  sample_location);
+		}
+
+		if(world_rank == 0 && n_env > 0) {
+			boost_io::filtering_ostream outf;
+			std::string path = fstream_init(outf, file_prefix, "_converged_env_params");
+			std::cout << "Writing env variational parameters to " << path << std::endl;
+			outf << std::scientific << std::setprecision(7);
+			outf << "env mean variance" << std::endl;
+			for (long ll = 0; ll < n_env; ll++) {
+				outf << env_names[ll] << " ";
+				outf << vp_init.muw(ll) << " ";
+				outf << vp_init.sw_sq(ll) << std::endl;
 			}
+			boost_io::close(outf);
+		}
+
+
+		if(world_rank == 0 && n_covar > 0) {
+			boost_io::filtering_ostream outf;
+			std::string ofile = fstream_init(outf, file_prefix, "_converged_covar_params");
+			std::cout << "Writing covar variational parameters to " << ofile << std::endl;
+
+			outf << "covar mean variance" << std::endl;
+			outf << std::setprecision(9) << std::fixed;
+			for (int cc = 0; cc < n_covar; cc++) {
+				outf << covar_names[cc] << " ";
+				outf << vp_init.muc(cc) << " ";
+				outf << vp_init.sc_sq(cc) <<  std::endl;
+			}
+			boost_io::close(outf);
 		}
 
 		// Compute LOCO p-values
 		Eigen::VectorXd neglogp_beta(n_var), neglogp_gam(n_var), neglogp_rgam(n_var), neglogp_joint(n_var);
 		Eigen::VectorXd test_stat_beta(n_var), test_stat_gam(n_var), test_stat_rgam(n_var), test_stat_joint(n_var);
 		if(p.drop_loco) {
-			std::cout << "Computing single-snp hypothesis tests while excluding SNPs within ";
-			std::cout << p.LOSO_window << " of the test SNP" << std::endl;
+			if (p.debug){
+				std::cout << "Computing single-snp hypothesis tests while excluding SNPs within ";
+				std::cout << p.LOSO_window << " of the test SNP" << std::endl;
+			}
 			LOCO_pvals_v2(X, vp_init, p.LOSO_window, neglogp_beta,
 			              neglogp_rgam,
 			              neglogp_joint,
@@ -1881,34 +1799,27 @@ public:
 			neglogp_gam.resize(0);
 			test_stat_gam.resize(0);
 		} else {
-			std::cout << "Computing single-snp hypothesis tests with LOCO strategy" << std::endl;
+			if (p.debug) std::cout << "Computing single-SNP hypothesis tests with LOCO strategy" << std::endl;
 			LOCO_pvals(vp_init, resid_loco, neglogp_beta, neglogp_gam, neglogp_rgam, neglogp_joint,
 			           test_stat_beta, test_stat_gam, test_stat_rgam, test_stat_joint);
 		}
 
 		if(world_rank == 0) {
-			// MAP snp-stats to file
-			fileUtils::write_snp_stats_to_file(outf_map, n_effects, n_var, vp_init, X, p, true, neglogp_beta,
+			boost_io::filtering_ostream outf;
+			std::string ofile = fstream_init(outf, file_prefix, "_converged_snp_stats");
+			std::cout << "Writing single-SNP hypothesis test results ";
+			if(p.drop_loco) {
+				std::cout << "(leave out SNPs within " << p.LOSO_window << "bp)";
+			} else {
+				std::cout << "(computed with LOCO strategy)";
+			}
+			std::cout << " to " << ofile << std::endl;
+			fileUtils::write_snp_stats_to_file(outf, n_effects, n_var, vp_init, X, p, true, neglogp_beta,
 			                                   neglogp_gam,
 			                                   neglogp_rgam, neglogp_joint, test_stat_beta, test_stat_gam,
 			                                   test_stat_rgam,
 			                                   test_stat_joint);
-			if (n_covar > 0) {
-				write_covars_to_file(outf_map_covar, vp_init);
-			}
-		}
-	}
-
-	void write_covars_to_file(boost_io::filtering_ostream& ofile,
-	                          VariationalParametersLite vp) {
-		// Assumes ofile has been initialised.
-
-		// Header
-		ofile << "covar beta" << std::endl;
-
-		ofile << std::setprecision(9) << std::fixed;
-		for (int cc = 0; cc < n_covar; cc++) {
-			ofile << covar_names[cc] << " " << vp.muc(cc) << std::endl;
+			boost_io::close(outf);
 		}
 	}
 

@@ -36,7 +36,6 @@ TEST_CASE( "Example 4: multi-env + mog + covars + emp_bayes" ){
 		data.read_non_genetic_data();
 		data.standardise_non_genetic_data();
 		SECTION( "Ex4. Non genetic data standardised + covars regressed"){
-			CHECK(data.p.scale_pheno);
 			CHECK(!data.p.use_vb_on_covars);
 			CHECK(data.p.covar_file == "NULL");
 		}
@@ -217,7 +216,7 @@ TEST_CASE( "Example 4: multi-env + mog + covars + emp_bayes + sample subset" ){
 
 		std::vector< VbTracker > trackers(VB.hyps_inits.size(), p);
 		VB.run_inference(VB.hyps_inits, false, 2, trackers);
-		VB.write_map_stats_to_file("");
+		VB.output_results("");
 		SECTION("Ex3. Vbayes_X2 inference correct"){
 			CHECK(trackers[0].count == 10);
 			CHECK(trackers[0].logw == Approx(-57.062373213));

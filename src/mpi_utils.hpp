@@ -22,8 +22,6 @@
 // VBayesX2::adjustParams -> local correlation matrices
 // VBayesX2::updateEnvWeights -> ???
 // Data::calc_dxteex() -> dztz_lmj
-//
-// Delete everything related to VB.write_map_stats_to_file
 
 // Operations to search for
 // sum()

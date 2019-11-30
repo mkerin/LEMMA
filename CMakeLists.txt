@@ -1,15 +1,14 @@
 cmake_minimum_required(VERSION 3.7.2)
-project(LEMMA VERSION 0.11.6)
+project(LEMMA VERSION 1.0.0)
 
 set(CMAKE_CXX_STANDARD 11)
-cmake_policy(SET CMP0074 OLD)
 
 ### Compilation flags
 set(LOC_COMPILE_OPTS -Wno-deprecated -Wno-parentheses)
-if(CMAKE_BUILD_TYPE STREQUAL Release)
-    list(APPEND LOC_COMPILE_OPTS -O3)
-else()
+if(CMAKE_BUILD_TYPE STREQUAL Debug)
     list(APPEND LOC_COMPILE_OPTS -g -DDEBUG)
+else()
+    list(APPEND LOC_COMPILE_OPTS -O3)
 endif()
 
 if(DEFINED STATIC_BUILD)
@@ -85,11 +84,11 @@ message("Compile options:")
 message(${LOC_COMPILE_OPTS})
 message("Lib-dirs: ")
 message(${LIB_DIRS})
-message("Libs: ")
+message("Libs:")
 message(${LIBRARIES})
 
 ### Compile LEMMA
-set(TARGET bgen_prog_${PROJECT_VERSION_MAJOR}_${PROJECT_VERSION_MINOR}_${PROJECT_VERSION_PATCH})
+set(TARGET lemma_${PROJECT_VERSION_MAJOR}_${PROJECT_VERSION_MINOR}_${PROJECT_VERSION_PATCH})
 
 list(APPEND LOC_COMPILE_OPTS -DVERSION_MAJOR=${PROJECT_VERSION_MAJOR})
 list(APPEND LOC_COMPILE_OPTS -DVERSION_MINOR=${PROJECT_VERSION_MINOR})
@@ -98,7 +97,7 @@ list(APPEND LOC_COMPILE_OPTS -DVERSION_PATCH=${PROJECT_VERSION_PATCH})
 
 set(SOURCES src/hyps.cpp src/variational_parameters.cpp src/genotype_matrix.cpp src/mpi_utils.cpp)
 list(APPEND SOURCES src/parse_arguments.cpp src/file_utils.cpp src/eigen_utils.cpp src/rhe_reg.cpp)
-list(APPEND SOURCES src/rhe_reg_component.cpp src/nelder_mead.cpp)
+list(APPEND SOURCES src/rhe_reg_component.cpp src/nelder_mead.cpp src/stats_tests.cpp)
 
 include_directories(${PROJECT_SOURCE_DIR})
 add_executable(${TARGET} src/bgen_prog.cpp ${SOURCES})

@@ -47,11 +47,7 @@ void RHEreg::run() {
 		nls_env_weights = run_RHE_nelderMead();
 	} else if(p.mode_RHEreg_LM) {
 		nls_env_weights = run_RHE_levenburgMarquardt();
-	} else if(n_env > 0) {
-		std::cout << "G+GxE effects model (gaussian prior)" << std::endl;
-		solve_RHE(components);
 	} else {
-		std::cout << "Main effects model (gaussian prior)" << std::endl;
 		solve_RHE(components);
 	}
 	end = std::chrono::system_clock::now();
@@ -357,7 +353,7 @@ void RHEreg::solve_RHE(std::vector<RHEreg_Component>& components) {
 	Eigen::MatrixXd A = CC.block(0, 0, n_components, n_components);
 	Eigen::VectorXd bb = CC.col(n_components);
 
-	if(world_rank == 0) {
+	if(world_rank == 0 && p.debug) {
 		auto filename = fileUtils::fstream_init(outf, p.out_file, "", "_linSystem_dump");
 		std::cout << "Writing RHEreg linear system to " << filename << std::endl;
 		outf << CC << std::endl;
@@ -748,17 +744,16 @@ void RHEreg::to_file(const std::string &file) {
 	auto filename = fileUtils::fstream_init(outf, file, "", suffix);
 
 	std::cout << "Writing PVE results to " << filename << std::endl;
-	outf << "component sigmas h2 h2_se h2_bias_corrected" << std::endl;
+	outf << "component\tsigma\th2\th2_se" << std::endl;
 
 	for (int ii = 0; ii < n_components; ii++) {
-		outf << components[ii].label << " ";
-		outf << sigmas[ii] << " ";
-		outf << h2[ii] << " ";
+		outf << components[ii].label << "\t";
+		outf << sigmas[ii] << "\t";
+		outf << h2[ii] << "\t";
 		if(p.n_jacknife > 1) {
-			outf << h2_se_jack[ii] << " ";
-			outf << h2_bias_corrected[ii] << std::endl;
+			outf << h2_se_jack[ii] << std::endl;
 		} else {
-			outf << "NA NA" << std::endl;
+			outf << "NA" << std::endl;
 		}
 	}
 
@@ -776,15 +771,15 @@ void RHEreg::to_file(const std::string &file) {
 		h2_GxE_sd = std::sqrt(h2_GxE_sd);
 		h2_G_sd = std::sqrt(h2_G_sd);
 
-		outf << "G_tot NA " << h2_G_tot << " " << h2_G_sd << " NA" << std::endl;
+		outf << "G_tot\tNA\t" << h2_G_tot << "\t" << h2_G_sd << std::endl;
 		if(n_env > 0) {
-			outf << "GxE_tot NA " << h2_GxE_tot << " " << h2_GxE_sd << " NA" << std::endl;
+			outf << "GxE_tot\tNA\t" << h2_GxE_tot << "\t" << h2_GxE_sd << std::endl;
 		}
 	}
 
 	boost_io::close(outf);
 
-	if(p.xtra_verbose && p.n_jacknife > 1) {
+	if(p.debug && p.n_jacknife > 1) {
 		auto filename = fileUtils::fstream_init(outf, file, "", suffix + "_jacknife");
 		std::cout << "Writing jacknife estimates to " << filename << std::endl;
 

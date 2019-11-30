@@ -68,24 +68,24 @@ void EigenUtils::write_matrix(boost_io::filtering_ostream& outf,
 
 template <typename EigenMat>
 void EigenUtils::read_matrix( const std::string& filename,
-							  EigenMat& M){
+                              EigenMat& M){
 	std::vector<std::string> placeholder;
 	EigenUtils::read_matrix(filename, M, placeholder);
 }
 
 template <typename EigenMat>
 void EigenUtils::read_matrix(const std::string &filename,
-							 EigenMat &M,
-							 std::vector <std::string> &col_names){
+                             EigenMat &M,
+                             std::vector <std::string> &col_names){
 	std::map<long, bool> incomplete_row;
 	EigenUtils::read_matrix(filename, M, col_names, incomplete_row);
 }
 
 template <typename EigenMat>
 void EigenUtils::read_matrix(const std::string &filename,
-							 EigenMat &M,
+                             EigenMat &M,
                              std::vector <std::string> &col_names,
-							 std::map<long, bool> &incomplete_row) {
+                             std::map<long, bool> &incomplete_row) {
 	/* Read txt file into martix. Files can be gzipped. */
 
 	boost_io::filtering_istream fg;
@@ -153,7 +153,6 @@ void EigenUtils::read_matrix(const std::string &filename,
 					throw;
 				}
 			}
-
 			M(i, k) = tmp_d;
 		}
 		i++;
@@ -367,9 +366,9 @@ template void EigenUtils::read_matrix(const std::string&,
 template void EigenUtils::read_matrix(const std::string&,
                                       Eigen::MatrixXd&, std::vector<std::string>&, std::map<long, bool>&);
 template void EigenUtils::read_matrix(const std::string&,
-									  Eigen::MatrixXf&, std::vector<std::string>&);
+                                      Eigen::MatrixXf&, std::vector<std::string>&);
 template void EigenUtils::read_matrix(const std::string&,
-									  Eigen::MatrixXd&, std::vector<std::string>&);
+                                      Eigen::MatrixXd&, std::vector<std::string>&);
 template void EigenUtils::read_matrix(const std::string&, Eigen::MatrixXf&);
 template void EigenUtils::read_matrix(const std::string&, Eigen::MatrixXd&);
 template void EigenUtils::write_matrix(boost_io::filtering_ostream&,

@@ -81,6 +81,17 @@ write_snp_stats_to_file(boost_io::filtering_ostream &ofile,
                         const Eigen::Ref<const Eigen::VectorXd> &test_stat_rgam,
                         const Eigen::Ref<const Eigen::VectorXd> &test_stat_joint);
 
+void
+write_snp_stats_to_file(boost_io::filtering_ostream &ofile, const int &n_effects,
+                        const GenotypeMatrix &X,
+                        const bool &append,
+                        const Eigen::Ref<const Eigen::VectorXd> &neglogp_beta,
+                        const Eigen::Ref<const Eigen::VectorXd> &neglogp_gam,
+                        const Eigen::Ref<const Eigen::VectorXd> &neglogp_rgam,
+                        const Eigen::Ref<const Eigen::VectorXd> &test_stat_beta,
+                        const Eigen::Ref<const Eigen::VectorXd> &test_stat_gam,
+                        const Eigen::Ref<const Eigen::VectorXd> &test_stat_rgam);
+
 void write_snp_stats_to_file(boost_io::filtering_ostream &ofile, const int &n_effects,
                              const GenotypeMatrix &X,
                              const bool &append,

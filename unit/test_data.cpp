@@ -43,7 +43,6 @@ TEST_CASE("Data") {
 
 		data.standardise_non_genetic_data();
 		SECTION("Check non genetic data standardised + covars regressed") {
-			CHECK(data.p.scale_pheno);
 			CHECK(data.p.use_vb_on_covars);
 			CHECK(data.p.covar_file == "NULL");
 			if(world_rank == 0) {

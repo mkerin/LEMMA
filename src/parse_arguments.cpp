@@ -4,7 +4,6 @@
 
 #include "parse_arguments.hpp"
 #include "parameters.hpp"
-#include "my_timer.hpp"
 
 #include "tools/eigen3.3/Dense"
 #include "tools/cxxopts.hpp"
@@ -23,54 +22,6 @@
 #include <boost/iostreams/filter/gzip.hpp>
 
 namespace boost_io = boost::iostreams;
-
-// For vectorise profiling
-void foo(const Eigen::VectorXi& aa1,
-         const Eigen::VectorXi& aa2,
-         Eigen::VectorXi& aa){
-	asm ("#it begins here!");
-	aa = aa1 + aa2;
-	asm ("#it ends here!");
-}
-
-void foo(const Eigen::VectorXf& aa1,
-         const Eigen::VectorXf& aa2,
-         Eigen::VectorXf& aa){
-	asm ("#it begins here!");
-	aa = aa1 + aa2;
-	asm ("#it ends here!");
-}
-
-void foo(const Eigen::VectorXf& aa1,
-         const Eigen::VectorXd& aa2,
-         Eigen::VectorXf& aa){
-	asm ("#it begins here!");
-	aa = aa1 + aa2.cast<float>();
-	asm ("#it ends here!");
-}
-
-void foo(const Eigen::VectorXd& aa1,
-         const Eigen::VectorXd& aa2,
-         Eigen::VectorXd& aa){
-	asm ("#it begins here!");
-	aa = aa1 + aa2;
-	asm ("#it ends here!");
-}
-
-void check_counts(const std::string &in_str, int i, int num, int argc) {
-	// Stop overflow from argv
-	if (i + num >= argc) {
-		if (num == 1) {
-			std::cout << "ERROR: flag " << in_str << " requres an argument. ";
-			std::cout << "Please refer to the manual for usage instructions." << std::endl;
-		} else {
-			std::cout << "ERROR: flag " << in_str << " seems to require ";
-			std::cout << std::to_string(num) + " arguments. No arguments of ";
-			std::cout << "this type should be implemented yet.." << std::endl;
-		}
-		std::exit(EXIT_FAILURE);
-	}
-}
 
 void print_compilation_details(){
 	std::cout << "Compilation details:" << std::endl;
@@ -105,6 +56,11 @@ void print_compilation_details(){
 #ifdef MPI_VERSION
 	std::cout << "- compiled with openMPI" << std::endl;
 #endif
+
+#ifdef NDEBUG
+	std::cout << "- WARNING: NDEBUG is defined which means assert statements won't work!" << std::endl;
+#endif
+
 }
 
 void parse_arguments(parameters &p, int argc, char **argv) {
@@ -121,8 +77,8 @@ void parse_arguments(parameters &p, int argc, char **argv) {
 	options.add_options("General")
 	    ("verbose", "", cxxopts::value<bool>(p.verbose))
 	    ("xtra_verbose", "")
-	    ("bgen", "(Optional) Path to BGEN file. This must be indexed (eg. with BGENIX). By default this is stored in RAM using O(NM) bytes.", cxxopts::value<std::string>(p.bgen_file))
-	    ("streamBgen", "(Optional) Path to BGEN file. This must be indexed (eg. with BGENIX). This can be used with --RHE or --mode_calc_snpstats.", cxxopts::value<std::string>())
+	    ("bgen", "Path to BGEN file. This must be indexed (eg. with BGENIX). By default this is stored in RAM using O(NM) bytes.", cxxopts::value<std::string>(p.bgen_file))
+	    ("streamBgen", "Path to BGEN file. This must be indexed (eg. with BGENIX). This can be used with --RHE or --mode_calc_snpstats.", cxxopts::value<std::string>())
 	    ("mStreamBgen", "Text file containing paths to multiple BGEN files. They must all be indexed (eg. with BGENIX). This can be used with --RHE or --mode_calc_snpstats.", cxxopts::value<std::string>())
 	    ("pheno", "Path to phenotype file. Must have a header and have the same number of rows as the BGEN file.", cxxopts::value<std::string>(p.pheno_file))
 	    ("covar", "Path to file of covariates. Must have a header and have the same number of rows as the BGEN file.", cxxopts::value<std::string>(p.covar_file))
@@ -135,7 +91,43 @@ void parse_arguments(parameters &p, int argc, char **argv) {
 	    ("environment_weights", "Path to initial environment weights", cxxopts::value<std::string>(p.env_coeffs_file))
 	    ("out", "Filepath to output", cxxopts::value<std::string>(p.out_file))
 	    ("streamOut", "Output file for tests on imputed variants", cxxopts::value<std::string>(p.streamBgenOutFile))
+	    ("suppress_squared_env_removal", "QC: Suppress test for significant squared environmental effects (SQE)")
+	    ("incl_squared_envs", "QC: Include significant squared environmental effects (SQE) as covariates")
 	;
+
+	options.add_options("VB")
+			("VB", "Run VB algorithm.")
+			("singleSnpStats", "Compute SNP association tests", cxxopts::value<bool>(p.mode_calc_snpstats))
+			("min_elbo_diff", "Convergence threshold for VB convergence.", cxxopts::value<double>(p.elbo_tol))
+			("mode_empirical_bayes", "Maximise ELBO wrt hyperparameters for hyperparameter updates.")
+			("mode_constant_hyps", "Keep hyperparameters constant.")
+			("mode_squarem", "Use SQUAREM algorithm for hyperparameter updates.")
+			("vb_iter_max", "Maximum number of VB iterations (default: 10000)", cxxopts::value<long>(p.vb_iter_max))
+			("spike_diff_factor", "", cxxopts::value<double>())
+			("gam_spike_diff_factor", "", cxxopts::value<double>(p.gam_spike_diff_factor))
+			("beta_spike_diff_factor", "", cxxopts::value<double>(p.beta_spike_diff_factor))
+			("resume_from_param_dump", "For use when resuming VB algorithm from previous run.", cxxopts::value<std::string>(p.resume_prefix))
+			("param_dump_interval", "Save VB state to file every N iterations (default: None)", cxxopts::value<long>(p.param_dump_interval))
+			;
+
+	options.add_options("RHE")
+			("RHEreg", "Run randomised HE-regression algorithm", cxxopts::value<bool>())
+			("RHEreg-fast", "Run randomised HE-regression algorithm without centering and scaling genotype matrix (unnecessary with modified h2 conversion)")
+			("RHEreg-groups", "Text file containing group of each SNP for use with multicomponent randomised HE regression", cxxopts::value<std::string>())
+			("mRHEreg-groups", "Text file to paths of --RHE-groups files. Each should correspond to the bgen files given in --mStreamBgen", cxxopts::value<std::string>())
+			("n-RHEreg-samples", "Number of random vectors used in RHE algorithm", cxxopts::value<long>(p.n_pve_samples))
+			("n-RHEreg-jacknife", "Number of jacknife samples used in RHE algorithm", cxxopts::value<long>(p.n_jacknife))
+			("random-seed", "Seed used to draw random vectors in RHE algorithm (default: random)",
+			 cxxopts::value<unsigned int>(p.random_seed))
+			;
+
+	options.add_options("Filtering")
+			("maf", "Exclude all SNPs whose minor allele frequency is below this threshold", cxxopts::value<double>(p.min_maf))
+			("info", "Exclude all SNPs whose IMPUTE info is below this threshold", cxxopts::value<double>(p.min_info))
+			("incl_rsids", "Exclude all SNPs whose RSID is not in the given file.", cxxopts::value<std::string>(p.incl_rsids_file))
+			("incl_sample_ids", "Exclude all samples whose sample ID is not in the BGEN file.", cxxopts::value<std::string>(p.incl_sids_file))
+			("range", "Genomic range in format chr:start-end", cxxopts::value<std::string>())
+			;
 
 	options.add_options("Internal")
 	    ("snpwise_scan", "", cxxopts::value<std::string>(p.snpstats_file))
@@ -176,44 +168,8 @@ void parse_arguments(parameters &p, int argc, char **argv) {
 	    ("LM-random-starts", "", cxxopts::value<long>(p.n_LM_starts))
 	;
 
-	options.add_options("Filtering")
-	    ("maf", "Exclude all SNPs whose minor allele frequency is below this threshold", cxxopts::value<double>(p.min_maf))
-	    ("info", "Exclude all SNPs whose IMPUTE info is below this threshold", cxxopts::value<double>(p.min_info))
-	    ("incl_rsids", "Exclude all SNPs whose RSID is not in the given file.", cxxopts::value<std::string>(p.incl_rsids_file))
-	    ("incl_sample_ids", "Exclude all samples whose sample ID is not in the BGEN file.", cxxopts::value<std::string>(p.incl_sids_file))
-	    ("suppress_squared_env_removal", "QC: Suppress test for significant squared environmental effects (SQE)")
-	    ("incl_squared_envs", "QC: Include significant squared environmental effects (SQE) as covariates")
-	;
-
-	options.add_options("VB")
-	    ("mode_vb", "Run VB algorithm.")
-	    ("mode_calc_snpstats", "Compute SNP association tests", cxxopts::value<bool>(p.mode_calc_snpstats))
-	    ("min_elbo_diff", "Convergence threshold for VB convergence.", cxxopts::value<double>(p.elbo_tol))
-	    ("mode_empirical_bayes", "Maximise ELBO wrt hyperparameters for hyperparameter updates.")
-	    ("mode_constant_hyps", "Keep hyperparameters constant.")
-	    ("mode_squarem", "Use SQUAREM algorithm for hyperparameter updates.")
-	    ("vb_iter_max", "Maximum number of VB iterations (default: 10000)", cxxopts::value<long>(p.vb_iter_max))
-	    ("spike_diff_factor", "", cxxopts::value<double>())
-	    ("gam_spike_diff_factor", "", cxxopts::value<double>(p.gam_spike_diff_factor))
-	    ("beta_spike_diff_factor", "", cxxopts::value<double>(p.beta_spike_diff_factor))
-	    ("resume_from_param_dump", "For use when resuming VB algorithm from previous run.", cxxopts::value<std::string>(p.resume_prefix))
-	    ("param_dump_interval", "Save VB state to file every N iterations (default: None)", cxxopts::value<long>(p.param_dump_interval))
-	;
-
-	options.add_options("RHE")
-	    ("RHEreg", "Run randomised HE-regression algorithm", cxxopts::value<bool>())
-	    ("RHEreg-fast", "Run randomised HE-regression algorithm without centering and scaling genotype matrix (unnecessary with modified h2 conversion)")
-	    ("RHEreg-groups", "Text file containing group of each SNP for use with multicomponent randomised HE regression", cxxopts::value<std::string>())
-	    ("mRHEreg-groups", "Text file to paths of --RHE-groups files. Each should correspond to the bgen files given in --mStreamBgen", cxxopts::value<std::string>())
-	    ("n_pve_samples", "Number of random vectors used in RHE algorithm", cxxopts::value<long>(p.n_pve_samples))
-	    ("n_jacknife", "Number of jacknife samples used in RHE algorithm", cxxopts::value<long>(p.n_jacknife))
-	    ("random_seed", "Seed used to draw random vectors in RHE algorithm (default: random)",
-	    cxxopts::value<unsigned int>(p.random_seed))
-	;
-
 	options.add_options("Other")
 	    ("h, help", "Print help page")
-	    ("redo_ym_interval", "", cxxopts::value<long>(p.redo_ym_interval))
 	;
 
 	try{
@@ -225,7 +181,7 @@ void parse_arguments(parameters &p, int argc, char **argv) {
 			std::exit(0);
 		} else {
 			print_compilation_details();
-			std::cout << std::endl << "Commandline arguments:" << std::endl << std::endl;
+			std::cout << std::endl << "Commandline arguments:" << std::endl;
 			std::cout << argv[0] << " \\" << std::endl;
 			for (auto keyvalue : args) {
 				std::cout << "\t--" << keyvalue.key() << "=" << keyvalue.value() <<" \\" << std::endl;
@@ -337,6 +293,13 @@ void parse_arguments(parameters &p, int argc, char **argv) {
 			check_file_exists(bgi);
 			p.streamBgiFiles.push_back(bgi);
 		}
+		if(opts.count("range")) {
+			auto ss = opts["range"].as<std::string>();
+			p.range = true;
+			p.range_chr = ss.substr(0, ss.find(':'));
+			p.range_start = std::atoi(ss.substr(ss.find(':')+1, ss.find('-')).c_str());
+			p.range_end = std::atoi(ss.substr(ss.find('-')+1, ss.size()).c_str());
+		}
 
 		if(opts.count("mode_empirical_bayes")) {
 			p.mode_empirical_bayes = true;
@@ -368,9 +331,6 @@ void parse_arguments(parameters &p, int argc, char **argv) {
 			if(!opts.count("param_dump_interval")) {
 				p.param_dump_interval = 50;
 			}
-		}
-		if(opts.count("raw_phenotypes")) {
-			p.scale_pheno = false;
 		}
 
 		if(opts.count("mode_spike_slab")) {
@@ -411,7 +371,7 @@ void parse_arguments(parameters &p, int argc, char **argv) {
 			std::cout << "Slab variance constrained to atleast " << p.min_spike_diff_factor << "x spike variance" << std::endl;
 		}
 
-		if(opts.count("mode_vb")) {
+		if(opts.count("VB")) {
 			p.mode_vb = true;
 			p.mode_calc_snpstats = true;
 		}
@@ -504,7 +464,6 @@ void parse_arguments(parameters &p, int argc, char **argv) {
 	//  "--xtra_verbose",
 	//  "--keep_constant_variants",
 	//  "--force_round1",
-	//  "--raw_phenotypes",
 	//  "--mode_alternating_updates",
 	//  "--mode_no_gxe",
 	//  "--vb_iter_max",
@@ -542,54 +501,6 @@ void parse_arguments(parameters &p, int argc, char **argv) {
 	//  std::exit(EXIT_SUCCESS);
 	// }
 	//
-	// if (argc == 1) {
-	//  print_compilation_details();
-	//  // For vectorise profiling
-	//  Eigen::VectorXi aa1 = Eigen::VectorXi::Random(256000);
-	//  Eigen::VectorXi aa2 = Eigen::VectorXi::Random(256000);
-	//  Eigen::VectorXi aa(256000);
-	//  Eigen::VectorXf bb1 = Eigen::VectorXf::Random(256000);
-	//  Eigen::VectorXf bb2 = Eigen::VectorXf::Random(256000);
-	//  Eigen::VectorXf bb(256000);
-	//  Eigen::VectorXd cc1 = Eigen::VectorXd::Random(256000);
-	//  Eigen::VectorXd cc2 = Eigen::VectorXd::Random(256000);
-	//  Eigen::VectorXd cc(256000);
-	//
-	//  MyTimer t_testi("500 foo() calls in %ts (int)\n");
-	//  t_testi.resume();
-	//  for (int jj = 0; jj < 500; jj++) {
-	//      foo(aa1, aa2, aa);
-	//  }
-	//  t_testi.stop();
-	//  t_testi.report();
-	//
-	//  MyTimer t_testf("500 foo() calls in %ts (float)\n");
-	//  t_testf.resume();
-	//  for (int jj = 0; jj < 500; jj++) {
-	//      foo(bb1, bb2, bb);
-	//  }
-	//  t_testf.stop();
-	//  t_testf.report();
-	//
-	//  MyTimer t_testf_cast("500 foo() calls in %ts (float via cast)\n");
-	//  t_testf_cast.resume();
-	//  for (int jj = 0; jj < 500; jj++) {
-	//      foo(bb1, cc2, bb);
-	//  }
-	//  t_testf_cast.stop();
-	//  t_testf_cast.report();
-	//
-	//
-	//  MyTimer t_testd("500 foo() calls in %ts (double)\n");
-	//  t_testd.resume();
-	//  for (int jj = 0; jj < 500; jj++) {
-	//      foo(cc1, cc2, cc);
-	//  }
-	//  t_testd.stop();
-	//  t_testd.report();
-	//
-	//  std::exit(EXIT_SUCCESS);
-	// }
 	//
 	// // read in and check option flags
 	// for (i = 0; i < argc; i++) {
@@ -828,11 +739,6 @@ void parse_arguments(parameters &p, int argc, char **argv) {
 	//
 	//      if(strcmp(in_str, "--high_mem") == 0) {
 	//          p.low_mem = false;
-	//          i += 0;
-	//      }
-	//
-	//      if(strcmp(in_str, "--raw_phenotypes") == 0) {
-	//          p.scale_pheno = false;
 	//          i += 0;
 	//      }
 	//
@@ -1130,13 +1036,13 @@ void parse_arguments(parameters &p, int argc, char **argv) {
 	}
 
 	if(p.mode_calc_snpstats) {
-		bool has_bgen = p.bgen_file != "NULL";
+		bool has_bgen = p.bgen_file != "NULL" || p.streamBgenFiles.size() > 0;
 		bool has_out = p.out_file != "NULL";
 		bool has_pheno = p.pheno_file != "NULL";
 		bool has_all = (has_pheno && has_out && has_bgen);
 		if(!has_all) {
 			std::cout << "ERROR: bgen, pheno and out filepaths should all be ";
-			std::cout << "provided in conjunction with --mode_vb." << std::endl;
+			std::cout << "provided in conjunction with --singleSnpStats" << std::endl;
 			std::exit(EXIT_FAILURE);
 		}
 	}
