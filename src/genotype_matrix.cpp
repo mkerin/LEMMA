@@ -66,7 +66,7 @@ Eigen::MatrixXd GenotypeMatrix::transpose_multiply(EigenRefDataMatrix lhs) const
 	assert(scaling_performed);
 
 	if(low_mem) {
-		if(params.mode_debug) std::cout << "Starting transpose multiply" << std::endl;
+		if(params.debug) std::cout << "Starting transpose multiply" << std::endl;
 		Eigen::MatrixXd res;
 		Eigen::VectorXd colsums = lhs.colwise().sum().matrix().cast<double>();
 
@@ -80,7 +80,7 @@ Eigen::MatrixXd GenotypeMatrix::transpose_multiply(EigenRefDataMatrix lhs) const
 		res = intervalWidth * (compressed_dosage_inv_sds.asDiagonal() * Mt_lhs);
 		res += 0.5 * intervalWidth * compressed_dosage_inv_sds * colsums.transpose();
 		res -= compressed_dosage_inv_sds.cwiseProduct(compressed_dosage_means) * colsums.transpose();
-		if(params.mode_debug) std::cout << "Ending transpose multiply" << std::endl;
+		if(params.debug) std::cout << "Ending transpose multiply" << std::endl;
 		return res;
 	} else {
 		return (G.transpose() * lhs.matrix()).cast<double>();

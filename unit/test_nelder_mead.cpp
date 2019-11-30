@@ -1,7 +1,6 @@
 //
 // Created by kerin on 2019-09-01.
 //
-#define EIGEN_USE_MKL_ALL
 #include "catch.hpp"
 
 #include "../src/nelder_mead.hpp"

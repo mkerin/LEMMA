@@ -1,7 +1,6 @@
 //
 // Created by kerin on 2019-03-02.
 //
-#define EIGEN_USE_MKL_ALL
 #include "catch.hpp"
 
 #include <vector>

@@ -40,7 +40,6 @@
 #include <boost/iostreams/filtering_stream.hpp>
 #include <boost/iostreams/device/file.hpp>
 #include <boost/iostreams/filter/gzip.hpp>
-#include <boost/exception/all.hpp>
 
 namespace boost_io = boost::iostreams;
 namespace boost_m = boost::math;
@@ -411,22 +410,23 @@ public:
 	void read_full_bgen(){
 		if(p.bgen_file != "NULL") {
 			std::cout << "Reading in BGEN" << std::endl;
-			p.chunk_size = bgenView->number_of_variants();
-			MyTimer t_readFullBgen("BGEN parsed in %ts \n");
-
 			if (p.flip_high_maf_variants) {
-				std::cout << "Flipping variants with MAF > 0.5" << std::endl;
+				std::cout << " - Flipping variants with MAF > 0.5" << std::endl;
 			}
-			t_readFullBgen.resume();
+
+			auto start = std::chrono::system_clock::now();
+			p.chunk_size = bgenView->number_of_variants();
 			fileUtils::read_bgen_chunk(bgenView, G, sample_is_invalid, n_samples, p.chunk_size, p, bgen_pass,
 			                           n_var_parsed);
+			auto end = std::chrono::system_clock::now();
+			std::chrono::duration<double> elapsed = end - start;
 			n_var = G.cols();
-			t_readFullBgen.stop();
-			std::cout << "BGEN contained " << n_var << " variants." << std::endl;
+			std::cout << " - BGEN contained " << n_var << " variants." << std::endl;
+			std::cout << " - BGEN parsed in " << elapsed.count() << "s" << std::endl;
 
 			G.calc_scaled_values();
 			G.compute_cumulative_pos();
-			if (p.xtra_verbose) std::cout << "Computed colwise mean and sd of genetic data" << std::endl;
+			if (p.debug) std::cout << " - Computed colwise mean and sd of genetic data" << std::endl << std::endl;
 
 			// Set default hyper-parameters if not read from file
 			// Run read_hyps twice as some settings depend on n_var
@@ -434,7 +434,7 @@ public:
 			if (p.hyps_grid_file != "NULL") {
 				read_hyps();
 			} else if (p.hyps_grid_file == "NULL") {
-				std::cout << "Initialising hyper-parameters with default settings" << std::endl;
+				if (p.debug) std::cout << "Initialising hyper-parameters with default settings" << std::endl;
 				Hyps hyps(p);
 				hyps.use_default_init(n_effects, n_var);
 				hyps_inits.push_back(hyps);
@@ -611,7 +611,8 @@ public:
 
 	void read_pheno( ){
 		// Read phenotypes to Eigen matrix Y
-		EigenUtils::read_matrix(p.pheno_file, n_samples, Y, pheno_names, missing_phenos);
+		EigenUtils::read_matrix(p.pheno_file, Y, pheno_names, missing_phenos);
+		assert(Y.rows() == n_samples);
 		n_pheno = Y.cols();
 		if(n_pheno != 1) {
 			std::cout << "ERROR: Only expecting one phenotype at a time." << std::endl;
@@ -621,7 +622,8 @@ public:
 
 	void read_covar( ){
 		// Read covariates to Eigen matrix C
-		EigenUtils::read_matrix(p.covar_file, n_samples, C, covar_names, missing_covars);
+		EigenUtils::read_matrix(p.covar_file, C, covar_names, missing_covars);
+		assert(C.rows() == n_samples);
 		n_covar = C.cols();
 		W_reduced = false;
 	}
@@ -633,7 +635,8 @@ public:
 
 	void read_environment( ){
 		// Read covariates to Eigen matrix C
-		EigenUtils::read_matrix(p.env_file, n_samples, E, env_names, missing_envs);
+		EigenUtils::read_matrix(p.env_file, E, env_names, missing_envs);
+		assert(E.rows() == n_samples);
 		n_env = E.cols();
 		E_reduced = false;
 	}
@@ -1265,7 +1268,7 @@ public:
 			assert(vp_init.muc.rows() == n_covar);
 		} else if (n_covar > 0) {
 			// Start covars at least squared solution
-			std::cout << "Starting covars at least squares fit" << std::endl;
+			if(p.debug) std::cout << "Starting covars at least squares fit" << std::endl;
 			Eigen::MatrixXd CtC = C.transpose() * C;
 			CtC = mpiUtils::mpiReduce_inplace(CtC);
 			Eigen::MatrixXd Cty = C.transpose() * Y;
@@ -1277,7 +1280,7 @@ public:
 		if(p.vb_init_file != "NULL") {
 			assign_vb_init_from_file(vp_init);
 		}
-		if (p.mode_debug) std::cout << "Done vb init" << std::endl;
+		if (p.debug) std::cout << "Done vb init" << std::endl;
 	}
 
 	void dump_processed_data(){
@@ -1431,10 +1434,7 @@ public:
 		std::cout << " across covariates";
 		if(p.env_file != "NULL") std::cout << ", env-variables" << std::endl;
 		std::cout << " and phenotype";
-		std::cout << " (" << n_samples << " on rank " << world_rank << ")." << std::endl;
-
-		std::cout << "Load factor for sample_is_invalid map: ";
-		std::cout << sample_is_invalid.load_factor() << std::endl;
+		std::cout << " (" << n_samples << " on rank " << world_rank << ")." << std::endl << std::endl;
 	}
 
 	std::string fstream_init(boost_io::filtering_ostream& my_outf,

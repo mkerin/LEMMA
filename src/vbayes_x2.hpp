@@ -84,13 +84,9 @@ public:
 	std::vector<long> chrs_present;
 	std::vector<long> chrs_index;
 
-
-//
 	parameters p;
 	std::vector<long> fwd_pass;
 	std::vector<long> back_pass;
-//	std::vector< std::vector < std::uint32_t >> fwd_pass_chunks;
-//	std::vector< std::vector < std::uint32_t >> back_pass_chunks;
 	std::vector< std::vector <long> > main_fwd_pass_chunks, gxe_fwd_pass_chunks;
 	std::vector< std::vector <long> > main_back_pass_chunks, gxe_back_pass_chunks;
 	std::vector<long> env_fwd_pass, covar_fwd_pass;
@@ -103,7 +99,6 @@ public:
 	EigenDataArrayX Cty;
 	EigenDataMatrix& E;
 	EigenDataMatrix& C;
-	Eigen::MatrixXd XtE;
 	Eigen::MatrixXd CtCRidgeInv;
 
 	Eigen::ArrayXXd& dXtEEX_lowertri;
@@ -208,24 +203,9 @@ public:
 			for (auto &hyps : hyps_inits) {
 				hyps.s_x << n_var;
 			}
-		} else if(n_env == 1) {
-			for (auto &hyps : hyps_inits) {
-				hyps.s_x << n_var, n_var;
-				// hyps.s_x << n_var, dXtEEX.col(0).sum() / (n_samples - 1.0);
-			}
 		} else {
-			// Eigen::ArrayXd muw_sq(n_env * n_env);
-			// for (int ll = 0; ll < n_env; ll++) {
-			//  for (int mm = 0; mm < n_env; mm++) {
-			//      muw_sq(mm*n_env + ll) = vp_init.mean_weights(mm) * vp_init.mean_weights(ll);
-			//  }
-			// }
-
 			for (auto &hyps : hyps_inits) {
 				hyps.s_x << n_var, n_var;
-				// hyps.s_x[0] = n_var;
-				// hyps.s_x(1) = (dXtEEX.rowwise() * muw_sq.transpose()).sum() / (N - 1.0);
-				// hyps.s_x(1) -= (XtE * vp_init.mean_weights().matrix()).array().square().sum() / N / (N - 1.0);
 			}
 		}
 
@@ -245,23 +225,10 @@ public:
 			covar_back_pass.push_back(n_covar - ll - 1);
 		}
 
-		long n_main_segs, n_gxe_segs, n_chunks;
 		// ceiling of n_var / chunk size
+		long n_main_segs, n_gxe_segs;
 		n_main_segs = (n_var + p.main_chunk_size - 1) / p.main_chunk_size;
-		// ceiling of n_var / chunk size
 		n_gxe_segs = (n_var + p.gxe_chunk_size - 1) / p.gxe_chunk_size;
-		n_chunks = n_main_segs;
-		if(n_effects > 1) {
-			n_chunks += n_gxe_segs;
-		}
-//
-//		fwd_pass_chunks.resize(n_chunks);
-//		back_pass_chunks.resize(n_chunks);
-//		for(std::uint32_t kk = 0; kk < n_effects * n_var; kk++){
-//			std::uint32_t ch_index = (kk < n_var ? kk / p.main_chunk_size : n_main_segs + (kk % n_var) / p.gxe_chunk_size);
-//			fwd_pass_chunks[ch_index].push_back(kk);
-//			back_pass_chunks[n_chunks - 1 - ch_index].push_back(kk);
-//		}
 
 		main_fwd_pass_chunks.resize(n_main_segs);
 		main_back_pass_chunks.resize(n_main_segs);
@@ -276,44 +243,12 @@ public:
 			gxe_back_pass_chunks[n_gxe_segs - 1 - gxe_ch_index].push_back(kk + n_var);
 		}
 
-
-//		for (long ii = 0; ii < n_chunks; ii++){
-//			std::reverse(back_pass_chunks[ii].begin(), back_pass_chunks[ii].end());
-//		}
 		for (long ii = 0; ii < n_main_segs; ii++) {
 			std::reverse(main_back_pass_chunks[ii].begin(), main_back_pass_chunks[ii].end());
 		}
 		for (long ii = 0; ii < n_gxe_segs; ii++) {
 			std::reverse(gxe_back_pass_chunks[ii].begin(), gxe_back_pass_chunks[ii].end());
 		}
-
-//		for (auto chunk : fwd_pass_chunks){
-//			for (auto ii : chunk){
-//				std::cout << ii << " ";
-//			}
-//			std::cout << std::endl;
-//		}
-//
-//		for (auto chunk : back_pass_chunks){
-//			for (auto ii : chunk){
-//				std::cout << ii << " ";
-//			}
-//			std::cout << std::endl;
-//		}
-//
-//		for (auto chunk : gxe_back_pass_chunks){
-//			for (auto ii : chunk){
-//				std::cout << ii << " ";
-//			}
-//			std::cout << std::endl;
-//		}
-//
-//		for (auto chunk : main_back_pass_chunks){
-//			for (auto ii : chunk){
-//				std::cout << ii << " ";
-//			}
-//			std::cout << std::endl;
-//		}
 
 		if(n_effects == 1) {
 			gxe_back_pass_chunks.clear();
@@ -337,7 +272,7 @@ public:
 
 		// Cache Cty
 		if(n_covar > 0) {
-			if (p.mode_debug) std::cout << "Caching Cty" << std::endl;
+			if (p.debug) std::cout << "Caching Cty" << std::endl;
 			EigenDataArrayX Ctylocal;
 			Ctylocal = C.transpose() * Y;
 			Cty.resize(Ctylocal.rows(), Ctylocal.cols());
@@ -500,7 +435,7 @@ public:
 		// Allow more flexible start point so that we can resume previous inference run
 		long count = p.vb_iter_start;
 		while(!all_converged && count < p.vb_iter_max) {
-			if (p.mode_debug) std::cout << "Iter count: " << count << std::endl;
+			if (p.debug) std::cout << "Iter count: " << count << std::endl;
 			for (int nn = 0; nn < n_grid; nn++) {
 				if(n_covar > 0) covar_prev[nn] = all_vp[nn].mean_covars().array();
 				beta_prev[nn] = all_vp[nn].mean_beta().array();
@@ -536,12 +471,12 @@ public:
 				}
 			}
 
-			if (p.mode_debug) std::cout << " - update params" << std::endl;
+			if (p.debug) std::cout << " - update params" << std::endl;
 			updateAllParams(count, round_index, all_vp, all_hyps, logw_prev);
 
 			// SQUAREM
 			if (p.mode_squarem) {
-				if (p.mode_debug) std::cout << " - SQUAREM accelerator" << std::endl;
+				if (p.debug) std::cout << " - SQUAREM accelerator" << std::endl;
 				if(count % 3 == 0) {
 					theta0 = all_hyps;
 				} else if (count % 3 == 1) {
@@ -752,7 +687,7 @@ public:
 		}
 
 		// Update env-weights
-		if (p.mode_debug) std::cout << " - update env weights" << std::endl;
+		if (p.debug) std::cout << " - update env weights" << std::endl;
 		if (n_effects > 1 && n_env > 1) {
 			for (int nn = 0; nn < n_grid; nn++) {
 				for (int uu = 0; uu < p.env_update_repeats; uu++) {
@@ -765,7 +700,7 @@ public:
 
 		// Maximise hyps
 		if (round_index > 1 && p.mode_empirical_bayes) {
-			if (p.mode_debug) std::cout << " - max hyps" << std::endl;
+			if (p.debug) std::cout << " - max hyps" << std::endl;
 			for (int nn = 0; nn < n_grid; nn++) {
 				maximiseHyps(all_hyps[nn], all_vp[nn]);
 				check_monotonic_elbo(all_hyps[nn], all_vp[nn], count, logw_prev[nn], "maxHyps");
@@ -874,7 +809,7 @@ public:
 				YX.noalias() += D * rr_diff.cast<scalarData>();
 			}
 
-			if(p.mode_debug) {
+			if(p.debug) {
 				if(ee == 0) {
 					for (int nn = 0; nn < n_grid; nn++) {
 						check_monotonic_elbo(all_hyps[nn], all_vp[nn], count, logw_prev[nn], "updateAlphaMu_main_internal");
@@ -1249,7 +1184,6 @@ public:
 				colVarZ -= (vp.muw(ll) * vp.muw(ll) * dXtEEX_lowertri.col(dXtEEX_col_ind(ll, ll, n_env))).sum();
 			}
 			colVarZ /= (Nglobal - 1.0);
-//		colVarZ -= (XtE * vp.muw.matrix()).array().square().sum() / Nglobal / (Nglobal - 1.0);
 		}
 		colVarZ = mpiUtils::mpiReduce_inplace(&colVarZ);
 

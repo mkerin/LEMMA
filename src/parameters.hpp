@@ -32,7 +32,7 @@ public:
 	bool elbo_tol_set_by_user, alpha_tol_set_by_user, mode_empirical_bayes;
 	bool keep_constant_variants, user_requests_round1, scale_pheno;
 	bool mode_alternating_updates, mode_RHE, mode_RHE_fast;
-	bool restrict_gamma_updates, mode_no_gxe, mode_debug;
+	bool restrict_gamma_updates, mode_no_gxe, debug;
 	bool init_weights_with_snpwise_scan, flip_high_maf_variants, min_spike_diff_set;
 	bool mode_mog_prior_beta, mode_mog_prior_gam, mode_random_start, mode_calc_snpstats;
 	bool mode_remove_squared_envs, mode_squarem, mode_incl_squared_envs, drop_loco;
@@ -115,7 +115,7 @@ public:
 		mode_calc_snpstats = false;
 		mode_mog_prior_beta = true;
 		mode_mog_prior_gam = true;
-		mode_debug = false;
+		debug = false;
 		mode_random_start = false;
 		mode_RHE = false;
 		mode_RHE_fast = false;

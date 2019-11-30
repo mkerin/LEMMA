@@ -154,7 +154,7 @@ public:
 		initialGuess[n_params - 1] = sigmas[2];
 		assert(initialGuess.rows() == n_params);
 
-		std::cout << std::endl << initialGuess << std::endl;
+		if(p.debug) std::cout << std::endl << initialGuess << std::endl;
 
 		theta = initialGuess;
 		update_aggregated_components(theta);
@@ -176,7 +176,7 @@ public:
 		delta = (JtJ + u*I).colPivHouseholderQr().solve(Jte);
 
 		if (delta.norm() <= e2*(theta.norm() + e2)) {
-			std::cout << "LM terminated as L2(delta) < " << e2*theta.norm() << std::endl;
+			if(p.debug) std::cout << "LM terminated as L2(delta) < " << e2*theta.norm() << std::endl;
 			stop = true;
 		} else {
 			// Attempt new step
@@ -208,11 +208,11 @@ public:
 				// Additional stop conditions
 				// max(g) <= e1 OR length(error)^2 <= e3
 				if(Jte.cwiseAbs().maxCoeff() <= e1) {
-					std::cout << "LM terminated as magnitude of the gradient Jte < " << e1 << std::endl;
+					if(p.debug) std::cout << "LM terminated as magnitude of the gradient Jte < " << e1 << std::endl;
 					stop = true;
 				}
 				if(ete <= e3) {
-					std::cout << "LM terminated as error dropped below < " << e3 << std::endl;
+					if(p.debug) std::cout << "LM terminated as error dropped below < " << e3 << std::endl;
 					stop = true;
 				}
 			} else {
@@ -221,7 +221,7 @@ public:
 				v *= damping;
 			}
 		}
-		if(p.mode_debug) std::cout << "LM: rho = " << rho << "; damping = " << u << std::endl;
+		if(p.debug) std::cout << "LM: rho = " << rho << "; damping = " << u << std::endl;
 		return stop;
 	}
 

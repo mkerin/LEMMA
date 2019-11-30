@@ -78,7 +78,7 @@ public:
 		is_finalised = false;
 		rm_jacknife_block = -1;
 
-		if(params.mode_debug) {
+		if(params.debug) {
 			std::string ram = mpiUtils::currentUsageRAM();
 			std::cout << "(" << ram << ")" << std::endl;
 		}

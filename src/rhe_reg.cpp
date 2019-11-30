@@ -61,9 +61,6 @@ void RHEreg::run() {
 	process_jacknife_samples();
 	end = std::chrono::system_clock::now();
 	elapsed_solveJacknife = end - start;
-
-	std::cout << "PVE estimates" << std::endl;
-	std::cout << h2 << std::endl;
 }
 
 void RHEreg::standardise_non_genetic_data(){
@@ -94,12 +91,12 @@ void RHEreg::initialise_components() {
 		fill_gaussian_noise(p.random_seed, zz, n_samples, n_draws);
 	}
 
-	if(p.mode_debug) {
+	if(p.debug) {
 		std::string ram = mpiUtils::currentUsageRAM();
 		std::cout << "Before initialising " << ram << std::endl;
 	}
 
-	std::cout << "Initialising HE-regression components with:" << std::endl;
+	std::cout << "Running RHE-regression with:" << std::endl;
 	std::cout << " - N-jacknife = " << p.n_jacknife << std::endl;
 	std::cout << " - N-draws = " << p.n_pve_samples << std::endl;
 	std::cout << " - N-samples = " << (long) Nglobal << std::endl;
@@ -125,7 +122,7 @@ void RHEreg::initialise_components() {
 				comp.group = group;
 				components.push_back(std::move(comp));
 
-				if(p.mode_debug) {
+				if(p.debug) {
 					std::string ram = mpiUtils::currentUsageRAM();
 					std::cout << "(" << ram << ")" << std::endl;
 				}
@@ -139,9 +136,9 @@ void RHEreg::initialise_components() {
 		}
 	}
 
-	if(p.xtra_verbose) {
+	if(p.debug) {
 		std::string ram = mpiUtils::currentUsageRAM();
-		std::cout << "Initialised main effects RHEreg components (" << ram << ")" << std::endl;
+		std::cout << "Initialised main effects RHE-regression components (" << ram << ")" << std::endl;
 	}
 
 	for (long ee = 0; ee < n_env; ee++) {
@@ -181,7 +178,7 @@ void RHEreg::initialise_components() {
 
 	std::cout << " - N-RHEreg-components = " << n_components - 1 << std::endl;
 	std::string ram = mpiUtils::currentUsageRAM();
-	std::cout << "Initialised RHEreg (" << ram << ")" << std::endl;
+	std::cout << "Initialised RHE-regression components (" << ram << ")" << std::endl << std::endl;
 }
 
 void RHEreg::compute_RHE_trace_operators() {
@@ -240,7 +237,7 @@ void RHEreg::compute_RHE_trace_operators() {
 		long n_var_parsed = 0;
 		long ch = 0;
 		long print_interval = p.streamBgen_print_interval;;
-		if (p.mode_debug) print_interval = 1;
+		if (p.debug) print_interval = 1;
 		long long n_find_operations = 0;
 		std::vector<std::string> SNPIDS;
 		long long n_vars_tot = 0;
@@ -362,13 +359,9 @@ void RHEreg::solve_RHE(std::vector<RHEreg_Component>& components) {
 
 	if(world_rank == 0) {
 		auto filename = fileUtils::fstream_init(outf, p.out_file, "", "_linSystem_dump");
-		std::cout << "Dumping RHEreg linear system to " << filename << std::endl;
+		std::cout << "Writing RHEreg linear system to " << filename << std::endl;
 		outf << CC << std::endl;
 		boost_io::close(outf);
-	}
-	if(!p.RHE_multicomponent) {
-		std::cout << "A: " << std::endl << A << std::endl;
-		std::cout << "b: " << std::endl << bb << std::endl;
 	}
 	sigmas = A.colPivHouseholderQr().solve(bb);
 	h2 = calc_h2(A, bb, true);
@@ -383,15 +376,19 @@ void RHEreg::solve_RHE(std::vector<RHEreg_Component>& components) {
 			}
 		}
 
-		std::cout << "Additive and multiplicative interaction h2 estimates:" << std::endl;
-		std::cout << "h2_G = " << h2_G_tot << std::endl;
+		std::cout << "Aggregate heritability estimates:" << std::endl;
+		std::cout << "G   = " << h2_G_tot << std::endl;
 		if(n_env > 0) {
-			std::cout << "h2_GxE = " << h2_GxE_tot << std::endl;
+			std::cout << "GxE = " << h2_GxE_tot << std::endl;
 		}
 	} else {
 		std::cout << "Heritability estimates:" << std::endl;
-		std::cout << h2 << std::endl;
+		for (long cc = 0; cc < n_components - 1; cc++){
+			printf ("%-10s", components[cc].label.c_str());
+			std::cout << " = " << h2[cc] << std::endl;
+		}
 	}
+
 
 	// Write to file
 	if(world_rank == 0 && p.xtra_verbose) {
@@ -427,7 +424,7 @@ void RHEreg::solve_RHE(std::vector<RHEreg_Component>& components) {
 			sigmas_jack.row(jj) = ss;
 			h2_jack.row(jj) = calc_h2(AA, bb, true);
 
-			if(p.xtra_verbose && jj % 10 == 0 && jj > 0) {
+			if(p.verbose && jj % 10 == 0 && jj > 0) {
 				std::cout << "Computed " << jj << " of ";
 				std::cout << p.n_jacknife << " jacknife blocks" << std::endl;
 			}
@@ -435,7 +432,7 @@ void RHEreg::solve_RHE(std::vector<RHEreg_Component>& components) {
 		for (long ii = 0; ii < n_components; ii++) {
 			components[ii].rm_jacknife_block = -1;
 		}
-		if (p.mode_debug) {
+		if (p.debug) {
 			boost_io::close(outf);
 		}
 	}
@@ -460,12 +457,11 @@ void RHEreg::solve_RHE(std::vector<RHEreg_Component>& components) {
 		bb1 << bb(ind_main), bb(ind_noise);
 		Eigen::VectorXd sigmas1 = A1.colPivHouseholderQr().solve(bb1);
 		Eigen::VectorXd h2_1 = sigmas1 / sigmas1.sum();
-		std::cout << "h2-G = " << h2_1(0, 0) << " (main effects model only)" << std::endl;
 	}
 }
 
 Eigen::VectorXd RHEreg::run_RHE_levenburgMarquardt() {
-	std::cout << std::endl << "Optimising env-weights with Levenburg-Marquardt" << std::endl;
+	std::cout << "Optimising interaction-weights with Levenburg-Marquardt" << std::endl;
 
 	Eigen::VectorXd env_weights;
 	double best_rss = std::numeric_limits<double>::max();
@@ -498,13 +494,16 @@ Eigen::VectorXd RHEreg::run_RHE_levenburgMarquardt() {
 		elapsed_LM_copyData += LM.elapsed_copyData;
 
 		if(tmp_rss < best_rss) {
-			std::cout << "Updating best LM; SumOfSquares = " << tmp_rss;
-			std::cout << " after " << LM.count << " iterations" << std::endl;
+			if (p.verbose) {
+				std::cout << "Updating best LM; SumOfSquares = " << tmp_rss;
+				std::cout << " after " << LM.count << " iterations" << std::endl;
+			}
 			best_rss = tmp_rss;
 			env_weights = tmp_env_weights;
 			LM.push_interim_updates();
 		}
 	}
+	std::cout << std::endl;
 
 	// Rescale env weights
 	Eigen::ArrayXd eta = E * env_weights;
@@ -514,7 +513,7 @@ Eigen::VectorXd RHEreg::run_RHE_levenburgMarquardt() {
 	sd /= (Nglobal - 1.0);
 	sd = std::sqrt(sd);
 	env_weights /= sd;
-	if(p.mode_debug) {
+	if(p.debug) {
 		std::cout << "Eta-mean = " << mean << std::endl;
 		std::cout << "Eta-SD = " << sd << std::endl;
 	}
@@ -526,13 +525,11 @@ Eigen::VectorXd RHEreg::run_RHE_levenburgMarquardt() {
 	std::vector<std::string> header = {"env", "mu"};
 	EigenUtils::write_matrix(outf, env_weights, header, env_names);
 
-	if(p.xtra_verbose) {
-		if (n_env > 0) {
+		if (p.verbose && n_env > 0) {
 			std::string path = fileUtils::filepath_format(p.out_file, "", "_LM_converged_eta");
-			std::cout << "Writing eta to file: " << path << std::endl;
+			std::cout << "Writing eta to " << path << std::endl;
 			fileUtils::dump_predicted_vec_to_file(eta, path, "eta", sample_location);
 		}
-	}
 
 	// Use weights to collapse GxE component and continue with rest of algorithm
 	std::vector<RHEreg_Component> my_components;
@@ -730,11 +727,11 @@ void RHEreg::process_jacknife_samples() {
 Eigen::MatrixXd RHEreg::project_out_covars(Eigen::Ref<Eigen::MatrixXd> rhs) {
 	if(n_covar > 0) {
 		if (CtC_inv.rows() != n_covar) {
-			if(p.mode_debug) std::cout << "Starting compute of CtC_inv" << std::endl;
+			if(p.debug) std::cout << "Starting compute of CtC_inv" << std::endl;
 			Eigen::MatrixXd CtC = C.transpose() * C;
 			CtC = mpiUtils::mpiReduce_inplace(CtC);
 			CtC_inv = CtC.inverse();
-			if(p.mode_debug) std::cout << "Ending compute of CtC_inv" << std::endl;
+			if(p.debug) std::cout << "Ending compute of CtC_inv" << std::endl;
 		}
 		return EigenUtils::project_out_covars(rhs, C, CtC_inv);
 	} else {

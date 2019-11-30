@@ -46,20 +46,20 @@ Eigen::MatrixXd solve(const Eigen::MatrixXd &A, const Eigen::MatrixXd &b);
 
 Eigen::MatrixXd subset_matrix(const Eigen::MatrixXd &orig, const std::vector<int> &valid_points);
 
-template <typename EigenMat>
-void read_matrix(const std::string& filename,
-                 const long& n_rows,
-                 EigenMat& M,
-                 std::vector< std::string >& col_names,
-                 std::map<long, bool>& incomplete_row );
+	template <typename EigenMat>
+	void read_matrix(const std::string& filename,
+					 EigenMat& M,
+					 std::vector< std::string >& col_names,
+					 std::map<long, bool>& incomplete_row );
 
-
+	template <typename EigenMat>
 void read_matrix(const std::string& filename,
-                 Eigen::MatrixXd& M,
+				 EigenMat& M,
                  std::vector< std::string >& col_names);
 
+	template <typename EigenMat>
 void read_matrix(const std::string& filename,
-                 Eigen::MatrixXd& M);
+				 EigenMat& M);
 
 void read_matrix_and_skip_cols(const std::string &filename,
                                const int& n_skip_cols,

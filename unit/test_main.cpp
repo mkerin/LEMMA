@@ -1,5 +1,4 @@
 // tests-main.cpp
-#define EIGEN_USE_MKL_ALL
 #include "catch.hpp"
 
 #include "../src/tools/eigen3.3/Dense"

@@ -130,7 +130,7 @@ void iterNelderMead(Eigen::Ref<Eigen::MatrixXd> simplex_points,
 	double par_delta = 0.5;         // shrinkage parameter
 
 
-	if(p.mode_debug) {
+	if(p.debug) {
 		std::cout << "Sorting function values (lowest to highest)" << std::endl;
 		std::cout << simplex_fn_vals.transpose() << std::endl;
 	}
@@ -146,7 +146,7 @@ void iterNelderMead(Eigen::Ref<Eigen::MatrixXd> simplex_points,
 		simplex_fn_vals(ii) = simplex_fn_vals_bak(sorter[ii].second);
 		simplex_points.row(ii) = simplex_points_bak.row(sorter[ii].second);
 	}
-	if(p.mode_debug) {
+	if(p.debug) {
 		std::cout << simplex_fn_vals.transpose() << std::endl;
 	}
 

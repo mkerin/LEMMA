@@ -362,7 +362,7 @@ void parse_arguments(parameters &p, int argc, char **argv) {
 		}
 
 		if(opts.count("mode_debug")) {
-			p.mode_debug = true;
+			p.debug = true;
 			p.verbose = true;
 			p.xtra_verbose = true;
 			if(!opts.count("param_dump_interval")) {

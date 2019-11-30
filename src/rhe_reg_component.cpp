@@ -40,7 +40,7 @@ RHEreg_Component::RHEreg_Component(const parameters &myparams,
 		_XXtzs[ii] = Eigen::MatrixXd::Zero(n_samples, n_draws);
 	}
 
-	if(params.mode_debug) {
+	if(params.debug) {
 		std::string ram = mpiUtils::currentUsageRAM();
 		std::cout << "(" << ram << ")" << std::endl;
 	}

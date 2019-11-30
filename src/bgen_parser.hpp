@@ -2,8 +2,6 @@
 #ifndef BGEN_PARSER_HPP
 #define BGEN_PARSER_HPP
 
-#include <boost/algorithm/string/predicate.hpp>
-#include <boost/lexical_cast.hpp>
 #include <iostream>
 #include "genfile/bgen/bgen.hpp"
 #include "typedefs.hpp"

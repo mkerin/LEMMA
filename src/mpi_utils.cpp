@@ -50,14 +50,14 @@ mpiUtils::partition_valid_samples_across_ranks(const long &n_samples,
 	long rankZeroSamples;
 	if(rankZeroBytes > p.maxBytesPerRank) {
 		// Predicted to overflow maxBytesPerRank. Adjust accordingly.
-		if(p.verbose) {
-			std::cout << "Reducing no. of samples stored on rank 0 from ";
+		if(p.debug) {
+			std::cout << "Reducing the number of samples stored on rank 0 from ";
 			std::cout << samplesPerRank << " to ";
 		}
 		long size1 = size - 1;
 		rankZeroSamples = (p.maxBytesPerRank - dXtEEX_bytes) / (long long) n_var;
 		samplesPerRank = (n_valid_sids - rankZeroSamples + size1 - 1) / size1;
-		if (p.verbose) std::cout << rankZeroSamples << " to allow space for dXtEEX" << std::endl;
+		if (p.debug) std::cout << rankZeroSamples << " to allow space for dXtEEX" << std::endl;
 		assert(rankZeroSamples > 0);
 	} else {
 		// No overflow; hence have same number of samples on all ranks.
@@ -78,7 +78,7 @@ mpiUtils::partition_valid_samples_across_ranks(const long &n_samples,
 	}
 	assert(iiValid == n_valid_sids + diff);
 
-	if(p.mode_debug) {
+	if(p.debug) {
 		std::vector<long> allii(size, 0);
 		for (const auto &kv : sample_location) {
 			if (kv.second != -1) {

@@ -530,7 +530,7 @@ bool fileUtils::read_bgen_chunk(genfile::bgen::View::UniquePtr &bgenView,
 	}
 
 	if(n_constant_variance > 0) {
-		std::cout << n_constant_variance << " variants removed due to ";
+		std::cout << " - " << n_constant_variance << " variants removed due to ";
 		std::cout << "constant variance" << std::endl;
 	}
 

@@ -1,7 +1,6 @@
-// Adapted from example/bgen_to_vcf.cpp by Gavin Band
-// From project at http://bitbucket.org/gavinband/bgen/get/master.tar.gz
-
-#define EIGEN_USE_MKL_ALL
+//
+// Created by kerin on 2018-01-26.
+//
 
 #include "parse_arguments.hpp"
 #include "parameters.hpp"
@@ -11,8 +10,6 @@
 #include "genotype_matrix.hpp"
 #include "mpi_utils.hpp"
 
-#include <boost/algorithm/string/predicate.hpp>
-#include <boost/lexical_cast.hpp>
 #include <algorithm>
 #include <dirent.h>
 #include <iostream>
@@ -129,7 +126,7 @@ int main( int argc, char** argv ) {
 				long n_var_parsed = 0;
 				long ch = 0;
 				long print_interval = p.streamBgen_print_interval;;
-				if (p.mode_debug) print_interval = 1;
+				if (p.debug) print_interval = 1;
 				long long n_vars_tot = 0;
 				for (int ii = 0; ii < p.streamBgenFiles.size(); ii++) {
 					n_vars_tot += data.streamBgenViews[ii]->number_of_variants();
@@ -244,7 +241,7 @@ int main( int argc, char** argv ) {
 	auto end = std::chrono::system_clock::now();
 	std::chrono::duration<double> elapsed_seconds = end-start;
 	std::time_t end_time = std::chrono::system_clock::to_time_t(end);
-	std::cout << "Analysis finished at " << std::ctime(&end_time);
+	std::cout << std::endl << "Analysis finished at " << std::ctime(&end_time);
 	std::cout << "Elapsed time: " << elapsed_seconds.count() << "s" << std::endl;
 
 	if (world_rank != 0) {

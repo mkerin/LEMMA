@@ -67,85 +67,26 @@ void EigenUtils::write_matrix(boost_io::filtering_ostream& outf,
 }
 
 template <typename EigenMat>
-void EigenUtils::read_matrix(const std::string &filename,
-                             const long &n_rows,
-                             EigenMat &M,
-                             std::vector<std::string> &col_names,
-                             std::map<long, bool> &incomplete_row) {
-	/* Assumptions:
-	   - n_rows constant (number of samples constant across files)
-	 */
-
-	boost_io::filtering_istream fg;
-	std::string gz_str = ".gz";
-	if (filename.find(gz_str) != std::string::npos) {
-		fg.push(boost_io::gzip_decompressor());
-	}
-	fg.push(boost_io::file_source(filename));
-	if (!fg) {
-		std::cout << "ERROR: " << filename << " not opened." << std::endl;
-		std::exit(EXIT_FAILURE);
-	}
-
-	// Reading column names
-	std::string line;
-	if (!getline(fg, line)) {
-		std::cout << "ERROR: " << filename << " contains zero lines." << std::endl;
-		std::exit(EXIT_FAILURE);
-	}
-	std::stringstream ss;
-	std::string s;
-	int n_cols = 0;
-	ss.clear();
-	ss.str(line);
-	while (ss >> s) {
-		++n_cols;
-		col_names.push_back(s);
-	}
-	std::cout << " Reading matrix of size " << n_rows << " x " << n_cols << " from " << filename << std::endl;
-
-	// Write remainder of file to Eigen matrix M
-	incomplete_row.clear();
-	M.resize(n_rows, n_cols);
-	int i = 0;
-	double tmp_d;
-	while (getline(fg, line)) {
-		if (i >= n_rows) {
-			throw std::runtime_error("ERROR: could not convert txt file (too many lines).");
-		}
-		ss.clear();
-		ss.str(line);
-		for (int k = 0; k < n_cols; k++) {
-			std::string sss;
-			ss >> sss;
-			/// NA
-			if (sss == "NA" || sss == "NAN" || sss == "NaN" || sss == "nan") {
-				tmp_d = 0;
-				incomplete_row[i] = true;
-			} else {
-				try{
-					tmp_d = stod(sss);
-				} catch (const std::invalid_argument &exc) {
-					std::cout << sss << " on line " << i << std::endl;
-					throw;
-				}
-			}
-			M(i, k) = tmp_d;
-		}
-		i++;
-	}
-	if (i < n_rows) {
-		throw std::runtime_error("ERROR: could not convert txt file (too few lines).");
-	}
+void EigenUtils::read_matrix( const std::string& filename,
+							  EigenMat& M){
+	std::vector<std::string> placeholder;
+	EigenUtils::read_matrix(filename, M, placeholder);
 }
 
+template <typename EigenMat>
 void EigenUtils::read_matrix(const std::string &filename,
-                             Eigen::MatrixXd &M,
-                             std::vector <std::string> &col_names) {
-	/* Assumptions:
-	   - dimensions unknown
-	   - assume no missing values
-	 */
+							 EigenMat &M,
+							 std::vector <std::string> &col_names){
+	std::map<long, bool> incomplete_row;
+	EigenUtils::read_matrix(filename, M, col_names, incomplete_row);
+}
+
+template <typename EigenMat>
+void EigenUtils::read_matrix(const std::string &filename,
+							 EigenMat &M,
+                             std::vector <std::string> &col_names,
+							 std::map<long, bool> &incomplete_row) {
+	/* Read txt file into martix. Files can be gzipped. */
 
 	boost_io::filtering_istream fg;
 	std::string gz_str = ".gz";
@@ -185,9 +126,10 @@ void EigenUtils::read_matrix(const std::string &filename,
 		++n_cols;
 		col_names.push_back(s1);
 	}
-	std::cout << " Reading matrix of size " << n_rows << " x " << n_cols << " from " << filename << std::endl;
+	std::cout << "Reading matrix of size " << n_rows << " x " << n_cols << " from " << filename << std::endl;
 
 	// Write remainder of file to Eigen matrix M
+	incomplete_row.clear();
 	M.resize(n_rows, n_cols);
 	int i = 0;
 	double tmp_d;
@@ -198,28 +140,24 @@ void EigenUtils::read_matrix(const std::string &filename,
 		ss.clear();
 		ss.str(line);
 		for (int k = 0; k < n_cols; k++) {
-			std::string s;
-			ss >> s;
-			try{
-				tmp_d = stod(s);
-			} catch (const std::invalid_argument &exc) {
-				std::cout << s << " on line " << i << std::endl;
-				throw;
+			std::string sss;
+			ss >> sss;
+			if (sss == "NA" || sss == "NAN" || sss == "NaN" || sss == "nan") {
+				tmp_d = 0;
+				incomplete_row[i] = true;
+			} else {
+				try {
+					tmp_d = stod(sss);
+				} catch (const std::invalid_argument &exc) {
+					std::cout << sss << " on line " << i << std::endl;
+					throw;
+				}
 			}
 
 			M(i, k) = tmp_d;
 		}
 		i++;
 	}
-	if (i < n_rows) {
-		throw std::runtime_error("ERROR: could not convert txt file (too few lines).");
-	}
-}
-
-void EigenUtils::read_matrix( const std::string& filename,
-                              Eigen::MatrixXd& M){
-	std::vector<std::string> placeholder;
-	EigenUtils::read_matrix(filename, M, placeholder);
 }
 
 void EigenUtils::read_matrix_and_skip_cols(const std::string &filename,
@@ -424,10 +362,16 @@ Eigen::MatrixXd EigenUtils::project_out_covars(Eigen::Ref<Eigen::MatrixXd> rhs, 
 // Explicit instantiation
 // https://stackoverflow.com/questions/2152002/how-do-i-force-a-particular-instance-of-a-c-template-to-instantiate
 
-template void EigenUtils::read_matrix(const std::string&, const long&,
+template void EigenUtils::read_matrix(const std::string&,
                                       Eigen::MatrixXf&, std::vector<std::string>&, std::map<long, bool>&);
-template void EigenUtils::read_matrix(const std::string&, const long&,
+template void EigenUtils::read_matrix(const std::string&,
                                       Eigen::MatrixXd&, std::vector<std::string>&, std::map<long, bool>&);
+template void EigenUtils::read_matrix(const std::string&,
+									  Eigen::MatrixXf&, std::vector<std::string>&);
+template void EigenUtils::read_matrix(const std::string&,
+									  Eigen::MatrixXd&, std::vector<std::string>&);
+template void EigenUtils::read_matrix(const std::string&, Eigen::MatrixXf&);
+template void EigenUtils::read_matrix(const std::string&, Eigen::MatrixXd&);
 template void EigenUtils::write_matrix(boost_io::filtering_ostream&,
                                        Eigen::VectorXd&,
                                        std::vector<std::string>&,
