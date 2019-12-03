@@ -76,18 +76,13 @@ void parse_arguments(parameters &p, int argc, char **argv) {
 
 	options.add_options("General")
 	    ("verbose", "", cxxopts::value<bool>(p.verbose))
-	    ("xtra_verbose", "")
 	    ("bgen", "Path to BGEN file. This must be indexed (eg. with BGENIX). By default this is stored in RAM using O(NM) bytes.", cxxopts::value<std::string>(p.bgen_file))
-	    ("streamBgen", "Path to BGEN file. This must be indexed (eg. with BGENIX). This can be used with --RHE or --mode_calc_snpstats.", cxxopts::value<std::string>())
+	    ("streamBgen", "Path to BGEN file. This must be indexed (eg. with BGENIX). This can be used with --RHEreg or --singleSnpStats.", cxxopts::value<std::string>())
 	    ("mStreamBgen", "Text file containing paths to multiple BGEN files. They must all be indexed (eg. with BGENIX). This can be used with --RHE or --mode_calc_snpstats.", cxxopts::value<std::string>())
-	    ("pheno", "Path to phenotype file. Must have a header and have the same number of rows as the BGEN file.", cxxopts::value<std::string>(p.pheno_file))
-	    ("covar", "Path to file of covariates. Must have a header and have the same number of rows as the BGEN file.", cxxopts::value<std::string>(p.covar_file))
-	    ("environment", "Path to file of environmental variables", cxxopts::value<std::string>(p.env_file))
-	    ("dxteex", "", cxxopts::value<std::string>(p.dxteex_file))
+	    ("pheno", "Path to phenotype file. Must have a header and have the same number of rows as samples in the BGEN file.", cxxopts::value<std::string>(p.pheno_file))
+	    ("covar", "Path to file of covariates. Must have a header and have the same number of rows as samples in the BGEN file.", cxxopts::value<std::string>(p.covar_file))
+	    ("environment", "Path to file of environmental variables. Must have a header and have the same number of rows as samples in the BGEN file.", cxxopts::value<std::string>(p.env_file))
 	    ("hyps_grid", "Path to initial hyperparameters values", cxxopts::value<std::string>(p.hyps_grid_file))
-	    ("vb_init", "", cxxopts::value<std::string>(p.vb_init_file))
-	    ("covar_init", "Path to initial covariate weights", cxxopts::value<std::string>(p.covar_coeffs_file))
-	    ("extra_pve_covar", "Variables that are included as covariates in the PVE analysis but not in the VB algorithm (Eg. principle components).", cxxopts::value<std::string>(p.extra_pve_covar_file))
 	    ("environment_weights", "Path to initial environment weights", cxxopts::value<std::string>(p.env_coeffs_file))
 	    ("out", "Filepath to output", cxxopts::value<std::string>(p.out_file))
 	    ("streamOut", "Output file for tests on imputed variants", cxxopts::value<std::string>(p.streamBgenOutFile))
@@ -98,16 +93,14 @@ void parse_arguments(parameters &p, int argc, char **argv) {
 	options.add_options("VB")
 			("VB", "Run VB algorithm.")
 			("singleSnpStats", "Compute SNP association tests", cxxopts::value<bool>(p.mode_calc_snpstats))
-			("min_elbo_diff", "Convergence threshold for VB convergence.", cxxopts::value<double>(p.elbo_tol))
-			("mode_empirical_bayes", "Maximise ELBO wrt hyperparameters for hyperparameter updates.")
-			("mode_constant_hyps", "Keep hyperparameters constant.")
-			("mode_squarem", "Use SQUAREM algorithm for hyperparameter updates.")
-			("vb_iter_max", "Maximum number of VB iterations (default: 10000)", cxxopts::value<long>(p.vb_iter_max))
-			("spike_diff_factor", "", cxxopts::value<double>())
-			("gam_spike_diff_factor", "", cxxopts::value<double>(p.gam_spike_diff_factor))
-			("beta_spike_diff_factor", "", cxxopts::value<double>(p.beta_spike_diff_factor))
+			("VB-ELBO-thresh", "Convergence threshold for VB convergence.", cxxopts::value<double>(p.elbo_tol))
+			("VB-squarem", "Use SQUAREM algorithm for hyperparameter updates (on by default).")
+			("VB-varEM", "Maximise ELBO wrt hyperparameters for hyperparameter updates.")
+			("VB-constant-hyps", "Keep hyperparameters constant.")
+			("VB-iter-max", "Maximum number of VB iterations (default: 10000)", cxxopts::value<long>(p.vb_iter_max))
 			("resume_from_param_dump", "For use when resuming VB algorithm from previous run.", cxxopts::value<std::string>(p.resume_prefix))
 			("param_dump_interval", "Save VB state to file every N iterations (default: None)", cxxopts::value<long>(p.param_dump_interval))
+			("dxteex", "Optional flag to pass precomputed dXtEEX array.", cxxopts::value<std::string>(p.dxteex_file))
 			;
 
 	options.add_options("RHE")
@@ -119,6 +112,7 @@ void parse_arguments(parameters &p, int argc, char **argv) {
 			("n-RHEreg-jacknife", "Number of jacknife samples used in RHE algorithm", cxxopts::value<long>(p.n_jacknife))
 			("random-seed", "Seed used to draw random vectors in RHE algorithm (default: random)",
 			 cxxopts::value<unsigned int>(p.random_seed))
+			("extra-pve-covar", "Covariables in addition to those provided to --VB (Eg. principle components).", cxxopts::value<std::string>(p.extra_pve_covar_file))
 			;
 
 	options.add_options("Filtering")
@@ -130,6 +124,12 @@ void parse_arguments(parameters &p, int argc, char **argv) {
 			;
 
 	options.add_options("Internal")
+			("spike_diff_factor", "", cxxopts::value<double>())
+			("gam_spike_diff_factor", "", cxxopts::value<double>(p.gam_spike_diff_factor))
+			("beta_spike_diff_factor", "", cxxopts::value<double>(p.beta_spike_diff_factor))
+	    ("covar_init", "Path to initial covariate weights", cxxopts::value<std::string>(p.covar_coeffs_file))
+	    ("vb_init", "", cxxopts::value<std::string>(p.vb_init_file))
+	    ("xtra_verbose", "")
 	    ("snpwise_scan", "", cxxopts::value<std::string>(p.snpstats_file))
 	    ("pve_mog_weights", "", cxxopts::value<std::string>(p.mog_weights_file))
 	    ("rhe_random_vectors", "Random vectors used to calculate randomised matrix trace estimates. (Optional)", cxxopts::value<std::string>(p.rhe_random_vectors_file))
@@ -301,17 +301,17 @@ void parse_arguments(parameters &p, int argc, char **argv) {
 			p.range_end = std::atoi(ss.substr(ss.find('-')+1, ss.size()).c_str());
 		}
 
-		if(opts.count("mode_empirical_bayes")) {
+		if(opts.count("VB-varEM")) {
 			p.mode_empirical_bayes = true;
 			p.mode_squarem = false;
 		}
 
-		if(opts.count("mode_constant_hyps")) {
+		if(opts.count("VB-constant-hyps")) {
 			p.mode_empirical_bayes = false;
 			p.mode_squarem = false;
 		}
 
-		if(opts.count("mode_squarem")) {
+		if(opts.count("VB-squarem")) {
 			p.mode_squarem = true;
 			p.mode_empirical_bayes = true;
 		}
@@ -403,10 +403,10 @@ void parse_arguments(parameters &p, int argc, char **argv) {
 			std::cout << "--min_alpha_diff of " << p.alpha_tol << " entered." << std::endl;
 		}
 
-		if(opts.count("min_elbo_diff")) {
+		if(opts.count("VB-ELBO-thresh")) {
 			p.elbo_tol_set_by_user = true;
-			if(p.elbo_tol < 0) throw std::runtime_error("--min_elbo_diff must be positive.");
-			std::cout << "--min_elbo_diff of " << p.elbo_tol << " entered." << std::endl;
+			if(p.elbo_tol < 0) throw std::runtime_error("--VB-ELBO-thresh must be positive.");
+			std::cout << "--VB-ELBO-thresh of " << p.elbo_tol << " entered." << std::endl;
 		}
 
 		if(opts.count("incl_sample_ids")) {

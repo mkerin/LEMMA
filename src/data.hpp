@@ -967,7 +967,6 @@ public:
 		hyps_inits.clear();
 		hyps_names.clear();
 
-
 		std::vector< std::string > case1 = {"sigma", "sigma_b", "lambda_b"};
 		std::vector< std::string > case2 = {"sigma", "sigma_b", "sigma_g", "lambda_b", "lambda_g"};
 		std::vector< std::string > case3 = {"hyp", "value"};

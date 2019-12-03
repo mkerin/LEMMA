@@ -1627,7 +1627,7 @@ public:
 		}
 
 		/*** Hyps - header ***/
-		outf << "weight elbo count sigma";
+		outf << "count elbo sigma";
 
 		for (int ee = 0; ee < n_effects; ee++) {
 			outf << " pve" << ee;
@@ -1646,10 +1646,9 @@ public:
 		/*** Hyps - converged ***/
 		for (int ii = 0; ii < my_n_grid; ii++) {
 			outf << std::setprecision(8) << std::fixed;
-			outf << weights[ii];
+			outf << " " << trackers[ii].count;
 			outf << " " << trackers[ii].logw;
 			outf << std::setprecision(6) << std::fixed;
-			outf << " " << trackers[ii].count;
 			outf << " " << trackers[ii].hyps.sigma;
 
 			outf << std::setprecision(8) << std::fixed;

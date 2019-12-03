@@ -79,8 +79,7 @@ public:
 		time_check = std::chrono::system_clock::now();
 
 		// Create directories
-		std::string ss = "interim_files/grid_point_" + std::to_string(ii);
-		ss = "r" + std::to_string(round_index) + "_" + ss;
+		std::string ss = "lemma_interim_files";
 		boost::filesystem::path interim_ext(ss), path(main_out_file);
 		dir = path.parent_path() / interim_ext;
 		subdir = interim_ext;
