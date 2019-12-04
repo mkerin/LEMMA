@@ -4,7 +4,7 @@ LEMMA (**L**inear **E**nvironment **M**ixed **M**odel **A**nalysis) aims to unco
 
 ## Getting Started
 ### Installation
-LEMMA requires the [BGEN file format](https://bitbucket.org/gavinband/bgen/src/default/), Boost and OpenMPI. We also recommend compiling with the Intel MKL library.
+LEMMA requires the [BGEN file format](https://bitbucket.org/gavinband/bgen/src/default/), Boost (https://www.boost.org/) and OpenMPI. We also recommend compiling with the Intel MKL library.
 
 Bare minimum build:
 ```
