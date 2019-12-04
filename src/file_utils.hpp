@@ -7,7 +7,6 @@
 
 #include "parameters.hpp"
 #include "genotype_matrix.hpp"
-#include "variational_parameters.hpp"
 
 #include "genfile/bgen/bgen.hpp"
 #include "genfile/bgen/View.hpp"
@@ -32,7 +31,8 @@ long long getValueRAM(const std::string& field = "VmRSS:");
 std::string fstream_init(boost_io::filtering_ostream &my_outf,
                          const std::string &file,
                          const std::string &file_prefix = "",
-                         const std::string &file_suffix = "");
+                         const std::string &file_suffix = "",
+						 const bool& allow_gzip = true);
 
 std::string filepath_format(const std::string& orig,
                             const std::string& file_prefix,
@@ -48,27 +48,10 @@ void dump_predicted_vec_to_file(Eigen::Ref<Eigen::MatrixXd> mat,
                                 const std::string& header,
                                 const std::map<long, int>& sample_location);
 
-void write_snp_stats_to_file(boost_io::filtering_ostream &ofile,
-                             const int &n_effects,
-                             const long& n_var,
-                             const VariationalParameters &vp,
-                             const GenotypeMatrix &X,
-                             const parameters &p,
-                             const bool &write_mog);
-
-void write_snp_stats_to_file(boost_io::filtering_ostream& ofile,
-                             const int& n_effects,
-                             const long& n_var,
-                             const VariationalParametersLite& vp,
-                             const GenotypeMatrix& X,
-                             const parameters& p,
-                             const bool& write_mog);
-
-void
+	void
 write_snp_stats_to_file(boost_io::filtering_ostream &ofile,
                         const int &n_effects,
                         const int &n_var,
-                        const VariationalParametersLite &vp,
                         const GenotypeMatrix &X,
                         const parameters &p,
                         const bool &write_mog,

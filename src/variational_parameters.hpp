@@ -7,6 +7,7 @@
 #include "hyps.hpp"
 
 #include "tools/eigen3.3/Dense"
+#include "file_utils.hpp"
 
 #include <boost/iostreams/filtering_stream.hpp>
 #include <boost/iostreams/device/file.hpp>
@@ -55,31 +56,29 @@ public:
 	VariationalParamsBase(const parameters& my_params) : p(my_params){
 	};
 
-/*** utility functions ***/
+	/*** utility functions ***/
 	void resize(std::int32_t n_samples, std::int32_t n_var, long n_covar, long n_env);
-
 	void run_default_init(long n_var, long n_covar, long n_env);
 
-	void dump_snps_to_file(boost_io::filtering_ostream& my_outf, const GenotypeMatrix& X, long n_env) const;
-
-/*** mean of latent variables ***/
+	/*** mean of latent variables ***/
 	Eigen::VectorXd mean_covars() const;
 	Eigen::VectorXd mean_beta() const;
 	Eigen::VectorXd mean_gam() const;
 	Eigen::VectorXd mean_weights() const;
 
 	double mean_beta(std::uint32_t jj) const;
-
 	double mean_gam(std::uint32_t jj) const;
 
-/*** variance of latent variables ***/
+	/*** variance of latent variables ***/
 	Eigen::ArrayXd var_beta() const;
-
 	Eigen::ArrayXd var_gam() const;
-
 	Eigen::ArrayXd mean_beta_sq(int u0) const;
-
 	Eigen::ArrayXd mean_gam_sq(int u0) const;
+
+	/*** IO ***/
+	void env_to_file(const std::string& path, const std::vector<std::string>& env_names) const;
+	void covar_to_file(const std::string& path, const std::vector<std::string>& covar_names) const;
+	void snps_to_file(const std::string& path, const GenotypeMatrix &X, long n_env) const;
 };
 
 // Store subset of Variational Parameters to be RAM efficient

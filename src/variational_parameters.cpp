@@ -3,12 +3,14 @@
 //
 
 #include "variational_parameters.hpp"
-#include <iostream>
-#include <limits>
 #include "hyps.hpp"
 #include "parameters.hpp"
 #include "tools/eigen3.3/Dense"
 #include "mpi_utils.hpp"
+#include "file_utils.hpp"
+
+#include <iostream>
+#include <limits>
 
 void VariationalParamsBase::resize(std::int32_t n_samples, std::int32_t n_var, long n_covar, long n_env) {
 	s1_beta_sq.resize(n_var);
@@ -66,8 +68,12 @@ void VariationalParamsBase::run_default_init(long n_var, long n_covar, long n_en
 	}
 }
 
-void VariationalParamsBase::dump_snps_to_file(boost_io::filtering_ostream& outf,
-                                              const GenotypeMatrix& X, long n_env) const {
+void VariationalParamsBase::snps_to_file(const std::string& path,
+										 const GenotypeMatrix &X, long n_env) const {
+
+	boost_io::filtering_ostream outf;
+	fileUtils::fstream_init(outf, path);
+
 	outf << "SNPID alpha_beta mu1_beta s1_beta";
 	if(p.mode_mog_prior_beta) outf << " mu2_beta s2_beta";
 	if(n_env > 0) {
@@ -97,6 +103,42 @@ void VariationalParamsBase::dump_snps_to_file(boost_io::filtering_ostream& outf,
 		}
 		outf << std::endl;
 	}
+
+	boost_io::close(outf);
+}
+
+void VariationalParamsBase::env_to_file(const std::string& path,
+		const std::vector<std::string>& env_names) const {
+	boost_io::filtering_ostream outf;
+	fileUtils::fstream_init(outf, path);
+
+	long n_env = env_names.size();
+	outf << std::scientific << std::setprecision(7);
+	outf << "env mean variance" << std::endl;
+	for (int cc = 0; cc < n_env; cc++) {
+		outf << env_names[cc] << " ";
+		outf << muw(cc) << " ";
+		outf << sw_sq(cc) << std::endl;
+	}
+
+	boost_io::close(outf);
+}
+
+void VariationalParamsBase::covar_to_file(const std::string& path,
+		const std::vector<std::string>& covar_names) const {
+	boost_io::filtering_ostream outf;
+	fileUtils::fstream_init(outf, path);
+
+	long n_covar = covar_names.size();
+	outf << std::scientific << std::setprecision(7);
+	outf << "covar mean variance" << std::endl;
+	for (int cc = 0; cc < n_covar; cc++) {
+		outf << covar_names[cc] << " ";
+		outf << muc(cc) << " ";
+		outf << sc_sq(cc) << std::endl;
+	}
+
+	boost_io::close(outf);
 }
 
 Eigen::VectorXd VariationalParamsBase::mean_covars() const {

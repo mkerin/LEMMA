@@ -13,10 +13,10 @@
 
 
 // Scenarios
-char* case1a[] = { (char*) "--mode_vb",
-				   (char*) "--mode_empirical_bayes",
+char* case1a[] = { (char*) "--VB",
+				   (char*) "--VB-varEM",
 				   (char*) "--env_momentum_coeff", (char*) "0.8",
-				   (char*) "--vb_iter_max", (char*) "10",
+				   (char*) "--VB-iter-max", (char*) "10",
 				   (char*) "--hyps_grid", (char*) "data/io_test/single_hyps_gxage.txt",
 				   (char*) "--pheno", (char*) "data/io_test/pheno.txt",
 				   (char*) "--environment", (char*) "data/io_test/n50_p100_env.txt",

@@ -98,8 +98,8 @@ void parse_arguments(parameters &p, int argc, char **argv) {
 			("VB-varEM", "Maximise ELBO wrt hyperparameters for hyperparameter updates.")
 			("VB-constant-hyps", "Keep hyperparameters constant.")
 			("VB-iter-max", "Maximum number of VB iterations (default: 10000)", cxxopts::value<long>(p.vb_iter_max))
-			("resume_from_param_dump", "For use when resuming VB algorithm from previous run.", cxxopts::value<std::string>(p.resume_prefix))
-			("param_dump_interval", "Save VB state to file every N iterations (default: None)", cxxopts::value<long>(p.param_dump_interval))
+			("resume_from_state", "For use when resuming VB algorithm from previous run.", cxxopts::value<std::string>(p.resume_prefix))
+			("state_dump_interval", "Save VB parameter state to file every N iterations (default: None)", cxxopts::value<long>(p.param_dump_interval))
 			("dxteex", "Optional flag to pass precomputed dXtEEX array.", cxxopts::value<std::string>(p.dxteex_file))
 			;
 

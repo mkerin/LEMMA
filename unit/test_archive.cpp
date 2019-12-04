@@ -7,7 +7,7 @@ TEST_CASE( "Example 1: single-env" ){
 parameters p;
 
 SECTION("Ex1. No filters applied, low mem mode"){
-char* argv[] = { (char*) "bin/bgen_prog", (char*) "--mode_vb", (char*) "--low_mem",
+char* argv[] = { (char*) "bin/bgen_prog", (char*) "--VB", (char*) "--low_mem",
 				 (char*) "--mode_spike_slab", (char*) "--mode_regress_out_covars",
 				 (char*) "--bgen", (char*) "data/io_test/n50_p100.bgen",
 				 (char*) "--out", (char*) "data/io_test/fake_age.out",
@@ -153,7 +153,7 @@ TEST_CASE( "Example 2a: multi-env + bgen over 2chr" ){
 parameters p;
 
 SECTION("Ex2. No filters applied, high mem mode"){
-char* argv[] = { (char*) "bin/bgen_prog", (char*) "--mode_vb", (char*) "--high_mem",
+char* argv[] = { (char*) "bin/bgen_prog", (char*) "--VB", (char*) "--high_mem",
 				 (char*) "--mode_spike_slab", (char*) "--mode_regress_out_covars",
 				 (char*) "--environment", (char*) "data/io_test/n50_p100_env.txt",
 				 (char*) "--bgen", (char*) "data/io_test/n50_p100_chr2.bgen",
@@ -276,7 +276,7 @@ TEST_CASE( "Example 3: multi-env w/ covars" ){
 parameters p;
 
 SECTION("Ex3. No filters applied, high mem mode"){
-char* argv[] = { (char*) "bin/bgen_prog", (char*) "--mode_vb", (char*) "--high_mem",
+char* argv[] = { (char*) "bin/bgen_prog", (char*) "--VB", (char*) "--high_mem",
 				 (char*) "--use_vb_on_covars", (char*) "--mode_spike_slab",
 				 (char*) "--environment", (char*) "data/io_test/n50_p100_env.txt.gz",
 				 (char*) "--bgen", (char*) "data/io_test/n50_p100.bgen",
@@ -423,9 +423,9 @@ TEST_CASE( "Example 6: single-env w MoG + hyps max" ){
 parameters p;
 
 SECTION("Ex6. No filters applied, high mem mode"){
-char* argv[] = { (char*) "bin/bgen_prog", (char*) "--mode_vb", (char*) "--effects_prior_mog",
-				 (char*) "--vb_iter_max", (char*) "20",  (char*) "--mode_regress_out_covars",
-				 (char*) "--mode_empirical_bayes", (char*) "--high_mem",
+char* argv[] = { (char*) "bin/bgen_prog", (char*) "--VB", (char*) "--effects_prior_mog",
+				 (char*) "--VB-iter-max", (char*) "20",  (char*) "--mode_regress_out_covars",
+				 (char*) "--VB-varEM", (char*) "--high_mem",
 				 (char*) "--bgen", (char*) "data/io_test/n50_p100.bgen",
 				 (char*) "--out", (char*) "data/io_test/fake_age.out",
 				 (char*) "--pheno", (char*) "data/io_test/pheno.txt",

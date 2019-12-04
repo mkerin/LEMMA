@@ -17,8 +17,8 @@
 #include "../src/genotype_matrix.hpp"
 
 // Scenarios
-char* argv_single_env[] = { (char*) "--mode_vb", (char*) "--low_mem",
-				 (char*) "--effects_prior_mog", (char*) "--vb_iter_max", (char*) "20",
+char* argv_single_env[] = { (char*) "--VB", (char*) "--low_mem",
+				 (char*) "--effects_prior_mog", (char*) "--VB-iter-max", (char*) "20",
 				 (char*) "--vb_init", (char*) "data/io_test/answer_init.txt",
 				 (char*) "--hyps_grid", (char*) "data/io_test/hyperpriors_gxage.txt",
 				 (char*) "--bgen", (char*) "data/io_test/n50_p100.bgen",
@@ -26,8 +26,8 @@ char* argv_single_env[] = { (char*) "--mode_vb", (char*) "--low_mem",
 				 (char*) "--environment", (char*) "data/io_test/age.txt",
 				 (char*) "--out", (char*) "data/io_test/fake_age.out"};
 //
-char* argv_multi_env[] = { (char*) "--mode_vb", (char*) "--low_mem",
-				 (char*) "--effects_prior_mog", (char*) "--vb_iter_max", (char*) "20",
+char* argv_multi_env[] = { (char*) "--VB", (char*) "--low_mem",
+				 (char*) "--effects_prior_mog", (char*) "--VB-iter-max", (char*) "20",
 				 (char*) "--vb_init", (char*) "data/io_test/answer_init.txt",
 				 (char*) "--hyps_grid", (char*) "data/io_test/hyperpriors_gxage.txt",
 				 (char*) "--bgen", (char*) "data/io_test/n50_p100.bgen",
@@ -35,8 +35,8 @@ char* argv_multi_env[] = { (char*) "--mode_vb", (char*) "--low_mem",
 				 (char*) "--environment", (char*) "data/io_test/n50_p100_env.txt",
 				 (char*) "--out", (char*) "data/io_test/fake_env.out"};
 //
-char* argv_main[] = { (char*) "--mode_vb", (char*) "--mode_no_gxe", (char*) "--low_mem",
-				 (char*) "--effects_prior_mog", (char*) "--vb_iter_max", (char*) "20",
+char* argv_main[] = { (char*) "--VB", (char*) "--mode_no_gxe", (char*) "--low_mem",
+				 (char*) "--effects_prior_mog", (char*) "--VB-iter-max", (char*) "20",
 				 (char*) "--vb_init", (char*) "data/io_test/answer_init.txt",
 				 (char*) "--hyps_grid", (char*) "data/io_test/single_hyps_gxage.txt",
 				 (char*) "--bgen", (char*) "data/io_test/n50_p100.bgen",

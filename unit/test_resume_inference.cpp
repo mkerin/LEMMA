@@ -15,10 +15,10 @@
 // Scenarios
 char* case1a[] = { (char*) "prog",
 	               (char*) "--mode_regress_out_covars",
-	               (char*) "--mode_vb",
-	               (char*) "--mode_empirical_bayes",
+	               (char*) "--VB",
+	               (char*) "--VB-varEM",
 	               (char*) "--spike_diff_factor", (char*) "10000",
-	               (char*) "--vb_iter_max", (char*) "10",
+	               (char*) "--VB-iter-max", (char*) "10",
 	               (char*) "--hyps_grid", (char*) "data/io_test/single_hyps_gxage.txt",
 	               (char*) "--pheno", (char*) "data/io_test/pheno.txt",
 	               (char*) "--environment", (char*) "data/io_test/n50_p100_env.txt",
@@ -27,12 +27,12 @@ char* case1a[] = { (char*) "prog",
 
 char* case1b[] = { (char*) "prog",
 	               (char*) "--mode_regress_out_covars",
-	               (char*) "--mode_vb",
-	               (char*) "--mode_empirical_bayes",
+	               (char*) "--VB",
+	               (char*) "--VB-varEM",
 	               (char*) "--spike_diff_factor", (char*) "10000",
-	               (char*) "--vb_iter_max", (char*) "10",
+	               (char*) "--VB-iter-max", (char*) "10",
 	               (char*) "--vb_iter_start", (char*) "3",
-	               (char*) "--resume_from_param_dump",
+	               (char*) "--resume_from_state",
 	               (char*) "data/io_test/r2_interim_files/grid_point_0/test1a_dump_it2",
 	               (char*) "--pheno", (char*) "data/io_test/pheno.txt",
 	               (char*) "--environment", (char*) "data/io_test/n50_p100_env.txt",
@@ -41,8 +41,8 @@ char* case1b[] = { (char*) "prog",
 
 char* case1c[] = { (char*) "prog",
 	               (char*) "--mode_regress_out_covars",
-	               (char*) "--mode_calc_snpstats",
-	               (char*) "--resume_from_param_dump",
+	               (char*) "--singleSnpStats",
+	               (char*) "--resume_from_state",
 	               (char*) "data/io_test/r2_interim_files/grid_point_0/test1a_dump_it10",
 	               (char*) "--pheno", (char*) "data/io_test/pheno.txt",
 	               (char*) "--environment", (char*) "data/io_test/n50_p100_env.txt",
@@ -213,11 +213,11 @@ TEST_CASE("Resume from multi-env + mog + emp_bayes"){
 
 
 char* case2a[] = { (char*) "prog",
-	               (char*) "--mode_vb",
-	               (char*) "--mode_squarem",
+	               (char*) "--VB",
+	               (char*) "--VB-squarem",
 	               (char*) "--verbose",
 	               (char*) "--spike_diff_factor", (char*) "10000",
-	               (char*) "--vb_iter_max", (char*) "10",
+	               (char*) "--VB-iter-max", (char*) "10",
 	               (char*) "--hyps_grid", (char*) "data/io_test/single_hyps_gxage.txt",
 	               (char*) "--pheno", (char*) "data/io_test/pheno.txt",
 	               (char*) "--environment", (char*) "data/io_test/n50_p100_env.txt",
@@ -225,12 +225,12 @@ char* case2a[] = { (char*) "prog",
 	               (char*) "--out", (char*) "data/io_test/test2a.out.gz"};
 
 char* case2b[] = { (char*) "prog",
-	               (char*) "--mode_vb",
-	               (char*) "--mode_squarem",
+	               (char*) "--VB",
+	               (char*) "--VB-squarem",
 	               (char*) "--spike_diff_factor", (char*) "10000",
-	               (char*) "--vb_iter_max", (char*) "10",
+	               (char*) "--VB-iter-max", (char*) "10",
 	               (char*) "--vb_iter_start", (char*) "3",
-	               (char*) "--resume_from_param_dump",
+	               (char*) "--resume_from_state",
 	               (char*) "data/io_test/r2_interim_files/grid_point_0/test2a_dump_it2",
 	               (char*) "--pheno", (char*) "data/io_test/pheno.txt",
 	               (char*) "--environment", (char*) "data/io_test/n50_p100_env.txt",
@@ -359,18 +359,18 @@ TEST_CASE("Resume from multi-env + mog + squarem"){
 
 // Scenarios
 char* case3a[] = { (char*) "prog",
-	               (char*) "--mode_vb",
-	               (char*) "--mode_empirical_bayes",
+	               (char*) "--VB",
+	               (char*) "--VB-varEM",
 	               (char*) "--use_vb_on_covars",
-	               (char*) "--vb_iter_max", (char*) "10",
+	               (char*) "--VB-iter-max", (char*) "10",
 	               (char*) "--pheno", (char*) "data/io_test/pheno.txt",
 	               (char*) "--environment", (char*) "data/io_test/n50_p100_env.txt",
 	               (char*) "--bgen", (char*) "data/io_test/n50_p100.bgen",
 	               (char*) "--out", (char*) "data/io_test/test3a.out"};
 
 char* case3c[] = { (char*) "prog",
-	               (char*) "--mode_calc_snpstats", (char*) "--use_vb_on_covars",
-	               (char*) "--resume_from_param_dump",
+	               (char*) "--singleSnpStats", (char*) "--use_vb_on_covars",
+	               (char*) "--resume_from_state",
 	               (char*) "data/io_test/r2_interim_files/grid_point_0/test3a_dump_it10",
 	               (char*) "--pheno", (char*) "data/io_test/pheno.txt",
 	               (char*) "--environment", (char*) "data/io_test/n50_p100_env.txt",
@@ -420,7 +420,7 @@ TEST_CASE("Resume from multi-env + mog + emp_bayes + incl_covars"){
 			CHECK(neglogp_gam(0) == Approx(1.6241936617));
 			CHECK(neglogp_rgam(0) == Approx(2.9866331893));
 		}
-		VB.output_results("");
+		VB.output_vb_results();
 	}
 
 

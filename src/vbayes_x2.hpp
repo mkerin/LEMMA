@@ -1813,7 +1813,7 @@ public:
 				std::cout << "(computed with LOCO strategy)";
 			}
 			std::cout << " to " << ofile << std::endl;
-			fileUtils::write_snp_stats_to_file(outf, n_effects, n_var, vp_init, X, p, true, neglogp_beta,
+			fileUtils::write_snp_stats_to_file(outf, n_effects, n_var, X, p, true, neglogp_beta,
 			                                   neglogp_gam,
 			                                   neglogp_rgam, neglogp_joint, test_stat_beta, test_stat_gam,
 			                                   test_stat_rgam,
@@ -1831,6 +1831,7 @@ public:
 		std::string stem_w_dir = filepath.substr(0, filepath.find('.'));
 		std::string stem       = stem_w_dir.substr(stem_w_dir.rfind('/')+1, stem_w_dir.size());
 		std::string ext        = filepath.substr(filepath.find('.'), filepath.size());
+
 
 		std::string ofile      = dir + file_prefix + stem + file_suffix + ext;
 

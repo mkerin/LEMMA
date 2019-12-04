@@ -18,11 +18,11 @@ TEST_CASE( "Example 4: multi-env + mog + covars + emp_bayes" ){
 	parameters p;
 
 	SECTION("Ex4. No filters applied, high mem mode"){
-		char* argv[] = { (char*) "bin/bgen_prog", (char*) "--mode_vb", (char*) "--low_mem",
-			             (char*) "--mode_regress_out_covars", (char*) "--mode_empirical_bayes",
+		char* argv[] = { (char*) "bin/bgen_prog", (char*) "--VB", (char*) "--low_mem",
+			             (char*) "--mode_regress_out_covars", (char*) "--VB-varEM",
 			             (char*) "--spike_diff_factor", (char*) "10000",
 			             (char*) "--effects_prior_mog",
-			             (char*) "--vb_iter_max", (char*) "10",
+			             (char*) "--VB-iter-max", (char*) "10",
 			             (char*) "--environment", (char*) "data/io_test/n50_p100_env.txt",
 			             (char*) "--bgen", (char*) "data/io_test/n50_p100.bgen",
 			             (char*) "--out", (char*) "data/io_test/config4.out",
@@ -182,12 +182,12 @@ TEST_CASE( "Example 4: multi-env + mog + covars + emp_bayes + sample subset" ){
 	parameters p;
 
 	SECTION("Ex4. No filters applied, high mem mode"){
-		char* argv[] = { (char*) "bin/bgen_prog", (char*) "--mode_vb", (char*) "--low_mem",
-			             (char*) "--mode_regress_out_covars", (char*) "--mode_empirical_bayes",
+		char* argv[] = { (char*) "bin/bgen_prog", (char*) "--VB", (char*) "--low_mem",
+			             (char*) "--mode_regress_out_covars", (char*) "--VB-varEM",
 			             (char*) "--spike_diff_factor", (char*) "10000",
 			             (char*) "--effects_prior_mog",
 			             (char*) "--incl_sample_ids", (char*) "data/io_test/sample_ids_head28.txt",
-			             (char*) "--vb_iter_max", (char*) "10",
+			             (char*) "--VB-iter-max", (char*) "10",
 			             (char*) "--environment", (char*) "data/io_test/n50_p100_env.txt",
 			             (char*) "--bgen", (char*) "data/io_test/n50_p100.bgen",
 			             (char*) "--out", (char*) "data/io_test/config4_subset.out",
@@ -216,7 +216,7 @@ TEST_CASE( "Example 4: multi-env + mog + covars + emp_bayes + sample subset" ){
 
 		std::vector< VbTracker > trackers(VB.hyps_inits.size(), p);
 		VB.run_inference(VB.hyps_inits, false, 2, trackers);
-		VB.output_results("");
+		VB.output_vb_results();
 		SECTION("Ex3. Vbayes_X2 inference correct"){
 			CHECK(trackers[0].count == 10);
 			CHECK(trackers[0].logw == Approx(-57.062373213));
@@ -227,10 +227,10 @@ TEST_CASE( "Example 4: multi-env + mog + covars + emp_bayes + sample subset" ){
 // Garbage test; testing dxteex should be way lower level
 //TEST_CASE("--dxteex") {
 //	parameters p;
-//	char *argv[] = {(char *) "bin/bgen_prog", (char *) "--mode_vb", (char *) "--low_mem",
-//		            (char *) "--use_vb_on_covars", (char *) "--mode_empirical_bayes",
+//	char *argv[] = {(char *) "bin/bgen_prog", (char *) "--VB", (char *) "--low_mem",
+//		            (char *) "--use_vb_on_covars", (char *) "--VB-varEM",
 //		            (char *) "--effects_prior_mog",
-//		            (char *) "--vb_iter_max", (char *) "10",
+//		            (char *) "--VB-iter-max", (char *) "10",
 //		            (char *) "--environment", (char *) "data/io_test/n50_p100_env.txt",
 //		            (char *) "--bgen", (char *) "data/io_test/n50_p100.bgen",
 //		            (char *) "--out", (char *) "data/io_test/config4.out",
@@ -324,11 +324,11 @@ TEST_CASE( "Example 4: multi-env + mog + covars + emp_bayes + sample subset" ){
 // This whole section needs redoing
 //TEST_CASE("--dxteex case8") {
 //	parameters p;
-//	char *argv[] = {(char *) "bin/bgen_prog", (char *) "--mode_vb", (char *) "--low_mem",
-//		            (char *) "--mode_empirical_bayes",
+//	char *argv[] = {(char *) "bin/bgen_prog", (char *) "--VB", (char *) "--low_mem",
+//		            (char *) "--VB-varEM",
 //		            (char *) "--effects_prior_mog",
 //		            (char *) "--use_vb_on_covars",
-//		            (char *) "--vb_iter_max", (char *) "30",
+//		            (char *) "--VB-iter-max", (char *) "30",
 //		            (char *) "--environment", (char *) "data/io_test/case8/env.txt",
 //		            (char *) "--bgen", (char *) "data/io_test/n1000_p2000.bgen",
 //		            (char *) "--out", (char *) "data/io_test/case8/inference.out",
@@ -447,7 +447,7 @@ TEST_CASE( "Edge case 1: error in alpha" ){
 	parameters p;
 
 	SECTION("Ex1. No filters applied, low mem mode"){
-		char* argv[] = { (char*) "bin/bgen_prog", (char*) "--mode_vb", (char*) "--low_mem",
+		char* argv[] = { (char*) "bin/bgen_prog", (char*) "--VB", (char*) "--low_mem",
 			             (char*) "--mode_spike_slab",
 			             (char*) "--bgen", (char*) "data/io_test/n50_p100.bgen",
 			             (char*) "--out", (char*) "data/io_test/fake_age.out",

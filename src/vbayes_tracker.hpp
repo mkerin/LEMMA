@@ -86,24 +86,7 @@ public:
 		boost::filesystem::create_directories(dir);
 
 		// Initialise fstreams
-		fstream_init(outf_iter, dir, "_iter_updates", false);
-
-		// Weights - add header + initial values
-		if(n_effects > 1) {
-			fstream_init(outf_weights, dir, "_env_weights", false);
-			outf_weights << "count ";
-			for (int ll = 0; ll < n_env; ll++) {
-				outf_weights << env_names[ll];
-				if (ll + 1 < n_env) outf_weights << " ";
-			}
-			outf_weights << std::endl;
-			outf_weights << "-1 ";
-			for (int ll = 0; ll < n_env; ll++) {
-				outf_weights << vp.muw(ll);
-				if (ll + 1 < n_env) outf_weights << " ";
-			}
-			outf_weights << std::endl;
-		}
+		fileUtils::fstream_init(outf_iter, p.out_file, subdir.string() + "/", "_iter_updates", false);
 
 		// Diagnostics - add header
 		outf_iter << "count sigma";
@@ -119,13 +102,30 @@ public:
 			outf_iter << " lambda" << ee;
 		}
 		outf_iter << " s_x";
-		if(n_effects > 1) outf_iter << " s_z";
+		if(n_env > 0) outf_iter << " s_z";
 		outf_iter << " var_covar elbo";
 		if (n_covar > 0) outf_iter << " max_covar_diff";
 		outf_iter << " max_beta_diff";
 		if (n_env > 0) outf_iter << " max_gam_diff";
 		if (n_env > 1) outf_iter << " max_w_diff";
 		outf_iter << " secs" << std::endl;
+
+		// Weights - add header + initial values
+		if(n_env > 0) {
+			fileUtils::fstream_init(outf_weights, p.out_file, subdir.string() + "/", "_env_weights", false);
+			outf_weights << "count ";
+			for (int ll = 0; ll < n_env; ll++) {
+				outf_weights << env_names[ll];
+				if (ll + 1 < n_env) outf_weights << " ";
+			}
+			outf_weights << std::endl;
+			outf_weights << "-1 ";
+			for (int ll = 0; ll < n_env; ll++) {
+				outf_weights << vp.muw(ll);
+				if (ll + 1 < n_env) outf_weights << " ";
+			}
+			outf_weights << std::endl;
+		}
 	}
 
 	void push_interim_hyps(const long& cnt,
@@ -206,6 +206,7 @@ public:
 	                const std::vector< std::string >& env_names,
 	                const std::unordered_map<long, bool>& sample_is_invalid,
 	                const std::map<long, int>& sample_location){
+		std::string path;
 
 		// Aggregate effects
 		Eigen::VectorXd Ealpha = Eigen::VectorXd::Zero(n_samples);
@@ -236,79 +237,31 @@ public:
 		}
 		assert(cc == n_cols);
 
-		std::string path = fileUtils::filepath_format(p.out_file, subdir.string() + "/", "_dump_it" + count + "_aggregate");
-		// if(p.xtra_verbose) std::cout << "Dumping yhat to " << path << std::endl;
+		path = fileUtils::filepath_format(p.out_file, subdir.string() + "/", "_dump_it" + count + "_aggregate");
 		fileUtils::dump_predicted_vec_to_file(tmp, path, header, sample_location);
 
 		int world_rank;
 		MPI_Comm_rank(MPI_COMM_WORLD, &world_rank);
 		if(world_rank == 0) {
-			// Snp-stats
-			fstream_init(outf_inits, dir, "_dump_it" + count + "_latent_snps", true);
-			vp.dump_snps_to_file(outf_inits, X, n_env);
-			boost_io::close(outf_inits);
+			path = fileUtils::filepath_format(p.out_file, subdir.string() + "/", "_dump_it" + count + "_latent_snps");
+			vp.snps_to_file(path, X, n_env);
 
-			// Covars
 			if(n_covar > 0) {
-				fstream_init(outf_inits, dir, "_dump_it" + count + "_covars", true);
-				outf_inits << std::scientific << std::setprecision(7);
-				outf_inits << "covar mu s_sq" << std::endl;
-				for (int cc = 0; cc < n_covar; cc++) {
-					outf_inits << covar_names[cc] << " ";
-					outf_inits << vp.muc(cc) << " ";
-					outf_inits << vp.sc_sq(cc) << std::endl;
-				}
-				boost_io::close(outf_inits);
+				path = fileUtils::filepath_format(p.out_file, subdir.string() + "/", "_dump_it" + count + "_covars");
+				vp.covar_to_file(path, covar_names);
 			}
 
-			// Env-weights
 			if(n_env > 0) {
-				fstream_init(outf_inits, dir, "_dump_it" + count + "_env", true);
-				outf_inits << std::scientific << std::setprecision(7);
-				outf_inits << "env mu s_sq" << std::endl;
-				for (long ll = 0; ll < n_env; ll++) {
-					outf_inits << env_names[ll] << " ";
-					outf_inits << vp.muw(ll) << " ";
-					outf_inits << vp.sw_sq(ll) << std::endl;
-				}
-				boost_io::close(outf_inits);
+				path = fileUtils::filepath_format(p.out_file, subdir.string() + "/", "_dump_it" + count + "_env");
+				vp.env_to_file(path, env_names);
 			}
 
-			// Hyps
-			fstream_init(outf_inits, dir, "_dump_it" + count + "_hyps", true);
+			fileUtils::fstream_init(outf_inits, p.out_file, subdir.string() + "/", "_dump_it" + count + "_hyps");
 			outf_inits << hyps << std::endl;
 			boost_io::close(outf_inits);
 		}
 	}
 
-	void fstream_init(boost_io::filtering_ostream& my_outf,
-	                  const boost::filesystem::path& dir,
-	                  const std::string& file_suffix,
-	                  const bool& allow_gzip){
-		my_outf.reset();
-
-		std::string filepath   = main_out_file;
-		std::string stem_w_dir = filepath.substr(0, filepath.find('.'));
-		std::string stem       = stem_w_dir.substr(stem_w_dir.rfind('/')+1, stem_w_dir.size());
-		std::string ext        = filepath.substr(filepath.find('.'), filepath.size());
-
-		if(!allow_gzip) {
-			ext = ext.substr(0, ext.find(".gz"));
-		}
-		std::string ofile      = dir.string() + "/" + stem + file_suffix + ext;
-
-		if (ext.find(".gz") != std::string::npos) {
-			my_outf.push(boost_io::gzip_compressor());
-		}
-
-		int rank;
-		MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-		if(rank == 0) {
-			my_outf.push(boost_io::file_sink(ofile));
-		} else {
-			my_outf.push(boost_io::file_sink(ofile, std::ios_base::app));
-		}
-	}
 };
 
 #endif

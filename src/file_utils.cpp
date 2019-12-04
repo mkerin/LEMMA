@@ -5,7 +5,6 @@
 #include "file_utils.hpp"
 #include "parameters.hpp"
 #include "genotype_matrix.hpp"
-#include "variational_parameters.hpp"
 
 #include "genfile/bgen/bgen.hpp"
 #include "genfile/bgen/View.hpp"
@@ -54,15 +53,20 @@ long long fileUtils::getValueRAM(const std::string& field){
 #endif
 }
 
-std::string fileUtils::fstream_init(boost_io::filtering_ostream &my_outf, const std::string &file,
+std::string fileUtils::fstream_init(boost_io::filtering_ostream &my_outf,
+		                            const std::string &file,
                                     const std::string &file_prefix,
-                                    const std::string &file_suffix) {
+                                    const std::string &file_suffix,
+									const bool& allow_gzip) {
 
 	std::string filepath   = file;
 	std::string dir        = filepath.substr(0, filepath.rfind('/')+1);
 	std::string stem_w_dir = filepath.substr(0, filepath.find('.'));
 	std::string stem       = stem_w_dir.substr(stem_w_dir.rfind('/')+1, stem_w_dir.size());
 	std::string ext        = filepath.substr(filepath.find('.'), filepath.size());
+	if(!allow_gzip) {
+		ext = ext.substr(0, ext.find(".gz"));
+	}
 
 	std::string ofile      = dir + file_prefix + stem + file_suffix + ext;
 
@@ -131,15 +135,8 @@ void fileUtils::dump_predicted_vec_to_file(Eigen::Ref<Eigen::MatrixXd> mat,
 			MPI_Recv(all_mat[rr].data(), all_n_samples[rr] * n_cols, MPI_DOUBLE, rr, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
 		}
 		all_mat[0] = mat;
-
-		// std::cout << "Condensed data on rank 0:" << std::endl;
-		// for (const auto& mmm : all_mat) {
-		//  std::cout << mmm.size() << std::endl;
-		// }
 	} else {
-		// std::cerr << "Sending from rank " << world_rank << std::endl;
 		MPI_Send(mat.data(), mat.size(), MPI_DOUBLE, 0, 0, MPI_COMM_WORLD);
-		// std::cerr << "Sent from rank " << world_rank << std::endl;
 	}
 
 	if(world_rank == 0) {
@@ -148,9 +145,7 @@ void fileUtils::dump_predicted_vec_to_file(Eigen::Ref<Eigen::MatrixXd> mat,
 		if (filename.find(gz_str) != std::string::npos) {
 			outf.push(boost_io::gzip_compressor());
 		}
-		// std::cout << "Pushing " << filename << std::endl;
 		outf.push(boost_io::file_sink(filename));
-		// std::cout << "Sink to " << filename << std::endl;
 
 		std::vector<long> all_ii(world_size, 0);
 		outf << header << std::endl;
@@ -170,146 +165,13 @@ void fileUtils::dump_predicted_vec_to_file(Eigen::Ref<Eigen::MatrixXd> mat,
 				all_ii[kv.second]++;
 			}
 		}
-		// std::cout << "POpping.." << std::endl;
 		outf.pop();
-		// std::cout << "Written to " << filename << std::endl;
 		boost_io::close(outf);
-		// std::cout << "Closed " << filename << std::endl;
-	}
-}
-
-//std::string variational_params_header(const parameters& p, const long& n_effects){
-//	std::string header = "";
-//	header += "beta0 alpha0 mu0 s_sq0";
-//	if(p.mode_mog_prior_beta) header += " mu_spike0 s_sq_spike0";
-//	if(n_effects > 1){
-//		header += "beta1 alpha1 mu1 s_sq1";
-//		if(p.mode_mog_prior_gam) header += " mu_spike1 s_sq_spike1";
-//	}
-//	return header;
-//}
-
-std::string variational_params_header(const parameters& p, const int& effect_index){
-	std::string header = "";
-	assert(effect_index == 0 || effect_index == 1);
-	if(effect_index == 0) {
-		header += "beta0 alpha0 mu0 s_sq0";
-		if(p.mode_mog_prior_beta) header += " mu_spike0 s_sq_spike0";
-	} else {
-		header += "beta1 alpha1 mu1 s_sq1";
-		if(p.mode_mog_prior_gam) header += " mu_spike1 s_sq_spike1";
-	}
-	return header;
-}
-
-void fileUtils::write_snp_stats_to_file(boost_io::filtering_ostream &ofile,
-                                        const int &n_effects,
-                                        const long &n_var,
-                                        const VariationalParameters &vp,
-                                        const GenotypeMatrix &X,
-                                        const parameters &p,
-                                        const bool &write_mog) {
-	// Function to write parameter values from genetic effects to file
-	// Assumes ofile has been initialised
-
-	ofile << "chr rsid pos a0 a1 maf info";
-	for (int ee = 0; ee < n_effects; ee++) {
-		ofile << " " << variational_params_header(p, ee);
-	}
-	ofile << std::endl;
-
-	Eigen::ArrayXXd mean_beta  = vp.alpha_beta * vp.mu1_beta;
-	if(p.mode_mog_prior_beta) mean_beta += (1 - vp.alpha_beta) * vp.mu2_beta;
-
-	Eigen::ArrayXXd mean_gam  = vp.alpha_gam * vp.mu1_gam;
-	if(p.mode_mog_prior_beta) mean_gam += (1 - vp.alpha_gam) * vp.mu2_gam;
-
-	ofile << std::scientific << std::setprecision(7);
-
-	for (std::uint32_t kk = 0; kk < n_var; kk++) {
-		ofile << X.chromosome[kk] << " " << X.rsid[kk] << " " << X.position[kk];
-		ofile << " " << X.al_0[kk] << " " << X.al_1[kk] << " " << X.maf[kk] << " " << X.info[kk];
-
-		// main effects
-		ofile << " " << mean_beta(kk);
-		ofile << " " << vp.alpha_beta(kk);
-		ofile << " " << vp.mu1_beta(kk);
-		ofile << " " << vp.s1_beta_sq(kk);
-		if(write_mog && p.mode_mog_prior_beta) {
-			ofile << " " << vp.mu2_beta(kk);
-			ofile << " " << vp.s2_beta_sq(kk);
-		}
-
-		// Interaction effects
-		if(n_effects > 1) {
-			ofile << " " << mean_gam(kk);
-			ofile << " " << vp.alpha_gam(kk);
-			ofile << " " << vp.mu1_gam(kk);
-			ofile << " " << vp.s1_gam_sq(kk);
-			if (write_mog && p.mode_mog_prior_gam) {
-				ofile << " " << vp.mu2_gam(kk);
-				ofile << " " << vp.s2_gam_sq(kk);
-			}
-		}
-		ofile << std::endl;
-	}
-}
-
-void fileUtils::write_snp_stats_to_file(boost_io::filtering_ostream &ofile,
-                                        const int &n_effects,
-                                        const long &n_var,
-                                        const VariationalParametersLite &vp,
-                                        const GenotypeMatrix &X,
-                                        const parameters &p,
-                                        const bool &write_mog) {
-	// Function to write parameter values from genetic effects to file
-	// Assumes ofile has been initialised
-
-	ofile << "chr rsid pos a0 a1 maf info";
-	for (int ee = 0; ee < n_effects; ee++) {
-		ofile << " " << variational_params_header(p, ee);
-	}
-	ofile << std::endl;
-
-	Eigen::ArrayXXd mean_beta  = vp.alpha_beta * vp.mu1_beta;
-	if(p.mode_mog_prior_beta) mean_beta += (1 - vp.alpha_beta) * vp.mu2_beta;
-
-	Eigen::ArrayXXd mean_gam  = vp.alpha_gam * vp.mu1_gam;
-	if(p.mode_mog_prior_beta) mean_gam += (1 - vp.alpha_gam) * vp.mu2_gam;
-
-	ofile << std::scientific << std::setprecision(7);
-
-	for (std::uint32_t kk = 0; kk < n_var; kk++) {
-		ofile << X.chromosome[kk] << " " << X.rsid[kk] << " " << X.position[kk];
-		ofile << " " << X.al_0[kk] << " " << X.al_1[kk] << " " << X.maf[kk] << " " << X.info[kk];
-
-		// main effects
-		ofile << " " << mean_beta(kk);
-		ofile << " " << vp.alpha_beta(kk);
-		ofile << " " << vp.mu1_beta(kk);
-		ofile << " " << vp.s1_beta_sq(kk);
-		if(write_mog && p.mode_mog_prior_beta) {
-			ofile << " " << vp.mu2_beta(kk);
-			ofile << " " << vp.s2_beta_sq(kk);
-		}
-
-		// Interaction effects
-		if(n_effects > 1) {
-			ofile << " " << mean_gam(kk);
-			ofile << " " << vp.alpha_gam(kk);
-			ofile << " " << vp.mu1_gam(kk);
-			ofile << " " << vp.s1_gam_sq(kk);
-			if (write_mog && p.mode_mog_prior_gam) {
-				ofile << " " << vp.mu2_gam(kk);
-				ofile << " " << vp.s2_gam_sq(kk);
-			}
-		}
-		ofile << std::endl;
 	}
 }
 
 void fileUtils::write_snp_stats_to_file(boost_io::filtering_ostream &ofile, const int &n_effects, const int &n_var,
-                                        const VariationalParametersLite &vp, const GenotypeMatrix &X,
+                                        const GenotypeMatrix &X,
                                         const parameters &p,
                                         const bool &write_mog, const Eigen::Ref<const Eigen::VectorXd> &neglogp_beta,
                                         const Eigen::Ref<const Eigen::VectorXd> &neglogp_gam,
@@ -322,50 +184,26 @@ void fileUtils::write_snp_stats_to_file(boost_io::filtering_ostream &ofile, cons
 	// Function to write parameter values from genetic effects to file
 	// Assumes ofile has been initialised
 
-	ofile << "chr rsid pos a0 a1 maf info";
-	ofile << " " << variational_params_header(p, 0);
+	ofile << "SNPID chr rsid pos a0 a1 maf info";
 	ofile << " loco_t_stat" << 0 << " loco_t_neglogp" << 0;
 	if(n_effects > 1) {
-		ofile << " " << variational_params_header(p, 1);
 		if (test_stat_gam.size() > 0) ofile << " loco_t_stat" << 1;
 		if (neglogp_gam.size() > 0) ofile << " loco_t_neglogp" << 1;
 		ofile << " loco_chi_stat" << " loco_robust_neglogp" << " loco_f_stat" << " loco_f_neglogp";
 	}
 	ofile << std::endl;
 
-	Eigen::ArrayXXd mean_beta  = vp.alpha_beta * vp.mu1_beta;
-	if(p.mode_mog_prior_beta) mean_beta += (1 - vp.alpha_beta) * vp.mu2_beta;
-
-	Eigen::ArrayXXd mean_gam  = vp.alpha_gam * vp.mu1_gam;
-	if(p.mode_mog_prior_beta) mean_gam += (1 - vp.alpha_gam) * vp.mu2_gam;
-
 	ofile << std::scientific << std::setprecision(7);
 	for (std::uint32_t kk = 0; kk < n_var; kk++) {
-		ofile << X.chromosome[kk] << " " << X.rsid[kk] << " " << X.position[kk];
+		ofile << X.SNPID[kk] << " "<< X.chromosome[kk] << " " << X.rsid[kk] << " " << X.position[kk];
 		ofile << " " << X.al_0[kk] << " " << X.al_1[kk] << " " << X.maf[kk] << " " << X.info[kk];
 
 		// main effects
-		ofile << " " << mean_beta(kk);
-		ofile << " " << vp.alpha_beta(kk);
-		ofile << " " << vp.mu1_beta(kk);
-		ofile << " " << vp.s1_beta_sq(kk);
-		if(write_mog && p.mode_mog_prior_beta) {
-			ofile << " " << vp.mu2_beta(kk);
-			ofile << " " << vp.s2_beta_sq(kk);
-		}
 		ofile << " " << test_stat_beta(kk);
 		ofile << " " << neglogp_beta(kk);
 
 		// Interaction effects
 		if(n_effects > 1) {
-			ofile << " " << mean_gam(kk);
-			ofile << " " << vp.alpha_gam(kk);
-			ofile << " " << vp.mu1_gam(kk);
-			ofile << " " << vp.s1_gam_sq(kk);
-			if (write_mog && p.mode_mog_prior_gam) {
-				ofile << " " << vp.mu2_gam(kk);
-				ofile << " " << vp.s2_gam_sq(kk);
-			}
 			if (test_stat_gam.size() > 0) ofile << " " << test_stat_gam(kk);
 			if (neglogp_gam.size() > 0) ofile << " " << neglogp_gam(kk);
 			ofile << " " << test_stat_rgam(kk);
