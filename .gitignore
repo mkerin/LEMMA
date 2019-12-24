@@ -1,5 +1,5 @@
 # Ignore the build and lib dirs
-build/*
+build*/*
 lib/*
 3rd_party/*
 archive/*
@@ -7,17 +7,16 @@ src/tools/*
 data/*
 tests/data/*
 example/inference*
-
+cmake_commands.txt
+R/*
 cmake-build*
 CMakeFiles/*
-traces/*
-instruments*
 examples/*
-tests/*.bak
-tests/*.backup
+example/*
 
 # Ignore any executables
 bin/*
+unit/tests
 
 # garbage files
 *.gch
