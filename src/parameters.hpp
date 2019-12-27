@@ -22,7 +22,7 @@ public:
 	std::vector< std::string > streamBgenFiles, streamBgiFiles, RHE_groups_files;
 	unsigned int random_seed;
 	long chunk_size, vb_iter_max, vb_iter_start, param_dump_interval, n_pve_samples;
-	long long int maxBytesPerRank;
+	long long maxBytesPerRank;
 	int env_update_repeats;
 	unsigned int n_thread, main_chunk_size, gxe_chunk_size;
 	std::uint32_t range_start, range_end;
@@ -32,12 +32,12 @@ public:
 	bool elbo_tol_set_by_user, alpha_tol_set_by_user, mode_empirical_bayes;
 	bool keep_constant_variants, user_requests_round1;
 	bool mode_alternating_updates, mode_RHE, mode_RHE_fast;
-	bool mode_no_gxe, debug;
+	bool mode_no_gxe, debug, force_write_vparams;
 	bool init_weights_with_snpwise_scan, flip_high_maf_variants, min_spike_diff_set;
 	bool mode_mog_prior_beta, mode_mog_prior_gam, mode_random_start, mode_calc_snpstats;
 	bool mode_remove_squared_envs, mode_squarem, mode_incl_squared_envs, drop_loco;
 	bool exclude_ones_from_env_sq, mode_RHEreg_NM;
-	long levenburgMarquardt_max_iter;
+	long levenburgMarquardt_max_iter, pheno_col_num;
 	double min_maf, min_info, elbo_tol, alpha_tol;
 	double beta_spike_diff_factor, gam_spike_diff_factor, min_spike_diff_factor;
 	long LOSO_window, n_jacknife, streamBgen_print_interval, nelderMead_max_iter, n_LM_starts;
@@ -49,7 +49,7 @@ public:
 		pheno_file("NULL"),
 		recombination_file("NULL"),
 		covar_file("NULL"),
-		env_file("NULL"),
+				env_file("NULL"),
 		bgi_file("NULL"),
 		snpstats_file("NULL"),
 		r1_hyps_grid_file("NULL"),
@@ -73,6 +73,7 @@ public:
 		n_jacknife = 2;
 		random_seed = -1;
 		env_update_repeats = 1;
+		pheno_col_num = -1;
 		interaction_analysis = false;
 		joint_covar_update = false;
 		drop_loco = false;
@@ -95,6 +96,7 @@ public:
 		param_dump_interval = 50;
 		streamBgen_print_interval = 100;
 		range = false;
+		force_write_vparams = false;
 		min_spike_diff_set = false;
 		mode_remove_squared_envs = true;
 		mode_incl_squared_envs = false;

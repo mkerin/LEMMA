@@ -168,7 +168,7 @@ TEST_CASE("Data") {
 		data.read_non_genetic_data();
 		data.read_full_bgen();
 
-		Eigen::VectorXd vv = Eigen::VectorXd::Ones(data.G.pp);
+		Eigen::VectorXd vv = Eigen::VectorXd::Ones(data.G.cols());
 		Eigen::VectorXd v1 = data.G.mult_vector_by_chr(1, vv);
 		Eigen::VectorXd v2 = data.G.mult_vector_by_chr(22, vv);
 

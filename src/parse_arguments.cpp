@@ -60,7 +60,6 @@ void print_compilation_details(){
 #ifdef NDEBUG
 	std::cout << "- WARNING: NDEBUG is defined which means assert statements won't work!" << std::endl;
 #endif
-
 }
 
 void parse_arguments(parameters &p, int argc, char **argv) {
@@ -91,42 +90,44 @@ void parse_arguments(parameters &p, int argc, char **argv) {
 	;
 
 	options.add_options("VB")
-			("VB", "Run VB algorithm.")
-			("singleSnpStats", "Compute SNP association tests", cxxopts::value<bool>(p.mode_calc_snpstats))
-			("VB-ELBO-thresh", "Convergence threshold for VB convergence.", cxxopts::value<double>(p.elbo_tol))
-			("VB-squarem", "Use SQUAREM algorithm for hyperparameter updates (on by default).")
-			("VB-varEM", "Maximise ELBO wrt hyperparameters for hyperparameter updates.")
-			("VB-constant-hyps", "Keep hyperparameters constant.")
-			("VB-iter-max", "Maximum number of VB iterations (default: 10000)", cxxopts::value<long>(p.vb_iter_max))
-			("resume_from_state", "For use when resuming VB algorithm from previous run.", cxxopts::value<std::string>(p.resume_prefix))
-			("state_dump_interval", "Save VB parameter state to file every N iterations (default: None)", cxxopts::value<long>(p.param_dump_interval))
-			("dxteex", "Optional flag to pass precomputed dXtEEX array.", cxxopts::value<std::string>(p.dxteex_file))
-			;
+	    ("VB", "Run VB algorithm.")
+	    ("singleSnpStats", "Compute SNP association tests", cxxopts::value<bool>(p.mode_calc_snpstats))
+	    ("VB-ELBO-thresh", "Convergence threshold for VB convergence.", cxxopts::value<double>(p.elbo_tol))
+	    ("VB-squarem", "Use SQUAREM algorithm for hyperparameter updates (on by default).")
+	    ("VB-varEM", "Maximise ELBO wrt hyperparameters for hyperparameter updates.")
+	    ("VB-constant-hyps", "Keep hyperparameters constant.")
+	    ("VB-iter-max", "Maximum number of VB iterations (default: 10000)", cxxopts::value<long>(p.vb_iter_max))
+	    ("resume_from_state", "For use when resuming VB algorithm from previous run.", cxxopts::value<std::string>(p.resume_prefix))
+	    ("state_dump_interval", "Save VB parameter state to file every N iterations (default: None)", cxxopts::value<long>(p.param_dump_interval))
+	    ("dxteex", "Optional flag to pass precomputed dXtEEX array.", cxxopts::value<std::string>(p.dxteex_file))
+	;
 
 	options.add_options("RHE")
-			("RHEreg", "Run randomised HE-regression algorithm", cxxopts::value<bool>())
-			("RHEreg-fast", "Run randomised HE-regression algorithm without centering and scaling genotype matrix (unnecessary with modified h2 conversion)")
-			("RHEreg-groups", "Text file containing group of each SNP for use with multicomponent randomised HE regression", cxxopts::value<std::string>())
-			("mRHEreg-groups", "Text file to paths of --RHE-groups files. Each should correspond to the bgen files given in --mStreamBgen", cxxopts::value<std::string>())
-			("n-RHEreg-samples", "Number of random vectors used in RHE algorithm", cxxopts::value<long>(p.n_pve_samples))
-			("n-RHEreg-jacknife", "Number of jacknife samples used in RHE algorithm", cxxopts::value<long>(p.n_jacknife))
-			("random-seed", "Seed used to draw random vectors in RHE algorithm (default: random)",
-			 cxxopts::value<unsigned int>(p.random_seed))
-			("extra-pve-covar", "Covariables in addition to those provided to --VB (Eg. principle components).", cxxopts::value<std::string>(p.extra_pve_covar_file))
-			;
+	    ("RHEreg", "Run randomised HE-regression algorithm", cxxopts::value<bool>())
+	    ("RHEreg-fast", "Run randomised HE-regression algorithm without centering and scaling genotype matrix (unnecessary with modified h2 conversion)")
+	    ("RHEreg-groups", "Text file containing group of each SNP for use with multicomponent randomised HE regression", cxxopts::value<std::string>())
+	    ("mRHEreg-groups", "Text file to paths of --RHE-groups files. Each should correspond to the bgen files given in --mStreamBgen", cxxopts::value<std::string>())
+	    ("n-RHEreg-samples", "Number of random vectors used in RHE algorithm", cxxopts::value<long>(p.n_pve_samples))
+	    ("n-RHEreg-jacknife", "Number of jacknife samples used in RHE algorithm", cxxopts::value<long>(p.n_jacknife))
+	    ("random-seed", "Seed used to draw random vectors in RHE algorithm (default: random)",
+	    cxxopts::value<unsigned int>(p.random_seed))
+	    ("extra-pve-covar", "Covariables in addition to those provided to --VB (Eg. principle components).", cxxopts::value<std::string>(p.extra_pve_covar_file))
+	;
 
 	options.add_options("Filtering")
-			("maf", "Exclude all SNPs whose minor allele frequency is below this threshold", cxxopts::value<double>(p.min_maf))
-			("info", "Exclude all SNPs whose IMPUTE info is below this threshold", cxxopts::value<double>(p.min_info))
-			("incl_rsids", "Exclude all SNPs whose RSID is not in the given file.", cxxopts::value<std::string>(p.incl_rsids_file))
-			("incl_sample_ids", "Exclude all samples whose sample ID is not in the BGEN file.", cxxopts::value<std::string>(p.incl_sids_file))
-			("range", "Genomic range in format chr:start-end", cxxopts::value<std::string>())
-			;
+	    ("maf", "Exclude all SNPs whose minor allele frequency is below this threshold", cxxopts::value<double>(p.min_maf))
+	    ("info", "Exclude all SNPs whose IMPUTE info is below this threshold", cxxopts::value<double>(p.min_info))
+	    ("incl_rsids", "Exclude all SNPs whose RSID is not in the given file.", cxxopts::value<std::string>(p.incl_rsids_file))
+	    ("incl_sample_ids", "Exclude all samples whose sample ID is not in the BGEN file.", cxxopts::value<std::string>(p.incl_sids_file))
+	    ("range", "Genomic range in format chr:start-end", cxxopts::value<std::string>())
+	    ("pheno-col-num", "Column number of the phenotype to use (if --pheno contains multiple phenotypes)", cxxopts::value<long>(p.pheno_col_num))
+	;
 
 	options.add_options("Internal")
-			("spike_diff_factor", "", cxxopts::value<double>())
-			("gam_spike_diff_factor", "", cxxopts::value<double>(p.gam_spike_diff_factor))
-			("beta_spike_diff_factor", "", cxxopts::value<double>(p.beta_spike_diff_factor))
+	    ("spike_diff_factor", "", cxxopts::value<double>())
+	    ("gam_spike_diff_factor", "", cxxopts::value<double>(p.gam_spike_diff_factor))
+	    ("beta_spike_diff_factor", "", cxxopts::value<double>(p.beta_spike_diff_factor))
+	    ("force_write_vparams", "", cxxopts::value<bool>(p.force_write_vparams))
 	    ("covar_init", "Path to initial covariate weights", cxxopts::value<std::string>(p.covar_coeffs_file))
 	    ("vb_init", "", cxxopts::value<std::string>(p.vb_init_file))
 	    ("xtra_verbose", "")
@@ -195,10 +196,10 @@ void parse_arguments(parameters &p, int argc, char **argv) {
 		if(opts.count("RHEreg")) {
 			p.mode_RHE = true;
 		}
-		if(opts.count("RHEreg-NM")){
+		if(opts.count("RHEreg-NM")) {
 			p.mode_RHE = true;
 		}
-		if(opts.count("RHEreg-LM")){
+		if(opts.count("RHEreg-LM")) {
 			p.mode_RHE = true;
 		}
 		if(opts.count("mode_pve_est")) {
@@ -1012,14 +1013,15 @@ void parse_arguments(parameters &p, int argc, char **argv) {
 			p.resume_prefix,
 			std::regex(".*it([0-9]+).*"),
 			std::string("$1"));
-		std::cout << "Resuming from previously saved state" << std::endl;
+		std::cout << "NB: Will resume from previous parameter state";
 		if (p.vb_iter_start == 0) {
 			try {
 				p.vb_iter_start = std::stol(index) + 1;
-				std::cout << "Incrementing vb counter to " << p.vb_iter_start << std::endl;
+				std::cout << " (incrementing vb counter to " << p.vb_iter_start << ")";
 			} catch (const std::invalid_argument& ia) {
 			}
 		}
+		std::cout << std::endl;
 	}
 
 	// mode_vb specific options

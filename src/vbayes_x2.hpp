@@ -72,8 +72,6 @@ public:
 	long n_env;
 	long n_var;
 	long n_var2;
-	bool random_params_init;
-	bool run_round1;
 	double Nglobal;
 	int world_rank;
 	bool first_covar_update;
@@ -118,6 +116,8 @@ public:
 	std::chrono::system_clock::time_point time_check;
 	std::chrono::duration<double> elapsed_innerLoop;
 
+	std::vector<Eigen::VectorXd> resid_loco, ym_per_chr, yx_per_chr;
+
 	explicit VBayesX2(Data& dat) : X(dat.G),
 		Y(dat.Y),
 		C(dat.C),
@@ -153,13 +153,6 @@ public:
 		assert(n_covar == covar_names.size());
 		assert(n_env == E.cols());
 		assert(n_env == env_names.size());
-
-		random_params_init = false;
-		if(p.user_requests_round1) {
-			run_round1     = true;
-		} else {
-			run_round1     = false;
-		}
 
 		std::set<int> tmp(X.chromosome.begin(), X.chromosome.end());
 		chrs_present.assign(tmp.begin(), tmp.end());
@@ -229,10 +222,8 @@ public:
 		}
 
 		// Generate initial values for each run
-		random_params_init = false;
 		if(p.mode_random_start) {
 			std::cout << "Beta and gamma initialised with random draws" << std::endl;
-			random_params_init = true;
 		}
 
 		// Initialise summary vars for vp_init
@@ -1403,11 +1394,9 @@ public:
 	                               std::vector<Eigen::VectorXd>& pred_main,
 	                               std::vector<Eigen::VectorXd>& pred_int,
 	                               std::vector<Eigen::VectorXd>& chr_residuals) const {
-
-//		std::set<int> chrs(X.chromosome.begin(), X.chromosome.end());
-		assert(pred_main.size() == n_chrs);
-		assert(pred_int.size() == n_chrs);
-		assert(chr_residuals.size() == n_chrs);
+		pred_main.resize(n_chrs);
+		pred_int.resize(n_chrs);
+		chr_residuals.resize(n_chrs);
 
 		// casts used if DATA_AS_FLOAT
 		Eigen::VectorXd map_residuals;
@@ -1450,73 +1439,46 @@ public:
 		}
 	}
 
-	void LOCO_pvals(const VariationalParametersLite& vp,
-	                const std::vector<Eigen::VectorXd>& chr_residuals,
-	                Eigen::Ref<Eigen::VectorXd> neglogp_beta,
-	                Eigen::Ref<Eigen::VectorXd> neglogp_gam,
-	                Eigen::Ref<Eigen::VectorXd> neglogp_gam_robust,
-	                Eigen::Ref<Eigen::VectorXd> neglogp_joint,
-	                Eigen::Ref<Eigen::VectorXd> test_stat_beta,
-	                Eigen::Ref<Eigen::VectorXd> test_stat_gam,
-	                Eigen::Ref<Eigen::VectorXd> test_stat_gam_robust,
-	                Eigen::Ref<Eigen::VectorXd> test_stat_joint){
-		assert(neglogp_beta.rows()  == n_var);
-		assert(neglogp_gam.rows()   == n_var);
-		assert(neglogp_joint.rows() == n_var);
-		assert(test_stat_beta.rows()  == n_var);
-		assert(test_stat_gam.rows()   == n_var);
-		assert(test_stat_joint.rows() == n_var);
-		assert(n_effects == 1 || n_effects == 2);
-
-//		std::set<int> chrs(X.chromosome.begin(), X.chromosome.end());
+	void my_LOCO_pvals(const VariationalParametersLite& vp,
+	                   const std::vector<Eigen::VectorXd>& chr_residuals,
+	                   Eigen::MatrixXd& neglogPvals,
+	                   Eigen::MatrixXd& testStats){
 		assert(chr_residuals.size() == n_chrs);
+		neglogPvals.resize(n_var, (n_env > 0 ? 4 : 1));
+		testStats.resize(n_var, (n_env > 0 ? 4 : 1));
 
-		// Compute p-vals per variant (p=3 as residuals mean centered)
-		Eigen::MatrixXd H(n_samples, n_effects);
-		boost_m::students_t t_dist(n_samples - n_effects - 1);
-		boost_m::fisher_f f_dist(n_effects, n_samples - n_effects - 1);
-		for(std::uint32_t jj = 0; jj < n_var; jj++ ) {
-			long chr1 = X.chromosome[jj];
-			long cc = std::find(chrs_present.begin(), chrs_present.end(), chr1) - chrs_present.begin();
-			H.col(0) = X.col(jj).cast<double>();
-
-			double rss_alt, rss_null;
-			Eigen::MatrixXd HtH(H.cols(), H.cols()), Hty(H.cols(), 1);
-			Eigen::MatrixXd HtH_inv(H.cols(), H.cols()), HtVH(H.cols(), H.cols());
-			if(n_effects == 1) {
-				double beta_tstat, beta_pval;
-				prep_lm(H, chr_residuals[cc], HtH, HtH_inv, Hty, rss_alt);
-				student_t_test(n_samples, HtH_inv, Hty, rss_alt, 0, beta_tstat, beta_pval);
-
-				neglogp_beta(jj) = -1 * log10(beta_pval);
-				test_stat_beta(jj) = beta_tstat;
-			} else if (n_effects > 1) {
-				H.col(1) = H.col(0).cwiseProduct(vp.eta.cast<double>());
-
-				// Single-var tests
-				double beta_tstat, gam_tstat, rgam_stat, beta_pval, gam_pval, rgam_pval;
-				prep_lm(H, chr_residuals[cc], HtH, HtH_inv, Hty, rss_alt, HtVH);
-				hetero_chi_sq(HtH_inv, Hty, HtVH, 1, rgam_stat, rgam_pval);
-				student_t_test(n_samples, HtH_inv, Hty, rss_alt, 1, gam_tstat, gam_pval);
-				student_t_test(n_samples, HtH_inv, Hty, rss_alt, 0, beta_tstat, beta_pval);
-
-				// F-test over main+int effects of snp_j
-				double joint_fstat, joint_pval;
-				rss_null = chr_residuals[cc].squaredNorm();
-				rss_null = mpiUtils::mpiReduce_inplace(&rss_null);
-				joint_fstat       = (rss_null - rss_alt) / 2.0;
-				joint_fstat      /= rss_alt / (Nglobal - 3.0);
-				joint_pval        = 1.0 - boost_m::cdf(f_dist, joint_fstat);
-
-				neglogp_beta[jj]       = -1 * std::log10(beta_pval);
-				neglogp_gam[jj]        = -1 * std::log10(gam_pval);
-				neglogp_gam_robust[jj] = -1 * std::log10(rgam_pval);
-				neglogp_joint[jj]      = -1 * std::log10(joint_pval);
-				test_stat_beta[jj]     = beta_tstat;
-				test_stat_gam[jj]      = gam_tstat;
-				test_stat_gam_robust[jj] = rgam_stat;
-				test_stat_joint[jj]    = joint_fstat;
+		std::map<long,long> chr_changes;
+		long chr = X.chromosome[0];
+		for (long jj = 0; jj < n_var; jj++) {
+			if (chr != X.chromosome[jj]) {
+				chr_changes[chr] = jj;
+				chr = X.chromosome[jj];
 			}
+		}
+		chr_changes[chr] = n_var;
+
+		EigenDataMatrix D;
+		long max_chunk_size = 256, start = 0;
+		bool append = false;
+		while (start < n_var) {
+			long chunkSize = std::min(n_var,std::min(max_chunk_size,chr_changes[X.chromosome[start]]));
+			std::vector<long> chunk(chunkSize);
+			std::iota(chunk.begin(),chunk.end(),start);
+
+			long chr1 = X.chromosome[start];
+			long cc = std::find(chrs_present.begin(), chrs_present.end(), chr1) - chrs_present.begin();
+
+			long ch_len = chunk.size();
+			if (D.cols() != ch_len) {
+				D.resize(n_samples, ch_len);
+			}
+			X.col_block3(chunk, D);
+			Eigen::MatrixXd chunk_neglogPvals, chunk_testStats;
+			compute_LOCO_pvals(chr_residuals[cc], D, vp, chunk_neglogPvals, chunk_testStats);
+
+			neglogPvals.block(start,0,chunkSize,(n_env > 0 ? 4 : 1)) = chunk_neglogPvals;
+			testStats.block(start,0,chunkSize,(n_env > 0 ? 4 : 1)) = chunk_testStats;
+			start += chunkSize;
 		}
 	}
 
@@ -1612,7 +1574,7 @@ public:
 	                                         const std::vector< VbTracker >& trackers,
 	                                         const long& my_n_grid){
 		boost_io::filtering_ostream outf;
-		std::string ofile       = fstream_init(outf, file_prefix, "");
+		std::string ofile       = fileUtils::fstream_init(outf, p.out_file, file_prefix, "");
 		std::cout << "Writing converged hyperparameter values to " << ofile << std::endl;
 
 		// Compute normalised weights using finite elbo
@@ -1682,15 +1644,25 @@ public:
 		boost_io::close(outf);
 	}
 
+	void output_vb_results() {
+		if(world_rank == 0) {
+			std::string format = fileUtils::filepath_format(p.out_file, "", "_converged_vparams_*");
+			std::cout << "Writing variational parameters to " << format << std::endl;
 
-	void output_results(const std::string& file_prefix){
+			std::string path = fileUtils::filepath_format(p.out_file, "", "_converged_vparams");
+			vp_init.dump_to_prefix(path, X, env_names, covar_names);
+		}
+
+		if (n_env > 0) {
+			std::string path = fileUtils::filepath_format(p.out_file, "", "_converged_eta");
+			std::cout << "Writing eta to " << path << std::endl;
+			fileUtils::dump_predicted_vec_to_file(vp_init.eta, path, "eta", sample_location);
+		}
 
 		/*********** Stats from MAP to file ************/
-		std::vector<Eigen::VectorXd> resid_loco(n_chrs), pred_main(n_chrs), pred_int(n_chrs);
-
 		// Predicted effects to file
 		calcPredEffects(vp_init);
-		compute_residuals_per_chr(vp_init, pred_main, pred_int, resid_loco);
+		compute_residuals_per_chr(vp_init, ym_per_chr, yx_per_chr, resid_loco);
 		Eigen::VectorXd Ealpha = Eigen::VectorXd::Zero(n_samples);
 		if(n_covar > 0) {
 			Ealpha += (C * vp_init.muc.matrix().cast<scalarData>()).cast<double>();
@@ -1736,76 +1708,49 @@ public:
 
 		// Save eta & residual phenotypes to separate files
 		boost_io::filtering_ostream tmp_outf;
-		if (n_env > 0) {
-			std::string path = fileUtils::filepath_format(p.out_file, "", "_converged_eta");
-			std::cout << "Writing eta to " << path << std::endl;
-			fileUtils::dump_predicted_vec_to_file(vp_init.eta, path, "eta", sample_location);
-		}
 
 		for (long cc = 0; cc < n_chrs; cc++) {
 			std::string path = fileUtils::filepath_format(p.out_file, "",
-														  "_converged_resid_pheno_chr" + std::to_string(chrs_present[cc]));
+			                                              "_converged_resid_pheno_chr" + std::to_string(chrs_present[cc]));
 			std::cout << "Writing residualised pheno to " << path << std::endl;
 			fileUtils::dump_predicted_vec_to_file(resid_loco[cc], path,
-												  "chr" + std::to_string(chrs_present[cc]),
-												  sample_location);
+			                                      "chr" + std::to_string(chrs_present[cc]),
+			                                      sample_location);
 		}
+	}
 
-		if(world_rank == 0 && n_env > 0) {
-			boost_io::filtering_ostream outf;
-			std::string path = fstream_init(outf, file_prefix, "_converged_env_params");
-			std::cout << "Writing env variational parameters to " << path << std::endl;
-			outf << std::scientific << std::setprecision(7);
-			outf << "env mean variance" << std::endl;
-			for (long ll = 0; ll < n_env; ll++) {
-				outf << env_names[ll] << " ";
-				outf << vp_init.muw(ll) << " ";
-				outf << vp_init.sw_sq(ll) << std::endl;
-			}
-			boost_io::close(outf);
-		}
-
-
-		if(world_rank == 0 && n_covar > 0) {
-			boost_io::filtering_ostream outf;
-			std::string ofile = fstream_init(outf, file_prefix, "_converged_covar_params");
-			std::cout << "Writing covar variational parameters to " << ofile << std::endl;
-
-			outf << "covar mean variance" << std::endl;
-			outf << std::setprecision(9) << std::fixed;
-			for (int cc = 0; cc < n_covar; cc++) {
-				outf << covar_names[cc] << " ";
-				outf << vp_init.muc(cc) << " ";
-				outf << vp_init.sc_sq(cc) <<  std::endl;
-			}
-			boost_io::close(outf);
-		}
+	void my_compute_LOCO_pvals(VariationalParametersLite vp){
+		calcPredEffects(vp);
+		compute_residuals_per_chr(vp, ym_per_chr, yx_per_chr, resid_loco);
 
 		// Compute LOCO p-values
-		Eigen::VectorXd neglogp_beta(n_var), neglogp_gam(n_var), neglogp_rgam(n_var), neglogp_joint(n_var);
-		Eigen::VectorXd test_stat_beta(n_var), test_stat_gam(n_var), test_stat_rgam(n_var), test_stat_joint(n_var);
+		Eigen::MatrixXd neglogPvals, testStats;
 		if(p.drop_loco) {
-			if (p.debug){
+			if (p.debug) {
 				std::cout << "Computing single-snp hypothesis tests while excluding SNPs within ";
 				std::cout << p.LOSO_window << " of the test SNP" << std::endl;
 			}
-			LOCO_pvals_v2(X, vp_init, p.LOSO_window, neglogp_beta,
-			              neglogp_rgam,
-			              neglogp_joint,
-			              test_stat_beta,
-			              test_stat_rgam,
-			              test_stat_joint);
-			neglogp_gam.resize(0);
-			test_stat_gam.resize(0);
+			Eigen::VectorXd neglogp_beta(n_var), neglogp_gam(n_var), neglogp_rgam(n_var), neglogp_joint(n_var);
+			Eigen::VectorXd test_stat_beta(n_var), test_stat_gam(n_var), test_stat_rgam(n_var), test_stat_joint(n_var);
+			LOCO_pvals_v2(X, vp, p.LOSO_window,
+			              neglogp_beta, neglogp_rgam, neglogp_joint,
+			              test_stat_beta, test_stat_rgam, test_stat_joint);
+			neglogPvals.resize(neglogp_beta.rows(), 3);
+			neglogPvals.col(0) = neglogp_beta;
+			neglogPvals.col(1) = Eigen::VectorXd::Constant(neglogp_beta.rows(), -1);
+			neglogPvals.col(2) = neglogp_rgam;
+			testStats.resize(neglogp_beta.rows(), 3);
+			testStats.col(0) = test_stat_beta;
+			testStats.col(1) = Eigen::VectorXd::Constant(neglogp_beta.rows(), -1);
+			testStats.col(2) = test_stat_rgam;
 		} else {
 			if (p.debug) std::cout << "Computing single-SNP hypothesis tests with LOCO strategy" << std::endl;
-			LOCO_pvals(vp_init, resid_loco, neglogp_beta, neglogp_gam, neglogp_rgam, neglogp_joint,
-			           test_stat_beta, test_stat_gam, test_stat_rgam, test_stat_joint);
+			my_LOCO_pvals(vp, resid_loco, neglogPvals, testStats);
 		}
 
 		if(world_rank == 0) {
 			boost_io::filtering_ostream outf;
-			std::string ofile = fstream_init(outf, file_prefix, "_converged_snp_stats");
+			std::string ofile = fileUtils::fstream_init(outf, p.out_file, "", "_loco_pvals");
 			std::cout << "Writing single-SNP hypothesis test results ";
 			if(p.drop_loco) {
 				std::cout << "(leave out SNPs within " << p.LOSO_window << "bp)";
@@ -1813,35 +1758,10 @@ public:
 				std::cout << "(computed with LOCO strategy)";
 			}
 			std::cout << " to " << ofile << std::endl;
-			fileUtils::write_snp_stats_to_file(outf, n_effects, n_var, X, p, true, neglogp_beta,
-			                                   neglogp_gam,
-			                                   neglogp_rgam, neglogp_joint, test_stat_beta, test_stat_gam,
-			                                   test_stat_rgam,
-			                                   test_stat_joint);
+			bool append = false;
+			fileUtils::write_snp_stats_to_file(outf, n_effects, X, append, neglogPvals, testStats);
 			boost_io::close(outf);
 		}
-	}
-
-	std::string fstream_init(boost_io::filtering_ostream& my_outf,
-	                         const std::string& file_prefix,
-	                         const std::string& file_suffix){
-
-		std::string filepath   = p.out_file;
-		std::string dir        = filepath.substr(0, filepath.rfind('/')+1);
-		std::string stem_w_dir = filepath.substr(0, filepath.find('.'));
-		std::string stem       = stem_w_dir.substr(stem_w_dir.rfind('/')+1, stem_w_dir.size());
-		std::string ext        = filepath.substr(filepath.find('.'), filepath.size());
-
-
-		std::string ofile      = dir + file_prefix + stem + file_suffix + ext;
-
-		my_outf.reset();
-		std::string gz_str = ".gz";
-		if (p.out_file.find(gz_str) != std::string::npos) {
-			my_outf.push(boost_io::gzip_compressor());
-		}
-		my_outf.push(boost_io::file_sink(ofile));
-		return ofile;
 	}
 };
 

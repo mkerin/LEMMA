@@ -188,7 +188,6 @@ public:
 			// filter - apply queries
 			query->initialise();
 			bgenView->set_query(query);
-			bgenView->summarise(std::cout);
 		}
 
 		for (int ii = 0; ii < p.streamBgenFiles.size(); ii++) {
@@ -205,6 +204,12 @@ public:
 			}
 			query->initialise();
 			streamBgenViews[ii]->set_query(query);
+		}
+
+		if (p.bgen_file != "NULL"){
+			bgenView->summarise(std::cout);
+		} else if (p.streamBgenFiles.size() > 0){
+			streamBgenViews[0]->summarise(std::cout);
 		}
 
 		filters_applied = true;
@@ -599,9 +604,19 @@ public:
 
 	void read_pheno( ){
 		// Read phenotypes to Eigen matrix Y
-		EigenUtils::read_matrix(p.pheno_file, Y, pheno_names, missing_phenos);
-		assert(Y.rows() == n_samples);
+		Eigen::MatrixXd tmpY;
+		EigenUtils::read_matrix(p.pheno_file, tmpY, pheno_names, missing_phenos);
+		if (tmpY.cols() > 1){
+			if (p.pheno_col_num == -1) {
+				throw std::runtime_error("Multiple phenotypes detected; specify one with --pheno-col-num");
+			} else {
+				Y = tmpY.col(p.pheno_col_num);
+			}
+		} else {
+			Y = tmpY;
+		}
 		assert(Y.cols() == 1);
+		assert(Y.rows() == n_samples);
 		n_pheno = Y.cols();
 		Y_reduced = false;
 	}
@@ -1110,9 +1125,6 @@ public:
 	}
 
 	void assign_vb_init_from_file(VariationalParametersLite& vp_init){
-		// Set initial conditions for VB
-		std::cout << "Reading initialisation for alpha from file" << std::endl;
-
 		// Different filetypes
 		std::vector<std::string> case1 = {"alpha", "mu"};
 		std::vector<std::string> case2 = {"chr", "rsid", "pos", "a0", "a1", "beta", "gamma"};
@@ -1130,7 +1142,7 @@ public:
 		std::vector< std::string > init_key;
 		if(vb_init_colnames == case1) {
 			EigenUtils::read_matrix(p.vb_init_file, vb_init_mat, vb_init_colnames);
-			assert(vb_init_mat.rows() == 2 * n_var);
+			assert(p.bgen_file == "NULL" || vb_init_mat.rows() == 2 * n_var);
 
 			alpha_init = Eigen::Map<Eigen::ArrayXXd>(vb_init_mat.col(0).data(), n_var, n_effects);
 			mu_init = Eigen::Map<Eigen::ArrayXXd>(vb_init_mat.col(1).data(), n_var, n_effects);
@@ -1167,7 +1179,7 @@ public:
 			}
 		} else if(vb_init_colnames == case3a) {
 			EigenUtils::read_matrix_and_skip_cols(p.vb_init_file, 1, vb_init_mat, vb_init_colnames);
-			assert(vb_init_mat.rows() == n_var);
+			assert(p.bgen_file == "NULL" || vb_init_mat.rows() == n_var);
 
 			vp_init.alpha_beta = vb_init_mat.col(0);
 			vp_init.mu1_beta = vb_init_mat.col(1);
@@ -1176,7 +1188,7 @@ public:
 			vp_init.s2_beta_sq = vb_init_mat.col(4);
 		} else if(vb_init_colnames == case3b) {
 			EigenUtils::read_matrix_and_skip_cols(p.vb_init_file, 1, vb_init_mat, vb_init_colnames);
-			assert(vb_init_mat.rows() == n_var);
+			assert(p.bgen_file == "NULL" || vb_init_mat.rows() == n_var);
 
 			vp_init.alpha_beta = vb_init_mat.col(0);
 			vp_init.mu1_beta = vb_init_mat.col(1);
@@ -1201,13 +1213,16 @@ public:
 			throw std::runtime_error("Unexpected header");
 		}
 
-		assert(vp_init.alpha_beta.rows() == n_var);
+		assert(p.bgen_file == "NULL" || vp_init.alpha_beta.rows() == n_var);
 		if(n_env > 0) {
-			assert(vp_init.alpha_gam.rows() == n_var);
+			assert(p.bgen_file == "NULL" || vp_init.alpha_gam.rows() == n_var);
 		}
 	}
 
 	void set_vb_init(){
+		if (p.resume_prefix != "NULL") {
+			std::cout << "Reading in previous parameter state" << std::endl;
+		}
 		vp_init.run_default_init(n_var, n_covar, n_env);
 
 		// Manually set env coeffs
@@ -1273,6 +1288,9 @@ public:
 			assign_vb_init_from_file(vp_init);
 		}
 		if (p.debug) std::cout << "Done vb init" << std::endl;
+		if (p.resume_prefix != "NULL") {
+			std::cout << std::endl;
+		}
 	}
 
 	void dump_processed_data(){

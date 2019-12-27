@@ -42,6 +42,7 @@ class GenotypeMatrix {
 	const double L = 2.0;
 	const double intervalWidth = L/numCompressedIntervals;
 	const double invIntervalWidth = numCompressedIntervals / 2.0;
+	long nn, pp;
 
 public:
 	const bool low_mem;
@@ -64,7 +65,6 @@ public:
 	Eigen::VectorXd compressed_dosage_means;
 	Eigen::VectorXd compressed_dosage_sds;
 	Eigen::VectorXd compressed_dosage_inv_sds;
-	std::size_t nn, pp;
 
 	// Interface type of Eigen indices -> see eigen3/Eigen/src/Core/EigenBase.h
 	typedef Eigen::Index Index;

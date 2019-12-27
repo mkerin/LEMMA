@@ -3,13 +3,15 @@
 //
 #include "mpi_utils.hpp"
 #include "typedefs.hpp"
+#include "variational_parameters.hpp"
 
 #include "tools/eigen3.3/Dense"
 #include "tools/eigen3.3/Eigenvalues"
 
 #include <boost/math/distributions/chi_squared.hpp>
 #include <boost/math/distributions/students_t.hpp>
-#include <boost/math/distributions/complement.hpp> // complements
+#include <boost/math/distributions/complement.hpp>
+#include <boost/math/distributions/fisher_f.hpp>
 
 #include <cmath>
 
@@ -66,7 +68,7 @@ void student_t_test(long nn,
                     const Eigen::MatrixXd &Hty,
                     double rss,
                     int jj,
-                    double &tstat,
+                    double &stat,
                     double &pval) {
 	/* 2-sided Student t-test on regression output
 	   H0: beta[jj] != 0
@@ -76,18 +78,23 @@ void student_t_test(long nn,
 	nn = mpiUtils::mpiReduce_inplace(&nn);
 
 	auto beta = HtH_inv * Hty;
-	tstat = beta(jj, 0);
-	tstat /= std::sqrt(rss * HtH_inv(jj, jj) / (double) (nn - pp));
+	stat = beta(jj, 0);
+	stat /= std::sqrt(rss * HtH_inv(jj, jj) / (double) (nn - pp));
+//	if (std::isnan(stat)){
+//		std::cout << "est = " << beta(jj, 0) << std::endl;
+//		std::cout << "sd(est) = " << std::sqrt(rss * HtH_inv(jj, jj) / (double) (nn - pp)) << std::endl;
+//		std::cout << "rss = " << rss << std::endl;
+//	}
 
 	boost_m::students_t t_dist(nn - pp);
-	pval  = 2 * boost_m::cdf(boost_m::complement(t_dist, fabs(tstat)));
+	pval  = 2 * boost_m::cdf(boost_m::complement(t_dist, fabs(stat)));
 }
 
 void hetero_chi_sq(const Eigen::MatrixXd &HtH_inv,
                    const Eigen::MatrixXd &Hty,
                    const Eigen::MatrixXd &HtVH,
                    int jj,
-                   double &chi_stat,
+                   double &stat,
                    double &pval) {
 	/* Standard errors adjusted for Heteroscedasticity
 	   https://en.wikipedia.org/wiki/Heteroscedasticity-consistent_standard_errors
@@ -98,11 +105,16 @@ void hetero_chi_sq(const Eigen::MatrixXd &HtH_inv,
 
 	auto beta = HtH_inv * Hty;
 	auto var_beta = HtH_inv * HtVH * HtH_inv;
-	chi_stat = beta(jj, 0) * beta(jj, 0);
-	chi_stat /= var_beta(jj, jj);
+	stat = beta(jj, 0) * beta(jj, 0);
+	stat /= var_beta(jj, jj);
+	stat = std::abs(stat);
+//	if (std::isnan(stat)){
+//		std::cout << "est_sq = " << beta(jj, 0) * beta(jj, 0) << std::endl;
+//		std::cout << "var(est) = " << var_beta(jj, jj) << std::endl;
+//	}
 
 	boost_m::chi_squared chi_dist(1);
-	pval = boost_m::cdf(boost_m::complement(chi_dist, chi_stat));
+	pval = boost_m::cdf(boost_m::complement(chi_dist, stat));
 }
 
 void homo_chi_sq(long nn,
@@ -110,7 +122,7 @@ void homo_chi_sq(long nn,
                  const Eigen::MatrixXd &Hty,
                  const double rss,
                  const int jj,
-                 double &chi_stat,
+                 double &stat,
                  double &pval) {
 	/* Essentially the square of the t-test from regression
 	 */
@@ -119,95 +131,16 @@ void homo_chi_sq(long nn,
 	nn = mpiUtils::mpiReduce_inplace(&nn);
 
 	auto beta = HtH_inv * Hty;
-	chi_stat = beta(jj, 0) * beta(jj, 0);
-	chi_stat /= rss * HtH_inv(jj, jj) / (double) (nn - pp);
+	stat = beta(jj, 0) * beta(jj, 0);
+	stat /= rss * HtH_inv(jj, jj) / (double) (nn - pp);
+	stat = std::abs(stat);
+//	if (std::isnan(stat)){
+//		std::cout << "est_sq = " << beta(jj, 0) * beta(jj, 0) << std::endl;
+//		std::cout << "var(est) = " << rss * HtH_inv(jj, jj) / (double) (nn - pp) << std::endl;
+//	}
 
 	boost_m::chi_squared chi_dist(1);
-	pval = boost_m::cdf(boost_m::complement(chi_dist, chi_stat));
-}
-
-void computeSingleSnpTests(EigenRefDataMatrix Xtest,
-                           EigenRefDataMatrix neglogPvals,
-                           EigenRefDataMatrix chiSqStats,
-                           EigenRefDataMatrix pheno_resid) {
-	/* Computes
-	 * main effects chisq
-	 */
-	assert(neglogPvals.rows() == Xtest.cols());
-	assert(chiSqStats.rows() == Xtest.cols());
-	assert(neglogPvals.cols() == 1);
-	assert(chiSqStats.cols() == 1);
-
-	long n_samples = pheno_resid.rows();
-	long n_var = Xtest.cols();
-	long n_effects = 1;
-
-	// Compute p-vals per variant (p=3 as residuals mean centered)
-	EigenDataMatrix H(n_samples, n_effects);
-	EigenDataMatrix Hty(n_effects, 1);
-	EigenDataMatrix HtH(n_effects, n_effects);
-	EigenDataMatrix HtH_inv(n_effects, n_effects);
-	EigenDataMatrix HtVH(n_effects, n_effects);
-	for(std::uint32_t jj = 0; jj < n_var; jj++ ) {
-		H.col(0) = Xtest.col(jj);
-
-		// Single-var tests
-		double rss_alt, rss_null;
-		double beta_stat, gam_stat, rgam_stat, beta_pval, gam_pval, rgam_pval;
-		prep_lm(H, pheno_resid, HtH, HtH_inv, Hty, rss_alt, HtVH);
-		homo_chi_sq(n_samples, HtH_inv, Hty, rss_alt, 0, beta_stat, beta_pval);
-
-		neglogPvals(jj, 0) = -1 * std::log10(beta_pval);
-
-		chiSqStats(jj, 0) = beta_stat;
-	}
-}
-
-void computeSingleSnpTests(EigenRefDataMatrix Xtest,
-                           EigenRefDataMatrix neglogPvals,
-                           EigenRefDataMatrix chiSqStats,
-                           EigenRefDataMatrix pheno_resid,
-                           EigenRefDataVector eta) {
-	/* Computes
-	 * main effects chisq
-	 * gxe chisq (homoskedastic)
-	 * gxe chisq (heteroskedastic)
-	 */
-	assert(neglogPvals.rows() == Xtest.cols());
-	assert(chiSqStats.rows() == Xtest.cols());
-	assert(neglogPvals.cols() == 3);
-	assert(chiSqStats.cols() == 3);
-
-	long n_samples = pheno_resid.rows();
-	long n_var = Xtest.cols();
-	long n_effects = 2;
-
-	// Compute p-vals per variant (p=3 as residuals mean centered)
-	EigenDataMatrix H(n_samples, n_effects);
-	EigenDataMatrix Hty(n_effects, 1);
-	EigenDataMatrix HtH(n_effects, n_effects);
-	EigenDataMatrix HtH_inv(n_effects, n_effects);
-	EigenDataMatrix HtVH(n_effects, n_effects);
-	for(std::uint32_t jj = 0; jj < n_var; jj++ ) {
-		H.col(0) = Xtest.col(jj);
-		H.col(1) = H.col(0).cwiseProduct(eta);
-
-		// Single-var tests
-		double rss_alt, rss_null;
-		double beta_stat, gam_stat, rgam_stat, beta_pval, gam_pval, rgam_pval;
-		prep_lm(H, pheno_resid, HtH, HtH_inv, Hty, rss_alt, HtVH);
-		homo_chi_sq(n_samples, HtH_inv, Hty, rss_alt, 0, beta_stat, beta_pval);
-		homo_chi_sq(n_samples, HtH_inv, Hty, rss_alt, 1, gam_stat, gam_pval);
-		hetero_chi_sq(HtH_inv, Hty, HtVH, 1, rgam_stat, rgam_pval);
-
-		neglogPvals(jj, 0) = -1 * std::log10(beta_pval);
-		neglogPvals(jj, 1) = -1 * std::log10(gam_pval);
-		neglogPvals(jj, 2) = -1 * std::log10(rgam_pval);
-
-		chiSqStats(jj, 0) = beta_stat;
-		chiSqStats(jj, 1) = gam_stat;
-		chiSqStats(jj, 2) = rgam_stat;
-	}
+	pval = boost_m::cdf(boost_m::complement(chi_dist, stat));
 }
 
 double homo_chi_sq(const long nn,
@@ -238,3 +171,85 @@ double student_t_test(long nn,
 	student_t_test(nn, HtH_inv, Hty, rss, jj, tstat, pval);
 	return pval;
 }
+
+template <typename GenoMat>
+void compute_LOCO_pvals(const EigenDataVector& resid_pheno,
+                        const GenoMat& Xtest,
+                        const VariationalParametersLite& vp,
+                        Eigen::MatrixXd& neglogPvals,
+                        Eigen::MatrixXd& testStats){
+	long n_env     = vp.muw.rows();
+	long n_var     = Xtest.cols();
+	long n_samples = Xtest.rows();
+	long n_effects = (n_env > 0 ? 2 : 1);
+	double Nlocal  = n_samples;
+	double Nglobal = mpiUtils::mpiReduce_inplace(&Nlocal);
+
+	neglogPvals.resize(n_var, (n_env > 0 ? 4 : 1));
+	testStats.resize(n_var, (n_env > 0 ? 4 : 1));
+
+	// Compute p-vals per variant (p=3 as residuals mean centered)
+	Eigen::MatrixXd H(n_samples, 2 + 2 * (n_env > 0 ? 1 : 0));
+	H.col(0) = Eigen::VectorXd::Constant(n_samples, 1.0);
+	if (n_env > 0) H.col(3) = vp.eta.cast<double>();
+	boost_m::students_t t_dist(n_samples - H.cols() - 1);
+	boost_m::fisher_f f_dist(n_effects, n_samples - H.cols() - 1);
+	for(std::uint32_t jj = 0; jj < n_var; jj++ ) {
+		H.col(1) = Xtest.col(jj);
+
+		double rss_alt, rss_null;
+		Eigen::MatrixXd HtH(H.cols(), H.cols()), Hty(H.cols(), 1);
+		Eigen::MatrixXd HtH_inv(H.cols(), H.cols()), HtVH(H.cols(), H.cols());
+		if(n_env == 0) {
+			double beta_tstat, beta_pval;
+			prep_lm(H, resid_pheno, HtH, HtH_inv, Hty, rss_alt);
+			student_t_test(n_samples, HtH_inv, Hty, rss_alt, 1, beta_tstat, beta_pval);
+
+			neglogPvals(jj,0) = -1 * log10(beta_pval);
+			testStats(jj,0)   = beta_tstat;
+		} else {
+			H.col(2) = H.col(1).cwiseProduct(vp.eta.cast<double>());
+			try {
+				// Single-var tests
+				double beta_tstat, gam_tstat, rgam_stat, beta_pval, gam_pval, rgam_pval;
+				prep_lm(H, resid_pheno, HtH, HtH_inv, Hty, rss_alt, HtVH);
+				hetero_chi_sq(HtH_inv, Hty, HtVH, 2, rgam_stat, rgam_pval);
+				student_t_test(n_samples, HtH_inv, Hty, rss_alt, 2, gam_tstat, gam_pval);
+				student_t_test(n_samples, HtH_inv, Hty, rss_alt, 1, beta_tstat, beta_pval);
+
+				// F-test over main+int effects of snp_j
+				double joint_fstat, joint_pval;
+				rss_null = resid_pheno.squaredNorm();
+				rss_null = mpiUtils::mpiReduce_inplace(&rss_null);
+				joint_fstat = (rss_null - rss_alt) / 2.0;
+				joint_fstat /= rss_alt / (Nglobal - 3.0);
+				joint_pval = 1.0 - boost_m::cdf(f_dist, joint_fstat);
+
+				neglogPvals(jj, 0) = -1 * std::log10(beta_pval);
+				neglogPvals(jj, 1) = -1 * std::log10(gam_pval);
+				neglogPvals(jj, 2) = -1 * std::log10(rgam_pval);
+				neglogPvals(jj, 3) = -1 * std::log10(joint_pval);
+				testStats(jj, 0) = beta_tstat;
+				testStats(jj, 1) = gam_tstat;
+				testStats(jj, 2) = rgam_stat;
+				testStats(jj, 3) = joint_fstat;
+			} catch (...) {
+				neglogPvals(jj, 0) = std::numeric_limits<double>::quiet_NaN();
+				neglogPvals(jj, 1) = std::numeric_limits<double>::quiet_NaN();
+				neglogPvals(jj, 2) = std::numeric_limits<double>::quiet_NaN();
+				neglogPvals(jj, 3) = std::numeric_limits<double>::quiet_NaN();
+				testStats(jj, 0) = std::numeric_limits<double>::quiet_NaN();
+				testStats(jj, 1) = std::numeric_limits<double>::quiet_NaN();
+				testStats(jj, 2) = std::numeric_limits<double>::quiet_NaN();
+				testStats(jj, 3) = std::numeric_limits<double>::quiet_NaN();
+			}
+		}
+	}
+}
+
+// Explicit instantiation
+// https://stackoverflow.com/questions/2152002/how-do-i-force-a-particular-instance-of-a-c-template-to-instantiate
+template void compute_LOCO_pvals(const EigenDataVector&, const EigenDataMatrix&, const VariationalParametersLite&,
+                                 Eigen::MatrixXd&, Eigen::MatrixXd&);
+template void compute_LOCO_pvals(const EigenDataVector&, const GenotypeMatrix&, const VariationalParametersLite&,
+                                 Eigen::MatrixXd&, Eigen::MatrixXd&);

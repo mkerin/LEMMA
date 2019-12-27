@@ -56,7 +56,7 @@ list(APPEND LIBRARIES boost boost_iostreams)
 list(APPEND INCL_DIRS ${BGEN}/3rd_party/boost_1_55_0)
 
 
-### MPI Dependency [recommended]
+### MPI Dependency [required]
 find_package(MPI REQUIRED)
 include_directories(${MPI_INCLUDE_PATH})
 string(APPEND LIB_DIRS " ${MPI_LINK_FLAGS}")
@@ -80,13 +80,6 @@ if(DEFINED MKL_ROOT)
     endif()
 endif()
 
-message("Compile options:")
-message(${LOC_COMPILE_OPTS})
-message("Lib-dirs: ")
-message(${LIB_DIRS})
-message("Libs:")
-message(${LIBRARIES})
-
 ### Compile LEMMA
 set(TARGET lemma_${PROJECT_VERSION_MAJOR}_${PROJECT_VERSION_MINOR}_${PROJECT_VERSION_PATCH})
 
@@ -100,17 +93,17 @@ list(APPEND SOURCES src/parse_arguments.cpp src/file_utils.cpp src/eigen_utils.c
 list(APPEND SOURCES src/rhe_reg_component.cpp src/nelder_mead.cpp src/stats_tests.cpp)
 
 include_directories(${PROJECT_SOURCE_DIR})
-add_executable(${TARGET} src/bgen_prog.cpp ${SOURCES})
+add_executable(${TARGET} src/main.cpp ${SOURCES})
 target_compile_options(${TARGET} PRIVATE -msse2 ${LOC_COMPILE_OPTS})
 target_include_directories(${TARGET} PRIVATE ${INCL_DIRS})
 set_target_properties(${TARGET} PROPERTIES LINK_FLAGS "${LIB_DIRS}")
 target_link_libraries(${TARGET} ${LIBRARIES} ${LINKER_OPTS})
 
 ### Compile Catch Unit Tests
-set(TSOURCES unit/test_pve.cpp unit/test_main.cpp unit/test_hyps.cpp)
-list(APPEND TSOURCES unit/test_resume_inference.cpp unit/test_eigen.cpp unit/test_data.cpp)
-list(APPEND TSOURCES unit/test_nelder_mead.cpp)
-#set(TSOURCES unit/test_pve.cpp)
+#set(TSOURCES unit/test_pve.cpp unit/test_main.cpp unit/test_hyps.cpp)
+#list(APPEND TSOURCES unit/test_resume_inference.cpp unit/test_eigen.cpp unit/test_data.cpp)
+#list(APPEND TSOURCES unit/test_nelder_mead.cpp unit/test_snptests.cpp)
+set(TSOURCES unit/test_resume_inference.cpp unit/test_snptests.cpp)
 
 add_executable(tests unit/main.cpp ${TSOURCES} ${SOURCES})
 target_link_libraries(tests ${LIBRARIES} ${LINKER_OPTS})

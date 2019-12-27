@@ -81,7 +81,7 @@ int main( int argc, char** argv ) {
 
 			// Write time log to file
 			boost_io::filtering_ostream outf_time;
-			std::string ofile_map = VB.fstream_init(outf_time, "", "_time_elapsed");
+			std::string ofile_map = fileUtils::fstream_init(outf_time, p.out_file, "", "_time_elapsed");
 			outf_time << "function time" << std::endl;
 			outf_time << "read_data " << elapsed_reading_data.count() << std::endl;
 			outf_time << "VB_prepro " << elapsed_reading_data.count() << std::endl;
@@ -89,8 +89,12 @@ int main( int argc, char** argv ) {
 			outf_time << "SNP_testing " << VB.elapsed_innerLoop.count() << std::endl;
 		}
 
+		if (p.mode_vb || p.force_write_vparams) {
+			VB.output_vb_results();
+		}
+
 		if (p.mode_calc_snpstats) {
-			VB.output_results("");
+			VB.my_compute_LOCO_pvals(data.vp_init);
 		}
 	}
 
@@ -102,7 +106,7 @@ int main( int argc, char** argv ) {
 		std::cout << "Computing single-snp hypothesis tests" << std::endl;
 		boost_io::filtering_ostream outf;
 		if(world_rank == 0) {
-			if (p.streamBgenOutFile != "NULL"){
+			if (p.streamBgenOutFile != "NULL") {
 				fileUtils::fstream_init(outf, p.streamBgenOutFile);
 				std::cout << "Writing single SNP hypothesis tests to file: " << p.streamBgenOutFile << std::endl;
 			} else {
@@ -119,6 +123,7 @@ int main( int argc, char** argv ) {
 			n_vars_tot += data.streamBgenViews[ii]->number_of_variants();
 		}
 
+		Eigen::MatrixXd neglogPvals, testStats;
 		for (int ii = 0; ii < p.streamBgenFiles.size(); ii++) {
 			std::cout << "Streaming genotypes from " << p.streamBgenFiles[ii] << std::endl;
 			while (fileUtils::read_bgen_chunk(data.streamBgenViews[ii], Xstream, data.sample_is_invalid,
@@ -129,22 +134,18 @@ int main( int argc, char** argv ) {
 					std::cout << " variants parsed)" << std::endl;
 				}
 
-				Eigen::MatrixXd nlogp(Xstream.cols(), 3), chiSq(Xstream.cols(), 3);
-				if (data.n_env > 0) {
-					computeSingleSnpTests(Xstream.G, nlogp, chiSq, data.Y, data.vp_init.eta);
+				assert(data.n_env > 0);
+				Xstream.calc_scaled_values();
+				compute_LOCO_pvals(data.Y.col(0), Xstream, data.vp_init, neglogPvals, testStats);
 
-					if (world_rank == 0) {
-						fileUtils::write_snp_stats_to_file(outf, data.n_effects, Xstream, append,
-						                                   nlogp.col(0), nlogp.col(1), nlogp.col(2),
-						                                   chiSq.col(0), chiSq.col(1), chiSq.col(2));
-					}
-				} else {
-					assert(false);
+				if (world_rank == 0) {
+					fileUtils::write_snp_stats_to_file(outf, data.n_effects, Xstream, append, neglogPvals, testStats);
 				}
 				append = true;
 				nChunk++;
 			}
 		}
+		boost_io::close(outf);
 	}
 
 	if(p.mode_RHE) {

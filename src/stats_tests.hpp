@@ -1,10 +1,10 @@
 // parse_arguments
 #ifndef STATS_TESTS_HPP
 #define STATS_TESTS_HPP
-#define CATCH_CONFIG_MAIN
 
 #include "typedefs.hpp"
 #include "tools/eigen3.3/Dense"
+#include "variational_parameters.hpp"
 
 void prep_lm(const Eigen::MatrixXd& H,
              const Eigen::MatrixXd& y,
@@ -26,7 +26,7 @@ void student_t_test(long nn,
                     const Eigen::MatrixXd& Hty,
                     double rss,
                     int jj,
-                    double& tstat,
+                    double& stat,
                     double& pval);
 
 double student_t_test(long nn,
@@ -39,7 +39,7 @@ void hetero_chi_sq(const Eigen::MatrixXd& HtH_inv,
                    const Eigen::MatrixXd& Hty,
                    const Eigen::MatrixXd& HtVH,
                    int jj,
-                   double& chi_stat,
+                   double& stat,
                    double& pval);
 
 double hetero_chi_sq(const Eigen::MatrixXd& HtH_inv,
@@ -52,7 +52,7 @@ void homo_chi_sq(long nn,
                  const Eigen::MatrixXd& Hty,
                  const double rss,
                  const int jj,
-                 double& chi_stat,
+                 double& stat,
                  double& pval);
 
 double homo_chi_sq(const long nn,
@@ -61,15 +61,11 @@ double homo_chi_sq(const long nn,
                    const double rss,
                    const int jj);
 
-void computeSingleSnpTests(EigenRefDataMatrix Xtest,
-                           EigenRefDataMatrix neglogPvals,
-                           EigenRefDataMatrix chiSqStats,
-                           EigenRefDataMatrix pheno_resid);
-
-void computeSingleSnpTests(EigenRefDataMatrix Xtest,
-                           EigenRefDataMatrix neglogPvals,
-                           EigenRefDataMatrix chiSqStats,
-                           EigenRefDataMatrix pheno_resid,
-                           EigenRefDataVector eta);
+template <typename GenoMat>
+void compute_LOCO_pvals(const EigenDataVector& resid_pheno,
+                        const GenoMat& Xtest,
+                        const VariationalParametersLite& vp,
+                        Eigen::MatrixXd& neglogPvals,
+                        Eigen::MatrixXd& testStats);
 
 #endif

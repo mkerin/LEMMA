@@ -119,17 +119,17 @@ TEST_CASE("Resume from multi-env + mog + emp_bayes"){
 			long n_chrs = VB.n_chrs;
 			VariationalParametersLite& vp_init = VB.vp_init;
 
-			std::vector<Eigen::VectorXd> map_residuals_by_chr(n_chrs), pred_main(n_chrs), pred_int(n_chrs);
+			std::vector<Eigen::VectorXd> resid_loco(n_chrs), pred_main(n_chrs), pred_int(n_chrs);
 			Eigen::VectorXd neglogp_beta(n_var), neglogp_gam(n_var), neglogp_rgam(n_var), neglogp_joint(n_var);
 			Eigen::VectorXd test_stat_beta(n_var), test_stat_gam(n_var), test_stat_rgam(n_var), test_stat_joint(n_var);
 
-			VB.compute_residuals_per_chr(vp_init, pred_main, pred_int, map_residuals_by_chr);
-			VB.LOCO_pvals(vp_init, map_residuals_by_chr, neglogp_beta, neglogp_gam, neglogp_rgam, neglogp_joint,
-			              test_stat_beta, test_stat_gam, test_stat_rgam, test_stat_joint);
+			VB.compute_residuals_per_chr(vp_init, pred_main, pred_int, resid_loco);
+			Eigen::MatrixXd neglogPvals, testStats;
+			VB.my_LOCO_pvals(VB.vp_init, resid_loco, neglogPvals, testStats);
 
-			// CHECK(map_residuals_by_chr[0](0) == Approx(-1.5519763671));
-			CHECK(neglogp_beta(0) == Approx(0.2697830299));
-			CHECK(neglogp_gam(0) == Approx(1.6833160853));
+			// CHECK(resid_loco[0](0) == Approx(-1.5519763671));
+			CHECK(neglogPvals(0,0) == Approx(0.2697830299));
+			CHECK(neglogPvals(0,1) == Approx(1.6833160853));
 		}
 
 	}
@@ -197,17 +197,17 @@ TEST_CASE("Resume from multi-env + mog + emp_bayes"){
 		long n_chrs = VB.n_chrs;
 		VariationalParametersLite& vp_init = VB.vp_init;
 
-		std::vector<Eigen::VectorXd> map_residuals_by_chr(n_chrs), pred_main(n_chrs), pred_int(n_chrs);
+		std::vector<Eigen::VectorXd> resid_loco(n_chrs), pred_main(n_chrs), pred_int(n_chrs);
 		Eigen::VectorXd neglogp_beta(n_var), neglogp_gam(n_var), neglogp_rgam(n_var), neglogp_joint(n_var);
 		Eigen::VectorXd test_stat_beta(n_var), test_stat_gam(n_var), test_stat_rgam(n_var), test_stat_joint(n_var);
 
-		VB.compute_residuals_per_chr(vp_init, pred_main, pred_int, map_residuals_by_chr);
-		VB.LOCO_pvals(vp_init, map_residuals_by_chr, neglogp_beta, neglogp_gam, neglogp_rgam, neglogp_joint,
-		              test_stat_beta, test_stat_gam, test_stat_rgam, test_stat_joint);
+		VB.compute_residuals_per_chr(vp_init, pred_main, pred_int, resid_loco);
+		Eigen::MatrixXd neglogPvals, testStats;
+		VB.my_LOCO_pvals(VB.vp_init, resid_loco, neglogPvals, testStats);
 
-		// CHECK(map_residuals_by_chr[0](0) == Approx(-1.5520966012));
-		CHECK(neglogp_beta(0) == Approx(0.2697970087));
-		CHECK(neglogp_gam(0) == Approx(1.6834605272));
+		// CHECK(resid_loco[0](0) == Approx(-1.5520966012));
+		CHECK(neglogPvals(0,0) == Approx(0.2697970087));
+		CHECK(neglogPvals(0,1) == Approx(1.6834605272));
 	}
 }
 
@@ -407,18 +407,18 @@ TEST_CASE("Resume from multi-env + mog + emp_bayes + incl_covars"){
 			long n_chrs = VB.n_chrs;
 			VariationalParametersLite& vp_init = VB.vp_init;
 
-			std::vector<Eigen::VectorXd> map_residuals_by_chr(n_chrs), pred_main(n_chrs), pred_int(n_chrs);
+			std::vector<Eigen::VectorXd> resid_loco(n_chrs), pred_main(n_chrs), pred_int(n_chrs);
 			Eigen::VectorXd neglogp_beta(n_var), neglogp_gam(n_var), neglogp_rgam(n_var), neglogp_joint(n_var);
 			Eigen::VectorXd test_stat_beta(n_var), test_stat_gam(n_var), test_stat_rgam(n_var), test_stat_joint(n_var);
 
-			VB.compute_residuals_per_chr(vp_init, pred_main, pred_int, map_residuals_by_chr);
-			VB.LOCO_pvals(vp_init, map_residuals_by_chr, neglogp_beta, neglogp_gam, neglogp_rgam, neglogp_joint,
-			              test_stat_beta, test_stat_gam, test_stat_rgam, test_stat_joint);
+			VB.compute_residuals_per_chr(vp_init, pred_main, pred_int, resid_loco);
+			Eigen::MatrixXd neglogPvals, testStats;
+			VB.my_LOCO_pvals(VB.vp_init, resid_loco, neglogPvals, testStats);
 
-			// CHECK(map_residuals_by_chr[0](0) == Approx(-1.5466697978));
-			CHECK(neglogp_beta(0) == Approx(0.2858580487));
-			CHECK(neglogp_gam(0) == Approx(1.6241936617));
-			CHECK(neglogp_rgam(0) == Approx(2.9866331893));
+			// CHECK(resid_loco[0](0) == Approx(-1.5466697978));
+			CHECK(neglogPvals(0,0) == Approx(0.2858580487));
+			CHECK(neglogPvals(0,1) == Approx(1.6241936617));
+			CHECK(neglogPvals(0,2) == Approx(2.9866331893));
 		}
 		VB.output_vb_results();
 	}
@@ -443,18 +443,18 @@ TEST_CASE("Resume from multi-env + mog + emp_bayes + incl_covars"){
 		long n_env = VB.n_env;
 		VariationalParametersLite& vp_init = VB.vp_init;
 
-		std::vector<Eigen::VectorXd> map_residuals_by_chr(n_chrs), pred_main(n_chrs), pred_int(n_chrs);
+		std::vector<Eigen::VectorXd> resid_loco(n_chrs), pred_main(n_chrs), pred_int(n_chrs);
 		Eigen::VectorXd neglogp_beta(n_var), neglogp_gam(n_var), neglogp_rgam(n_var), neglogp_joint(n_var);
 		Eigen::VectorXd test_stat_beta(n_var), test_stat_gam(n_var), test_stat_rgam(n_var), test_stat_joint(n_var);
 
-		VB.compute_residuals_per_chr(vp_init, pred_main, pred_int, map_residuals_by_chr);
-		VB.LOCO_pvals(vp_init, map_residuals_by_chr, neglogp_beta, neglogp_gam, neglogp_rgam, neglogp_joint,
-		              test_stat_beta, test_stat_gam, test_stat_rgam, test_stat_joint);
+		VB.compute_residuals_per_chr(vp_init, pred_main, pred_int, resid_loco);
+		Eigen::MatrixXd neglogPvals, testStats;
+		VB.my_LOCO_pvals(VB.vp_init, resid_loco, neglogPvals, testStats);
 
-		// CHECK(map_residuals_by_chr[0](0) == Approx(-1.5468266922));
-		CHECK(neglogp_beta(0) == Approx(0.2859132953));
-		CHECK(neglogp_gam(0) == Approx(1.62452219));
-		CHECK(neglogp_rgam(0) == Approx(2.9858778387));
+		// CHECK(resid_loco[0](0) == Approx(-1.5468266922));
+		CHECK(neglogPvals(0,0) == Approx(0.2859132953));
+		CHECK(neglogPvals(0,1) == Approx(1.62452219));
+		CHECK(neglogPvals(0,2) == Approx(2.9858778387));
 
 		VB.p.LOSO_window = 10;
 		VB.LOCO_pvals_v2(VB.X, vp_init, VB.p.LOSO_window, neglogp_beta,

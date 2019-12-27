@@ -141,6 +141,28 @@ void VariationalParamsBase::covar_to_file(const std::string& path,
 	boost_io::close(outf);
 }
 
+void VariationalParamsBase::dump_to_prefix(const std::string& prefix,
+		const GenotypeMatrix &X,
+					const std::vector<std::string>& env_names,
+					const std::vector<std::string>& covar_names) const {
+	std::string path;
+	long n_env = env_names.size();
+	long n_covar = covar_names.size();
+
+	if (n_env > 0) {
+		path = fileUtils::filepath_format(prefix, "", "_env");
+		env_to_file(path, env_names);
+	}
+
+	if (n_covar > 0) {
+		path = fileUtils::filepath_format(prefix, "", "_covar");
+		covar_to_file(path, covar_names);
+	}
+
+	path = fileUtils::filepath_format(prefix, "", "_snp_vars");
+	snps_to_file(path, X, n_env);
+};
+
 Eigen::VectorXd VariationalParamsBase::mean_covars() const {
 	return muc;
 }

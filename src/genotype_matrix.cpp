@@ -233,34 +233,33 @@ void GenotypeMatrix::compute_means_and_sd() {
 }
 
 void GenotypeMatrix::standardise_matrix() {
-	if(!low_mem) {
-		for (std::size_t k = 0; k < pp; k++) {
-			double mu = 0.0;
-			double count = 0;
-			for (std::size_t i = 0; i < nn; i++) {
-				if (missing_genos[k].count(i) == 0) {
-					mu += G(i, k);
-					count += 1;
-				}
+	assert(!low_mem);
+	for (std::size_t k = 0; k < pp; k++) {
+		double mu = 0.0;
+		double count = 0;
+		for (std::size_t i = 0; i < nn; i++) {
+			if (missing_genos[k].count(i) == 0) {
+				mu += G(i, k);
+				count += 1;
 			}
+		}
 
-			mu = mu / count;
-			double val, sigma = 0.0;
-			for (std::size_t i = 0; i < nn; i++) {
-				if (missing_genos[k].count(i) == 0) {
-					G(i, k) -= mu;
-					val = G(i, k);
-					sigma += val * val;
-				} else {
-					G(i, k) = 0.0;
-				}
+		mu = mu / count;
+		double val, sigma = 0.0;
+		for (std::size_t i = 0; i < nn; i++) {
+			if (missing_genos[k].count(i) == 0) {
+				G(i, k) -= mu;
+				val = G(i, k);
+				sigma += val * val;
+			} else {
+				G(i, k) = 0.0;
 			}
+		}
 
-			sigma = sqrt(sigma/(count - 1));
-			if (sigma > 1e-12) {
-				for (std::size_t i = 0; i < nn; i++) {
-					G(i, k) /= sigma;
-				}
+		sigma = sqrt(sigma/(count - 1));
+		if (sigma > 1e-12) {
+			for (std::size_t i = 0; i < nn; i++) {
+				G(i, k) /= sigma;
 			}
 		}
 	}

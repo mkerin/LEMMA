@@ -54,10 +54,10 @@ long long fileUtils::getValueRAM(const std::string& field){
 }
 
 std::string fileUtils::fstream_init(boost_io::filtering_ostream &my_outf,
-		                            const std::string &file,
+                                    const std::string &file,
                                     const std::string &file_prefix,
                                     const std::string &file_suffix,
-									const bool& allow_gzip) {
+                                    const bool& allow_gzip) {
 
 	std::string filepath   = file;
 	std::string dir        = filepath.substr(0, filepath.rfind('/')+1);
@@ -170,52 +170,6 @@ void fileUtils::dump_predicted_vec_to_file(Eigen::Ref<Eigen::MatrixXd> mat,
 	}
 }
 
-void fileUtils::write_snp_stats_to_file(boost_io::filtering_ostream &ofile, const int &n_effects, const int &n_var,
-                                        const GenotypeMatrix &X,
-                                        const parameters &p,
-                                        const bool &write_mog, const Eigen::Ref<const Eigen::VectorXd> &neglogp_beta,
-                                        const Eigen::Ref<const Eigen::VectorXd> &neglogp_gam,
-                                        const Eigen::Ref<const Eigen::VectorXd> &neglogp_rgam,
-                                        const Eigen::Ref<const Eigen::VectorXd> &neglogp_joint,
-                                        const Eigen::Ref<const Eigen::VectorXd> &test_stat_beta,
-                                        const Eigen::Ref<const Eigen::VectorXd> &test_stat_gam,
-                                        const Eigen::Ref<const Eigen::VectorXd> &test_stat_rgam,
-                                        const Eigen::Ref<const Eigen::VectorXd> &test_stat_joint) {
-	// Function to write parameter values from genetic effects to file
-	// Assumes ofile has been initialised
-
-	ofile << "SNPID chr rsid pos a0 a1 maf info";
-	ofile << " loco_t_stat" << 0 << " loco_t_neglogp" << 0;
-	if(n_effects > 1) {
-		if (test_stat_gam.size() > 0) ofile << " loco_t_stat" << 1;
-		if (neglogp_gam.size() > 0) ofile << " loco_t_neglogp" << 1;
-		ofile << " loco_chi_stat" << " loco_robust_neglogp" << " loco_f_stat" << " loco_f_neglogp";
-	}
-	ofile << std::endl;
-
-	ofile << std::scientific << std::setprecision(7);
-	for (std::uint32_t kk = 0; kk < n_var; kk++) {
-		ofile << X.SNPID[kk] << " "<< X.chromosome[kk] << " " << X.rsid[kk] << " " << X.position[kk];
-		ofile << " " << X.al_0[kk] << " " << X.al_1[kk] << " " << X.maf[kk] << " " << X.info[kk];
-
-		// main effects
-		ofile << " " << test_stat_beta(kk);
-		ofile << " " << neglogp_beta(kk);
-
-		// Interaction effects
-		if(n_effects > 1) {
-			if (test_stat_gam.size() > 0) ofile << " " << test_stat_gam(kk);
-			if (neglogp_gam.size() > 0) ofile << " " << neglogp_gam(kk);
-			ofile << " " << test_stat_rgam(kk);
-			ofile << " " << neglogp_rgam(kk);
-			ofile << " " << test_stat_joint(kk);
-			ofile << " " << neglogp_joint(kk);
-		}
-		ofile << std::endl;
-	}
-}
-
-
 void fileUtils::write_snp_stats_to_file(boost_io::filtering_ostream &ofile, const int &n_effects,
                                         const GenotypeMatrix &X,
                                         const bool &append,
@@ -233,12 +187,13 @@ void fileUtils::write_snp_stats_to_file(boost_io::filtering_ostream &ofile, cons
 
 	if(!append) {
 		ofile << "SNPID chr rsid pos a0 a1 maf info";
-		ofile << " loco_t_stat0 loco_t_neglogp0";
+		ofile << " tStat_main neglogP_main";
 		if(n_effects > 1) {
-			if (neglogp_gam.size() > 0) ofile << " loco_t_stat1";
-			if (test_stat_gam.size() > 0) ofile << " loco_t_neglogp1";
-			ofile << " loco_chi_stat" << " loco_robust_neglogp";
-			ofile << " loco_f_stat" << " loco_f_neglogp";
+			if (test_stat_gam.size() > 0) ofile << " tStat_gxe_standardSE";
+			if (neglogp_gam.size() > 0) ofile << " neglogP_gxe_standardSE";
+			ofile << " chiSqStat_gxe_robust" << " neglogP_gxe_robust";
+//			if (test_stat_joint.size() > 0) ofile << " loco_f_stat";
+//			if (neglogp_joint.size() > 0) ofile << " loco_f_neglogp";
 		}
 		ofile << std::endl;
 	}
@@ -258,55 +213,37 @@ void fileUtils::write_snp_stats_to_file(boost_io::filtering_ostream &ofile, cons
 			if (neglogp_gam.size() > 0) ofile << " " << neglogp_gam(kk);
 			ofile << " " << test_stat_rgam(kk);
 			ofile << " " << neglogp_rgam(kk);
-			ofile << " " << test_stat_joint(kk);
-			ofile << " " << neglogp_joint(kk);
+//			if (test_stat_joint.size() > 0) ofile << " " << test_stat_joint(kk);
+//			if (neglogp_joint.size() > 0) ofile << " " << neglogp_joint(kk);
 		}
 		ofile << std::endl;
 	}
 }
 
 void fileUtils::write_snp_stats_to_file(boost_io::filtering_ostream &ofile, const int &n_effects,
-										const GenotypeMatrix &X,
-										const bool &append,
-										const Eigen::Ref<const Eigen::VectorXd> &neglogp_beta,
-										const Eigen::Ref<const Eigen::VectorXd> &neglogp_gam,
-										const Eigen::Ref<const Eigen::VectorXd> &neglogp_rgam,
-										const Eigen::Ref<const Eigen::VectorXd> &test_stat_beta,
-										const Eigen::Ref<const Eigen::VectorXd> &test_stat_gam,
-										const Eigen::Ref<const Eigen::VectorXd> &test_stat_rgam) {
-	// Function to write parameter values from genetic effects to file
-	// Assumes ofile has been initialised
-	long n_var = X.cols();
+                                        const GenotypeMatrix &X,
+                                        const bool &append,
+                                        const Eigen::Ref<const Eigen::VectorXd> &neglogp_beta,
+                                        const Eigen::Ref<const Eigen::VectorXd> &neglogp_gam,
+                                        const Eigen::Ref<const Eigen::VectorXd> &neglogp_rgam,
+                                        const Eigen::Ref<const Eigen::VectorXd> &test_stat_beta,
+                                        const Eigen::Ref<const Eigen::VectorXd> &test_stat_gam,
+                                        const Eigen::Ref<const Eigen::VectorXd> &test_stat_rgam) {
+	Eigen::VectorXd tmp;
+	fileUtils::write_snp_stats_to_file(ofile, n_effects, X, append,
+	                                   neglogp_beta, neglogp_gam, neglogp_rgam, tmp,
+	                                   test_stat_beta, test_stat_gam, test_stat_rgam, tmp);
+}
 
-	if(!append) {
-		ofile << "SNPID chr rsid pos a0 a1 maf info";
-		ofile << " main_standardSE_chisq main_standardSE_neglogp";
-		if(n_effects > 1) {
-			if (neglogp_gam.size() > 0) ofile << " gxe_standardSE_chisq";
-			if (test_stat_gam.size() > 0) ofile << " gxe_standardSE_neglogp";
-			ofile << " gxe_robustSE_chisq" << " gxe_robustSE_neglogp";
-		}
-		ofile << std::endl;
-	}
-
-	ofile << std::scientific << std::setprecision(7);
-	for (std::uint32_t kk = 0; kk < n_var; kk++) {
-		ofile << X.SNPID[kk] << " " << X.chromosome[kk] << " " << X.rsid[kk] << " " << X.position[kk];
-		ofile << " " << X.al_0[kk] << " " << X.al_1[kk] << " " << X.maf[kk] << " " << X.info[kk];
-
-		// main effects
-		ofile << " " << test_stat_beta(kk);
-		ofile << " " << neglogp_beta(kk);
-
-		// Interaction effects
-		if(n_effects > 1) {
-			if (test_stat_gam.size() > 0) ofile << " " << test_stat_gam(kk);
-			if (neglogp_gam.size() > 0) ofile << " " << neglogp_gam(kk);
-			ofile << " " << test_stat_rgam(kk);
-			ofile << " " << neglogp_rgam(kk);
-		}
-		ofile << std::endl;
-	}
+void fileUtils::write_snp_stats_to_file(boost_io::filtering_ostream &ofile,
+                                        const int &n_effects,
+                                        const GenotypeMatrix &X,
+                                        const bool &append,
+                                        const Eigen::Ref<const Eigen::MatrixXd> &neglogPvals,
+                                        const Eigen::Ref<const Eigen::MatrixXd> &testStats){
+	fileUtils::write_snp_stats_to_file(ofile, n_effects, X, append,
+	                                   neglogPvals.col(0), neglogPvals.col(1), neglogPvals.col(2),
+	                                   testStats.col(0), testStats.col(1), testStats.col(2));
 }
 
 bool fileUtils::read_bgen_chunk(genfile::bgen::View::UniquePtr &bgenView,

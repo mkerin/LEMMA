@@ -14,7 +14,7 @@ mkdir build
 cd build
 cmake .. \
 -DBGEN_ROOT=<path_to_bgen_lib> \
--DBOOST_ROOT=<path_to_boost_1_55_0>
+-DBOOST_ROOT=<path_to_boost>
 cd ..
 cmake --build build --target lemma_1_0_0 -- -j 4
 ```
@@ -34,7 +34,7 @@ The phenotype has been simulated to have:
 - GxE effects occur with a linear combination of two of the five environments (ie 2 are active).
 - SNP-Heritability of 20% (main effects) and 10% (GxE effects)
 
-#### Fitting the LEMMA variational inference algorithm
+#### Running the LEMMA variational inference algorithm
 ```
 mpirun -n 1 build/lemma_1_0_0 \
   --VB \
@@ -49,12 +49,9 @@ Output files:
 - `example/inference.out.gz` : contains converged hyperparameter values + ELBO
 - `example/inference_converged_eta.out.gz` : contains converged ES
 - `example/inference_converged_resid_pheno_chr${cc}.out.gz` : residual phenotypes for chromosomes c = 1:22
-- `example/inference_converged_snp_stats.out.gz` : single SNP hypothesis tests from genotyped SNPs
+- `example/inference_converged_vparams_*.out.gz` : variational parameters estimated by the LEMMA algorithm.
 - `example/inference_converged_yhat.out.gz` : predicted vectors and residualised phenotypes.
-- `example/inference_converged_env_params.out.gz` : converged mean and variance parameters for interactions weights.
-- `example/inference_converged_covar_params.out.gz` : converged mean and variance parameters for covariables.
-
-*TODO*: Implement `--pheno-col-num` flag. Then stop writing one file per LOCO resid_pheno.  
+ 
 *TODO*: Write coefficients from hypothesis tests to file.
 
 #### Heritability estimation
@@ -68,7 +65,6 @@ mpirun -n 1 build/lemma_1_0_0 \
 ```
 This should return heritability estimates of h2-G = 0.23 (0.032) and h2-GxE = 0.08 (0.016), where the value in brackets is the standard error.
 
-
 #### Association testing with imputed SNPs
 ```
 for cc in `seq 1 22`; do
@@ -80,7 +76,54 @@ for cc in `seq 1 22`; do
     --environment example/inference_converged_eta.out.gz \
     --out example/loco_pvals_chr${cc}.out.gz;
 done
+
+BGEN_SNPWISE=/well/marchini/kebl4230/software/bgen_snpwise_lm/bin/bgen_snpwise
+${BGEN_SNPWISE} --mode_gxe_student_t --robust_se \
+  --range ${cc} 0 1000000000000 \
+  --pheno example/inference_converged_resid_pheno_chr${cc}.out.gz \
+  --bgen example/n5k_p20k_example.bgen \
+  --environment example/inference_converged_eta.out.gz \
+  --out snpwise_pvals_chr${cc}.out.gz;
+
+ zcat example/loco_pvals_chr${cc}.out.gz | head
+zcat snpwise_pvals_chr${cc}.out.gz | head
+
+paste <(zcat example/loco_pvals_chr${cc}.out.gz | cut -d' ' -f13) <(zcat snpwise_pvals_chr${cc}.out.gz | cut -f19) | head
+
+
+DIR=../software/LEMMA
+Rscript R/functions/gen_scatter_plot.R \
+  --file1 ${DIR}/example/loco_pvals_chr${cc}.out.gz \
+  --colname1 main_standardSE_chisq \
+  --file2 ${DIR}/snpwise_pvals_chr${cc}.out.gz \
+  --colname2 chi_stat_main_standardSE \
+ --out tmp.pdf
+
+ Rscript R/functions/gen_scatter_plot.R \
+   --file1 ${DIR}/example/inference_converged_snp_stats.out.gz \
+   --colname1 loco_t_neglogp0 --key1 rsid \
+   --file2 ${DIR}/snpwise_pvals_chr${cc}.out.gz \
+   --colname2 neglogp_main_standardSE --key2 rsid \
+  --out tmp2.pdf
+example/inference_converged_snp_stats.out.gz
 ```
+
+#### All at once
+```
+mpirun -n 1 build/lemma_1_0_0 \
+  --VB \
+  --RHEreg --n-RHEreg-samples 20 --n-RHEreg-jacknife 100 --random-seed 1 \
+  --singleSnpStats \
+  --pheno example/pheno.txt.gz \
+  --bgen example/n5k_p20k_example.bgen \
+  --environment example/inference_converged_eta.out.gz \
+  --out example/pve.out.gz
+```
+- singleSnpStats callable from outside VB class
+- just run from VP parameter state and full bgen file
+- 
+
+
 *TODO*: Write coefficients from hypothesis tests to file.
 
 ## Advanced Usage
