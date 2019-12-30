@@ -25,6 +25,7 @@
 #include <ctime>
 #include <map>
 #include <mutex>
+#include <regex>
 #include <vector>
 #include <string>
 #include <set>
@@ -86,6 +87,10 @@ public:
 	EigenDataMatrix E;
 	Eigen::ArrayXXd dXtEEX_lowertri;
 	EigenDataMatrix C_extra_pve;
+
+	Eigen::MatrixXd resid_loco;
+	std::vector<long> loco_chrs;
+	std::map<long, bool> missing_resid_loco;
 
 // Init points
 	VariationalParametersLite vp_init;
@@ -153,7 +158,7 @@ public:
 
 		// filter - range
 		if (p.range) {
-			std::cout << "Selecting snps in range " << p.range_chr << ": " << p.range_start << " - " << p.range_end << std::endl;
+			std::cout << "Selecting snps in range " << p.range_chr << ":" << p.range_start << "-" << p.range_end << std::endl;
 		}
 
 		// filter - incl rsids
@@ -208,8 +213,6 @@ public:
 
 		if (p.bgen_file != "NULL"){
 			bgenView->summarise(std::cout);
-		} else if (p.streamBgenFiles.size() > 0){
-			streamBgenViews[0]->summarise(std::cout);
 		}
 
 		filters_applied = true;
@@ -222,7 +225,9 @@ public:
 		}
 
 		// Read in phenotypes
-		read_pheno();
+		if (p.pheno_file != "NULL") {
+			read_pheno();
+		}
 
 		// Read in covariates if present
 		if(p.covar_file != "NULL") {
@@ -256,12 +261,14 @@ public:
 		if(p.snpstats_file != "NULL") {
 			read_external_snpstats();
 		}
+
+		if(p.resid_loco_file != "NULL") {
+			read_resid_loco();
+		}
 	}
 
 	void standardise_non_genetic_data(){
 		// Step 3; Center phenos, normalise covars
-		EigenUtils::center_matrix(Y);
-		EigenUtils::scale_matrix_and_remove_constant_cols(Y, n_pheno, pheno_names);
 		if(n_covar > 0) {
 			EigenUtils::center_matrix(C);
 			EigenUtils::scale_matrix_and_remove_constant_cols(C, n_covar, covar_names);
@@ -281,124 +288,128 @@ public:
 		   if any of E have squared dependance on Y then remove
 		 */
 
-		if (n_env > 0) {
-			if(n_covar == 0) {
-				C = E;
-				covar_names = env_names;
-				n_covar = n_env;
-			} else if (p.use_vb_on_covars) {
-				EigenDataMatrix tmp(E.rows(), C.cols() + E.cols());
-				tmp << C, E;
-				C = tmp;
-				covar_names.insert(covar_names.end(), env_names.begin(), env_names.end());
-				n_covar += n_env;
-			} else if (n_covar > 0) {
-				regress_first_mat_from_second(C, "covars", covar_names, Y, "pheno");
-				regress_first_mat_from_second(C, "covars", covar_names, E, "env");
-
-				C = E;
-				covar_names = env_names;
-				n_covar = n_env;
-			}
-
-			// Removing squared dependance
-			std::vector<int> cols_to_remove;
-			Eigen::MatrixXd H;
-			Eigen::VectorXd tmp = Eigen::VectorXd::Zero(n_samples);
-			if(p.exclude_ones_from_env_sq) {
-				H.resize(n_samples, n_covar + 1);
-				H << tmp, C;
-			} else {
-				Eigen::MatrixXd ones = Eigen::MatrixXd::Constant(n_samples, 1, 1.0);
-				H.resize(n_samples, n_covar + 2);
-				H << tmp, ones, C;
-			}
-
-			if (p.verbose) std::cout << "Checking for squared dependance: " << std::endl;
-			if (p.verbose) std::cout << "Name\t-log10(p-val)" << std::endl;
-			long n_signif_envs_sq = 0;
-			for (int ee = 0; ee < n_env; ee++) {
-				// H.col(0) = E.col(ee);
-				double rss_alt, tstat, pval;
-				try {
-					H.col(0) = E.col(ee).array().square().matrix();
-					Eigen::MatrixXd HtH(H.cols(), H.cols()), Hty(H.cols(), 1), HtH_inv(H.cols(), H.cols());
-					prep_lm(H, Y, HtH, HtH_inv, Hty, rss_alt);
-					student_t_test(n_samples, HtH_inv, Hty, rss_alt, 0, tstat, pval);
-
-					if (p.verbose) std::cout << env_names[ee] << "\t";
-					if (p.verbose) std::cout << -1 * std::log10(pval) << std::endl;
-
-					if (pval < 0.01 / (double) n_env) {
-						cols_to_remove.push_back(ee);
-						n_signif_envs_sq++;
-					}
-				} catch (const std::exception& e) {
-					if(p.xtra_verbose) {
-						std::cout << "Error when checking for significant squared envs ";
-						std::cout << "(I believe this is due to attempting linear regression ";
-						std::cout << "with a singular matrix)" << std::endl;
-						std::cout << e.what() << std::endl;
-					}
-				}
-			}
-			if (n_signif_envs_sq > 0) {
-				Eigen::MatrixXd E_sq(n_samples, n_signif_envs_sq);
-				std::vector<std::string> env_sq_names;
-				for (int nn = 0; nn < n_signif_envs_sq; nn++) {
-					E_sq.col(nn) = E.col(cols_to_remove[nn]).array().square();
-					env_sq_names.push_back(env_names[cols_to_remove[nn]] + "_sq");
-				}
-
-				if (p.mode_incl_squared_envs) {
-					std::cout << "Including the squared effects from " << cols_to_remove.size();
-					std::cout << " environmental variables:" << std::endl;
-					for (int ee : cols_to_remove) {
-						std::cout << env_names[ee] << std::endl;
-					}
-
-					EigenUtils::center_matrix(E_sq);
-					EigenUtils::scale_matrix_and_remove_constant_cols(E_sq, n_signif_envs_sq, env_sq_names);
-
-					EigenDataMatrix tmp(n_samples, n_covar + n_signif_envs_sq);
-					tmp << C, E_sq;
+		if(n_pheno > 0) {
+			EigenUtils::center_matrix(Y);
+			EigenUtils::scale_matrix_and_remove_constant_cols(Y, n_pheno, pheno_names);
+			if (n_env > 0) {
+				if (n_covar == 0) {
+					C = E;
+					covar_names = env_names;
+					n_covar = n_env;
+				} else if (p.use_vb_on_covars) {
+					EigenDataMatrix tmp(E.rows(), C.cols() + E.cols());
+					tmp << C, E;
 					C = tmp;
-					covar_names.insert(covar_names.end(), env_sq_names.begin(), env_sq_names.end());
-					n_covar += n_signif_envs_sq;
+					covar_names.insert(covar_names.end(), env_names.begin(), env_names.end());
+					n_covar += n_env;
+				} else if (n_covar > 0) {
+					regress_first_mat_from_second(C, "covars", covar_names, Y, "pheno");
+					regress_first_mat_from_second(C, "covars", covar_names, E, "env");
 
-					assert(n_covar == covar_names.size());
-					assert(n_covar == C.cols());
-				} else if (p.mode_remove_squared_envs) {
-					std::cout << "Projecting out squared dependance from: " << std::endl;
-					for (int ee : cols_to_remove) {
-						std::cout << env_names[ee] << std::endl;
-					}
-
-					Eigen::MatrixXd H(n_samples, n_covar + n_signif_envs_sq);
-					H << E_sq, C;
-
-					Eigen::MatrixXd HtH, Hty;
-					HtH = H.transpose() * H;
-					HtH = mpiUtils::mpiReduce_inplace(HtH);
-					Hty = H.transpose() * Y;
-					Hty = mpiUtils::mpiReduce_inplace(Hty);
-					Eigen::MatrixXd beta = HtH.colPivHouseholderQr().solve(Hty);
-
-					Y -= E_sq * beta.block(0, 0, n_signif_envs_sq, 1);
-				} else {
-					std::cout << "Warning: Environments with significant squared effects detected (";
-					for (const auto& env_sq_name : env_sq_names) {
-						std::cout << env_sq_name << ", ";
-					}
-					std::cout << ") but mitigation suppressed" << std::endl;
+					C = E;
+					covar_names = env_names;
+					n_covar = n_env;
 				}
-			}
 
-			// For internal use
-			Y2 = Y;
-			regress_first_mat_from_second(C, Y2);
-		} else {
-			Y2 = Y;
+				// Removing squared dependance
+				std::vector<int> cols_to_remove;
+				Eigen::MatrixXd H;
+				Eigen::VectorXd tmp = Eigen::VectorXd::Zero(n_samples);
+				if (p.exclude_ones_from_env_sq) {
+					H.resize(n_samples, n_covar + 1);
+					H << tmp, C;
+				} else {
+					Eigen::MatrixXd ones = Eigen::MatrixXd::Constant(n_samples, 1, 1.0);
+					H.resize(n_samples, n_covar + 2);
+					H << tmp, ones, C;
+				}
+
+				if (p.verbose) std::cout << "Checking for squared dependance: " << std::endl;
+				if (p.verbose) std::cout << "Name\t-log10(p-val)" << std::endl;
+				long n_signif_envs_sq = 0;
+				for (int ee = 0; ee < n_env; ee++) {
+					// H.col(0) = E.col(ee);
+					double rss_alt, tstat, pval;
+					try {
+						H.col(0) = E.col(ee).array().square().matrix();
+						Eigen::MatrixXd HtH(H.cols(), H.cols()), Hty(H.cols(), 1), HtH_inv(H.cols(), H.cols());
+						prep_lm(H, Y, HtH, HtH_inv, Hty, rss_alt);
+						student_t_test(n_samples, HtH_inv, Hty, rss_alt, 0, tstat, pval);
+
+						if (p.verbose) std::cout << env_names[ee] << "\t";
+						if (p.verbose) std::cout << -1 * std::log10(pval) << std::endl;
+
+						if (pval < 0.01 / (double) n_env) {
+							cols_to_remove.push_back(ee);
+							n_signif_envs_sq++;
+						}
+					} catch (const std::exception &e) {
+						if (p.xtra_verbose) {
+							std::cout << "Error when checking for significant squared envs ";
+							std::cout << "(I believe this is due to attempting linear regression ";
+							std::cout << "with a singular matrix)" << std::endl;
+							std::cout << e.what() << std::endl;
+						}
+					}
+				}
+				if (n_signif_envs_sq > 0) {
+					Eigen::MatrixXd E_sq(n_samples, n_signif_envs_sq);
+					std::vector<std::string> env_sq_names;
+					for (int nn = 0; nn < n_signif_envs_sq; nn++) {
+						E_sq.col(nn) = E.col(cols_to_remove[nn]).array().square();
+						env_sq_names.push_back(env_names[cols_to_remove[nn]] + "_sq");
+					}
+
+					if (p.mode_incl_squared_envs) {
+						std::cout << "Including the squared effects from " << cols_to_remove.size();
+						std::cout << " environmental variables:" << std::endl;
+						for (int ee : cols_to_remove) {
+							std::cout << env_names[ee] << std::endl;
+						}
+
+						EigenUtils::center_matrix(E_sq);
+						EigenUtils::scale_matrix_and_remove_constant_cols(E_sq, n_signif_envs_sq, env_sq_names);
+
+						EigenDataMatrix tmp(n_samples, n_covar + n_signif_envs_sq);
+						tmp << C, E_sq;
+						C = tmp;
+						covar_names.insert(covar_names.end(), env_sq_names.begin(), env_sq_names.end());
+						n_covar += n_signif_envs_sq;
+
+						assert(n_covar == covar_names.size());
+						assert(n_covar == C.cols());
+					} else if (p.mode_remove_squared_envs) {
+						std::cout << "Projecting out squared dependance from: " << std::endl;
+						for (int ee : cols_to_remove) {
+							std::cout << env_names[ee] << std::endl;
+						}
+
+						Eigen::MatrixXd H(n_samples, n_covar + n_signif_envs_sq);
+						H << E_sq, C;
+
+						Eigen::MatrixXd HtH, Hty;
+						HtH = H.transpose() * H;
+						HtH = mpiUtils::mpiReduce_inplace(HtH);
+						Hty = H.transpose() * Y;
+						Hty = mpiUtils::mpiReduce_inplace(Hty);
+						Eigen::MatrixXd beta = HtH.colPivHouseholderQr().solve(Hty);
+
+						Y -= E_sq * beta.block(0, 0, n_signif_envs_sq, 1);
+					} else {
+						std::cout << "Warning: Environments with significant squared effects detected (";
+						for (const auto &env_sq_name : env_sq_names) {
+							std::cout << env_sq_name << ", ";
+						}
+						std::cout << ") but mitigation suppressed" << std::endl;
+					}
+				}
+
+				// For internal use
+				Y2 = Y;
+				regress_first_mat_from_second(C, Y2);
+			} else {
+				Y2 = Y;
+			}
 		}
 	}
 
@@ -603,7 +614,6 @@ public:
 	}
 
 	void read_pheno( ){
-		// Read phenotypes to Eigen matrix Y
 		Eigen::MatrixXd tmpY;
 		EigenUtils::read_matrix(p.pheno_file, tmpY, pheno_names, missing_phenos);
 		if (tmpY.cols() > 1){
@@ -619,6 +629,24 @@ public:
 		assert(Y.rows() == n_samples);
 		n_pheno = Y.cols();
 		Y_reduced = false;
+	}
+
+	void read_resid_loco(){
+		std::vector<std::string> resid_loco_names;
+		EigenUtils::read_matrix(p.resid_loco_file, resid_loco, resid_loco_names, missing_resid_loco);
+		loco_chrs.clear();
+		std::vector<int> keep_cols;
+		for (long cc = 0; cc < resid_loco_names.size(); cc++){
+			try {
+				std::string chr = std::regex_replace(resid_loco_names[cc], std::regex("resid_excl_chr([0-9]+).*"), std::string("$1"));
+				loco_chrs.push_back(std::stoi(chr));
+				keep_cols.push_back(cc);
+			} catch (...) {}
+		}
+		for (long cc = 0; cc < keep_cols.size(); cc++){
+			resid_loco.col(cc) = resid_loco.col(keep_cols[cc]);
+		}
+		std::cout << " - detected residualised phenotype with " << keep_cols.size() << " LOCO partitions" << std::endl;
 	}
 
 	void read_covar( ){
@@ -1404,6 +1432,7 @@ public:
 		incomplete_cases.insert(missing_covars.begin(), missing_covars.end());
 		incomplete_cases.insert(missing_phenos.begin(), missing_phenos.end());
 		incomplete_cases.insert(missing_envs.begin(), missing_envs.end());
+		incomplete_cases.insert(missing_resid_loco.begin(), missing_resid_loco.end());
 
 		mpiUtils::partition_valid_samples_across_ranks(n_samples, n_var, n_env, p, incomplete_cases, sample_location);
 
@@ -1417,18 +1446,23 @@ public:
 		}
 
 		if(n_pheno > 0) {
-			Y = reduce_mat_to_complete_cases( Y, Y_reduced, n_pheno, incomplete_cases );
+			Y = reduce_mat_to_complete_cases(Y, Y_reduced, n_pheno, incomplete_cases);
 		}
 		if(n_covar > 0) {
-			C = reduce_mat_to_complete_cases( C, W_reduced, n_covar, incomplete_cases );
+			C = reduce_mat_to_complete_cases(C, W_reduced, n_covar, incomplete_cases);
 		}
 		if(n_env > 0) {
-			E = reduce_mat_to_complete_cases( E, E_reduced, n_env, incomplete_cases );
+			E = reduce_mat_to_complete_cases(E, E_reduced, n_env, incomplete_cases);
 		}
 		if(p.extra_pve_covar_file != "NULL" && p.mode_RHE) {
-			long n_extra_cols = C_extra_pve.cols();
+			long n_cols = C_extra_pve.cols();
 			bool placeholder = false;
-			C_extra_pve = reduce_mat_to_complete_cases(C_extra_pve, placeholder, n_extra_cols, incomplete_cases);
+			C_extra_pve = reduce_mat_to_complete_cases(C_extra_pve, placeholder, n_cols, incomplete_cases);
+		}
+		if (p.resid_loco_file != "NULL"){
+			long n_cols = resid_loco.cols();
+			bool placeholder = false;
+			resid_loco = reduce_mat_to_complete_cases(resid_loco, placeholder, n_cols, incomplete_cases);
 		}
 		n_samples -= incomplete_cases.size();
 		missing_phenos.clear();

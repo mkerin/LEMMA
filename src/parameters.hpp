@@ -12,11 +12,11 @@
 class parameters {
 public:
 	std::string bgen_file, range_chr, out_file, pheno_file, env_file, covar_file, bgi_file;
-	std::string incl_sids_file, incl_rsids_file, recombination_file;
+	std::string incl_sids_file, incl_rsids_file, recombination_file, resid_loco_file;
 	std::string r1_hyps_grid_file, r1_probs_grid_file, hyps_grid_file, rhe_random_vectors_file;
 	std::string env_coeffs_file, covar_coeffs_file, hyps_probs_file, vb_init_file;
 	std::string dxteex_file, snpstats_file, mog_weights_file, resume_prefix;
-	std::string streamBgenOutFile, extra_pve_covar_file;
+	std::string assocOutFile, extra_pve_covar_file;
 	std::vector< std::string > rsid;
 //	std::string streamBgenFiles, streamBgiFiles;
 	std::vector< std::string > streamBgenFiles, streamBgiFiles, RHE_groups_files;
@@ -49,7 +49,8 @@ public:
 		pheno_file("NULL"),
 		recombination_file("NULL"),
 		covar_file("NULL"),
-				env_file("NULL"),
+		env_file("NULL"),
+		resid_loco_file("NULL"),
 		bgi_file("NULL"),
 		snpstats_file("NULL"),
 		r1_hyps_grid_file("NULL"),
@@ -66,7 +67,7 @@ public:
 		resume_prefix("NULL"),
 		env_coeffs_file("NULL"),
 		rhe_random_vectors_file("NULL"),
-		streamBgenOutFile("NULL") {
+		assocOutFile("NULL") {
 		flip_high_maf_variants = false;
 		init_weights_with_snpwise_scan = false;
 		n_thread = 1;

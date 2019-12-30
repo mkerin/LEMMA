@@ -84,14 +84,13 @@ void parse_arguments(parameters &p, int argc, char **argv) {
 	    ("hyps_grid", "Path to initial hyperparameters values", cxxopts::value<std::string>(p.hyps_grid_file))
 	    ("environment_weights", "Path to initial environment weights", cxxopts::value<std::string>(p.env_coeffs_file))
 	    ("out", "Filepath to output", cxxopts::value<std::string>(p.out_file))
-	    ("streamOut", "Output file for tests on imputed variants", cxxopts::value<std::string>(p.streamBgenOutFile))
+	    ("streamOut", "Output file for tests on imputed variants", cxxopts::value<std::string>(p.assocOutFile))
 	    ("suppress_squared_env_removal", "QC: Suppress test for significant squared environmental effects (SQE)")
 	    ("incl_squared_envs", "QC: Include significant squared environmental effects (SQE) as covariates")
 	;
 
 	options.add_options("VB")
 	    ("VB", "Run VB algorithm.")
-	    ("singleSnpStats", "Compute SNP association tests", cxxopts::value<bool>(p.mode_calc_snpstats))
 	    ("VB-ELBO-thresh", "Convergence threshold for VB convergence.", cxxopts::value<double>(p.elbo_tol))
 	    ("VB-squarem", "Use SQUAREM algorithm for hyperparameter updates (on by default).")
 	    ("VB-varEM", "Maximise ELBO wrt hyperparameters for hyperparameter updates.")
@@ -100,6 +99,11 @@ void parse_arguments(parameters &p, int argc, char **argv) {
 	    ("resume_from_state", "For use when resuming VB algorithm from previous run.", cxxopts::value<std::string>(p.resume_prefix))
 	    ("state_dump_interval", "Save VB parameter state to file every N iterations (default: None)", cxxopts::value<long>(p.param_dump_interval))
 	    ("dxteex", "Optional flag to pass precomputed dXtEEX array.", cxxopts::value<std::string>(p.dxteex_file))
+	;
+
+	options.add_options("Assoc")
+		("singleSnpStats", "Compute SNP association tests", cxxopts::value<bool>(p.mode_calc_snpstats))
+		("resid-loco", "Residualised phenotypes to compute association tests on. Inherited from VB algorithm if this is run first", cxxopts::value<std::string>(p.resid_loco_file))
 	;
 
 	options.add_options("RHE")
@@ -178,7 +182,7 @@ void parse_arguments(parameters &p, int argc, char **argv) {
 		auto args = opts.arguments();
 
 		if (opts.count("help")) {
-			std::cout << options.help({"General", "VB", "RHE", "Other"}) << std::endl;
+			std::cout << options.help({"General", "VB", "Assoc", "RHE", "Other"}) << std::endl;
 			std::exit(0);
 		} else {
 			print_compilation_details();
@@ -374,7 +378,6 @@ void parse_arguments(parameters &p, int argc, char **argv) {
 
 		if(opts.count("VB")) {
 			p.mode_vb = true;
-			p.mode_calc_snpstats = true;
 		}
 
 		if(opts.count("effects_prior_mog")) {
@@ -766,7 +769,7 @@ void parse_arguments(parameters &p, int argc, char **argv) {
 	//
 	//      if(strcmp(in_str, "--streamOut") == 0) {
 	//          check_counts(in_str, i, 1, argc);
-	//          p.streamBgenOutFile = argv[i + 1];
+	//          p.assocOutFile = argv[i + 1];
 	//          i += 1;
 	//      }
 	//
@@ -1009,10 +1012,7 @@ void parse_arguments(parameters &p, int argc, char **argv) {
 			p.covar_coeffs_file = "NULL";
 		}
 
-		std::string index = std::regex_replace(
-			p.resume_prefix,
-			std::regex(".*it([0-9]+).*"),
-			std::string("$1"));
+		std::string index = std::regex_replace(p.resume_prefix, std::regex(".*it([0-9]+).*"), std::string("$1"));
 		std::cout << "NB: Will resume from previous parameter state";
 		if (p.vb_iter_start == 0) {
 			try {
@@ -1040,7 +1040,7 @@ void parse_arguments(parameters &p, int argc, char **argv) {
 	if(p.mode_calc_snpstats) {
 		bool has_bgen = p.bgen_file != "NULL" || p.streamBgenFiles.size() > 0;
 		bool has_out = p.out_file != "NULL";
-		bool has_pheno = p.pheno_file != "NULL";
+		bool has_pheno = (p.pheno_file != "NULL" && p.mode_vb) || p.resid_loco_file != "NULL";
 		bool has_all = (has_pheno && has_out && has_bgen);
 		if(!has_all) {
 			std::cout << "ERROR: bgen, pheno and out filepaths should all be ";

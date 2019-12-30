@@ -19,9 +19,7 @@ cd ..
 cmake --build build --target lemma_1_0_0 -- -j 4
 ```
 
-*TODO*: Make OpenMPI optional?
-
-### Example usage
+### Example data
 The `example` directory contains a simulated dataset with:
 - 5000 individuals
 - 20,000 SNPs
@@ -34,6 +32,50 @@ The phenotype has been simulated to have:
 - GxE effects with a linear combination of two of the five environments (i.e. two are active).
 - SNP-Heritability of 20% (main effects) and 10% (GxE effects)
 
+### Running LEMMA
+The LEMMA approach consists of three distinct steps:
+1. A variational inference algorithm computes the Environmental Score (ES) and residualised phenotype. This is typically run on genotyped SNPs.
+2. Single SNP association testing using the ES and residualised phenotypes. This can be run either on the same set of genotyped SNPs, or a larger set of imputed SNPs.
+3. Heritability estimation partitioned into additive SNP effects and multiplicative GxE effects with the ES. 
+
+All three steps can be run in sequence using the following commands
+```
+rm example/bgen_filenames.txt
+for cc in `seq 1 22`; do
+  bgenix -g example/n5k_p20k_example.bgen -incl-range ${cc}:0-10000000000 > example/n5k_p20k_example_chr${cc}.bgen;
+  bgenix -index -g example/n5k_p20k_example_chr${cc}.bgen;
+  echo "example/n5k_p20k_example_chr${cc}.bgen" >> example/bgen_filenames.txt;
+done
+
+mpirun -n 1 build/lemma_1_0_0 \
+  --pheno example/pheno.txt.gz \
+  --environment example/env.txt.gz \
+  --VB \
+  --bgen example/n5k_p20k_example.bgen \
+  --singleSnpStats \
+  --RHEreg --n-RHEreg-samples 20 --n-RHEreg-jacknife 100 --random-seed 1 \
+  --mStreamBgen example/bgen_filenames.txt \
+  --out example/inference.out.gz
+```
+For association testing and heritability estimation, LEMMA will use genetic data provided from the `--mStreamBgen` if it is provided. Otherwise LEMMA will use genetic data from the `--bgen` flag.
+
+Files provided to `--mStreamBgen` should each contain only one chromosome. Separating the chromosomes into different files can be achieved with the [BGENIX](https://bitbucket.org/gavinband/bgen/wiki/bgenix) program.
+
+Output from the variational inference algorithm:
+- `example/inference.out.gz` :                                converged hyperparameter values + ELBO
+- `example/inference_converged_eta.out.gz` :                  converged Environmental Score
+- `example/inference_converged_resid_pheno_chr${cc}.out.gz` : residual phenotypes for chromosomes c = 1:22
+- `example/inference_converged_vparams_*.out.gz` :            variational parameters estimated by the LEMMA algorithm
+- `example/inference_converged_yhat.out.gz` :                 predicted vectors and residualised phenotypes
+
+Output from association testing:
+- `example/inference_loco_pvals.out.gz`
+
+Output from heritability estimation:
+- `example/inference_pve.out.gz`
+
+The LEMMA algorithm is modular, and so each step can be performed separately as follows.
+
 #### Running the LEMMA variational inference algorithm
 ```
 mpirun -n 1 build/lemma_1_0_0 \
@@ -45,56 +87,38 @@ mpirun -n 1 build/lemma_1_0_0 \
 ```
 In this case the algorithm should converge in 59 iterations.
 
-Output files:
-- `example/inference.out.gz` :                                converged hyperparameter values + ELBO
-- `example/inference_converged_eta.out.gz` :                  converged Environmental Score
-- `example/inference_converged_resid_pheno_chr${cc}.out.gz` : residual phenotypes for chromosomes c = 1:22
-- `example/inference_converged_vparams_*.out.gz` :            variational parameters estimated by the LEMMA algorithm
-- `example/inference_converged_yhat.out.gz` :                 predicted vectors and residualised phenotypes
-- `example/inference_loco_pvals.out.gz` :                     single SNP hypothesis tests applied to SNPs from the file passed to `--bgen`
+#### Association testing with imputed SNPs
+```
+mpirun -n 1 build/lemma_1_0_0 \
+  --singleSnpStats --maf 0.01 \
+  --pheno example/pheno.txt.gz \
+  --resid-loco example/inference_converged_yhat.out.gz \
+  --mStreamBgen example/bgen_filenames.txt \
+  --environment example/inference_converged_eta.out.gz \
+  --out example/inference_loco_pvals.out.gz;
+```
+In this example the flag `--pheno example/pheno.txt.gz` is optional. This is used on to see if any environmental variables have significant squared effects, and include them as covariates if so.
+
+For analyses of large genomic datasets if may be useful to parallelize association testing across chunks of SNPs with the `--range` flag.
 
 #### Heritability estimation
 ```
 mpirun -n 1 build/lemma_1_0_0 \
   --RHEreg --n-RHEreg-samples 20 --n-RHEreg-jacknife 100 --random-seed 1 \
   --pheno example/pheno.txt.gz \
-  --bgen example/n5k_p20k_example.bgen \
+  --mStreamBgen example/bgen_filenames.txt \
   --environment example/inference_converged_eta.out.gz \
-  --out example/pve.out.gz
+  --out example/inference_pve.out.gz
 ```
 This should return heritability estimates of h2-G = 0.23 (0.032) and h2-GxE = 0.08 (0.016), where the value in brackets is the standard error.
 
-#### Association testing with imputed SNPs
-Note that genetic data is now streamed from file.
-```
-for cc in `seq 1 22`; do
-  mpirun -n 1 build/lemma_1_0_0 \
-    --singleSnpStats --maf 0.01 \
-    --range ${cc}:0-1000000000000 \
-    --pheno example/inference_converged_resid_pheno_chr${cc}.out.gz \
-    --streamBgen example/n5k_p20k_example.bgen \
-    --environment example/inference_converged_eta.out.gz \
-    --out example/loco_pvals_chr${cc}.out.gz;
-done
-```
-
-#### All at once
-```
-mpirun -n 1 build/lemma_1_0_0 \
-  --pheno example/pheno.txt.gz \
-  --environment example/env.txt.gz \
-  --VB \
-  --bgen example/n5k_p20k_example.bgen \
-  --singleSnpStats \
-  --RHEreg --n-RHEreg-samples 20 --n-RHEreg-jacknife 100 --random-seed 1 \
-  --streamBgen example/n5k_p20k_example.bgen \
-  --out example/inference.out.gz
-```
 
 ## Advanced Usage
 
 ### Precomputing the dXtEEX array
-Before running the variational algorithm, LEMMA requires the quantities $\sum_i X_{ij}^2 E_{il} E_{im}$ for $1 \le j \le M$ and $1 \le l \le m \le L$. LEMMA is able to compute this internally, however for large datasets this imposes substantial costs. As this is easily parallelised over variants and/or environments, we recommend that users precompute this quantity beforehand and provide a file to LEMMA at runtime.
+Before running the variational algorithm, LEMMA requires the quantities
+![Test Image 1](img/LEMMA_precomputation.png)  
+LEMMA is able to compute this internally, however for large datasets this imposes substantial costs. As this is easily parallelised over variants and/or environments, we recommend that users precompute this quantity beforehand and provide a file to LEMMA at runtime.
 
 Install `bgen_utils` using instructions from <https://github.com/mkerin/bgen_utils>.
 
@@ -147,11 +171,11 @@ Download the Intel MKL Library. Build with
 ```
 cd build
 cmake .. \
--DBGEN_ROOT=<path/to/bgen> \
--DBOOST_ROOT=<path/to/boost_1_55_0> \
+-DBGEN_ROOT=<path_to_bgen_lib> \
+-DBOOST_ROOT=<path_to_boost> \
 -DMKL_ROOT=<path_to_IntelMklRoot>
 cd ..
-cmake --build build --target bgen_prog_0_11_6 -- -j 4
+cmake --build build --target lemma_1_0_0 -- -j 4
 ```
 
 Note that current compile flags compatible with the Intel MKL Library 2019 Update 1.

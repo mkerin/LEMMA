@@ -738,9 +738,6 @@ Eigen::MatrixXd RHEreg::project_out_covars(Eigen::Ref<Eigen::MatrixXd> rhs) {
 void RHEreg::to_file(const std::string &file) {
 	boost_io::filtering_ostream outf;
 	std::string suffix = "";
-	if(p.mode_vb || p.mode_calc_snpstats) {
-		suffix = "_pve";
-	}
 	auto filename = fileUtils::fstream_init(outf, file, "", suffix);
 
 	std::cout << "Writing PVE results to " << filename << std::endl;

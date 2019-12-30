@@ -73,6 +73,11 @@ int main( int argc, char** argv ) {
 			auto vb_end = std::chrono::system_clock::now();
 			std::chrono::duration<double> elapsed_vb = vb_end - vb_start;
 			data.vp_init = VB.vp_init;
+			data.loco_chrs = VB.chrs_present;
+			data.resid_loco.resize(data.n_samples, data.loco_chrs.size());
+			for (long cc = 0; cc < data.loco_chrs.size(); cc++){
+				data.resid_loco.col(cc) = VB.resid_loco[cc];
+			}
 
 //				std::cout << std::endl << "Time expenditure:" << std::endl;
 //				std::cout << "Reading data: " << elapsed_reading_data.count() << " secs" << std::endl;
@@ -93,12 +98,17 @@ int main( int argc, char** argv ) {
 			VB.output_vb_results();
 		}
 
-		if (p.mode_calc_snpstats) {
+		if (p.streamBgenFiles.empty() && p.mode_calc_snpstats) {
 			VB.my_compute_LOCO_pvals(data.vp_init);
 		}
 	}
 
 	if (!p.streamBgenFiles.empty() && p.mode_calc_snpstats) {
+		std::string assoc_filepath = p.out_file;
+		if(p.mode_vb) {
+			assoc_filepath = fileUtils::filepath_format(assoc_filepath, "", "_loco_pvals");
+		}
+
 		GenotypeMatrix Xstream(p, false);
 		bool bgen_pass = true;
 		bool append = false;
@@ -106,12 +116,12 @@ int main( int argc, char** argv ) {
 		std::cout << "Computing single-snp hypothesis tests" << std::endl;
 		boost_io::filtering_ostream outf;
 		if(world_rank == 0) {
-			if (p.streamBgenOutFile != "NULL") {
-				fileUtils::fstream_init(outf, p.streamBgenOutFile);
-				std::cout << "Writing single SNP hypothesis tests to file: " << p.streamBgenOutFile << std::endl;
+			if (p.assocOutFile != "NULL") {
+				fileUtils::fstream_init(outf, p.assocOutFile);
+				std::cout << "Writing single SNP hypothesis tests to file: " << p.assocOutFile << std::endl;
 			} else {
-				fileUtils::fstream_init(outf, p.out_file);
-				std::cout << "Writing single SNP hypothesis tests to file: " << p.out_file << std::endl;
+				fileUtils::fstream_init(outf, assoc_filepath);
+				std::cout << "Writing single SNP hypothesis tests to file: " << assoc_filepath << std::endl;
 			}
 		}
 
@@ -126,6 +136,8 @@ int main( int argc, char** argv ) {
 		Eigen::MatrixXd neglogPvals, testStats;
 		for (int ii = 0; ii < p.streamBgenFiles.size(); ii++) {
 			std::cout << "Streaming genotypes from " << p.streamBgenFiles[ii] << std::endl;
+			bool isFirstChunk = true;
+			long chr, cc;
 			while (fileUtils::read_bgen_chunk(data.streamBgenViews[ii], Xstream, data.sample_is_invalid,
 			                                  data.n_samples, 128, p, bgen_pass, n_var_parsed)) {
 				if (nChunk % print_interval == 0 && nChunk > 0) {
@@ -133,10 +145,23 @@ int main( int argc, char** argv ) {
 					std::cout << ", " << n_var_parsed - 1 << "/" << n_vars_tot;
 					std::cout << " variants parsed)" << std::endl;
 				}
+				if (isFirstChunk){
+					chr = Xstream.chromosome[0];
+					auto it = std::find(data.loco_chrs.begin(), data.loco_chrs.end(), chr);
+					if (it == data.loco_chrs.end()){
+						throw std::runtime_error("Could not locate resid_excl_chr"+std::to_string(chr)+""
+												 "amongst columns passed to --resid-loco");
+					} else {
+						cc = it - data.loco_chrs.begin();
+					}
+					isFirstChunk = false;
+				} else if (chr != Xstream.chromosome[0]) {
+					throw std::runtime_error(p.streamBgenFiles[ii] + " appears to contain more than one chromosome");
+				}
 
 				assert(data.n_env > 0);
 				Xstream.calc_scaled_values();
-				compute_LOCO_pvals(data.Y.col(0), Xstream, data.vp_init, neglogPvals, testStats);
+				compute_LOCO_pvals(data.resid_loco.col(cc), Xstream, data.vp_init, neglogPvals, testStats);
 
 				if (world_rank == 0) {
 					fileUtils::write_snp_stats_to_file(outf, data.n_effects, Xstream, append, neglogPvals, testStats);
@@ -168,18 +193,21 @@ int main( int argc, char** argv ) {
 			C << data.C.cast<double>();
 		}
 
-		std::string out_file = p.out_file;
-		out_file = out_file.substr(0, out_file.find(".gz"));
+		std::string rhe_filepath = p.out_file;
+		rhe_filepath = rhe_filepath.substr(0, rhe_filepath.find(".gz"));
+		if(p.mode_vb || p.mode_calc_snpstats) {
+			rhe_filepath = fileUtils::filepath_format(rhe_filepath, "", "_pve");
+		}
 		if(data.n_env > 0) {
 			// If multi env; use VB to collapse to single
 			if(p.mode_vb || p.env_coeffs_file != "NULL") {
 				RHEreg pve(data, Y, C, data.vp_init.eta);
 				pve.run();
-				pve.to_file(p.out_file);
+				pve.to_file(rhe_filepath);
 
 				// Write time log to file
 				boost_io::filtering_ostream outf_time;
-				std::string ofile_map = fileUtils::fstream_init(outf_time, p.out_file, "", "_time_elapsed");
+				std::string ofile_map = fileUtils::fstream_init(outf_time, rhe_filepath, "", "_time_elapsed");
 				outf_time << "function time" << std::endl;
 				outf_time << "streamBgen " << pve.elapsed_streamBgen.count() << std::endl;
 				outf_time << "solveRHE " << pve.elapsed_solveRHE.count() << std::endl;
@@ -189,11 +217,11 @@ int main( int argc, char** argv ) {
 			} else {
 				RHEreg pve(data, Y, C, data.E);
 				pve.run();
-				pve.to_file(p.out_file);
+				pve.to_file(rhe_filepath);
 
 				// Write time log to file
 				boost_io::filtering_ostream outf_time;
-				std::string ofile_map = fileUtils::fstream_init(outf_time, p.out_file, "", "_time_elapsed");
+				std::string ofile_map = fileUtils::fstream_init(outf_time, rhe_filepath, "", "_time_elapsed");
 				outf_time << "function time" << std::endl;
 				outf_time << "streamBgen " << pve.elapsed_streamBgen.count() << std::endl;
 				outf_time << "solveRHE " << pve.elapsed_solveRHE.count() << std::endl;
@@ -204,11 +232,11 @@ int main( int argc, char** argv ) {
 		} else {
 			RHEreg pve(data, Y, C);
 			pve.run();
-			pve.to_file(p.out_file);
+			pve.to_file(rhe_filepath);
 
 			// Write time log to file
 			boost_io::filtering_ostream outf_time;
-			std::string ofile_map = fileUtils::fstream_init(outf_time, p.out_file, "", "_time_elapsed");
+			std::string ofile_map = fileUtils::fstream_init(outf_time, rhe_filepath, "", "_time_elapsed");
 			outf_time << "function time" << std::endl;
 			outf_time << "streamBgen " << pve.elapsed_streamBgen.count() << std::endl;
 			outf_time << "solveRHE " << pve.elapsed_solveRHE.count() << std::endl;

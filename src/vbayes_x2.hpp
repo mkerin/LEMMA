@@ -326,6 +326,9 @@ public:
 
 		long ii_map = std::distance(weights.begin(), std::max_element(weights.begin(), weights.end()));
 		vp_init = trackers[ii_map].vp;
+
+		// Compute residual phenotypes
+		compute_residuals_per_chr(vp_init, ym_per_chr, yx_per_chr, resid_loco);
 	}
 
 	void runOuterLoop(const int round_index,
@@ -500,7 +503,7 @@ public:
 					n_converged += n;
 				}
 
-				std::cout << "Completed " << count+1 << " iterations, " << n_converged << " runs converged";
+				std::cout << "Completed " << count+1 << " iterations ";
 				print_time_check();
 			}
 		}
@@ -1460,20 +1463,19 @@ public:
 		EigenDataMatrix D;
 		long max_chunk_size = 256, start = 0;
 		bool append = false;
+		Eigen::MatrixXd chunk_neglogPvals, chunk_testStats;
 		while (start < n_var) {
-			long chunkSize = std::min(n_var,std::min(max_chunk_size,chr_changes[X.chromosome[start]]));
+			long chr = X.chromosome[start];
+			long cc = std::find(chrs_present.begin(), chrs_present.end(), chr) - chrs_present.begin();
+
+			long chunkSize = std::min(max_chunk_size,chr_changes[chr] - start);
 			std::vector<long> chunk(chunkSize);
 			std::iota(chunk.begin(),chunk.end(),start);
 
-			long chr1 = X.chromosome[start];
-			long cc = std::find(chrs_present.begin(), chrs_present.end(), chr1) - chrs_present.begin();
-
-			long ch_len = chunk.size();
-			if (D.cols() != ch_len) {
-				D.resize(n_samples, ch_len);
+			if (D.cols() != chunkSize) {
+				D.resize(n_samples, chunkSize);
 			}
 			X.col_block3(chunk, D);
-			Eigen::MatrixXd chunk_neglogPvals, chunk_testStats;
 			compute_LOCO_pvals(chr_residuals[cc], D, vp, chunk_neglogPvals, chunk_testStats);
 
 			neglogPvals.block(start,0,chunkSize,(n_env > 0 ? 4 : 1)) = chunk_neglogPvals;
@@ -1679,7 +1681,7 @@ public:
 		}
 		if(n_chrs > 0) {
 			for(auto cc : chrs_present) {
-				header += " residuals_excl_chr" + std::to_string(cc);
+				header += " resid_excl_chr" + std::to_string(cc);
 			}
 			n_cols += n_chrs;
 		}
@@ -1717,6 +1719,7 @@ public:
 			                                      "chr" + std::to_string(chrs_present[cc]),
 			                                      sample_location);
 		}
+		std::cout << std::endl;
 	}
 
 	void my_compute_LOCO_pvals(VariationalParametersLite vp){
