@@ -1,6 +1,6 @@
 # LEMMA
 
-LEMMA (**L**inear **E**nvironment **M**ixed **M**odel **A**nalysis) aims to uncover GxE interactions between SNPs and a linear combination of multiple environmental variables. To do this efficiently, LEMMA leverages an assumption that (where GxE interactions exist) SNPs will interact with a common environmetal 'profile'.
+LEMMA (**L**inear **E**nvironment **M**ixed **M**odel **A**nalysis) aims to uncover GxE interactions between SNPs and a linear combination of multiple environmental variables. To do this efficiently, LEMMA leverages an assumption that (where GxE interactions exist) SNPs will interact with a common environmental 'profile'.
 
 ## Getting Started
 ### Installation
@@ -31,7 +31,7 @@ The `example` directory contains a simulated dataset with:
 The phenotype has been simulated to have:
 - 2000 SNPs with non-zero main effects
 - 500 SNPs with non-zero GxE effects
-- GxE effects occur with a linear combination of two of the five environments (ie 2 are active).
+- GxE effects with a linear combination of two of the five environments (i.e. two are active).
 - SNP-Heritability of 20% (main effects) and 10% (GxE effects)
 
 #### Running the LEMMA variational inference algorithm
@@ -46,13 +46,12 @@ mpirun -n 1 build/lemma_1_0_0 \
 In this case the algorithm should converge in 59 iterations.
 
 Output files:
-- `example/inference.out.gz` : contains converged hyperparameter values + ELBO
-- `example/inference_converged_eta.out.gz` : contains converged ES
+- `example/inference.out.gz` :                                converged hyperparameter values + ELBO
+- `example/inference_converged_eta.out.gz` :                  converged Environmental Score
 - `example/inference_converged_resid_pheno_chr${cc}.out.gz` : residual phenotypes for chromosomes c = 1:22
-- `example/inference_converged_vparams_*.out.gz` : variational parameters estimated by the LEMMA algorithm.
-- `example/inference_converged_yhat.out.gz` : predicted vectors and residualised phenotypes.
- 
-*TODO*: Write coefficients from hypothesis tests to file.
+- `example/inference_converged_vparams_*.out.gz` :            variational parameters estimated by the LEMMA algorithm
+- `example/inference_converged_yhat.out.gz` :                 predicted vectors and residualised phenotypes
+- `example/inference_loco_pvals.out.gz` :                     single SNP hypothesis tests applied to SNPs from the file passed to `--bgen`
 
 #### Heritability estimation
 ```
@@ -66,70 +65,36 @@ mpirun -n 1 build/lemma_1_0_0 \
 This should return heritability estimates of h2-G = 0.23 (0.032) and h2-GxE = 0.08 (0.016), where the value in brackets is the standard error.
 
 #### Association testing with imputed SNPs
+Note that genetic data is now streamed from file.
 ```
 for cc in `seq 1 22`; do
   mpirun -n 1 build/lemma_1_0_0 \
-    --singleSnpStats \
+    --singleSnpStats --maf 0.01 \
     --range ${cc}:0-1000000000000 \
     --pheno example/inference_converged_resid_pheno_chr${cc}.out.gz \
     --streamBgen example/n5k_p20k_example.bgen \
     --environment example/inference_converged_eta.out.gz \
     --out example/loco_pvals_chr${cc}.out.gz;
 done
-
-BGEN_SNPWISE=/well/marchini/kebl4230/software/bgen_snpwise_lm/bin/bgen_snpwise
-${BGEN_SNPWISE} --mode_gxe_student_t --robust_se \
-  --range ${cc} 0 1000000000000 \
-  --pheno example/inference_converged_resid_pheno_chr${cc}.out.gz \
-  --bgen example/n5k_p20k_example.bgen \
-  --environment example/inference_converged_eta.out.gz \
-  --out snpwise_pvals_chr${cc}.out.gz;
-
- zcat example/loco_pvals_chr${cc}.out.gz | head
-zcat snpwise_pvals_chr${cc}.out.gz | head
-
-paste <(zcat example/loco_pvals_chr${cc}.out.gz | cut -d' ' -f13) <(zcat snpwise_pvals_chr${cc}.out.gz | cut -f19) | head
-
-
-DIR=../software/LEMMA
-Rscript R/functions/gen_scatter_plot.R \
-  --file1 ${DIR}/example/loco_pvals_chr${cc}.out.gz \
-  --colname1 main_standardSE_chisq \
-  --file2 ${DIR}/snpwise_pvals_chr${cc}.out.gz \
-  --colname2 chi_stat_main_standardSE \
- --out tmp.pdf
-
- Rscript R/functions/gen_scatter_plot.R \
-   --file1 ${DIR}/example/inference_converged_snp_stats.out.gz \
-   --colname1 loco_t_neglogp0 --key1 rsid \
-   --file2 ${DIR}/snpwise_pvals_chr${cc}.out.gz \
-   --colname2 neglogp_main_standardSE --key2 rsid \
-  --out tmp2.pdf
-example/inference_converged_snp_stats.out.gz
 ```
 
 #### All at once
 ```
 mpirun -n 1 build/lemma_1_0_0 \
-  --VB \
-  --RHEreg --n-RHEreg-samples 20 --n-RHEreg-jacknife 100 --random-seed 1 \
-  --singleSnpStats \
   --pheno example/pheno.txt.gz \
+  --environment example/env.txt.gz \
+  --VB \
   --bgen example/n5k_p20k_example.bgen \
-  --environment example/inference_converged_eta.out.gz \
-  --out example/pve.out.gz
+  --singleSnpStats \
+  --RHEreg --n-RHEreg-samples 20 --n-RHEreg-jacknife 100 --random-seed 1 \
+  --streamBgen example/n5k_p20k_example.bgen \
+  --out example/inference.out.gz
 ```
-- singleSnpStats callable from outside VB class
-- just run from VP parameter state and full bgen file
-- 
-
-
-*TODO*: Write coefficients from hypothesis tests to file.
 
 ## Advanced Usage
 
 ### Precomputing the dXtEEX array
-Before LEMMA running the VB algorithm LEMMA requires the quantities $\sum_i X_{ij}^2 E_{il} E_{im}$ for $1 \le j \le M$ and $1 \le l \le m \le L$. LEMMA is able to compute this internally, however for large datasets this imposes substantial costs. As this is easily parallelised over variants and/or environments, we recommend that users precompute this quantity beforehand and provide a file to LEMMA at runtime.
+Before running the variational algorithm, LEMMA requires the quantities $\sum_i X_{ij}^2 E_{il} E_{im}$ for $1 \le j \le M$ and $1 \le l \le m \le L$. LEMMA is able to compute this internally, however for large datasets this imposes substantial costs. As this is easily parallelised over variants and/or environments, we recommend that users precompute this quantity beforehand and provide a file to LEMMA at runtime.
 
 Install `bgen_utils` using instructions from <https://github.com/mkerin/bgen_utils>.
 
@@ -143,12 +108,11 @@ for cc in `seq 1 22`; do
     --range ${cc}:0-100000000000 \
     --bgen $(bgen) \
     --environment $(dir)/env.txt \
-    --out example/dxteex_chr"$$$$tar".out.gz;
+    --out example/dxteex_chr${cc}.out.gz;
 done
 zcat example/dxteex_chr*.out.gz > example/dxteex.out.gz
 ```
-
-Use the `example/dxteex.out.gz` array with VB with
+Then provide the file `example/dxteex.out.gz` to LEMMA with the commandline flag `--dxteex`.
 ```
 mpirun -n 1 build/lemma_1_0_0 \
   --VB \
@@ -164,10 +128,9 @@ For this you will need:
 - LD-scores (we recommend using GCTA with a window of size `--ld-wind 1000`)
 - MAF of each SNP obtained from the UKBiobank MFI files.
 
-To convert into the file format expected by LEMMA we have provided a brief Rscript.
-*TBD*
+To convert into the file format expected by LEMMA we have provided a brief Rscript `scripts/preprocess_ldms_groups.R`.
 
-Then run the following
+Then run the heritability analysis as follows
 ```
 mpirun -n 1 build/lemma_1_0_0 \
   --RHEreg --n-RHEreg-samples 20 --n-RHEreg-jacknife 100 --random-seed 1 \
@@ -186,15 +149,15 @@ cd build
 cmake .. \
 -DBGEN_ROOT=<path/to/bgen> \
 -DBOOST_ROOT=<path/to/boost_1_55_0> \
--DMKL_ROOT=<path_t0_IntelMklRoot>
+-DMKL_ROOT=<path_to_IntelMklRoot>
 cd ..
 cmake --build build --target bgen_prog_0_11_6 -- -j 4
 ```
 
-Note that current compile flags compatible with the Intel MKL Library Update 1.
+Note that current compile flags compatible with the Intel MKL Library 2019 Update 1.
 
 ### Resuming from a previous parameter state
-In case of runtime crashes, LEMMA can save the parameter state at periodic intervals by providing the commandline flag ``. LEMMA can then subsequently resume inference from this saved state. For example
+In case of runtime crashes, LEMMA can save the parameter state at periodic intervals by providing the commandline flag `--resume_from_state`. LEMMA can then subsequently resume inference from this saved state. For example
 ```
 mpirun -n 1 build/lemma_1_0_0 \
   --VB \
@@ -209,14 +172,12 @@ mpirun -n 1 build/lemma_1_0_0 \
   --pheno example/pheno.txt.gz \
   --environment example/env.txt.gz \
   --bgen example/n5k_p20k_example.bgen \
-  --resume_from_param_dump example/lemma_interim_files/inference_dump_it30 \
+  --resume_from_state example/lemma_interim_files/inference_dump_it30 \
   --out example/inference_from_it30.out.gz
 
 zdiff example/inference_from_it30.out.gz example/inference.out.gz
 ```
 Outputs from the two should match, up to some small numerical difference in the ELBO. Note that if the iteration number that you start from is not a multiple of 3, then output will not match exactly because the SQUAREM algorithm adapts the trajectory of the hyperparameter updates in multiples of three.
-
-*TODO*: Clean up stdout from `--resume_from_param_dump`
 
 ## Other
 ### Complexity
