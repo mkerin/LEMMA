@@ -20,6 +20,7 @@
 #include <boost/iostreams/filtering_stream.hpp>
 #include <boost/iostreams/device/file.hpp>
 #include <boost/iostreams/filter/gzip.hpp>
+#include <boost/filesystem.hpp>
 
 namespace boost_io = boost::iostreams;
 
@@ -108,7 +109,6 @@ void parse_arguments(parameters &p, int argc, char **argv) {
 
 	options.add_options("RHE")
 	    ("RHEreg", "Run randomised HE-regression algorithm", cxxopts::value<bool>())
-	    ("RHEreg-fast", "Run randomised HE-regression algorithm without centering and scaling genotype matrix (unnecessary with modified h2 conversion)")
 	    ("RHEreg-groups", "Text file containing group of each SNP for use with multicomponent randomised HE regression", cxxopts::value<std::string>())
 	    ("mRHEreg-groups", "Text file to paths of --RHE-groups files. Each should correspond to the bgen files given in --mStreamBgen", cxxopts::value<std::string>())
 	    ("n-RHEreg-samples", "Number of random vectors used in RHE algorithm", cxxopts::value<long>(p.n_pve_samples))
@@ -235,12 +235,11 @@ void parse_arguments(parameters &p, int argc, char **argv) {
 			p.streamBgenFiles.push_back(opts["streamBgen"].as<std::string>());
 		}
 		if(opts.count("mStreamBgen")) {
-			boost_io::filtering_istream fg;
 			std::string filename = opts["mStreamBgen"].as<std::string>();
+			boost_io::filtering_istream fg;
 			fg.push(boost_io::file_source(filename));
-			if (!fg) {
-				std::cout << "ERROR: " << filename << " not opened." << std::endl;
-				std::exit(EXIT_FAILURE);
+			if (!boost::filesystem::exists(filename) || !fg) {
+				throw std::runtime_error("Error when trying to open file: " + filename);
 			}
 			std::string line, s;
 			while (getline(fg, line)) {
@@ -248,6 +247,9 @@ void parse_arguments(parameters &p, int argc, char **argv) {
 				while (ss >> s) {
 					p.streamBgenFiles.push_back(s);
 				}
+			}
+			if (p.streamBgenFiles.empty()){
+				throw std::runtime_error("No valid bgen files found in " + filename);
 			}
 		}
 		if(opts.count("loso_window_size")) {

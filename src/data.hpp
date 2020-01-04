@@ -116,6 +116,9 @@ public:
 
 	explicit Data(parameters& p) : p(p), G(p), vp_init(p) {
 		Eigen::setNbThreads(p.n_thread);
+		if (p.bgen_file == "NULL" && p.streamBgenFiles.empty()){
+			throw std::runtime_error("No bgen files available when initialising Data class");
+		}
 
 		// Create vector of bgen views for mutlithreading
 		n_var = 0;
