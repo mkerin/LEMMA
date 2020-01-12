@@ -55,6 +55,7 @@ public:
 	                    const long& n_var,
 	                    const Eigen::Ref<const Eigen::MatrixXd>& hyps_grid);
 	void update_pve();
+	void write_to_file(const std::string& path) const;
 	void read_from_dump(const std::string& filename);
 	double normL2() const;
 	bool domain_is_valid() const;
@@ -116,7 +117,6 @@ public:
 	}
 
 	friend std::ostream& operator<< (std::ostream &os, const Hyps& hyps);
-	friend boost_io::filtering_ostream& operator<< (boost_io::filtering_ostream &os, const Hyps& hyps);
 };
 
 Hyps operator+(const Hyps &h1, const Hyps &h2);

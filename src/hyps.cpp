@@ -2,6 +2,7 @@
 // Created by kerin on 2019-03-01.
 //
 #include "hyps.hpp"
+#include "file_utils.hpp"
 
 #include <boost/iostreams/filtering_stream.hpp>
 #include <boost/iostreams/device/file.hpp>
@@ -134,24 +135,27 @@ std::ostream& operator<<(std::ostream& os, const Hyps& hyps){
 	return os;
 }
 
-boost_io::filtering_ostream& operator<<(boost_io::filtering_ostream& os, const Hyps& hyps){
+void Hyps::write_to_file(const std::string& path) const {
+	boost_io::filtering_ostream outf;
+	fileUtils::fstream_init(outf, path);
+
 	std::vector<std::string> effects = {"_beta", "_gam"};
-	int n_effects = hyps.lambda.rows();
-	os << std::scientific << std::setprecision(7);
-	os << "hyp value" << std::endl;
-	os << "sigma " << hyps.sigma << std::endl;
+	int n_effects = lambda.rows();
+	outf << std::scientific << std::setprecision(7);
+	outf << "hyp value" << std::endl;
+	outf << "sigma " << sigma << std::endl;
 	for (int ii = 0; ii < n_effects; ii++) {
-		os << "lambda" << ii+1 << " " << hyps.lambda[ii] << std::endl;
+		outf << "lambda" << ii+1 << " " << lambda[ii] << std::endl;
 	}
 	for (int ii = 0; ii < n_effects; ii++) {
-		os << "sigma" << effects[ii] << "0 " << hyps.slab_relative_var[ii] << std::endl;
+		outf << "sigma" << effects[ii] << "0 " << slab_relative_var[ii] << std::endl;
 	}
 	for (int ii = 0; ii < n_effects; ii++) {
-		if((ii == 0 && hyps.p.mode_mog_prior_beta) || (ii == 1 && hyps.p.mode_mog_prior_gam)) {
-			os << "sigma" << effects[ii] << "1 " << hyps.spike_relative_var[ii] << std::endl;
+		if((ii == 0 && p.mode_mog_prior_beta) || (ii == 1 && p.mode_mog_prior_gam)) {
+			outf << "sigma" << effects[ii] << "1 " << spike_relative_var[ii] << std::endl;
 		}
 	}
-	return os;
+	boost_io::close(outf);
 }
 
 void Hyps::read_from_dump(const std::string& filename){

@@ -256,9 +256,8 @@ public:
 				vp.env_to_file(path, env_names);
 			}
 
-			fileUtils::fstream_init(outf_inits, p.out_file, subdir.string() + "/", "_dump_it" + count + "_hyps");
-			outf_inits << hyps << std::endl;
-			boost_io::close(outf_inits);
+			path = fileUtils::filepath_format(p.out_file, subdir.string() + "/", "_dump_it" + count + "_hyps");
+			hyps.write_to_file(path);
 		}
 	}
 
