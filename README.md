@@ -13,8 +13,8 @@ cd LEMMA
 mkdir build
 cd build
 cmake .. \
--DBGEN_ROOT=<path_to_bgen_lib> \
--DBOOST_ROOT=<path_to_boost>
+-DBGEN_ROOT=<absolute/path/to/bgen_lib> \
+-DBOOST_ROOT=<absolute/path/to/boost>
 cd ..
 cmake --build build --target lemma_1_0_0 -- -j 4
 ```
@@ -42,7 +42,7 @@ All three steps can be run in sequence using the following commands
 ```
 rm example/bgen_filenames.txt
 for cc in `seq 1 22`; do
-  bgenix -g example/n5k_p20k_example.bgen -incl-range ${cc}:0-10000000000 > example/n5k_p20k_example_chr${cc}.bgen;
+  bgenix -g example/n5k_p20k_example.bgen -incl-range ${cc}:0-1000000000 > example/n5k_p20k_example_chr${cc}.bgen;
   bgenix -index -g example/n5k_p20k_example_chr${cc}.bgen;
   echo "example/n5k_p20k_example_chr${cc}.bgen" >> example/bgen_filenames.txt;
 done
