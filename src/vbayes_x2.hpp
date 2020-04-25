@@ -116,7 +116,7 @@ public:
 	std::chrono::system_clock::time_point time_check;
 	std::chrono::duration<double> elapsed_innerLoop;
 
-	std::vector<Eigen::VectorXd> resid_loco, ym_per_chr, yx_per_chr;
+	std::vector<Eigen::VectorXd> loco_phenos;
 
 	explicit VBayesX2(Data& dat) : X(dat.G),
 		Y(dat.Y),
@@ -142,7 +142,7 @@ public:
 		n_covar        = dat.n_covar;
 		covar_names    = dat.covar_names;
 		env_names      = dat.env_names;
-		double Nlocal  = (double) n_samples;
+		auto Nlocal    = (double) n_samples;
 		Nglobal        = mpiUtils::mpiReduce_inplace(&Nlocal);
 		// E = dat.E;
 		first_covar_update = true;
@@ -275,6 +275,8 @@ public:
 
 	void run(){
 		std::cout << std::endl << "Starting variational inference";
+		std::cout << "(will terminate once change in ELBO falls below ";
+		std::cout << p.elbo_tol << ")" << std::endl;
 #ifndef OSX
 		long long kbMax, kbGlobal, kbLocal = fileUtils::getValueRAM();
 		MPI_Allreduce(&kbLocal, &kbMax, 1, MPI_LONG_LONG, MPI_MAX, MPI_COMM_WORLD);
@@ -328,7 +330,7 @@ public:
 		vp_init = trackers[ii_map].vp;
 
 		// Compute residual phenotypes
-		compute_residuals_per_chr(vp_init, ym_per_chr, yx_per_chr, resid_loco);
+		compute_residuals_per_chr(vp_init, loco_phenos);
 	}
 
 	void runOuterLoop(const int round_index,
@@ -1214,7 +1216,7 @@ public:
 		vp.calcEdZtZ(dXtEEX_lowertri, n_env);
 	}
 
-	void calcPredEffects(VariationalParameters& vp){
+	void calcPredEffects(VariationalParameters& vp) const {
 		Eigen::VectorXd rr_beta = vp.mean_beta();
 
 		vp.ym = X * rr_beta;
@@ -1228,7 +1230,7 @@ public:
 		}
 	}
 
-	void calcPredEffects(VariationalParametersLite& vp) {
+	void calcPredEffects(VariationalParametersLite& vp) const {
 		Eigen::VectorXd rr_beta = vp.mean_beta();
 
 		vp.ym = X * rr_beta;
@@ -1393,13 +1395,13 @@ public:
 		return res;
 	}
 
-	void compute_residuals_per_chr(const VariationalParametersLite& vp,
-	                               std::vector<Eigen::VectorXd>& pred_main,
-	                               std::vector<Eigen::VectorXd>& pred_int,
-	                               std::vector<Eigen::VectorXd>& chr_residuals) const {
+	void
+	compute_residuals_per_chr(const VariationalParametersLite &vp,
+			std::vector<Eigen::VectorXd> &loco_phenos) const {
+		std::vector<Eigen::VectorXd> pred_main, pred_int;
 		pred_main.resize(n_chrs);
 		pred_int.resize(n_chrs);
-		chr_residuals.resize(n_chrs);
+		loco_phenos.resize(n_chrs);
 
 		// casts used if DATA_AS_FLOAT
 		Eigen::VectorXd map_residuals;
@@ -1410,43 +1412,38 @@ public:
 		}
 
 		// Compute predicted effects from each chromosome
-		Eigen::VectorXd Eq_beta, Eq_gam;
-
-		Eq_beta = vp.mean_beta();
+		Eigen::VectorXd Eq_beta = vp.mean_beta();
 		for (auto cc : chrs_index) {
 			pred_main[cc] = X.mult_vector_by_chr(chrs_present[cc], Eq_beta);
 		}
 
 		if (n_effects > 1) {
-			Eq_gam = vp.mean_gam();
+			Eigen::VectorXd Eq_gam = vp.mean_gam();
 			for (auto cc : chrs_index) {
 				pred_int[cc]  = X.mult_vector_by_chr(chrs_present[cc], Eq_gam);
 			}
 		}
 
 		// Compute mean-centered residuals for each chromosome
-		if(!p.drop_loco) {
-			for (auto cc : chrs_index) {
-				if (n_effects > 1) {
-					chr_residuals[cc] = map_residuals + pred_main[cc] + pred_int[cc].cwiseProduct(vp.eta.cast<double>());
-				} else {
-					chr_residuals[cc] = map_residuals + pred_main[cc];
-				}
-				EigenUtils::center_matrix(chr_residuals[cc]);
+		for (auto cc : chrs_index) {
+			if (n_effects > 1) {
+				loco_phenos[cc] = map_residuals + pred_main[cc] + pred_int[cc].cwiseProduct(vp.eta.cast<double>());
+			} else {
+				loco_phenos[cc] = map_residuals + pred_main[cc];
 			}
-		} else {
-			for (auto cc : chrs_index) {
-				chr_residuals[cc] = map_residuals;
-				EigenUtils::center_matrix(chr_residuals[cc]);
-			}
+			EigenUtils::center_matrix(loco_phenos[cc]);
 		}
 	}
 
-	void my_LOCO_pvals(const VariationalParametersLite& vp,
-	                   const std::vector<Eigen::VectorXd>& chr_residuals,
-	                   Eigen::MatrixXd& neglogPvals,
-	                   Eigen::MatrixXd& testStats){
-		assert(chr_residuals.size() == n_chrs);
+//	TODO make vp const
+	void compute_LOCO_pvals(VariationalParametersLite &vp,
+			Eigen::MatrixXd &neglogPvals,
+			Eigen::MatrixXd &testStats) {
+
+		calcPredEffects(vp);
+		std::vector<Eigen::VectorXd> resid_pheno;
+		compute_residuals_per_chr(vp, resid_pheno);
+		assert(resid_pheno.size() == n_chrs);
 		neglogPvals.resize(n_var, (n_env > 0 ? 4 : 1));
 		testStats.resize(n_var, (n_env > 0 ? 4 : 1));
 
@@ -1476,7 +1473,7 @@ public:
 				D.resize(n_samples, chunkSize);
 			}
 			X.col_block3(chunk, D);
-			compute_LOCO_pvals(chr_residuals[cc], D, vp, chunk_neglogPvals, chunk_testStats);
+			::compute_LOCO_pvals(resid_pheno[cc], D, chunk_neglogPvals, chunk_testStats, vp.eta);
 
 			neglogPvals.block(start,0,chunkSize,(n_env > 0 ? 4 : 1)) = chunk_neglogPvals;
 			testStats.block(start,0,chunkSize,(n_env > 0 ? 4 : 1)) = chunk_testStats;
@@ -1484,15 +1481,15 @@ public:
 		}
 	}
 
-	void LOCO_pvals_v2(GenotypeMatrix &Xtest,
-	                   const VariationalParametersLite &vp,
-	                   const long &LOSO_window,
-	                   Eigen::Ref<Eigen::VectorXd> neglogp_beta,
-	                   Eigen::Ref<Eigen::VectorXd> neglogp_gam_robust,
-	                   Eigen::Ref<Eigen::VectorXd> neglogp_joint,
-	                   Eigen::Ref<Eigen::VectorXd> test_stat_beta,
-	                   Eigen::Ref<Eigen::VectorXd> test_stat_gam_robust,
-	                   Eigen::Ref<Eigen::VectorXd> test_stat_joint) const {
+	void compute_LOSO_pvals(GenotypeMatrix &Xtest,
+							const VariationalParametersLite &vp,
+							const long &LOSO_window,
+							Eigen::Ref<Eigen::VectorXd> neglogp_beta,
+							Eigen::Ref<Eigen::VectorXd> neglogp_gam_robust,
+							Eigen::Ref<Eigen::VectorXd> neglogp_joint,
+							Eigen::Ref<Eigen::VectorXd> test_stat_beta,
+							Eigen::Ref<Eigen::VectorXd> test_stat_gam_robust,
+							Eigen::Ref<Eigen::VectorXd> test_stat_joint) const {
 		assert(neglogp_beta.rows()  == n_var);
 		assert(neglogp_joint.rows() == n_var);
 		assert(test_stat_beta.rows()  == n_var);
@@ -1664,7 +1661,7 @@ public:
 		/*********** Stats from MAP to file ************/
 		// Predicted effects to file
 		calcPredEffects(vp_init);
-		compute_residuals_per_chr(vp_init, ym_per_chr, yx_per_chr, resid_loco);
+		compute_residuals_per_chr(vp_init, loco_phenos);
 		Eigen::VectorXd Ealpha = Eigen::VectorXd::Zero(n_samples);
 		if(n_covar > 0) {
 			Ealpha += (C * vp_init.muc.matrix().cast<scalarData>()).cast<double>();
@@ -1700,7 +1697,7 @@ public:
 			tmp.col(cc) = vp_init.yx; cc++;
 		}
 		for(int cc1 = 0; cc1 < n_chrs; cc1++) {
-			tmp.col(cc) = resid_loco[cc1]; cc++;
+			tmp.col(cc) = loco_phenos[cc1]; cc++;
 		}
 		assert(cc == n_cols);
 
@@ -1715,29 +1712,32 @@ public:
 			std::string path = fileUtils::filepath_format(p.out_file, "",
 			                                              "_converged_resid_pheno_chr" + std::to_string(chrs_present[cc]));
 			std::cout << "Writing residualised pheno to " << path << std::endl;
-			fileUtils::dump_predicted_vec_to_file(resid_loco[cc], path,
+			fileUtils::dump_predicted_vec_to_file(loco_phenos[cc], path,
 			                                      "chr" + std::to_string(chrs_present[cc]),
 			                                      sample_location);
 		}
 		std::cout << std::endl;
 	}
 
-	void my_compute_LOCO_pvals(VariationalParametersLite vp){
+	void compute_pvals(VariationalParametersLite vp){
 		calcPredEffects(vp);
-		compute_residuals_per_chr(vp, ym_per_chr, yx_per_chr, resid_loco);
+		compute_residuals_per_chr(vp, loco_phenos);
 
 		// Compute LOCO p-values
 		Eigen::MatrixXd neglogPvals, testStats;
-		if(p.drop_loco) {
+		if(!p.drop_loco) {
+			if (p.debug) std::cout << "Computing single-SNP hypothesis tests with LOCO strategy" << std::endl;
+			compute_LOCO_pvals(vp, neglogPvals, testStats);
+		} else {
 			if (p.debug) {
 				std::cout << "Computing single-snp hypothesis tests while excluding SNPs within ";
 				std::cout << p.LOSO_window << " of the test SNP" << std::endl;
 			}
 			Eigen::VectorXd neglogp_beta(n_var), neglogp_gam(n_var), neglogp_rgam(n_var), neglogp_joint(n_var);
 			Eigen::VectorXd test_stat_beta(n_var), test_stat_gam(n_var), test_stat_rgam(n_var), test_stat_joint(n_var);
-			LOCO_pvals_v2(X, vp, p.LOSO_window,
-			              neglogp_beta, neglogp_rgam, neglogp_joint,
-			              test_stat_beta, test_stat_rgam, test_stat_joint);
+			compute_LOSO_pvals(X, vp, p.LOSO_window,
+							   neglogp_beta, neglogp_rgam, neglogp_joint,
+							   test_stat_beta, test_stat_rgam, test_stat_joint);
 			neglogPvals.resize(neglogp_beta.rows(), 3);
 			neglogPvals.col(0) = neglogp_beta;
 			neglogPvals.col(1) = Eigen::VectorXd::Constant(neglogp_beta.rows(), -1);
@@ -1746,9 +1746,6 @@ public:
 			testStats.col(0) = test_stat_beta;
 			testStats.col(1) = Eigen::VectorXd::Constant(neglogp_beta.rows(), -1);
 			testStats.col(2) = test_stat_rgam;
-		} else {
-			if (p.debug) std::cout << "Computing single-SNP hypothesis tests with LOCO strategy" << std::endl;
-			my_LOCO_pvals(vp, resid_loco, neglogPvals, testStats);
 		}
 
 		if(world_rank == 0) {

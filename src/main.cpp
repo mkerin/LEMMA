@@ -76,7 +76,7 @@ int main( int argc, char** argv ) {
 			data.loco_chrs = VB.chrs_present;
 			data.resid_loco.resize(data.n_samples, data.loco_chrs.size());
 			for (long cc = 0; cc < data.loco_chrs.size(); cc++){
-				data.resid_loco.col(cc) = VB.resid_loco[cc];
+				data.resid_loco.col(cc) = VB.loco_phenos[cc];
 			}
 
 //				std::cout << std::endl << "Time expenditure:" << std::endl;
@@ -99,20 +99,11 @@ int main( int argc, char** argv ) {
 		}
 
 		if (p.streamBgenFiles.empty() && p.mode_calc_snpstats) {
-			VB.my_compute_LOCO_pvals(data.vp_init);
+			VB.compute_pvals(data.vp_init);
 		}
 	}
 
 	if (!p.streamBgenFiles.empty() && p.mode_calc_snpstats) {
-		std::string assoc_filepath = p.out_file;
-		if(p.mode_vb) {
-			assoc_filepath = fileUtils::filepath_format(assoc_filepath, "", "_loco_pvals");
-		}
-
-		GenotypeMatrix Xstream(p, false);
-		bool bgen_pass = true;
-		bool append = false;
-
 		std::cout << "Computing single-snp hypothesis tests" << std::endl;
 		boost_io::filtering_ostream outf;
 		if(world_rank == 0) {
@@ -120,6 +111,10 @@ int main( int argc, char** argv ) {
 				fileUtils::fstream_init(outf, p.assocOutFile);
 				std::cout << "Writing single SNP hypothesis tests to file: " << p.assocOutFile << std::endl;
 			} else {
+				std::string assoc_filepath = p.out_file;
+				if(p.mode_vb) {
+					assoc_filepath = fileUtils::filepath_format(assoc_filepath, "", "_loco_pvals");
+				}
 				fileUtils::fstream_init(outf, assoc_filepath);
 				std::cout << "Writing single SNP hypothesis tests to file: " << assoc_filepath << std::endl;
 			}
@@ -133,6 +128,9 @@ int main( int argc, char** argv ) {
 			n_vars_tot += data.streamBgenViews[ii]->number_of_variants();
 		}
 
+		GenotypeMatrix Xstream(p, false);
+		bool bgen_pass = true;
+		bool append = false;
 		Eigen::MatrixXd neglogPvals, testStats;
 		for (int ii = 0; ii < p.streamBgenFiles.size(); ii++) {
 			std::cout << "Streaming genotypes from " << p.streamBgenFiles[ii] << std::endl;
@@ -161,7 +159,7 @@ int main( int argc, char** argv ) {
 
 				assert(data.n_env > 0);
 				Xstream.calc_scaled_values();
-				compute_LOCO_pvals(data.resid_loco.col(cc), Xstream, data.vp_init, neglogPvals, testStats);
+				compute_LOCO_pvals(data.resid_loco.col(cc), Xstream, neglogPvals, testStats, data.vp_init.eta);
 
 				if (world_rank == 0) {
 					fileUtils::write_snp_stats_to_file(outf, data.n_effects, Xstream, append, neglogPvals, testStats);

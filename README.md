@@ -92,12 +92,12 @@ In this case the algorithm should converge in 59 iterations.
 mpirun -n 1 build/lemma_1_0_0 \
   --singleSnpStats --maf 0.01 \
   --pheno example/pheno.txt.gz \
-  --resid-loco example/inference_converged_yhat.out.gz \
+  --resid-pheno example/inference_converged_yhat.out.gz \
   --mStreamBgen example/bgen_filenames.txt \
   --environment example/inference_converged_eta.out.gz \
   --out example/inference_loco_pvals.out.gz;
 ```
-In this example the flag `--pheno example/pheno.txt.gz` is optional. This is used on to see if any environmental variables have significant squared effects, and include them as covariates if so.
+In this example the flag `--pheno example/pheno.txt.gz` is optional. This is used to see if any environmental variables have significant squared effects, and include them as covariates if so.
 
 For analyses of large genomic datasets if may be useful to parallelize association testing across chunks of SNPs with the `--range` flag.
 

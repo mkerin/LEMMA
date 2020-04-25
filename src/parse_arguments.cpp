@@ -104,7 +104,7 @@ void parse_arguments(parameters &p, int argc, char **argv) {
 
 	options.add_options("Assoc")
 		("singleSnpStats", "Compute SNP association tests", cxxopts::value<bool>(p.mode_calc_snpstats))
-		("resid-loco", "Residualised phenotypes to compute association tests on. Inherited from VB algorithm if this is run first", cxxopts::value<std::string>(p.resid_loco_file))
+		("resid-pheno", "Residualised phenotypes to compute association tests on. Inherited from VB algorithm if this is run first", cxxopts::value<std::string>(p.resid_loco_file))
 	;
 
 	options.add_options("RHE")
@@ -308,21 +308,24 @@ void parse_arguments(parameters &p, int argc, char **argv) {
 			p.range_end = std::atoi(ss.substr(ss.find('-')+1, ss.size()).c_str());
 		}
 
+		if(opts.count("VB")) {
+			p.mode_vb = true;
+		}
 		if(opts.count("VB-varEM")) {
 			p.mode_empirical_bayes = true;
 			p.mode_squarem = false;
+			p.mode_vb = true;
 		}
-
 		if(opts.count("VB-constant-hyps")) {
 			p.mode_empirical_bayes = false;
 			p.mode_squarem = false;
+			p.mode_vb = true;
 		}
-
 		if(opts.count("VB-squarem")) {
 			p.mode_squarem = true;
 			p.mode_empirical_bayes = true;
+			p.mode_vb = true;
 		}
-
 		if(opts.count("xtra_verbose")) {
 			p.verbose = true;
 			p.xtra_verbose = true;
@@ -378,10 +381,6 @@ void parse_arguments(parameters &p, int argc, char **argv) {
 			std::cout << "Slab variance constrained to atleast " << p.min_spike_diff_factor << "x spike variance" << std::endl;
 		}
 
-		if(opts.count("VB")) {
-			p.mode_vb = true;
-		}
-
 		if(opts.count("effects_prior_mog")) {
 			p.mode_mog_prior_beta = true;
 			p.mode_mog_prior_gam = true;
@@ -412,7 +411,6 @@ void parse_arguments(parameters &p, int argc, char **argv) {
 		if(opts.count("VB-ELBO-thresh")) {
 			p.elbo_tol_set_by_user = true;
 			if(p.elbo_tol < 0) throw std::runtime_error("--VB-ELBO-thresh must be positive.");
-			std::cout << "--VB-ELBO-thresh of " << p.elbo_tol << " entered." << std::endl;
 		}
 
 		if(opts.count("incl_sample_ids")) {
@@ -1028,13 +1026,13 @@ void parse_arguments(parameters &p, int argc, char **argv) {
 
 	// mode_vb specific options
 	if(p.mode_vb) {
-		bool has_bgen = p.bgen_file != "NULL";
+		bool has_bgen = p.bgen_file != "NULL" || !p.streamBgenFiles.empty();
 		bool has_out = p.out_file != "NULL";
 		bool has_pheno = p.pheno_file != "NULL";
 		bool has_all = (has_pheno && has_out && has_bgen);
 		if(!has_all) {
 			std::cout << "ERROR: bgen, pheno and out filepaths should all be ";
-			std::cout << "provided in conjunction with --mode_vb." << std::endl;
+			std::cout << "provided in conjunction with --VB." << std::endl;
 			std::exit(EXIT_FAILURE);
 		}
 	}
@@ -1042,7 +1040,9 @@ void parse_arguments(parameters &p, int argc, char **argv) {
 	if(p.mode_calc_snpstats) {
 		bool has_bgen = p.bgen_file != "NULL" || p.streamBgenFiles.size() > 0;
 		bool has_out = p.out_file != "NULL";
-		bool has_pheno = (p.pheno_file != "NULL" && p.mode_vb) || p.resid_loco_file != "NULL";
+		bool has_pheno = (p.pheno_file != "NULL" && p.mode_vb) ||
+						 (p.resume_prefix != "NULL" && p.bgen_file != "NULL") ||
+						 p.resid_loco_file != "NULL";
 		bool has_all = (has_pheno && has_out && has_bgen);
 		if(!has_all) {
 			std::cout << "ERROR: bgen, pheno and out filepaths should all be ";

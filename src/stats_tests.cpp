@@ -173,25 +173,25 @@ double student_t_test(long nn,
 }
 
 template <typename GenoMat>
-void compute_LOCO_pvals(const EigenDataVector& resid_pheno,
-                        const GenoMat& Xtest,
-                        const VariationalParametersLite& vp,
-                        Eigen::MatrixXd& neglogPvals,
-                        Eigen::MatrixXd& testStats){
-	long n_env     = vp.muw.rows();
+void compute_LOCO_pvals(const EigenDataVector &resid_pheno,
+		const GenoMat &Xtest,
+		Eigen::MatrixXd &neglogPvals,
+						Eigen::MatrixXd &testStats,
+						const EigenDataVector &eta) {
+	bool isGxE     = eta.rows() > 0;
 	long n_var     = Xtest.cols();
 	long n_samples = Xtest.rows();
-	long n_effects = (n_env > 0 ? 2 : 1);
+	long n_effects = (isGxE ? 2 : 1);
 	double Nlocal  = n_samples;
 	double Nglobal = mpiUtils::mpiReduce_inplace(&Nlocal);
 
-	neglogPvals.resize(n_var, (n_env > 0 ? 4 : 1));
-	testStats.resize(n_var, (n_env > 0 ? 4 : 1));
+	neglogPvals.resize(n_var, (isGxE ? 4 : 1));
+	testStats.resize(n_var, (isGxE ? 4 : 1));
 
 	// Compute p-vals per variant (p=3 as residuals mean centered)
-	Eigen::MatrixXd H(n_samples, 2 + 2 * (n_env > 0 ? 1 : 0));
+	Eigen::MatrixXd H(n_samples, 2 + 2 * (isGxE ? 1 : 0));
 	H.col(0) = Eigen::VectorXd::Constant(n_samples, 1.0);
-	if (n_env > 0) H.col(3) = vp.eta.cast<double>();
+	if (isGxE) H.col(3) = eta.cast<double>();
 	boost_m::students_t t_dist(n_samples - H.cols() - 1);
 	boost_m::fisher_f f_dist(n_effects, n_samples - H.cols() - 1);
 	for(std::uint32_t jj = 0; jj < n_var; jj++ ) {
@@ -200,7 +200,7 @@ void compute_LOCO_pvals(const EigenDataVector& resid_pheno,
 		double rss_alt, rss_null;
 		Eigen::MatrixXd HtH(H.cols(), H.cols()), Hty(H.cols(), 1);
 		Eigen::MatrixXd HtH_inv(H.cols(), H.cols()), HtVH(H.cols(), H.cols());
-		if(n_env == 0) {
+		if(!isGxE) {
 			double beta_tstat, beta_pval;
 			prep_lm(H, resid_pheno, HtH, HtH_inv, Hty, rss_alt);
 			student_t_test(n_samples, HtH_inv, Hty, rss_alt, 1, beta_tstat, beta_pval);
@@ -208,7 +208,7 @@ void compute_LOCO_pvals(const EigenDataVector& resid_pheno,
 			neglogPvals(jj,0) = -1 * log10(beta_pval);
 			testStats(jj,0)   = beta_tstat;
 		} else {
-			H.col(2) = H.col(1).cwiseProduct(vp.eta.cast<double>());
+			H.col(2) = H.col(1).cwiseProduct(eta.cast<double>());
 			try {
 				// Single-var tests
 				double beta_tstat, gam_tstat, rgam_stat, beta_pval, gam_pval, rgam_pval;
@@ -249,7 +249,7 @@ void compute_LOCO_pvals(const EigenDataVector& resid_pheno,
 
 // Explicit instantiation
 // https://stackoverflow.com/questions/2152002/how-do-i-force-a-particular-instance-of-a-c-template-to-instantiate
-template void compute_LOCO_pvals(const EigenDataVector&, const EigenDataMatrix&, const VariationalParametersLite&,
-                                 Eigen::MatrixXd&, Eigen::MatrixXd&);
-template void compute_LOCO_pvals(const EigenDataVector&, const GenotypeMatrix&, const VariationalParametersLite&,
-                                 Eigen::MatrixXd&, Eigen::MatrixXd&);
+template void compute_LOCO_pvals(const EigenDataVector&, const EigenDataMatrix&,
+                                 Eigen::MatrixXd&, Eigen::MatrixXd&,const EigenDataVector&);
+template void compute_LOCO_pvals(const EigenDataVector&, const GenotypeMatrix&,
+                                 Eigen::MatrixXd&, Eigen::MatrixXd&,const EigenDataVector&);

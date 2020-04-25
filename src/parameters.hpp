@@ -18,7 +18,6 @@ public:
 	std::string dxteex_file, snpstats_file, mog_weights_file, resume_prefix;
 	std::string assocOutFile, extra_pve_covar_file;
 	std::vector< std::string > rsid;
-//	std::string streamBgenFiles, streamBgiFiles;
 	std::vector< std::string > streamBgenFiles, streamBgiFiles, RHE_groups_files;
 	unsigned int random_seed;
 	long chunk_size, vb_iter_max, vb_iter_start, param_dump_interval, n_pve_samples;

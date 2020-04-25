@@ -62,10 +62,10 @@ double homo_chi_sq(const long nn,
                    const int jj);
 
 template <typename GenoMat>
-void compute_LOCO_pvals(const EigenDataVector& resid_pheno,
-                        const GenoMat& Xtest,
-                        const VariationalParametersLite& vp,
-                        Eigen::MatrixXd& neglogPvals,
-                        Eigen::MatrixXd& testStats);
+void compute_LOCO_pvals(const EigenDataVector &resid_pheno,
+						const GenoMat &Xtest,
+						Eigen::MatrixXd &neglogPvals,
+						Eigen::MatrixXd &testStats,
+						const EigenDataVector &eta = Eigen::VectorXd::Zero(0));
 
 #endif

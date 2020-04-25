@@ -26,6 +26,10 @@ Makefile
 .Rproj.user
 .Rhistory
 *.Rpoj
+*.json
+*.code-workspace
+*.cfg
+*.html
 .DS_Store
 .idea/*
 latest_compile_branch.txt

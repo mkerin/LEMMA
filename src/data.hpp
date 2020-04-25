@@ -1259,12 +1259,13 @@ public:
 		// Manually set env coeffs
 		if(p.env_coeffs_file != "NULL") {
 			std::vector<std::string> col_names;
-			std::vector<std::string> case1 = {"env", "mu", "s_sq"};
+			std::vector<std::string> case1a = {"env", "mu", "s_sq"};
+			std::vector<std::string> case1b = {"env", "mean", "variance"};
 			std::vector<std::string> case2 = {"env", "mu"};
 			read_file_header(p.env_coeffs_file, col_names);
 
 			Eigen::MatrixXd coeffs;
-			if(col_names == case1) {
+			if(col_names == case1a || col_names == case1b) {
 				EigenUtils::read_matrix_and_skip_cols(p.env_coeffs_file, 1, coeffs, col_names);
 				vp_init.muw = coeffs.col(0);
 				vp_init.sw_sq = coeffs.col(1);
@@ -1289,11 +1290,12 @@ public:
 		// Manually set covar coeffs
 		if(p.covar_coeffs_file != "NULL") {
 			std::vector<std::string> col_names;
-			std::vector<std::string> case1 = {"covar", "mu", "s_sq"};
+			std::vector<std::string> case1a = {"covar", "mu", "s_sq"};
+			std::vector<std::string> case1b = {"covar", "mean", "variance"};
 			read_file_header(p.covar_coeffs_file, col_names);
 
 			Eigen::MatrixXd coeffs;
-			if(col_names == case1) {
+			if(col_names == case1a || col_names == case1b) {
 				EigenUtils::read_matrix_and_skip_cols(p.covar_coeffs_file, 1, coeffs, col_names);
 				vp_init.muc = coeffs.col(0);
 				vp_init.sc_sq = coeffs.col(1);
