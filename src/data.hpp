@@ -981,7 +981,6 @@ public:
 			if (nNotFound > 0 && p.verbose) {
 				std::cout << " -- " << nNotFound << " SNPIDs from " << p.dxteex_file;
 				std::cout << " not present in bgen file" << std::endl;
-
 			}
 		}
 

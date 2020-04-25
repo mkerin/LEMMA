@@ -18,17 +18,17 @@ TEST_CASE( "Example 4: multi-env + mog + covars + emp_bayes" ){
 	parameters p;
 
 	SECTION("Ex4. No filters applied, high mem mode"){
-		char* argv[] = { (char*) "bin/bgen_prog", (char*) "--VB", (char*) "--low_mem",
-			             (char*) "--mode_regress_out_covars", (char*) "--VB-varEM",
-			             (char*) "--spike_diff_factor", (char*) "10000",
-			             (char*) "--effects_prior_mog",
+		char* argv[] = { (char*) "bin/bgen_prog", (char*) "--VB", (char*) "--low-mem",
+			             (char*) "--mode-regress-out-covars", (char*) "--VB-varEM",
+			             (char*) "--spike-diff-factor", (char*) "10000",
+			             (char*) "--effects-prior-mog",
 			             (char*) "--VB-iter-max", (char*) "10",
 			             (char*) "--environment", (char*) "data/io_test/n50_p100_env.txt",
 			             (char*) "--bgen", (char*) "data/io_test/n50_p100.bgen",
 			             (char*) "--out", (char*) "data/io_test/config4.out",
 			             (char*) "--pheno", (char*) "data/io_test/pheno.txt",
-			             (char*) "--hyps_grid", (char*) "data/io_test/single_hyps_gxage.txt",
-			             (char*) "--hyps_probs", (char*) "data/io_test/single_hyps_gxage_probs.txt"};
+			             (char*) "--hyps-grid", (char*) "data/io_test/single_hyps_gxage.txt",
+			             (char*) "--hyps-probs", (char*) "data/io_test/single_hyps_gxage_probs.txt"};
 		int argc = sizeof(argv)/sizeof(argv[0]);
 		parse_arguments(p, argc, argv);
 		Data data( p );
@@ -182,18 +182,18 @@ TEST_CASE( "Example 4: multi-env + mog + covars + emp_bayes + sample subset" ){
 	parameters p;
 
 	SECTION("Ex4. No filters applied, high mem mode"){
-		char* argv[] = { (char*) "bin/bgen_prog", (char*) "--VB", (char*) "--low_mem",
-			             (char*) "--mode_regress_out_covars", (char*) "--VB-varEM",
-			             (char*) "--spike_diff_factor", (char*) "10000",
-			             (char*) "--effects_prior_mog",
-			             (char*) "--incl_sample_ids", (char*) "data/io_test/sample_ids_head28.txt",
+		char* argv[] = { (char*) "bin/bgen_prog", (char*) "--VB", (char*) "--low-mem",
+			             (char*) "--mode-regress-out-covars", (char*) "--VB-varEM",
+			             (char*) "--spike-diff-factor", (char*) "10000",
+			             (char*) "--effects-prior-mog",
+			             (char*) "--incl-sample-ids", (char*) "data/io_test/sample_ids_head28.txt",
 			             (char*) "--VB-iter-max", (char*) "10",
 			             (char*) "--environment", (char*) "data/io_test/n50_p100_env.txt",
 			             (char*) "--bgen", (char*) "data/io_test/n50_p100.bgen",
 			             (char*) "--out", (char*) "data/io_test/config4_subset.out",
 			             (char*) "--pheno", (char*) "data/io_test/pheno.txt",
-			             (char*) "--hyps_grid", (char*) "data/io_test/single_hyps_gxage.txt",
-			             (char*) "--hyps_probs", (char*) "data/io_test/single_hyps_gxage_probs.txt"};
+			             (char*) "--hyps-grid", (char*) "data/io_test/single_hyps_gxage.txt",
+			             (char*) "--hyps-probs", (char*) "data/io_test/single_hyps_gxage_probs.txt"};
 		int argc = sizeof(argv)/sizeof(argv[0]);
 		parse_arguments(p, argc, argv);
 		Data data( p );
@@ -227,15 +227,15 @@ TEST_CASE( "Example 4: multi-env + mog + covars + emp_bayes + sample subset" ){
 // Garbage test; testing dxteex should be way lower level
 //TEST_CASE("--dxteex") {
 //	parameters p;
-//	char *argv[] = {(char *) "bin/bgen_prog", (char *) "--VB", (char *) "--low_mem",
-//		            (char *) "--use_vb_on_covars", (char *) "--VB-varEM",
-//		            (char *) "--effects_prior_mog",
+//	char *argv[] = {(char *) "bin/bgen_prog", (char *) "--VB", (char *) "--low-mem",
+//		            (char *) "--use-vb-on-covars", (char *) "--VB-varEM",
+//		            (char *) "--effects-prior-mog",
 //		            (char *) "--VB-iter-max", (char *) "10",
 //		            (char *) "--environment", (char *) "data/io_test/n50_p100_env.txt",
 //		            (char *) "--bgen", (char *) "data/io_test/n50_p100.bgen",
 //		            (char *) "--out", (char *) "data/io_test/config4.out",
 //		            (char *) "--pheno", (char *) "data/io_test/pheno.txt",
-//		            (char *) "--hyps_grid", (char *) "data/io_test/single_hyps_gxage.txt"};
+//		            (char *) "--hyps-grid", (char *) "data/io_test/single_hyps_gxage.txt"};
 //	int argc = sizeof(argv) / sizeof(argv[0]);
 //	parse_arguments(p, argc, argv);
 //
@@ -324,17 +324,17 @@ TEST_CASE( "Example 4: multi-env + mog + covars + emp_bayes + sample subset" ){
 // This whole section needs redoing
 //TEST_CASE("--dxteex case8") {
 //	parameters p;
-//	char *argv[] = {(char *) "bin/bgen_prog", (char *) "--VB", (char *) "--low_mem",
+//	char *argv[] = {(char *) "bin/bgen_prog", (char *) "--VB", (char *) "--low-mem",
 //		            (char *) "--VB-varEM",
-//		            (char *) "--effects_prior_mog",
-//		            (char *) "--use_vb_on_covars",
+//		            (char *) "--effects-prior-mog",
+//		            (char *) "--use-vb-on-covars",
 //		            (char *) "--VB-iter-max", (char *) "30",
 //		            (char *) "--environment", (char *) "data/io_test/case8/env.txt",
 //		            (char *) "--bgen", (char *) "data/io_test/n1000_p2000.bgen",
 //		            (char *) "--out", (char *) "data/io_test/case8/inference.out",
 //		            (char *) "--pheno", (char *) "data/io_test/case8/pheno.txt",
-//		            (char *) "--hyps_grid", (char *) "data/io_test/case8/hyperpriors_gxage_v1.txt",
-//		            (char *) "--vb_init", (char *) "data/io_test/case8/joint_init2.txt"};
+//		            (char *) "--hyps-grid", (char *) "data/io_test/case8/hyperpriors_gxage_v1.txt",
+//		            (char *) "--vb-init", (char *) "data/io_test/case8/joint_init2.txt"};
 //	int argc = sizeof(argv) / sizeof(argv[0]);
 //	parse_arguments(p, argc, argv);
 //
@@ -447,13 +447,13 @@ TEST_CASE( "Edge case 1: error in alpha" ){
 	parameters p;
 
 	SECTION("Ex1. No filters applied, low mem mode"){
-		char* argv[] = { (char*) "bin/bgen_prog", (char*) "--VB", (char*) "--low_mem",
-			             (char*) "--mode_spike_slab",
+		char* argv[] = { (char*) "bin/bgen_prog", (char*) "--VB", (char*) "--low-mem",
+			             (char*) "--mode-spike-slab",
 			             (char*) "--bgen", (char*) "data/io_test/n50_p100.bgen",
 			             (char*) "--out", (char*) "data/io_test/fake_age.out",
 			             (char*) "--pheno", (char*) "data/io_test/pheno.txt",
-			             (char*) "--hyps_grid", (char*) "data/io_test/hyperpriors_gxage.txt",
-			             (char*) "--hyps_probs", (char*) "data/io_test/hyperpriors_gxage_probs.txt",
+			             (char*) "--hyps-grid", (char*) "data/io_test/hyperpriors_gxage.txt",
+			             (char*) "--hyps-probs", (char*) "data/io_test/hyperpriors_gxage_probs.txt",
 			             (char*) "--environment", (char*) "data/io_test/age.txt"};
 		int argc = sizeof(argv)/sizeof(argv[0]);
 		parse_arguments(p, argc, argv);

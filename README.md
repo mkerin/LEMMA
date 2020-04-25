@@ -181,7 +181,7 @@ cmake --build build --target lemma_1_0_0 -- -j 4
 Note that current compile flags compatible with the Intel MKL Library 2019 Update 1.
 
 ### Resuming from a previous parameter state
-In case of runtime crashes, LEMMA can save the parameter state at periodic intervals by providing the commandline flag `--resume_from_state`. LEMMA can then subsequently resume inference from this saved state. For example
+In case of runtime crashes, LEMMA can save the parameter state at periodic intervals by providing the commandline flag `--resume-from-state`. LEMMA can then subsequently resume inference from this saved state. For example
 ```
 mpirun -n 1 build/lemma_1_0_0 \
   --VB \
@@ -196,7 +196,7 @@ mpirun -n 1 build/lemma_1_0_0 \
   --pheno example/pheno.txt.gz \
   --environment example/env.txt.gz \
   --bgen example/n5k_p20k_example.bgen \
-  --resume_from_state example/lemma_interim_files/inference_dump_it30 \
+  --resume-from-state example/lemma_interim_files/inference_dump_it30 \
   --out example/inference_from_it30.out.gz
 
 zdiff example/inference_from_it30.out.gz example/inference.out.gz
