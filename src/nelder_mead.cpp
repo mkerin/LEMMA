@@ -48,11 +48,13 @@ bool optimNelderMead(Eigen::Ref<Eigen::VectorXd> init_out_vals,
 
 	//
 	// begin loop
-	std::cout << "\nNelder-Mead: beginning search..." << std::endl;
-	std::cout << "  - Initialization Phase:" << std::endl;
-	std::cout << "    Objective function value at each vertex:" << std::endl << simplex_fn_vals.transpose() << std::endl;
-	std::cout << "    Simplex matrix:" << std::endl << simplex_points << std::endl;
-
+	if(p.debug) {
+		std::cout << "\nNelder-Mead: beginning search..." << std::endl;
+		std::cout << "  - Initialization Phase:" << std::endl;
+		std::cout << "    Objective function value at each vertex:" << std::endl << simplex_fn_vals.transpose()
+				  << std::endl;
+		std::cout << "    Simplex matrix:" << std::endl << simplex_points << std::endl;
+	}
 	const double err_tol = 1E-08;
 	long iter = 0;
 	double err = 2*err_tol;
@@ -75,14 +77,17 @@ bool optimNelderMead(Eigen::Ref<Eigen::VectorXd> init_out_vals,
 		init_out_vals = simplex_points.row(index_min);
 
 		// printing
-		std::cout << "  - Iteration: " << iter << std::endl;
-		std::cout << "    min_val:   " << min_val << std::endl;
+		if(p.debug) {
+			std::cout << "  - Iteration: " << iter << std::endl;
+			std::cout << "    min_val:   " << min_val << std::endl;
 
-		std::cout << "    Current optimal input values:" << std::endl;
-		std::cout << simplex_points.row(index_min) << std::endl;
+			std::cout << "    Current optimal input values:" << std::endl;
+			std::cout << simplex_points.row(index_min) << std::endl;
 
-		std::cout << "    Objective function value at each vertex:" << std::endl << simplex_fn_vals.transpose() << std::endl;
-		std::cout << "    Simplex matrix:" << std::endl << simplex_points << std::endl;
+			std::cout << "    Objective function value at each vertex:" << std::endl << simplex_fn_vals.transpose()
+					  << std::endl;
+			std::cout << "    Simplex matrix:" << std::endl << simplex_points << std::endl;
+		}
 	}
 
 	return success;

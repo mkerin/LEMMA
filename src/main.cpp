@@ -37,6 +37,9 @@ int main( int argc, char** argv ) {
 	std::cout << "LEMMA v" << VERSION_MAJOR << "." << VERSION_MINOR << "." << VERSION_PATCH << std::endl;
 	std::cout << "=============" << std::endl << std::endl;
 
+	if (argc == 1){
+		return 0;
+	}
 	auto start = std::chrono::system_clock::now();
 	auto data_start = std::chrono::system_clock::now();
 	parse_arguments(p, argc, argv);

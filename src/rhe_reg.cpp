@@ -174,7 +174,12 @@ void RHEreg::initialise_components() {
 
 	std::cout << " - N-RHEreg-components = " << n_components - 1 << std::endl;
 	std::string ram = mpiUtils::currentUsageRAM();
-	std::cout << "Initialised RHE-regression components (" << ram << ")" << std::endl << std::endl;
+	std::cout << "Initialised RHE-regression components";
+#ifndef OSX
+	std::cout << " (" << ram << ")" << std::endl << std::endl;
+#else
+	std::cout << std::endl << std::endl;
+#endif
 }
 
 void RHEreg::compute_RHE_trace_operators() {

@@ -274,7 +274,7 @@ public:
 	}
 
 	void run(){
-		std::cout << std::endl << "Starting variational inference";
+		std::cout << std::endl << "Starting variational inference ";
 		std::cout << "(will terminate once change in ELBO falls below ";
 		std::cout << p.elbo_tol << ")" << std::endl;
 #ifndef OSX
@@ -1162,12 +1162,17 @@ public:
 		auto now = std::chrono::system_clock::now();
 		std::chrono::duration<double> elapsed_seconds = now-time_check;
 		std::cout << " (" << elapsed_seconds.count();
-		std::cout << " seconds since last timecheck, estimated RAM usage = ";
+		std::cout << " seconds since last timecheck";
+#ifndef OSX
+		std::cout << ", estimated RAM usage = ";
 		std::cout << fileUtils::getValueRAM() << "KB)" << std::endl;
+#else
+		std::cout << ")" << std::endl;
+#endif
 		time_check = now;
 	}
 
-	void initRandomAlphaMu(VariationalParameters& vp){
+	void initRandomAlphaMu(VariationalParameters& vp){ // TODO deprecate
 		// vp.alpha a uniform simplex, vp.mu standard gaussian
 		// Also sets predicted effects
 		std::default_random_engine gen_gauss(p.random_seed), gen_unif(p.random_seed);

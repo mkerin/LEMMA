@@ -68,12 +68,14 @@ void parse_arguments(parameters &p, int argc, char **argv) {
 
 	cxxopts::Options options("LEMMA", "Software package to find GxE interactions with a common environmental profile."
 	                         "\n\nLEMMA by default fits the bayesian whole genome regression model:"
-	                         "\nY = C alpha + G beta + diag(eta) G gamma + espilon"
+	                         "\nY = C alpha + G beta + diag(eta) G gamma + epsilon"
 	                         "\nwhere eta = E w"
-	                         "\n\nLEMMA then estimates the heritability of the G and GxE components from the following model:"
-	                         "\nY sim N(C alpha, sigma_g GG^T / M + sigma_gxe Z(eta) Z(eta)^T / M + sigma I)"
+	                         "\n\nLEMMA is then able to"
+	                         "\n1. perform single snp association testing against a residualised phenotype"
+	                         "\n2. estimate partitioned heritability of the G and GxE effects from the following model:"
+	                         "\nY \\sim N(C alpha, sigma_g GG^T / M + sigma_gxe Z(eta) Z(eta)^T / M + sigma I)"
 	                         "\nwhere Z(eta) = diag(eta) G"
-	                         "\nusing randomised HE regressionAfter estimating the posterior of parameters ");
+	                         "\nusing randomised HE regression");
 
 	options.add_options("General")
 	    ("verbose", "", cxxopts::value<bool>(p.verbose))
@@ -83,24 +85,25 @@ void parse_arguments(parameters &p, int argc, char **argv) {
 	    ("pheno", "Path to phenotype file. Must have a header and have the same number of rows as samples in the BGEN file.", cxxopts::value<std::string>(p.pheno_file))
 	    ("covar", "Path to file of covariates. Must have a header and have the same number of rows as samples in the BGEN file.", cxxopts::value<std::string>(p.covar_file))
 	    ("environment", "Path to file of environmental variables. Must have a header and have the same number of rows as samples in the BGEN file.", cxxopts::value<std::string>(p.env_file))
-	    ("hyps-grid", "Path to initial hyperparameters values", cxxopts::value<std::string>(p.hyps_grid_file))
-	    ("environment-weights", "Path to initial environment weights", cxxopts::value<std::string>(p.env_coeffs_file))
 	    ("out", "Filepath to output", cxxopts::value<std::string>(p.out_file))
-	    ("streamOut", "Output file for tests on imputed variants", cxxopts::value<std::string>(p.assocOutFile))
+	    ("hyps-grid", "Path to file of initial hyperparameters values (optional)", cxxopts::value<std::string>(p.hyps_grid_file))
+	    ("streamOut", "Output file for tests on imputed variants (optional)", cxxopts::value<std::string>(p.assocOutFile))
 	    ("suppress-squared-env-removal", "QC: Suppress test for significant squared environmental effects (SQE)")
 	    ("incl-squared-envs", "QC: Include significant squared environmental effects (SQE) as covariates")
+	    ("random-seed", "Seed used for random number generation (default: random)",
+			 cxxopts::value<unsigned int>(p.random_seed))
 	;
 
 	options.add_options("VB")
 	    ("VB", "Run VB algorithm.")
-	    ("VB-ELBO-thresh", "Convergence threshold for VB convergence.", cxxopts::value<double>(p.elbo_tol))
 	    ("VB-squarem", "Use SQUAREM algorithm for hyperparameter updates (on by default).")
 	    ("VB-varEM", "Maximise ELBO wrt hyperparameters for hyperparameter updates.")
 	    ("VB-constant-hyps", "Keep hyperparameters constant.")
+	    ("VB-ELBO-thresh", "Convergence threshold for VB convergence (default: 0.01)", cxxopts::value<double>(p.elbo_tol))
 	    ("VB-iter-max", "Maximum number of VB iterations (default: 10000)", cxxopts::value<long>(p.vb_iter_max))
-	    ("resume-from-state", "For use when resuming VB algorithm from previous run.", cxxopts::value<std::string>(p.resume_prefix))
+	    ("dxteex", "Path to file containing precomputed dXtEEX array (optional)", cxxopts::value<std::string>(p.dxteex_file))
 	    ("state-dump-interval", "Save VB parameter state to file every N iterations (default: None)", cxxopts::value<long>(p.param_dump_interval))
-	    ("dxteex", "Optional flag to pass precomputed dXtEEX array.", cxxopts::value<std::string>(p.dxteex_file))
+	    ("resume-from-state", "For use when resuming VB algorithm from previous run.", cxxopts::value<std::string>(p.resume_prefix))
 	;
 
 	options.add_options("Assoc")
@@ -114,8 +117,6 @@ void parse_arguments(parameters &p, int argc, char **argv) {
 	    ("mRHEreg-groups", "Text file to paths of --RHE-groups files. Each should correspond to the bgen files given in --mStreamBgen", cxxopts::value<std::string>())
 	    ("n-RHEreg-samples", "Number of random vectors used in RHE algorithm", cxxopts::value<long>(p.n_pve_samples))
 	    ("n-RHEreg-jacknife", "Number of jacknife samples used in RHE algorithm", cxxopts::value<long>(p.n_jacknife))
-	    ("random-seed", "Seed used to draw random vectors in RHE algorithm (default: random)",
-	    cxxopts::value<unsigned int>(p.random_seed))
 	    ("extra-pve-covar", "Covariables in addition to those provided to --VB (Eg. principle components).", cxxopts::value<std::string>(p.extra_pve_covar_file))
 	;
 
@@ -135,6 +136,7 @@ void parse_arguments(parameters &p, int argc, char **argv) {
 	    ("force-write-vparams", "", cxxopts::value<bool>(p.force_write_vparams))
 	    ("covar-init", "Path to initial covariate weights", cxxopts::value<std::string>(p.covar_coeffs_file))
 	    ("vb-init", "", cxxopts::value<std::string>(p.vb_init_file))
+	    ("environment-weights", "Path to initial environment weights", cxxopts::value<std::string>(p.env_coeffs_file))
 	    ("xtra-verbose", "")
 	    ("snpwise-scan", "", cxxopts::value<std::string>(p.snpstats_file))
 	    ("pve-mog-weights", "", cxxopts::value<std::string>(p.mog_weights_file))
@@ -183,7 +185,7 @@ void parse_arguments(parameters &p, int argc, char **argv) {
 		auto args = opts.arguments();
 
 		if (opts.count("help")) {
-			std::cout << options.help({"General", "VB", "Assoc", "RHE", "Other"}) << std::endl;
+			std::cout << options.help({"General", "Filtering", "VB", "Assoc", "RHE","Other"}) << std::endl;
 			std::exit(0);
 		} else {
 			print_compilation_details();
@@ -491,7 +493,7 @@ void parse_arguments(parameters &p, int argc, char **argv) {
 		if(world_rank == 0) {
 			std::random_device rd;
 			p.random_seed = rd();
-			std::cout << "Any random sample generators will be initialised with seed=" << p.random_seed << std::endl;
+			std::cout << "No random seed provided by user. Random sample generators will be initialised with seed=" << p.random_seed << std::endl;
 		}
 		MPI_Bcast(&p.random_seed, 1, MPI_UNSIGNED, 0, MPI_COMM_WORLD);
 	}
