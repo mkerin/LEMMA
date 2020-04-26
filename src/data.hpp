@@ -459,8 +459,7 @@ public:
 		}
 		fg.push(boost_io::file_source(p.incl_rsids_file));
 		if (!fg) {
-			std::cout << "ERROR: " << p.incl_rsids_file << " not opened." << std::endl;
-			std::exit(EXIT_FAILURE);
+			throw std::runtime_error(p.incl_rsids_file+" could not be opened");
 		}
 
 		std::stringstream ss;
@@ -486,8 +485,7 @@ public:
 		}
 		fg.push(boost_io::file_source(p.incl_sids_file));
 		if (!fg) {
-			std::cout << "ERROR: " << p.incl_sids_file << " not opened." << std::endl;
-			std::exit(EXIT_FAILURE);
+			throw std::runtime_error(p.incl_sids_file+" could not be opened");
 		}
 
 		std::vector<std::string> bgen_ids;
@@ -544,8 +542,7 @@ public:
 		}
 		fg.push(boost_io::file_source(filename));
 		if (!fg) {
-			std::cout << "ERROR: " << filename << " not opened." << std::endl;
-			std::exit(EXIT_FAILURE);
+			throw std::runtime_error(filename+" could not be opened");
 		}
 
 		// Read file twice to acertain number of lines
@@ -564,8 +561,7 @@ public:
 		// Reading column names
 		col_names.clear();
 		if (!getline(fg, line)) {
-			std::cout << "ERROR: " << filename << " contains zero lines." << std::endl;
-			std::exit(EXIT_FAILURE);
+			throw std::runtime_error(filename+" contains zero lines");
 		}
 		std::stringstream ss;
 		std::string s;
@@ -705,8 +701,7 @@ public:
 		}
 		fg.push(boost_io::file_source(filename));
 		if (!fg) {
-			std::cout << "ERROR: " << filename << " not opened." << std::endl;
-			std::exit(EXIT_FAILURE);
+			throw std::runtime_error(filename+" could not be opened");
 		}
 
 		// Read file twice to ascertain number of lines
@@ -726,8 +721,7 @@ public:
 		// Reading column names
 		col_names.clear();
 		if (!getline(fg, line)) {
-			std::cout << "ERROR: " << filename << " contains zero lines" << std::endl;
-			std::exit(EXIT_FAILURE);
+			throw std::runtime_error(filename+" contains zero lines");
 		}
 		std::string s;
 		int n_cols = 0;
@@ -779,15 +773,13 @@ public:
 		}
 		fg.push(boost_io::file_source(p.dxteex_file));
 		if (!fg) {
-			std::cout << "ERROR: " << p.dxteex_file << " not opened." << std::endl;
-			std::exit(EXIT_FAILURE);
+			throw std::runtime_error(p.dxteex_file+" could not be opened");
 		}
 
 		// Reading column names
 		std::string s, line;
 		if (!getline(fg, line)) {
-			std::cout << "ERROR: " << p.dxteex_file << " contains zero lines" << std::endl;
-			std::exit(EXIT_FAILURE);
+			throw std::runtime_error(p.dxteex_file+" contains zero lines");
 		}
 		int n_cols = 0;
 		col_names.clear();
@@ -1519,16 +1511,14 @@ inline void read_file_header(const std::string& filename,
 	}
 	fg.push(boost_io::file_source(filename));
 	if (!fg) {
-		std::cout << "ERROR: " << filename << " not opened." << std::endl;
-		std::exit(EXIT_FAILURE);
+		throw std::runtime_error(filename+" could not be opened");
 	}
 
 	// Reading column names
 	col_names.clear();
 	std::string line;
 	if (!getline(fg, line)) {
-		std::cout << "ERROR: " << filename << " contains zero lines" << std::endl;
-		std::exit(EXIT_FAILURE);
+		throw std::runtime_error(filename+" contains zero lines");
 	}
 	std::stringstream ss;
 	std::string s;

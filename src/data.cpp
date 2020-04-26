@@ -23,15 +23,13 @@ void Data::read_txt_file(const std::string &filename, Eigen::MatrixXd &M, unsign
 	}
 	fg.push(boost_io::file_source(filename));
 	if (!fg) {
-		std::cout << "ERROR: " << filename << " not opened." << std::endl;
-		std::exit(EXIT_FAILURE);
+		throw std::runtime_error(filename+" could not be opened.");
 	}
 
 	// Reading column names
 	std::string line;
 	if (!getline(fg, line)) {
-		std::cout << "ERROR: " << filename << " contains zero lines." << std::endl;
-		std::exit(EXIT_FAILURE);
+		throw std::runtime_error(filename+" has zero lines.");
 	}
 	std::stringstream ss;
 	std::string s;

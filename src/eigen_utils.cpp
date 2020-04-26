@@ -95,8 +95,7 @@ void EigenUtils::read_matrix(const std::string &filename,
 	}
 	fg.push(boost_io::file_source(filename));
 	if (!fg) {
-		std::cout << "ERROR: " << filename << " not opened." << std::endl;
-		std::exit(EXIT_FAILURE);
+		throw std::runtime_error(filename+" could not be opened.");
 	}
 
 	// Read file twice to acertain number of lines
@@ -114,8 +113,7 @@ void EigenUtils::read_matrix(const std::string &filename,
 
 	// Reading column names
 	if (!getline(fg, line)) {
-		std::cout << "ERROR: " << filename << " contains zero lines." << std::endl;
-		std::exit(EXIT_FAILURE);
+		throw std::runtime_error(filename+" contains zero lines.");
 	}
 	std::stringstream ss;
 	std::string s1;
@@ -175,8 +173,7 @@ void EigenUtils::read_matrix_and_skip_cols(const std::string &filename,
 	}
 	fg.push(boost_io::file_source(filename));
 	if (!fg) {
-		std::cout << "ERROR: " << filename << " not opened." << std::endl;
-		std::exit(EXIT_FAILURE);
+		throw std::runtime_error(filename+" could not be opened.");
 	}
 
 	// Read file twice to acertain number of lines
@@ -194,8 +191,7 @@ void EigenUtils::read_matrix_and_skip_cols(const std::string &filename,
 
 	// Reading column names
 	if (!getline(fg, line)) {
-		std::cout << "ERROR: " << filename << " contains zero lines." << std::endl;
-		std::exit(EXIT_FAILURE);
+		throw std::runtime_error(filename+" contains zero lines.");
 	}
 	std::stringstream ss;
 	std::string s1;

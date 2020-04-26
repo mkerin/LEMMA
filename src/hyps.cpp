@@ -168,12 +168,16 @@ void Hyps::read_from_dump(const std::string& filename){
 	}
 	fg.push(boost_io::file_source(filename));
 	if (!fg) {
-		std::cout << "ERROR: " << filename << " not opened." << std::endl;
-		std::exit(EXIT_FAILURE);
+		throw std::runtime_error(filename+" could not be opened");
 	}
 
 	// Read file twice to acertain number of lines
 	std::string line, header, case1 = "hyp value";
+	getline(fg, header);
+	if (header != case1){
+		throw std::runtime_error("Unexpected header from "+filename);
+	}
+
 	std::vector<std::string> variables;
 	std::vector<double> values;
 

@@ -219,8 +219,7 @@ void parse_arguments(parameters &p, int argc, char **argv) {
 			std::string filename = opts["mRHEreg-groups"].as<std::string>();
 			fg.push(boost_io::file_source(filename));
 			if (!fg) {
-				std::cout << "ERROR: " << filename << " not opened." << std::endl;
-				std::exit(EXIT_FAILURE);
+				throw std::runtime_error(filename+" could not be opened.");
 			}
 			std::string line, s;
 			while (getline(fg, line)) {
@@ -464,9 +463,7 @@ void parse_arguments(parameters &p, int argc, char **argv) {
 		bool has_pheno = p.pheno_file != "NULL";
 		bool has_all = (has_pheno && has_out && has_bgen);
 		if(!has_all) {
-			std::cout << "ERROR: bgen, pheno and out filepaths should all be ";
-			std::cout << "provided in conjunction with --VB." << std::endl;
-			std::exit(EXIT_FAILURE);
+			throw std::runtime_error("bgen, pheno and out filepaths should all be provided in conjunction with --VB");
 		}
 	}
 
@@ -478,9 +475,7 @@ void parse_arguments(parameters &p, int argc, char **argv) {
 						 p.resid_loco_file != "NULL";
 		bool has_all = (has_pheno && has_out && has_bgen);
 		if(!has_all) {
-			std::cout << "ERROR: bgen, pheno and out filepaths should all be ";
-			std::cout << "provided in conjunction with --singleSnpStats" << std::endl;
-			std::exit(EXIT_FAILURE);
+			throw std::runtime_error("bgen, pheno and out filepaths should all be provided in conjunction with --singleSnpStats");
 		}
 	}
 
@@ -493,7 +488,6 @@ void check_file_exists(const std::string &filename) {
 	// Throw error if given file does not exist.
 	// NB: Doesn't check if file is empty etc.
 	if(!boost::filesystem::exists(filename)) {
-		std::cout << "File " << filename << " does not exist" << std::endl;
-		throw std::runtime_error("ERROR: file does not exist");
+		throw std::runtime_error(filename+" does not exist");
 	}
 }
