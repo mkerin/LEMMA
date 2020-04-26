@@ -229,10 +229,10 @@ void fileUtils::write_snp_stats_to_file(boost_io::filtering_ostream &ofile, cons
                                         const Eigen::Ref<const Eigen::VectorXd> &test_stat_beta,
                                         const Eigen::Ref<const Eigen::VectorXd> &test_stat_gam,
                                         const Eigen::Ref<const Eigen::VectorXd> &test_stat_rgam) {
-	Eigen::VectorXd tmp;
+	Eigen::VectorXd emptyVec;
 	fileUtils::write_snp_stats_to_file(ofile, n_effects, X, append,
-	                                   neglogp_beta, neglogp_gam, neglogp_rgam, tmp,
-	                                   test_stat_beta, test_stat_gam, test_stat_rgam, tmp);
+	                                   neglogp_beta,   neglogp_gam,   neglogp_rgam,   emptyVec,
+	                                   test_stat_beta, test_stat_gam, test_stat_rgam, emptyVec);
 }
 
 void fileUtils::write_snp_stats_to_file(boost_io::filtering_ostream &ofile,
@@ -241,9 +241,36 @@ void fileUtils::write_snp_stats_to_file(boost_io::filtering_ostream &ofile,
                                         const bool &append,
                                         const Eigen::Ref<const Eigen::MatrixXd> &neglogPvals,
                                         const Eigen::Ref<const Eigen::MatrixXd> &testStats){
-	fileUtils::write_snp_stats_to_file(ofile, n_effects, X, append,
-	                                   neglogPvals.col(0), neglogPvals.col(1), neglogPvals.col(2),
-	                                   testStats.col(0), testStats.col(1), testStats.col(2));
+	Eigen::VectorXd emptyVec;
+	if (n_effects > 1) {
+		fileUtils::write_snp_stats_to_file(ofile, n_effects, X, append,
+										   neglogPvals.col(0), neglogPvals.col(1), neglogPvals.col(2), emptyVec,
+										   testStats.col(0),   testStats.col(1),   testStats.col(2),   emptyVec);
+	} else {
+		fileUtils::write_snp_stats_to_file(ofile, n_effects, X, append,
+										   neglogPvals.col(0), emptyVec, emptyVec, emptyVec,
+										   testStats.col(0),   emptyVec, emptyVec, emptyVec);
+	}
+}
+
+void fileUtils::read_bgen_metadata(const std::string& filename,
+								   std::vector<int>& chr) {
+	genfile::bgen::View::UniquePtr bgenView = genfile::bgen::View::create(filename);
+
+	std::string   chr_j, rsid_j, SNPID_j;
+	std::uint32_t pos_j;
+	std::vector< std::string > alleles_j;
+	bool bgen_pass = true;
+
+	chr.clear();
+
+	while (bgen_pass) {
+		bgen_pass = bgenView->read_variant(&SNPID_j, &rsid_j, &chr_j, &pos_j, &alleles_j);
+		if (bgen_pass){
+			bgenView->ignore_genotype_data_block();
+		}
+		chr.push_back(std::stoi(chr_j));
+	}
 }
 
 bool fileUtils::read_bgen_chunk(genfile::bgen::View::UniquePtr &bgenView,
@@ -283,7 +310,7 @@ bool fileUtils::read_bgen_chunk(genfile::bgen::View::UniquePtr &bgenView,
 		if (!bgen_pass) break;
 		n_var_parsed++;
 
-		// Read probs + check maf filter
+		// Read dosage
 		bgenView->read_genotype_data_block( setter_v2 );
 
 		double d1     = setter_v2.m_sum_eij;

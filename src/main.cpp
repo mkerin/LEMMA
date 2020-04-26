@@ -79,11 +79,6 @@ int main( int argc, char** argv ) {
 				data.resid_loco.col(cc) = VB.loco_phenos[cc];
 			}
 
-//				std::cout << std::endl << "Time expenditure:" << std::endl;
-//				std::cout << "Reading data: " << elapsed_reading_data.count() << " secs" << std::endl;
-//				std::cout << "VB inference: " << elapsed_vb.count() << " secs" << std::endl;
-//				std::cout << "runInnerLoop: " << VB.elapsed_innerLoop.count() << " secs" << std::endl;
-
 			// Write time log to file
 			boost_io::filtering_ostream outf_time;
 			std::string ofile_map = fileUtils::fstream_init(outf_time, p.out_file, "", "_time_elapsed");
@@ -120,53 +115,70 @@ int main( int argc, char** argv ) {
 			}
 		}
 
-		long n_var_parsed = 0, nChunk = 0;
-		long print_interval = p.streamBgen_print_interval;
-		if (p.debug) print_interval = 1;
 		long long n_vars_tot = 0;
 		for (int ii = 0; ii < p.streamBgenFiles.size(); ii++) {
 			n_vars_tot += data.streamBgenViews[ii]->number_of_variants();
 		}
 
-		GenotypeMatrix Xstream(p, false);
-		bool bgen_pass = true;
-		bool append = false;
+		long ixChr, maxChunkSize = 256;
+		long n_var_parsed_tot = 0, nChunk = 0, print_interval = (p.debug ? 1 : p.streamBgen_print_interval);
+		bool bgen_pass = true, append = false;
 		Eigen::MatrixXd neglogPvals, testStats;
+		GenotypeMatrix Xstream(p, false);
 		for (int ii = 0; ii < p.streamBgenFiles.size(); ii++) {
 			std::cout << "Streaming genotypes from " << p.streamBgenFiles[ii] << std::endl;
-			bool isFirstChunk = true;
-			long chr, cc;
+
+			std::vector<int> chrsInFile;
+			fileUtils::read_bgen_metadata(p.streamBgenFiles[ii],chrsInFile);
+			std::map<long,long> chr_changes;
+			long chr = chrsInFile[0];
+			for (long jj = 0; jj < chrsInFile.size(); jj++) {
+				if (chr != chrsInFile[jj]) {
+					chr_changes[chr] = jj;
+					chr = chrsInFile[jj];
+				}
+			}
+			chr_changes[chr] = chrsInFile.size();
+
+			long n_var_parsed = 0;
+			long chunkSize = std::min(maxChunkSize, chr_changes[chr]-n_var_parsed);
 			while (fileUtils::read_bgen_chunk(data.streamBgenViews[ii], Xstream, data.sample_is_invalid,
-			                                  data.n_samples, 128, p, bgen_pass, n_var_parsed)) {
+			                                  data.n_samples, chunkSize, p, bgen_pass, n_var_parsed)) {
 				if (nChunk % print_interval == 0 && nChunk > 0) {
-					std::cout << "Chunk " << nChunk << " read (size " << 128;
-					std::cout << ", " << n_var_parsed - 1 << "/" << n_vars_tot;
+					std::cout << "Chunk " << nChunk << " read (size " << chunkSize;
+					std::cout << ", " << n_var_parsed_tot+n_var_parsed - 1 << "/" << n_vars_tot;
 					std::cout << " variants parsed)" << std::endl;
 				}
-				if (isFirstChunk){
-					chr = Xstream.chromosome[0];
-					auto it = std::find(data.loco_chrs.begin(), data.loco_chrs.end(), chr);
-					if (it == data.loco_chrs.end()){
-						throw std::runtime_error("Could not locate resid_excl_chr"+std::to_string(chr)+""
-												 "amongst columns passed to --resid-loco");
-					} else {
-						cc = it - data.loco_chrs.begin();
-					}
-					isFirstChunk = false;
-				} else if (chr != Xstream.chromosome[0]) {
-					throw std::runtime_error(p.streamBgenFiles[ii] + " appears to contain more than one chromosome");
+
+				int firstChr = Xstream.chromosome[0];
+				auto cnt = std::count(Xstream.chromosome.begin(),Xstream.chromosome.end(),firstChr);
+				if (cnt != Xstream.cols()){
+					throw std::logic_error("Expected only one chromosome in this chunk of data");
 				}
 
-				assert(data.n_env > 0);
+				auto it = std::find(data.loco_chrs.begin(),data.loco_chrs.end(),firstChr);
+				if (it == data.loco_chrs.end()){
+					throw std::runtime_error("Could not locate residualised LOCO phenotype for chromosome "+std::to_string(firstChr));
+				} else {
+					ixChr = it - data.loco_chrs.begin();
+				}
+
 				Xstream.calc_scaled_values();
-				compute_LOCO_pvals(data.resid_loco.col(cc), Xstream, neglogPvals, testStats, data.vp_init.eta);
+				if (data.n_env > 0) {
+					compute_LOCO_pvals(data.resid_loco.col(ixChr), Xstream, neglogPvals, testStats, data.vp_init.eta);
+				} else {
+					compute_LOCO_pvals(data.resid_loco.col(ixChr), Xstream, neglogPvals, testStats);
+				}
 
 				if (world_rank == 0) {
 					fileUtils::write_snp_stats_to_file(outf, data.n_effects, Xstream, append, neglogPvals, testStats);
 				}
+
 				append = true;
 				nChunk++;
+				chunkSize = std::min(maxChunkSize,chr_changes[chr]-n_var_parsed);
 			}
+			n_var_parsed_tot += n_var_parsed;
 		}
 		boost_io::close(outf);
 	}
