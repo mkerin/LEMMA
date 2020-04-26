@@ -13,6 +13,7 @@
 char* full_run[] = { (char*) "prog",
 	               (char*) "--VB-varEM",
 	               (char*) "--VB-iter-max", (char*) "10",
+	               (char*) "--random-seed", (char*) "1",
 	               (char*) "--pheno", (char*) "data/io_test/pheno.txt",
 	               (char*) "--environment", (char*) "data/io_test/n50_p100_env.txt",
 	               (char*) "--bgen", (char*) "data/io_test/n50_p100.bgen",
@@ -73,9 +74,9 @@ void my_test(const std::string& mode){
 		}
 		VB.compute_LOCO_pvals(VB.vp_init, neglogPvals, testStats);
 	}
-	CHECK(neglogPvals(0, 0) == Approx(0.2763157508));
-	CHECK(neglogPvals(0, 1) == Approx(1.5541356878));
-	CHECK(neglogPvals(0, 2) == Approx(3.0085535567));
+	CHECK(neglogPvals(0, 0) == Approx(0.2138468423));
+	CHECK(neglogPvals(0, 1) == Approx(1.761355603));
+	CHECK(neglogPvals(0, 2) == Approx(3.2604753173));
 }
 
 

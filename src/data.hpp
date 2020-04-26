@@ -442,10 +442,13 @@ public:
 			// which changes depending on how many variants excluded due to maf etc.
 			if (p.hyps_grid_file != "NULL") {
 				read_hyps();
-			} else if (p.hyps_grid_file == "NULL") {
-				if (p.debug) std::cout << "Initialising hyper-parameters with default settings" << std::endl;
+			} else {
+				if (p.debug) std::cout << "Initialising hyper-parameters with random draw" << std::endl;
 				Hyps hyps(p);
-				hyps.use_default_init(n_effects, n_var);
+				hyps.random_init(n_effects, n_var);
+				if (!hyps.domain_is_valid()){
+					throw std::runtime_error("Problem with hyperparameter sampling.");
+				}
 				hyps_inits.push_back(hyps);
 			}
 		}
@@ -1007,8 +1010,8 @@ public:
 		std::vector< std::string > case1 = {"sigma", "sigma_b", "lambda_b"};
 		std::vector< std::string > case2 = {"sigma", "sigma_b", "sigma_g", "lambda_b", "lambda_g"};
 		std::vector< std::string > case3 = {"hyp", "value"};
-		std::vector< std::string > case4c = {"h_b", "lambda_b", "f1_b"};
-		std::vector< std::string > case4d = {"h_b", "lambda_b", "f1_b", "h_g", "lambda_g", "f1_g"};
+		std::vector< std::string > case4c = {"h_b", "lambda_b", "f1_b"}; // deprecated
+		std::vector< std::string > case4d = {"h_b", "lambda_b", "f1_b", "h_g", "lambda_g", "f1_g"}; // deprecated
 
 		read_file_header(p.hyps_grid_file, hyps_names);
 		int n_hyps_removed = 0;
@@ -1055,8 +1058,11 @@ public:
 		} else if (hyps_names == case3) {
 			// Reading from hyps dump
 			Hyps hyps(p);
-			hyps.read_from_dump(p.hyps_grid_file);
-			assert(hyps.n_effects == n_effects);
+			hyps.from_file(p.hyps_grid_file);
+			if (hyps.n_effects != n_effects){
+				std::string analysis_type = (n_effects == 1? "main effects" : "gxe");
+				throw std::runtime_error("Expecting hyperparameters for a "+analysis_type+" analysis");
+			}
 			hyps_inits.push_back(hyps);
 		} else if(hyps_names == case4c) {
 			// h_b lambda_b f1_b

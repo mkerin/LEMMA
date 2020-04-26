@@ -257,7 +257,7 @@ public:
 			}
 
 			path = fileUtils::filepath_format(p.out_file, subdir.string() + "/", "_dump_it" + count + "_hyps");
-			hyps.write_to_file(path);
+			hyps.to_file(path);
 		}
 	}
 

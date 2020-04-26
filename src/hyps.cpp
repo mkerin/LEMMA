@@ -8,11 +8,17 @@
 #include <boost/iostreams/device/file.hpp>
 #include <boost/iostreams/filter/gzip.hpp>
 
+#include <algorithm>
 #include <cmath>
 #include <string>
 #include <vector>
 
 namespace boost_io = boost::iostreams;
+
+uint getPos(std::vector<std::string> vars, const std::string& var){
+	auto it = std::find(vars.begin(), vars.end(), var);
+	return it - vars.begin();
+}
 
 double Hyps::normL2() const {
 	double res = sigma * sigma;
@@ -135,7 +141,7 @@ std::ostream& operator<<(std::ostream& os, const Hyps& hyps){
 	return os;
 }
 
-void Hyps::write_to_file(const std::string& path) const {
+void Hyps::to_file(const std::string &path) const {
 	boost_io::filtering_ostream outf;
 	fileUtils::fstream_init(outf, path);
 
@@ -158,9 +164,7 @@ void Hyps::write_to_file(const std::string& path) const {
 	boost_io::close(outf);
 }
 
-void Hyps::read_from_dump(const std::string& filename){
-	// TODO: Better to match label to value rather than assuming order
-
+void Hyps::from_file(const std::string &filename){
 	boost_io::filtering_istream fg;
 	std::string gz_str = ".gz";
 	if (filename.find(gz_str) != std::string::npos) {
@@ -180,24 +184,17 @@ void Hyps::read_from_dump(const std::string& filename){
 
 	std::vector<std::string> variables;
 	std::vector<double> values;
-
-	getline(fg, header);
-	assert(header == case1);
-	std::stringstream ss;
+	std::string s1, s2;
 	while (getline(fg, line)) {
-		std::string s1, s2;
-		ss.clear();
-		ss.str(line);
-		// skip variable name
+		std::stringstream ss(line);
 		ss >> s1;
 		ss >> s2;
 
-		if(s1 != "") {
+		if(!s1.empty()) {
 			variables.push_back(s1);
 			try {
 				values.push_back(stod(s2));
 			} catch(...) {
-				std::cout << "Caught exception from Hyps::read_from_dump" << std::endl;
 				throw std::invalid_argument("stod failed");
 			}
 		}
@@ -209,29 +206,81 @@ void Hyps::read_from_dump(const std::string& filename){
 
 	if(variables == case_gxe) {
 		resize(2);
-
-		sigma = values[0];
-		lambda[0] = values[1];
-		lambda[1] = values[2];
-		slab_relative_var[0] = values[3];
-		slab_relative_var[1] = values[4];
-		spike_relative_var[0] = values[5];
-		spike_relative_var[1] = values[6];
-
-		slab_var = slab_relative_var * sigma;
-		spike_var = spike_relative_var * sigma;
+		sigma                 = values[getPos(case_gxe,"sigma")];
+		lambda[0]             = values[getPos(case_gxe,"lambda1")];
+		lambda[1]             = values[getPos(case_gxe,"lambda2")];
+		slab_relative_var[0]  = values[getPos(case_gxe,"sigma_beta0")];
+		slab_relative_var[1]  = values[getPos(case_gxe,"sigma_gam0")];
+		spike_relative_var[0] = values[getPos(case_gxe,"sigma_beta1")];
+		spike_relative_var[1] = values[getPos(case_gxe,"sigma_gam1")];
 	} else if (variables == case_g) {
 		resize(1);
-
-		sigma = values[0];
-		lambda[0] = values[1];
-		slab_relative_var[0] = values[2];
-		spike_relative_var[0] = values[3];
+		sigma                 = values[getPos(case_g,"sigma")];
+		lambda[0]             = values[getPos(case_g,"lambda1")];
+		slab_relative_var[0]  = values[getPos(case_g,"sigma_beta0")];
+		spike_relative_var[0] = values[getPos(case_g,"sigma_beta1")];
 	} else {
 		std::cout << "Unrecognised hyps header:" << std::endl;
 		for (auto sss : variables) {
 			std::cout << sss << std::endl;
 		}
-		throw std::runtime_error("Unrecognised hyps header");
+		throw std::runtime_error("Unrecognised variable names in "+filename);
 	}
+	slab_var = slab_relative_var * sigma;
+	spike_var = spike_relative_var * sigma;
+}
+
+void Hyps::random_init(int n_effects, long n_var) {
+	std::default_random_engine generator(p.random_seed);
+	std::uniform_real_distribution<double> unif_hb(0,0.5);
+	std::uniform_real_distribution<double> unif_hg(0,0.1);
+	std::uniform_real_distribution<double> unif_loglambda(2,std::max(3.0,1-std::log10(n_var)));
+
+	double h_b   = unif_hb(generator);
+	double h_g   = unif_hg(generator);
+	double lam_b = std::pow(10,-unif_loglambda(generator));
+	double lam_g = std::pow(10,-unif_loglambda(generator));
+
+	resize(n_effects);
+	if(n_effects == 1) {
+		slab_relative_var  << h_b / (1 - h_b) / n_var / lam_b;
+		spike_relative_var << slab_relative_var / p.beta_spike_diff_factor;
+		lambda             << lam_b;
+		s_x                << n_var;
+	} else {
+		slab_relative_var  << h_b / (1-h_b-h_g) / n_var / lam_b, h_b / (1-h_b-h_g) / n_var / lam_g;
+		spike_relative_var << slab_relative_var[0] / p.beta_spike_diff_factor, slab_relative_var[1] / p.gam_spike_diff_factor;
+		lambda             << lam_b, lam_g;
+		s_x                << n_var, n_var;
+	}
+	sigma     = 1;
+	slab_var  << sigma * slab_relative_var;
+	spike_var << sigma * spike_relative_var;
+}
+
+Eigen::VectorXd Hyps::get_sigmas(double h_b, double lam_b, double f1_b, long n_var) const {
+	Eigen::MatrixXd tmp(2, 2);
+	Eigen::VectorXd rhs(2);
+
+	double P = n_var;
+	tmp << P * lam_b * (1 - h_b), P * (1 - lam_b) * (1 - h_b),
+			lam_b * (f1_b - 1), f1_b * (1 - lam_b);
+	rhs << h_b, 0;
+	Eigen::VectorXd soln = tmp.inverse() * rhs;
+	return soln;
+}
+
+Eigen::VectorXd
+Hyps::get_sigmas(double h_b, double h_g, double lam_b, double lam_g, double f1_b, double f1_g, long n_var) const {
+	Eigen::MatrixXd tmp(4, 4);
+	Eigen::VectorXd rhs(4);
+
+	double P = n_var;
+	tmp << P * lam_b * (1 - h_b), P * (1 - lam_b) * (1 - h_b), -P * h_b * lam_g, -P * h_b * (1 - lam_g),
+			lam_b * (f1_b - 1), f1_b * (1 - lam_b), 0, 0,
+			-P * h_g * lam_b, -P * h_g * (1 - lam_b), P * lam_g * (1 - h_g), P * (1 - lam_g) * (1 - h_g),
+			0, 0, lam_g * (f1_g - 1), f1_g * (1 - lam_g);
+	rhs << h_b, 0, h_g, 0;
+	Eigen::VectorXd soln = tmp.inverse() * rhs;
+	return soln;
 }

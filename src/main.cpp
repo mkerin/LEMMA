@@ -172,15 +172,6 @@ int main( int argc, char** argv ) {
 	}
 
 	if(p.mode_RHE) {
-		if(p.random_seed == -1) {
-			if(world_rank == 0) {
-				std::random_device rd;
-				p.random_seed = rd();
-			}
-			MPI_Bcast(&p.random_seed, 1, MPI_UNSIGNED, 0, MPI_COMM_WORLD);
-		}
-		std::cout << "Initialising random sample generator with seed " << p.random_seed << std::endl;
-
 		Eigen::VectorXd Y = data.Y.cast<double>();
 		Eigen::MatrixXd C;
 		if (p.extra_pve_covar_file != "NULL") {

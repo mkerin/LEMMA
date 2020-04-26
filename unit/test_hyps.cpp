@@ -49,11 +49,11 @@ TEST_CASE("Hyps"){
 		CHECK(soln[2] == Approx(0.0005555556));
 		CHECK(soln[3] == Approx(0.0001066218));
 
-		hyps.use_default_init(2, 1000);
-		CHECK(hyps.slab_relative_var[0] == Approx(0.0005882353));
-		CHECK(hyps.spike_relative_var[0] == Approx(0.0001128936));
-		CHECK(hyps.slab_relative_var[1] == Approx(0.0002941176));
-		CHECK(hyps.spike_relative_var[1] == Approx(0.0000564468));
+		hyps.random_init(2, 1000);
+		CHECK(hyps.slab_relative_var[0] == Approx(0.0075781524));
+		CHECK(hyps.spike_relative_var[0] == Approx(0.0000075782));
+		CHECK(hyps.slab_relative_var[1] == Approx(0.0122428337));
+		CHECK(hyps.spike_relative_var[1] == Approx(0.0000122428));
 	}
 
 	SECTION("derived initial hyps"){

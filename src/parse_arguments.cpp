@@ -15,6 +15,7 @@
 #include <boost/filesystem.hpp>
 #include <mpi.h>
 #include <regex>
+#include <random>
 #include <stdexcept>
 
 #include <boost/iostreams/filtering_stream.hpp>
@@ -481,6 +482,18 @@ void parse_arguments(parameters &p, int argc, char **argv) {
 
 	if(p.env_file == "NULL" && p.env_coeffs_file != "NULL") {
 		std::cout << "WARNING: --environment-weights will be ignored as no --environment provided" << std::endl;
+	}
+
+	// Set random seed it not set by user
+	int world_rank;
+	MPI_Comm_rank(MPI_COMM_WORLD, &world_rank);
+	if(p.random_seed == -1) {
+		if(world_rank == 0) {
+			std::random_device rd;
+			p.random_seed = rd();
+			std::cout << "Any random sample generators will be initialised with seed=" << p.random_seed << std::endl;
+		}
+		MPI_Bcast(&p.random_seed, 1, MPI_UNSIGNED, 0, MPI_COMM_WORLD);
 	}
 }
 
