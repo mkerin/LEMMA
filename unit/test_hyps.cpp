@@ -12,6 +12,7 @@
 
 TEST_CASE("Hyps"){
 	parameters p;
+	p.random_seed = 1;
 
 	SECTION("Copy constructor in vectors"){
 		Hyps hyps(p);
@@ -56,34 +57,21 @@ TEST_CASE("Hyps"){
 		CHECK(hyps.spike_relative_var[1] == Approx(0.0000122428));
 	}
 
-	SECTION("derived initial hyps"){
-		p.bgen_file = "data/io_test/n50_p100.bgen";
-		p.bgi_file = "data/io_test/n50_p100.bgen.bgi";
-		p.pheno_file = "data/io_test/pheno.txt";
+	SECTION("Random initialization"){
+		SECTION("G case") {
+			Hyps hyps(p);
+			hyps.random_init(2, 1000);
+			CHECK(hyps.spike_var(0) == Approx(0.0000075782));
+			CHECK(hyps.slab_var(0) == Approx(0.0075781524));
+			CHECK(hyps.spike_var(1) == Approx(0.0000122428));
+			CHECK(hyps.slab_var(1) == Approx(0.0122428337));
+		}
 
-
-		SECTION("Joint effects, MixOfGaussian prior"){
-			p.env_file = "data/io_test/n50_p100_env.txt";
-			p.hyps_grid_file = "data/io_test/hyps_caseD.txt";
-
-			Data data(p);
-			data.read_non_genetic_data();
-			data.standardise_non_genetic_data();
-			data.read_full_bgen();
-			data.calc_dxteex();
-			data.set_vb_init();
-
-			VBayesX2 VB(data);
-			std::vector<Hyps> all_hyps = VB.hyps_inits;
-			std::vector<VariationalParameters> all_vp;
-			VB.setup_variational_params(all_hyps, all_vp);
-
-			CHECK(all_vp.size() > 0);
-			CHECK(VB.n_var == 67);
-			CHECK(all_hyps[0].spike_var(0) == Approx(0.0029850746));
-			CHECK(all_hyps[0].slab_var(0) == Approx(0.0029850746));
-			CHECK(all_hyps[0].spike_var(1) == Approx(0.0014925373));
-			CHECK(all_hyps[0].slab_var(1) == Approx(0.0014925373));
+		SECTION("GxE case") {
+			Hyps hyps(p);
+			hyps.random_init(1, 1000);
+			CHECK(hyps.spike_var(0) == Approx(0.0000068725));
+			CHECK(hyps.slab_var(0) == Approx(0.0068724729));
 		}
 	}
 }

@@ -103,10 +103,9 @@ set_target_properties(${TARGET} PROPERTIES LINK_FLAGS "${LIB_DIRS}")
 target_link_libraries(${TARGET} ${LIBRARIES} ${LINKER_OPTS})
 
 ### Compile Catch Unit Tests
-#set(TSOURCES unit/test_snptests.cpp unit/test_resume_inference.cpp)
-set(TSOURCES unit/test_pve.cpp unit/test_main.cpp unit/test_hyps.cpp)
-list(APPEND TSOURCES unit/test_resume_inference.cpp unit/test_eigen.cpp unit/test_data.cpp)
-list(APPEND TSOURCES unit/test_nelder_mead.cpp unit/test_snptests.cpp)
+set(TSOURCES unit/test_main.cpp unit/test_hyps.cpp)
+list(APPEND TSOURCES unit/test_resume_inference.cpp unit/test_eigen.cpp)
+list(APPEND TSOURCES unit/test_data.cpp unit/test_snptests.cpp)
 
 add_executable(tests unit/main.cpp ${TSOURCES} ${SOURCES})
 target_link_libraries(tests ${LIBRARIES} ${LINKER_OPTS})

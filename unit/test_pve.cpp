@@ -17,9 +17,9 @@ char* argv_rhe_nm[] = { (char*) "LEMMA",
 					  (char*) "--random-seed", (char*) "1",
 					  (char*) "--n-RHEreg-jacknife", (char*) "1",
 					  (char*) "--n-RHEreg-samples", (char*) "5",
-					  (char*) "--streamBgen", (char*) "data/io_test/n50_p100.bgen",
-					  (char*) "--pheno", (char*) "data/io_test/pheno.txt",
-					  (char*) "--environment", (char*) "data/io_test/n50_p100_env.txt",
+					  (char*) "--streamBgen", (char*) "unit/data/n50_p100.bgen",
+					  (char*) "--pheno", (char*) "unit/data/pheno.txt",
+					  (char*) "--environment", (char*) "unit/data/n50_p100_env.txt",
 					  (char*) "--out", (char*) "data/io_test/test_RHEreg_NM.out.gz"};
 
 char* argv_rhe_lm2[] = { (char*) "LEMMA",
