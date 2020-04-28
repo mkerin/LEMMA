@@ -12,6 +12,7 @@ R/*
 cmake-build*
 CMakeFiles/*
 examples/*
+.idea/*
 
 # Data 
 example/*out.gz
