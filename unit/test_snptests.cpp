@@ -14,26 +14,26 @@ char* full_run[] = { (char*) "prog",
 	               (char*) "--VB-varEM",
 	               (char*) "--VB-iter-max", (char*) "10",
 	               (char*) "--random-seed", (char*) "1",
-	               (char*) "--pheno", (char*) "data/io_test/pheno.txt",
-	               (char*) "--environment", (char*) "data/io_test/n50_p100_env.txt",
-	               (char*) "--bgen", (char*) "data/io_test/n50_p100.bgen",
-	               (char*) "--out", (char*) "data/io_test/test5a.out"};
+	               (char*) "--pheno", (char*) "unit/data/pheno.txt",
+	               (char*) "--environment", (char*) "unit/data/n50_p100_env.txt",
+	               (char*) "--bgen", (char*) "unit/data/n50_p100.bgen",
+	               (char*) "--out", (char*) "unit/data/test5a.out.gz"};
 
 char* from_resume[] = { (char*) "prog",
-				   (char*) "--bgen", (char*) "data/io_test/n50_p100.bgen",
+				   (char*) "--bgen", (char*) "unit/data/n50_p100.bgen",
 	               (char*) "--singleSnpStats",
 	               (char*) "--resume-from-state",
-	               (char*) "data/io_test/lemma_interim_files/test5a_dump_it_converged",
-	               (char*) "--pheno", (char*) "data/io_test/pheno.txt",
-	               (char*) "--environment", (char*) "data/io_test/n50_p100_env.txt",
-	               (char*) "--out", (char*) "data/io_test/test5b.out"};
+	               (char*) "unit/data/lemma_interim_files/test5a_dump_it_converged",
+	               (char*) "--pheno", (char*) "unit/data/pheno.txt",
+	               (char*) "--environment", (char*) "unit/data/n50_p100_env.txt",
+	               (char*) "--out", (char*) "unit/data/test5b.out.gz"};
 
 char* from_file[] = { (char*) "prog",
-				   (char*) "--streamBgen", (char*) "data/io_test/n50_p100.bgen",
+				   (char*) "--streamBgen", (char*) "unit/data/n50_p100.bgen",
 				   (char*) "--singleSnpStats",
-				   (char*) "--resid-pheno", (char*) "data/io_test/test5a_converged_yhat.out",
-				   (char*) "--environment", (char*) "data/io_test/test5a_converged_eta.out",
-				   (char*) "--out", (char*) "data/io_test/test5c.out"};
+				   (char*) "--resid-pheno", (char*) "unit/data/test5a_converged_yhat.out.gz",
+				   (char*) "--environment", (char*) "unit/data/test5a_converged_eta.out.gz",
+				   (char*) "--out", (char*) "unit/data/test5c.out.gz"};
 
 
 void my_test(const std::string& mode){
@@ -74,13 +74,13 @@ void my_test(const std::string& mode){
 		}
 		VB.compute_LOCO_pvals(VB.vp_init, neglogPvals, testStats);
 	}
-	CHECK(neglogPvals(0, 0) == Approx(0.2138468423));
-	CHECK(neglogPvals(0, 1) == Approx(1.761355603));
-	CHECK(neglogPvals(0, 2) == Approx(3.2604753173));
+	CHECK(neglogPvals(0, 0) == Approx(0.2692832123));
+	CHECK(neglogPvals(0, 1) == Approx(1.3696407518));
+	CHECK(neglogPvals(0, 2) == Approx(2.185395935));
 }
 
 
-TEST_CASE("singleSnpStats combinations"){
+TEST_CASE("Assoc tests invariant to code path"){
 	auto mode = GENERATE(as<std::string>{}, "after_lemma","from_file","from_state");
 	DYNAMIC_SECTION("Mode: " << mode << ", streamBgen: " << (mode == "after_lemma" ? "true" : "false")) {
 		my_test(mode);
