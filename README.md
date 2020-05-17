@@ -16,7 +16,7 @@ cmake .. \
 -DBGEN_ROOT=<absolute/path/to/bgen_lib> \
 -DBOOST_ROOT=<absolute/path/to/boost>
 cd ..
-cmake --build build --target lemma_1_0_0 -- -j 4
+cmake --build build --target lemma_1_0_1 -- -j 4
 ```
 
 ### Example data
@@ -47,13 +47,13 @@ for cc in `seq 1 22`; do
   echo "example/n5k_p20k_example_chr${cc}.bgen" >> example/bgen_filenames.txt;
 done
 
-mpirun -n 1 build/lemma_1_0_0 \
+mpirun -n 1 build/lemma_1_0_1 \
   --pheno example/pheno.txt.gz \
   --environment example/env.txt.gz \
   --VB \
   --bgen example/n5k_p20k_example.bgen \
   --singleSnpStats \
-  --RHEreg --n-RHEreg-samples 20 --n-RHEreg-jacknife 100 --random-seed 1 \
+  --RHEreg --random-seed 1 \
   --mStreamBgen example/bgen_filenames.txt \
   --out example/inference.out.gz
 ```
@@ -78,7 +78,7 @@ The LEMMA algorithm is modular, and so each step can be performed separately as 
 
 #### Running the LEMMA variational inference algorithm
 ```
-mpirun -n 1 build/lemma_1_0_0 \
+mpirun -n 1 build/lemma_1_0_1 \
   --VB \
   --pheno example/pheno.txt.gz \
   --environment example/env.txt.gz \
@@ -89,7 +89,7 @@ In this case the algorithm should converge in 59 iterations.
 
 #### Association testing with imputed SNPs
 ```
-mpirun -n 1 build/lemma_1_0_0 \
+mpirun -n 1 build/lemma_1_0_1 \
   --singleSnpStats --maf 0.01 \
   --pheno example/pheno.txt.gz \
   --resid-pheno example/inference_converged_yhat.out.gz \
@@ -103,8 +103,8 @@ For analyses of large genomic datasets if may be useful to parallelize associati
 
 #### Heritability estimation
 ```
-mpirun -n 1 build/lemma_1_0_0 \
-  --RHEreg --n-RHEreg-samples 20 --n-RHEreg-jacknife 100 --random-seed 1 \
+mpirun -n 1 build/lemma_1_0_1 \
+  --RHEreg --random-seed 1 \
   --pheno example/pheno.txt.gz \
   --mStreamBgen example/bgen_filenames.txt \
   --environment example/inference_converged_eta.out.gz \
@@ -112,6 +112,17 @@ mpirun -n 1 build/lemma_1_0_0 \
 ```
 This should return heritability estimates of h2-G = 0.23 (0.032) and h2-GxE = 0.08 (0.016), where the value in brackets is the standard error.
 
+
+### GPLEMMA
+```
+mpirun -n 1 build/lemma_1_0_1 \
+  --gplemma --random-seed 1 \
+  --pheno example/pheno.txt.gz \
+  --streamBgen example/n5k_p20k_example.bgen \
+  --environment example/inference_converged_eta.out.gz \
+  --out example/gplemma.out.gz
+```
+This should return heritability estimates of h2-G = 0.22 (0.026) and h2-GxE = 0.09 (0.01), where the value in brackets is the standard error.
 
 ## Advanced Usage
 
@@ -138,7 +149,7 @@ zcat example/dxteex_chr*.out.gz > example/dxteex.out.gz
 ```
 Then provide the file `example/dxteex.out.gz` to LEMMA with the commandline flag `--dxteex`.
 ```
-mpirun -n 1 build/lemma_1_0_0 \
+mpirun -n 1 build/lemma_1_0_1 \
   --VB \
   --pheno example/pheno.txt.gz \
   --environment example/env.txt.gz \
@@ -156,7 +167,7 @@ To convert into the file format expected by LEMMA we have provided a brief Rscri
 
 Then run the heritability analysis as follows
 ```
-mpirun -n 1 build/lemma_1_0_0 \
+mpirun -n 1 build/lemma_1_0_1 \
   --RHEreg --n-RHEreg-samples 20 --n-RHEreg-jacknife 100 --random-seed 1 \
   --pheno example/pheno.txt.gz \
   --bgen example/n5k_p20k_example.bgen \
@@ -175,7 +186,7 @@ cmake .. \
 -DBOOST_ROOT=<path_to_boost> \
 -DMKL_ROOT=<path_to_IntelMklRoot>
 cd ..
-cmake --build build --target lemma_1_0_0 -- -j 4
+cmake --build build --target lemma_1_0_1 -- -j 4
 ```
 
 Note that current compile flags compatible with the Intel MKL Library 2019 Update 1.
@@ -183,7 +194,7 @@ Note that current compile flags compatible with the Intel MKL Library 2019 Updat
 ### Resuming from a previous parameter state
 In case of runtime crashes, LEMMA can save the parameter state at periodic intervals by providing the commandline flag `--resume-from-state`. LEMMA can then subsequently resume inference from this saved state. For example
 ```
-mpirun -n 1 build/lemma_1_0_0 \
+mpirun -n 1 build/lemma_1_0_1 \
   --VB \
   --pheno example/pheno.txt.gz \
   --environment example/env.txt.gz \
@@ -191,7 +202,7 @@ mpirun -n 1 build/lemma_1_0_0 \
   --param_dump_interval 10 \
   --out example/inference.out.gz
 
-mpirun -n 1 build/lemma_1_0_0 \
+mpirun -n 1 build/lemma_1_0_1 \
   --VB \
   --pheno example/pheno.txt.gz \
   --environment example/env.txt.gz \
@@ -210,4 +221,4 @@ LEMMA uses a iterative algorithm to approximate the posterior distribution. The 
 ### RAM Usage
 To store the genotype matrix, LEMMA uses approximately MN bytes of RAM where M is the number of genotyped SNPs and N is the number of samples.
 
-To store an array of SNP-environment correlations, LEMMA uses a further 8ML(L+1)/2 bytes of RAM, where L is the number of environents and M is the number of SNPs. For M = 600k and L < 100 this should not be a dominating requirement.
+To store an array of SNP-environment correlations, LEMMA uses a further 8ML(L+1)/2 bytes of RAM, where L is the number of environments and M is the number of SNPs. For M = 600k and L < 100 this should not be a dominating requirement.

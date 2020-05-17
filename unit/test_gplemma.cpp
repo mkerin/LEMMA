@@ -23,9 +23,9 @@ char* argv_rhe_nm[] = { (char*) "LEMMA",
 					  (char*) "--out", (char*) "unit/data/test_pve/RHEreg_NM.out.gz"};
 
 char* argv_rhe_lm2[] = { (char*) "LEMMA",
-						(char*) "--RHEreg-LM",
-						(char*) "--LM-max-iter", (char*) "5",
-						(char*) "--LM-random-starts", (char*) "1",
+						(char*) "--gplemma",
+						(char*) "--gplemma-max-iter", (char*) "5",
+						(char*) "--gplemma-random-starts", (char*) "1",
 						(char*) "--maf", (char*) "0.01",
 						(char*) "--random-seed", (char*) "1",
 						(char*) "--n-RHEreg-jacknife", (char*) "1",

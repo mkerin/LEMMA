@@ -19,6 +19,7 @@ examples/*
 example/*out.gz
 example/lemma_interim_files/*
 example/.lemma_files/*
+example/gplemma*
 unit/data/lemma_interim_files/*
 unit/data/test*
 

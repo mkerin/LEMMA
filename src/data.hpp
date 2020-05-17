@@ -1482,7 +1482,8 @@ public:
 		std::cout << " samples with complete data across covariates";
 		if(p.env_file != "NULL") std::cout << ", env-variables";
 		std::cout << " and phenotype";
-		std::cout << " (" << n_samples << " on rank " << world_rank << ")." << std::endl << std::endl;
+		if (p.debug) std::cout << " (" << n_samples << " on rank " << world_rank << ")";
+		std::cout << "." << std::endl << std::endl;
 	}
 
 	std::string fstream_init(boost_io::filtering_ostream& my_outf,

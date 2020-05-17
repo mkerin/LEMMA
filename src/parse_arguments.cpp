@@ -115,8 +115,8 @@ void parse_arguments(parameters &p, int argc, char **argv) {
 	    ("RHEreg", "Run randomised HE-regression algorithm", cxxopts::value<bool>())
 	    ("RHEreg-groups", "Text file containing group of each SNP for use with multicomponent randomised HE regression", cxxopts::value<std::string>())
 	    ("mRHEreg-groups", "Text file to paths of --RHE-groups files. Each should correspond to the bgen files given in --mStreamBgen", cxxopts::value<std::string>())
-	    ("n-RHEreg-samples", "Number of random vectors used in RHE algorithm", cxxopts::value<long>(p.n_pve_samples))
-	    ("n-RHEreg-jacknife", "Number of jacknife samples used in RHE algorithm", cxxopts::value<long>(p.n_jacknife))
+	    ("n-RHEreg-samples", "Number of random vectors used in RHE algorithm (default 40)", cxxopts::value<long>(p.n_pve_samples))
+	    ("n-RHEreg-jacknife", "Number of jacknife samples used in RHE algorithm (default 100)", cxxopts::value<long>(p.n_jacknife))
 	    ("extra-pve-covar", "Covariables in addition to those provided to --VB (Eg. principle components).", cxxopts::value<std::string>(p.extra_pve_covar_file))
 	;
 
@@ -127,6 +127,12 @@ void parse_arguments(parameters &p, int argc, char **argv) {
 	    ("incl-sample-ids", "Exclude all samples whose sample ID is not in the BGEN file.", cxxopts::value<std::string>(p.incl_sids_file))
 	    ("range", "Genomic range in format chr:start-end", cxxopts::value<std::string>())
 	    ("pheno-col-num", "Column number of the phenotype to use (if --pheno contains multiple phenotypes)", cxxopts::value<long>(p.pheno_col_num))
+	;
+
+	options.add_options("GPLEMMA")
+	("gplemma", "Estimate GxE heritability with the GPLEMMA method", cxxopts::value<bool>(p.mode_RHEreg_LM))
+	("gplemma-max-iter", "Maximum number of Levenburg-Marquardt iterations used by GPLEMMA (default 200)", cxxopts::value<long>(p.levenburgMarquardt_max_iter))
+	("gplemma-random-starts", "Number of random initializations used by GPLEMMA (default 10)", cxxopts::value<long>(p.n_LM_starts))
 	;
 
 	options.add_options("Internal")
@@ -161,7 +167,7 @@ void parse_arguments(parameters &p, int argc, char **argv) {
 	    ("mode-alternating-updates", "", cxxopts::value<bool>(p.mode_alternating_updates))
 	    ("threads", "", cxxopts::value<unsigned int>(p.n_thread))
 	    ("hyps-probs", "", cxxopts::value<std::string>(p.hyps_probs_file))
-	    ("maxBytesPerRank", "Maximum number of bytes of RAM available on each partition when using MPI (Default: 16GB)",
+	    ("maxBytesPerRank", "Maximum number of bytes of RAM available on each core when using openMPI (Default: 16GB)",
 	    cxxopts::value<long long>(p.maxBytesPerRank))
 	    ("loso-window-size", "", cxxopts::value<long>(p.LOSO_window))
 	    ("drop-loco", "", cxxopts::value<bool>(p.drop_loco))
@@ -170,10 +176,7 @@ void parse_arguments(parameters &p, int argc, char **argv) {
 	    ("streamBgen-print-interval", "", cxxopts::value<long>(p.streamBgen_print_interval))
 	    ("mode-dump-processed-data", "", cxxopts::value<bool>(p.mode_dump_processed_data))
 	    ("RHEreg-NM", "", cxxopts::value<bool>(p.mode_RHEreg_NM))
-	    ("RHEreg-LM", "", cxxopts::value<bool>(p.mode_RHEreg_LM))
 	    ("NM-max-iter", "", cxxopts::value<long>(p.nelderMead_max_iter))
-	    ("LM-max-iter", "", cxxopts::value<long>(p.levenburgMarquardt_max_iter))
-	    ("LM-random-starts", "", cxxopts::value<long>(p.n_LM_starts))
 	;
 
 	options.add_options("Other")
@@ -185,7 +188,7 @@ void parse_arguments(parameters &p, int argc, char **argv) {
 		auto args = opts.arguments();
 
 		if (opts.count("help")) {
-			std::cout << options.help({"General", "Filtering", "VB", "Assoc", "RHE","Other"}) << std::endl;
+			std::cout << options.help({"General", "Filtering", "VB", "Assoc","RHE","GPLEMMA","Other"}) << std::endl;
 			std::exit(0);
 		} else {
 			print_compilation_details();
@@ -206,7 +209,7 @@ void parse_arguments(parameters &p, int argc, char **argv) {
 		if(opts.count("RHEreg-NM")) {
 			p.mode_RHE = true;
 		}
-		if(opts.count("RHEreg-LM")) {
+		if(opts.count("gplemma")) {
 			p.mode_RHE = true;
 		}
 		if(opts.count("mode-pve-est")) {

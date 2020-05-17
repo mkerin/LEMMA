@@ -70,7 +70,7 @@ public:
 		flip_high_maf_variants = false;
 		init_weights_with_snpwise_scan = false;
 		n_thread = 1;
-		n_jacknife = 2;
+		n_jacknife = 100;
 		random_seed = -1;
 		env_update_repeats = 1;
 		pheno_col_num = -1;
@@ -88,7 +88,7 @@ public:
 		vb_iter_max = 10000;
 		maxBytesPerRank = 14500000000;
 		vb_iter_start = 0;
-		n_pve_samples = 50;
+		n_pve_samples = 40;
 		LOSO_window = 100000;
 		// Initial difference in variance of spike & slab
 		beta_spike_diff_factor = 1000;

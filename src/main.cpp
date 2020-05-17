@@ -198,12 +198,11 @@ int main( int argc, char** argv ) {
 		}
 
 		std::string rhe_filepath = p.out_file;
-		rhe_filepath = rhe_filepath.substr(0, rhe_filepath.find(".gz"));
 		if(p.mode_vb || p.mode_calc_snpstats) {
 			rhe_filepath = fileUtils::filepath_format(rhe_filepath, "", "_pve");
 		}
 		if(data.n_env > 0) {
-			// If multi env; use VB to collapse to single
+			// If multi env; use VB to collapse to single environment
 			if(p.mode_vb || p.env_coeffs_file != "NULL") {
 				RHEreg pve(data, Y, C, data.vp_init.eta);
 				pve.run();

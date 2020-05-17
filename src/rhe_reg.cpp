@@ -92,9 +92,9 @@ void RHEreg::initialise_components() {
 		std::cout << "Before initialising " << ram << std::endl;
 	}
 
-	std::cout << "Running RHE-regression with:" << std::endl;
+	std::cout << "Initialising RHE-regression with:" << std::endl;
 	std::cout << " - N-jacknife = " << p.n_jacknife << std::endl;
-	std::cout << " - N-draws = " << p.n_pve_samples << std::endl;
+	std::cout << " - N-RHEreg-draws = " << p.n_pve_samples << std::endl;
 	std::cout << " - N-samples = " << (long) Nglobal << std::endl;
 	std::cout << " - N-covars = " << n_covar << std::endl;
 	std::cout << " - N-env = " << n_env << std::endl;
@@ -102,13 +102,17 @@ void RHEreg::initialise_components() {
 		std::cout << " - N-annotations = " << all_SNPGROUPS.size() << std::endl;
 	}
 
+	n_components = 1 + (p.RHE_multicomponent ? all_SNPGROUPS.size() : 1) * (n_env + 1);
+	std::cout << " - N-RHEreg-components = " << n_components - 1 << std::endl;
+	std::cout << "Expected RAM usage of approximately " << 8 * p.n_jacknife * p.n_pve_samples * Nglobal * n_components << " bytes" << std::endl << std::endl;
+
 	if(n_covar > 0) {
 		zz = project_out_covars(zz);
 		Y = project_out_covars(Y);
 	}
 
 	// Set variance components
-	components.reserve(1 + all_SNPGROUPS.size() * (n_env + 1));
+	components.reserve(n_components);
 	if(true) {
 		if(p.RHE_multicomponent) {
 			for (auto group : all_SNPGROUPS) {
@@ -170,12 +174,14 @@ void RHEreg::initialise_components() {
 		comp.effect_type = "noise";
 		components.push_back(std::move(comp));
 	}
-	n_components = components.size();
+	if (n_components != components.size()){
+		std::cout << "WARNING: N-RHEreg-components is actually " << components.size() << " rather than " << n_components << std::endl;	
+		n_components = components.size();
+	}
 
-	std::cout << " - N-RHEreg-components = " << n_components - 1 << std::endl;
-	std::string ram = mpiUtils::currentUsageRAM();
 	std::cout << "Initialised RHE-regression components";
 #ifndef OSX
+	std::string ram = mpiUtils::currentUsageRAM();
 	std::cout << " (" << ram << ")" << std::endl << std::endl;
 #else
 	std::cout << std::endl << std::endl;
@@ -246,7 +252,7 @@ void RHEreg::compute_RHE_trace_operators() {
 			n_vars_tot += data.streamBgenViews[ii]->number_of_variants();
 		}
 		long jack_block_size = (n_vars_tot + p.n_jacknife) / p.n_jacknife;
-		std::cout << "jacknife block size = " << jack_block_size << std::endl;
+		if (p.debug) std::cout << "jacknife block size = " << jack_block_size << std::endl;
 		for (int ii = 0; ii < p.streamBgenFiles.size(); ii++) {
 			std::cout << std::endl << "Streaming genotypes from " << p.streamBgenFiles[ii] << std::endl;
 
@@ -462,14 +468,14 @@ void RHEreg::solve_RHE(std::vector<RHEreg_Component>& components) {
 }
 
 Eigen::VectorXd RHEreg::run_RHE_levenburgMarquardt() {
-	std::cout << "Optimising interaction-weights with Levenburg-Marquardt" << std::endl;
+	std::cout << "Optimising interaction-weights with GPLEMMA" << std::endl;
 
 	Eigen::VectorXd env_weights;
 	double best_rss = std::numeric_limits<double>::max();
 	std::mt19937 generator{p.random_seed};
 	std::normal_distribution<scalarData> noise_normal(0.0, 2.0 / n_env / n_env);
 	for (long ii = 0; ii < p.n_LM_starts; ii++) {
-		std::cout << "Computing LM " << ii << " of " << p.n_LM_starts << std::endl;
+		std::cout << "Computing GPLEMMA from random start (run " << ii << " of " << p.n_LM_starts << ")" << std::endl;
 		Eigen::VectorXd tmp_env_weights;
 		double tmp_rss;
 		LevenbergMarquardt LM(p, components, Y, E, C, CtC_inv, ytEXXtEys, env_names);
@@ -495,7 +501,7 @@ Eigen::VectorXd RHEreg::run_RHE_levenburgMarquardt() {
 		elapsed_LM_copyData += LM.elapsed_copyData;
 
 		if(tmp_rss < best_rss) {
-			if (p.verbose) {
+			if (p.debug) {
 				std::cout << "Updating best LM; SumOfSquares = " << tmp_rss;
 				std::cout << " after " << LM.count << " iterations" << std::endl;
 			}
@@ -549,8 +555,8 @@ Eigen::VectorXd RHEreg::run_RHE_levenburgMarquardt() {
 Eigen::VectorXd RHEreg::run_RHE_nelderMead() {
 	std::cout << std::endl << "Optimising env-weights with Nelder Mead" << std::endl;
 	boost_io::filtering_ostream outf_env, outf_obj;
-	auto filename_env = fileUtils::fstream_init(outf_env, p.out_file, ".lemma_files/", "_nm_env_iter");
-	auto filename_obj = fileUtils::fstream_init(outf_obj, p.out_file, ".lemma_files/", "_nm_obj_iter");
+	auto filename_env = fileUtils::fstream_init(outf_env, p.out_file, "gplemma_interim_files/", "_nm_env_iter");
+	auto filename_obj = fileUtils::fstream_init(outf_obj, p.out_file, "gplemma_interim_files/", "_nm_obj_iter");
 	outf_env << "count ";
 	for (long ll = 0; ll < n_env; ll++) {
 		outf_env << env_names[ll];

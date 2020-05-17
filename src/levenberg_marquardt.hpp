@@ -232,7 +232,7 @@ public:
 	}
 
 	void push_interim_updates(){
-		auto filename_env = fileUtils::fstream_init(outf_env, p.out_file, ".lemma_files/", "_lm_env_iter");
+		auto filename_env = fileUtils::fstream_init(outf_env, p.out_file, "gplemma_interim_files/", "_lm_env_iter");
 		outf_env << "count ";
 		for (long ll = 0; ll < n_env; ll++) {
 			outf_env << env_names[ll];
