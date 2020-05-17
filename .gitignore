@@ -5,6 +5,7 @@ lib/*
 archive/*
 src/tools/*
 data/*
+local_scripts/*
 tests/data/*
 example/inference*
 cmake_commands.txt
@@ -19,7 +20,7 @@ example/*out.gz
 example/lemma_interim_files/*
 example/.lemma_files/*
 unit/data/lemma_interim_files/*
-unit/data/test*out.gz
+unit/data/test*
 
 # Ignore any executables
 bin/*
