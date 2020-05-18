@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8">
+        <meta http-equiv="X-UA-Compatible" content="IE=edge">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <meta name="description" content="None">
+        
+        
+        <link rel="shortcut icon" href="img/favicon.ico">
+        <title>LEMMA Documentation</title>
+        <link href="css/bootstrap.min.css" rel="stylesheet">
+        <link href="css/font-awesome.min.css" rel="stylesheet">
+        <link href="css/base.css" rel="stylesheet">
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/9.12.0/styles/github.min.css">
+
+        <script src="js/jquery-1.10.2.min.js" defer></script>
+        <script src="js/bootstrap.min.js" defer></script>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/9.12.0/highlight.min.js"></script>
+        <script>hljs.initHighlightingOnLoad();</script> 
+    </head>
+
+    <body class="homepage">
+        <div class="navbar fixed-top navbar-expand-lg navbar-dark bg-primary">
+            <div class="container">
+                <a class="navbar-brand" href=".">LEMMA Documentation</a>
+
+                <!-- Expanded navigation -->
+                <div id="navbar-collapse" class="navbar-collapse collapse">
+
+                    <ul class="nav navbar-nav ml-auto">
+                        <li class="nav-item">
+                            <a href="#" class="nav-link" data-toggle="modal" data-target="#mkdocs_search_modal">
+                                <i class="fa fa-search"></i> Search
+                            </a>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <div class="container">
+            <div class="row">
+                    <div class="col-md-3"><div class="navbar-light navbar-expand-md bs-sidebar hidden-print affix" role="complementary">
+    <div class="navbar-header">
+        <button type="button" class="navbar-toggler collapsed" data-toggle="collapse" data-target="#toc-collapse" title="Table of Contents">
+            <span class="fa fa-angle-down"></span>
+        </button>
+    </div>
+
+    
+    <div id="toc-collapse" class="navbar-collapse collapse card bg-secondary">
+        <ul class="nav flex-column">
+            
+            <li class="nav-item" data-level="1"><a href="#overview" class="nav-link">Overview</a>
+              <ul class="nav flex-column">
+              </ul>
+            </li>
+            
+            <li class="nav-item" data-level="1"><a href="#installation" class="nav-link">Installation</a>
+              <ul class="nav flex-column">
+              </ul>
+            </li>
+            
+            <li class="nav-item" data-level="1"><a href="#getting-started" class="nav-link">Getting started</a>
+              <ul class="nav flex-column">
+            <li class="nav-item" data-level="2"><a href="#example-data" class="nav-link">Example data</a>
+              <ul class="nav flex-column">
+              </ul>
+            </li>
+            <li class="nav-item" data-level="2"><a href="#basic-usage-of-lemma" class="nav-link">Basic usage of LEMMA</a>
+              <ul class="nav flex-column">
+              </ul>
+            </li>
+            <li class="nav-item" data-level="2"><a href="#basic-usage-of-gplemma" class="nav-link">Basic usage of GPLEMMA</a>
+              <ul class="nav flex-column">
+              </ul>
+            </li>
+            <li class="nav-item" data-level="2"><a href="#advanced-options" class="nav-link">Advanced options</a>
+              <ul class="nav flex-column">
+              </ul>
+            </li>
+              </ul>
+            </li>
+            
+            <li class="nav-item" data-level="1"><a href="#complexity" class="nav-link">Complexity</a>
+              <ul class="nav flex-column">
+              </ul>
+            </li>
+            
+            <li class="nav-item" data-level="1"><a href="#citation" class="nav-link">Citation</a>
+              <ul class="nav flex-column">
+              </ul>
+            </li>
+        </ul>
+    </div>
+</div></div>
+                    <div class="col-md-9" role="main">
+
+<h1 id="overview">Overview</h1>
+<p>This repository provides software for the following two methods:</p>
+<ul>
+<li>LEMMA (<strong>L</strong>inear <strong>E</strong>nvironment <strong>M</strong>ixed <strong>M</strong>odel <strong>A</strong>nalysis) is a whole genome wide regression method for flexible modeling of gene-environment interactions in large datasets such as the UK Biobank.  </li>
+<li>GPLEMMA (<strong>G</strong>aussian <strong>P</strong>rior <strong>L</strong>inear <strong>E</strong>nvironment <strong>M</strong>ixed <strong>M</strong>odel <strong>A</strong>nalysis) non-linear randomized Haseman-Elston regression method for flexible modeling of gene-environment interactions in large datasets such as the UK Biobank.</li>
+</ul>
+<h1 id="installation">Installation</h1>
+<p>LEMMA requires the <a href="https://bitbucket.org/gavinband/bgen/src/default/">BGEN file format</a>, Boost (https://www.boost.org/) and OpenMPI. We also recommend compiling with the Intel MKL library.</p>
+<p>First clone the repository</p>
+<pre><code>git clone git@github.com:mkerin/LEMMA.git
+cd LEMMA
+mkdir build
+</code></pre>
+
+<p>Bare minimum build:</p>
+<pre><code>cd build
+cmake .. \
+-DBGEN_ROOT=&lt;absolute/path/to/bgen_lib&gt; \
+-DBOOST_ROOT=&lt;absolute/path/to/boost&gt;
+cd ..
+cmake --build build --target lemma_1_0_1 -- -j 4
+</code></pre>
+
+<p>If you wish to compile with the Intel MKL Library then instead run the following:</p>
+<pre><code>cd build
+cmake .. \
+-DBGEN_ROOT=&lt;absolute/path/to/bgen_lib&gt; \
+-DBOOST_ROOT=&lt;pabsolute/path/to/boost&gt; \
+-DMKL_ROOT=&lt;absolute/path/to/IntelMklRoot&gt;
+cd ..
+cmake --build build --target lemma_1_0_1 -- -j 4
+</code></pre>
+
+<p>Note that current compile flags are compatible with the Intel MKL Library 2019 Update 1.</p>
+<h1 id="getting-started">Getting started</h1>
+<h2 id="example-data">Example data</h2>
+<p>The <code>example</code> directory contains a simulated dataset with:
+- 5000 individuals
+- 20,000 SNPs
+- 5 environmental variables
+- a simulated phenotype</p>
+<p>The phenotype has been simulated to have:
+- 2000 SNPs with non-zero main effects
+- 500 SNPs with non-zero GxE effects
+- GxE effects with a linear combination of two of the five environments (i.e. two are active).
+- SNP-Heritability of 20% (main effects) and 10% (GxE effects)</p>
+<h2 id="basic-usage-of-lemma">Basic usage of LEMMA</h2>
+<p>The LEMMA approach consists of three distinct steps:
+1. A variational inference algorithm computes the Environmental Score (ES) and residualised phenotype. This is typically run on genotyped SNPs.
+2. Single SNP association testing using the ES and residualised phenotypes. This can be run either on the same set of genotyped SNPs, or a larger set of imputed SNPs.
+3. Heritability estimation partitioned into additive SNP effects and multiplicative GxE effects with the ES. </p>
+<p>All three steps can be run in sequence using the following commands</p>
+<pre><code>rm example/bgen_filenames.txt
+for cc in `seq 1 22`; do
+  bgenix -g example/n5k_p20k_example.bgen -incl-range ${cc}:0-1000000000 &gt; example/n5k_p20k_example_chr${cc}.bgen;
+  bgenix -index -g example/n5k_p20k_example_chr${cc}.bgen;
+  echo &quot;example/n5k_p20k_example_chr${cc}.bgen&quot; &gt;&gt; example/bgen_filenames.txt;
+done
+
+mpirun -n 1 build/lemma_1_0_1 \
+  --pheno example/pheno.txt.gz \
+  --environment example/env.txt.gz \
+  --VB \
+  --bgen example/n5k_p20k_example.bgen \
+  --singleSnpStats \
+  --RHEreg --random-seed 1 \
+  --mStreamBgen example/bgen_filenames.txt \
+  --out example/inference.out.gz
+</code></pre>
+
+<p>For association testing and heritability estimation, LEMMA will use genetic data provided from the <code>--mStreamBgen</code> if it is provided. Otherwise LEMMA will use genetic data from the <code>--bgen</code> flag.</p>
+<p>Files provided to <code>--mStreamBgen</code> should each contain only one chromosome. Separating the chromosomes into different files can be achieved with the <a href="https://bitbucket.org/gavinband/bgen/wiki/bgenix">BGENIX</a> program.</p>
+<p>Output from the variational inference algorithm:
+- <code>example/inference.out.gz</code> :                                converged hyperparameter values + ELBO
+- <code>example/inference_converged_eta.out.gz</code> :                  converged Environmental Score
+- <code>example/inference_converged_resid_pheno_chr${cc}.out.gz</code> : residual phenotypes for chromosomes c = 1:22
+- <code>example/inference_converged_vparams_*.out.gz</code> :            variational parameters estimated by the LEMMA algorithm
+- <code>example/inference_converged_yhat.out.gz</code> :                 predicted vectors and residualised phenotypes</p>
+<p>Output from association testing:
+- <code>example/inference_loco_pvals.out.gz</code></p>
+<p>Output from heritability estimation:
+- <code>example/inference_pve.out.gz</code></p>
+<p>The LEMMA algorithm is modular, and so each step can be performed separately as follows.</p>
+<h3 id="running-the-lemma-variational-inference-algorithm">Running the LEMMA variational inference algorithm</h3>
+<pre><code>mpirun -n 1 build/lemma_1_0_1 \
+  --VB \
+  --pheno example/pheno.txt.gz \
+  --environment example/env.txt.gz \
+  --bgen example/n5k_p20k_example.bgen \
+  --out example/inference.out.gz
+</code></pre>
+
+<p>In this case the algorithm should converge in 59 iterations.</p>
+<h3 id="association-testing-with-imputed-snps">Association testing with imputed SNPs</h3>
+<pre><code>mpirun -n 1 build/lemma_1_0_1 \
+  --singleSnpStats --maf 0.01 \
+  --pheno example/pheno.txt.gz \
+  --resid-pheno example/inference_converged_yhat.out.gz \
+  --mStreamBgen example/bgen_filenames.txt \
+  --environment example/inference_converged_eta.out.gz \
+  --out example/inference_loco_pvals.out.gz;
+</code></pre>
+
+<p>In this example the flag <code>--pheno example/pheno.txt.gz</code> is optional. This is used to see if any environmental variables have significant squared effects, and include them as covariates if so.</p>
+<p>For analyses of large genomic datasets if may be useful to parallelize association testing across chunks of SNPs with the <code>--range</code> flag.</p>
+<h3 id="heritability-estimation">Heritability estimation</h3>
+<pre><code>mpirun -n 1 build/lemma_1_0_1 \
+  --RHEreg --random-seed 1 \
+  --pheno example/pheno.txt.gz \
+  --mStreamBgen example/bgen_filenames.txt \
+  --environment example/inference_converged_eta.out.gz \
+  --out example/inference_pve.out.gz
+</code></pre>
+
+<p>This should return heritability estimates of h2-G = 0.23 (0.032) and h2-GxE = 0.08 (0.016), where the value in brackets is the standard error.</p>
+<h2 id="basic-usage-of-gplemma">Basic usage of GPLEMMA</h2>
+<p>To run the GPLEMMA method on the same dataset given above, run the following commands</p>
+<pre><code>mpirun -n 1 build/lemma_1_0_1 \
+  --gplemma --random-seed 1 \
+  --pheno example/pheno.txt.gz \
+  --streamBgen example/n5k_p20k_example.bgen \
+  --environment example/inference_converged_eta.out.gz \
+  --out example/gplemma.out.gz
+</code></pre>
+
+<p>This should return heritability estimates of h2-G = 0.22 (0.026) and h2-GxE = 0.09 (0.01), where the value in brackets is the standard error.</p>
+<h2 id="advanced-options">Advanced options</h2>
+<h3 id="precomputing-the-dxteex-array">Precomputing the dXtEEX array</h3>
+<p>Before running the variational algorithm, LEMMA requires the quantities
+<img alt="Test Image 1" src="img/LEMMA_precomputation.png" /><br />
+LEMMA is able to compute this internally, however for large datasets this imposes substantial costs. As this is easily parallelised over variants and/or environments, we recommend that users precompute this quantity beforehand and provide a file to LEMMA at runtime.</p>
+<p>Install <code>bgen_utils</code> using instructions from <a href="https://github.com/mkerin/bgen_utils">https://github.com/mkerin/bgen_utils</a>.</p>
+<p>Build the <code>example/dxteex.out.gz</code> array using commands</p>
+<pre><code>BGEN_UTILS=&lt;path_to_bgen_utils&gt;
+for cc in `seq 1 22`; do
+  ${BGEN_UTILS} \
+    --compute-env-snp-correlations \
+    --mode_low_mem \
+    --range ${cc}:0-100000000000 \
+    --bgen $(bgen) \
+    --environment $(dir)/env.txt \
+    --out example/dxteex_chr${cc}.out.gz;
+done
+zcat example/dxteex_chr*.out.gz &gt; example/dxteex.out.gz
+</code></pre>
+
+<p>Then provide the file <code>example/dxteex.out.gz</code> to LEMMA with the commandline flag <code>--dxteex</code>.</p>
+<pre><code>mpirun -n 1 build/lemma_1_0_1 \
+  --VB \
+  --pheno example/pheno.txt.gz \
+  --environment example/env.txt.gz \
+  --bgen example/n5k_p20k_example.bgen \
+  --dxteex example/dxteex.out.gz \
+  --out example/inference.out.gz
+</code></pre>
+
+<h3 id="heritability-partitioned-by-maf-and-ld">Heritability partitioned by MAF and LD</h3>
+<p>For this you will need:
+- LD-scores (we recommend using GCTA with a window of size <code>--ld-wind 1000</code>)
+- MAF of each SNP obtained from the UKBiobank MFI files.</p>
+<p>To convert into the file format expected by LEMMA we have provided a brief Rscript <code>scripts/preprocess_ldms_groups.R</code>.</p>
+<p>Then run the heritability analysis as follows</p>
+<pre><code>mpirun -n 1 build/lemma_1_0_1 \
+  --RHEreg --n-RHEreg-samples 20 --n-RHEreg-jacknife 100 --random-seed 1 \
+  --pheno example/pheno.txt.gz \
+  --bgen example/n5k_p20k_example.bgen \
+  --environment example/inference_converged_eta.out.gz \
+  --RHEreg-groups example/ldms_groups.txt  \
+  --out example/rhe_ldms.out.gz
+</code></pre>
+
+<h3 id="resuming-from-a-previous-parameter-state">Resuming from a previous parameter state</h3>
+<p>In case of runtime crashes, LEMMA can save the parameter state at periodic intervals by providing the commandline flag <code>--resume-from-state</code>. LEMMA can then subsequently resume inference from this saved state. For example</p>
+<pre><code>mpirun -n 1 build/lemma_1_0_1 \
+  --VB \
+  --pheno example/pheno.txt.gz \
+  --environment example/env.txt.gz \
+  --bgen example/n5k_p20k_example.bgen \
+  --param_dump_interval 10 \
+  --out example/inference.out.gz
+
+mpirun -n 1 build/lemma_1_0_1 \
+  --VB \
+  --pheno example/pheno.txt.gz \
+  --environment example/env.txt.gz \
+  --bgen example/n5k_p20k_example.bgen \
+  --resume-from-state example/lemma_interim_files/inference_dump_it30 \
+  --out example/inference_from_it30.out.gz
+
+zdiff example/inference_from_it30.out.gz example/inference.out.gz
+</code></pre>
+
+<p>Outputs from the two should match, up to some small numerical difference in the ELBO. Note that if the iteration number that you start from is not a multiple of 3, then output will not match exactly because the SQUAREM algorithm adapts the trajectory of the hyperparameter updates in multiples of three.</p>
+<h1 id="complexity">Complexity</h1>
+<h3 id="computational-complexity">Computational Complexity</h3>
+<p>LEMMA uses a iterative algorithm to approximate the posterior distribution. The per-iteration complexity is O(NM).</p>
+<h3 id="memory-complexity">Memory Complexity</h3>
+<p>To store the genotype matrix, LEMMA uses approximately MN bytes of RAM where M is the number of genotyped SNPs and N is the number of samples.</p>
+<p>To store an array of SNP-environment correlations, LEMMA uses a further 8ML(L+1)/2 bytes of RAM, where L is the number of environments and M is the number of SNPs. For M = 600k and L &lt; 100 this should not be a dominating requirement.</p>
+<h1 id="citation">Citation</h1>
+<p>If you use <strong>LEMMA</strong> in your research, please cite the following publication:</p>
+<p><em>Matthew Kerin and Jonathan Marchini (2020) Gene-environment interactions using a Bayesian whole genome regression model</em> [<a href="https://www.biorxiv.org/content/10.1101/797829v2">bioRxiv</a>]</p>
+<p>If you use <strong>GPLEMMA</strong> in your research, please cite the following publication:</p>
+<p><em>Matthew Kerin and Jonathan Marchini (2020) Non-linear randomized Haseman-Elston regression for estimation of gene-environment heritability</em></p></div>
+            </div>
+        </div>
+
+        <footer class="col-md-12">
+            <hr>
+            <p>Documentation built with <a href="https://www.mkdocs.org/">MkDocs</a>.</p>
+        </footer>
+        <script>
+            var base_url = ".",
+                shortcuts = {"help": 191, "next": 78, "previous": 80, "search": 83};
+        </script>
+        <script src="js/base.js" defer></script>
+        <script src="search/main.js" defer></script>
+
+        <div class="modal" id="mkdocs_search_modal" tabindex="-1" role="dialog" aria-labelledby="searchModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h4 class="modal-title" id="searchModalLabel">Search</h4>
+                <button type="button" class="close" data-dismiss="modal"><span aria-hidden="true">&times;</span><span class="sr-only">Close</span></button>
+            </div>
+            <div class="modal-body">
+                <p>
+                    From here you can search these documents. Enter
+                    your search terms below.
+                </p>
+                <form>
+                    <div class="form-group">
+                        <input type="search" class="form-control" placeholder="Search..." id="mkdocs-search-query" title="Type search term here">
+                    </div>
+                </form>
+                <div id="mkdocs-search-results"></div>
+            </div>
+            <div class="modal-footer">
+            </div>
+        </div>
+    </div>
+</div><div class="modal" id="mkdocs_keyboard_modal" tabindex="-1" role="dialog" aria-labelledby="keyboardModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h4 class="modal-title" id="keyboardModalLabel">Keyboard Shortcuts</h4>
+                <button type="button" class="close" data-dismiss="modal"><span aria-hidden="true">&times;</span><span class="sr-only">Close</span></button>
+            </div>
+            <div class="modal-body">
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th style="width: 20%;">Keys</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td class="help shortcut"><kbd>?</kbd></td>
+                    <td>Open this help</td>
+                  </tr>
+                  <tr>
+                    <td class="next shortcut"><kbd>n</kbd></td>
+                    <td>Next page</td>
+                  </tr>
+                  <tr>
+                    <td class="prev shortcut"><kbd>p</kbd></td>
+                    <td>Previous page</td>
+                  </tr>
+                  <tr>
+                    <td class="search shortcut"><kbd>s</kbd></td>
+                    <td>Search</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="modal-footer">
+            </div>
+        </div>
+    </div>
+</div>
+
+    </body>
+</html>
+
+<!--
+MkDocs version : 1.1.2
+Build Date UTC : 2020-05-18 20:52:54.622357+00:00
+-->
