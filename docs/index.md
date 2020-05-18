@@ -1,16 +1,22 @@
-# LEMMA
 
-LEMMA (**L**inear **E**nvironment **M**ixed **M**odel **A**nalysis) aims to uncover GxE interactions between SNPs and a linear combination of multiple environmental variables. To do this efficiently, LEMMA leverages an assumption that (where GxE interactions exist) SNPs will interact with a common environmental 'profile'.
+# Overview
+This repository provides software for the following two methods:
 
-## Getting Started
-### Installation
+- LEMMA (**L**inear **E**nvironment **M**ixed **M**odel **A**nalysis) is a whole genome wide regression method for flexible modeling of gene-environment interactions in large datasets such as the UK Biobank.  
+- GPLEMMA (**G**aussian **P**rior **L**inear **E**nvironment **M**ixed **M**odel **A**nalysis) non-linear randomized Haseman-Elston regression method for flexible modeling of gene-environment interactions in large datasets such as the UK Biobank.
+
+# Installation
 LEMMA requires the [BGEN file format](https://bitbucket.org/gavinband/bgen/src/default/), Boost (https://www.boost.org/) and OpenMPI. We also recommend compiling with the Intel MKL library.
 
-Bare minimum build:
+First clone the repository
 ```
 git clone git@github.com:mkerin/LEMMA.git
 cd LEMMA
 mkdir build
+```
+
+Bare minimum build:
+```
 cd build
 cmake .. \
 -DBGEN_ROOT=<absolute/path/to/bgen_lib> \
@@ -19,7 +25,20 @@ cd ..
 cmake --build build --target lemma_1_0_1 -- -j 4
 ```
 
-### Example data
+If you wish to compile with the Intel MKL Library then instead run the following:
+```
+cd build
+cmake .. \
+-DBGEN_ROOT=<absolute/path/to/bgen_lib> \
+-DBOOST_ROOT=<pabsolute/path/to/boost> \
+-DMKL_ROOT=<absolute/path/to/IntelMklRoot>
+cd ..
+cmake --build build --target lemma_1_0_1 -- -j 4
+```
+Note that current compile flags are compatible with the Intel MKL Library 2019 Update 1.
+
+# Getting started
+## Example data
 The `example` directory contains a simulated dataset with:
 - 5000 individuals
 - 20,000 SNPs
@@ -32,7 +51,7 @@ The phenotype has been simulated to have:
 - GxE effects with a linear combination of two of the five environments (i.e. two are active).
 - SNP-Heritability of 20% (main effects) and 10% (GxE effects)
 
-### Running LEMMA
+## Basic usage of LEMMA
 The LEMMA approach consists of three distinct steps:
 1. A variational inference algorithm computes the Environmental Score (ES) and residualised phenotype. This is typically run on genotyped SNPs.
 2. Single SNP association testing using the ES and residualised phenotypes. This can be run either on the same set of genotyped SNPs, or a larger set of imputed SNPs.
@@ -76,7 +95,7 @@ Output from heritability estimation:
 
 The LEMMA algorithm is modular, and so each step can be performed separately as follows.
 
-#### Running the LEMMA variational inference algorithm
+### Running the LEMMA variational inference algorithm
 ```
 mpirun -n 1 build/lemma_1_0_1 \
   --VB \
@@ -87,7 +106,7 @@ mpirun -n 1 build/lemma_1_0_1 \
 ```
 In this case the algorithm should converge in 59 iterations.
 
-#### Association testing with imputed SNPs
+### Association testing with imputed SNPs
 ```
 mpirun -n 1 build/lemma_1_0_1 \
   --singleSnpStats --maf 0.01 \
@@ -101,7 +120,7 @@ In this example the flag `--pheno example/pheno.txt.gz` is optional. This is use
 
 For analyses of large genomic datasets if may be useful to parallelize association testing across chunks of SNPs with the `--range` flag.
 
-#### Heritability estimation
+### Heritability estimation
 ```
 mpirun -n 1 build/lemma_1_0_1 \
   --RHEreg --random-seed 1 \
@@ -112,8 +131,8 @@ mpirun -n 1 build/lemma_1_0_1 \
 ```
 This should return heritability estimates of h2-G = 0.23 (0.032) and h2-GxE = 0.08 (0.016), where the value in brackets is the standard error.
 
-
-### GPLEMMA
+## Basic usage of GPLEMMA
+To run the GPLEMMA method on the same dataset given above, run the following commands
 ```
 mpirun -n 1 build/lemma_1_0_1 \
   --gplemma --random-seed 1 \
@@ -124,11 +143,11 @@ mpirun -n 1 build/lemma_1_0_1 \
 ```
 This should return heritability estimates of h2-G = 0.22 (0.026) and h2-GxE = 0.09 (0.01), where the value in brackets is the standard error.
 
-## Advanced Usage
+## Advanced options
 
 ### Precomputing the dXtEEX array
 Before running the variational algorithm, LEMMA requires the quantities
-![Test Image 1](docs/img/LEMMA_precomputation.png)  
+![Test Image 1](img/LEMMA_precomputation.png)  
 LEMMA is able to compute this internally, however for large datasets this imposes substantial costs. As this is easily parallelised over variants and/or environments, we recommend that users precompute this quantity beforehand and provide a file to LEMMA at runtime.
 
 Install `bgen_utils` using instructions from <https://github.com/mkerin/bgen_utils>.
@@ -176,21 +195,6 @@ mpirun -n 1 build/lemma_1_0_1 \
   --out example/rhe_ldms.out.gz
 ```
 
-### Build with the Intel MKL Library
-Download the Intel MKL Library. Build with
-
-```
-cd build
-cmake .. \
--DBGEN_ROOT=<path_to_bgen_lib> \
--DBOOST_ROOT=<path_to_boost> \
--DMKL_ROOT=<path_to_IntelMklRoot>
-cd ..
-cmake --build build --target lemma_1_0_1 -- -j 4
-```
-
-Note that current compile flags compatible with the Intel MKL Library 2019 Update 1.
-
 ### Resuming from a previous parameter state
 In case of runtime crashes, LEMMA can save the parameter state at periodic intervals by providing the commandline flag `--resume-from-state`. LEMMA can then subsequently resume inference from this saved state. For example
 ```
@@ -214,11 +218,21 @@ zdiff example/inference_from_it30.out.gz example/inference.out.gz
 ```
 Outputs from the two should match, up to some small numerical difference in the ELBO. Note that if the iteration number that you start from is not a multiple of 3, then output will not match exactly because the SQUAREM algorithm adapts the trajectory of the hyperparameter updates in multiples of three.
 
-## Other
-### Complexity
+# Complexity
+### Computational Complexity
 LEMMA uses a iterative algorithm to approximate the posterior distribution. The per-iteration complexity is O(NM).
 
-### RAM Usage
+### Memory Complexity
 To store the genotype matrix, LEMMA uses approximately MN bytes of RAM where M is the number of genotyped SNPs and N is the number of samples.
 
 To store an array of SNP-environment correlations, LEMMA uses a further 8ML(L+1)/2 bytes of RAM, where L is the number of environments and M is the number of SNPs. For M = 600k and L < 100 this should not be a dominating requirement.
+
+# Citation
+
+If you use **LEMMA** in your research, please cite the following publication:
+
+*Matthew Kerin and Jonathan Marchini (2020) Gene-environment interactions using a Bayesian whole genome regression model* [[bioRxiv](https://www.biorxiv.org/content/10.1101/797829v2)]
+
+If you use **GPLEMMA** in your research, please cite the following publication:
+
+*Matthew Kerin and Jonathan Marchini (2020) Non-linear randomized Haseman-Elston regression for estimation of gene-environment heritability*
