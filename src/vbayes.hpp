@@ -345,7 +345,7 @@ public:
 	                  std::vector<Hyps>& all_hyps,
 	                  std::vector<VbTracker>& all_tracker){
 		// minimise KL Divergence and assign elbo estimate
-		if (p.xtra_verbose) std::cout << "Starting inner loop" << std::endl;
+		if (p.debug) std::cout << "Starting inner loop" << std::endl;
 		int print_interval = 25;
 		if(random_init) {
 			throw std::logic_error("Random start depreciated.");
@@ -502,7 +502,7 @@ public:
 		}
 
 		// Dump converged state
-		if (p.xtra_verbose) std::cout << "Dumping converged params" << std::endl;
+		if (p.debug) std::cout << "Dumping converged params" << std::endl;
 		for (int nn = 0; nn < n_grid; nn++) {
 			all_tracker[nn].dump_state("_converged", n_samples, n_covar, n_var,
 			                           n_env, n_effects,
@@ -630,7 +630,7 @@ public:
 		//
 		if(p.joint_covar_update) {
 			if(first_covar_update) {
-				if(p.xtra_verbose) {
+				if(p.debug) {
 					std::cout << "Performing first VB update of covar effects" << std::endl;
 				}
 				Eigen::MatrixXd CtCRidge = C.transpose() * C;

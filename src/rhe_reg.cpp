@@ -343,7 +343,7 @@ void RHEreg::compute_RHE_trace_operators() {
 			}
 		}
 		if (p.verbose) std::cout << n_var << " variants pass QC filters" << std::endl;
-		if (p.xtra_verbose && p.RHE_multicomponent) {
+		if (p.debug && p.RHE_multicomponent) {
 			std::cout << n_find_operations << " find operations performed" << std::endl;
 		}
 	}
@@ -398,7 +398,7 @@ void RHEreg::solve_RHE(std::vector<RHEreg_Component>& components) {
 
 
 	// Write to file
-	if(world_rank == 0 && p.xtra_verbose) {
+	if(world_rank == 0 && p.debug) {
 		auto filename = fileUtils::fstream_init(outf, p.out_file, "", "_h2_dump");
 		std::cout << "Dumping Heritability to " << filename << std::endl;
 		Eigen::VectorXd tmp(Eigen::Map<Eigen::VectorXd>(CC.data(),CC.cols()*CC.rows()));

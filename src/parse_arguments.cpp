@@ -79,9 +79,9 @@ void parse_arguments(parameters &p, int argc, char **argv) {
 
 	options.add_options("General")
 	    ("verbose", "", cxxopts::value<bool>(p.verbose))
-	    ("bgen", "Path to BGEN file. This must be indexed (eg. with BGENIX). By default this is stored in RAM using O(NM) bytes.", cxxopts::value<std::string>(p.bgen_file))
-	    ("streamBgen", "Path to BGEN file. This must be indexed (eg. with BGENIX). This can be used with --RHEreg or --singleSnpStats.", cxxopts::value<std::string>())
-	    ("mStreamBgen", "Text file containing paths to multiple BGEN files. They must all be indexed (eg. with BGENIX). This can be used with --RHE or --mode_calc_snpstats.", cxxopts::value<std::string>())
+	    ("bgen", "Path to BGEN file, genetic data stored in RAM using O(NM) bytes.", cxxopts::value<std::string>(p.bgen_file))
+	    ("streamBgen", "Path to BGEN file, genetic data streamed from file. Used for single SNP association testing or randomized HE regression.", cxxopts::value<std::string>())
+	    ("mStreamBgen", "Text file containing paths to multiple BGEN files, genetic data streamed from file.", cxxopts::value<std::string>())
 	    ("pheno", "Path to phenotype file. Must have a header and have the same number of rows as samples in the BGEN file.", cxxopts::value<std::string>(p.pheno_file))
 	    ("covar", "Path to file of covariates. Must have a header and have the same number of rows as samples in the BGEN file.", cxxopts::value<std::string>(p.covar_file))
 	    ("environment", "Path to file of environmental variables. Must have a header and have the same number of rows as samples in the BGEN file.", cxxopts::value<std::string>(p.env_file))
@@ -112,8 +112,8 @@ void parse_arguments(parameters &p, int argc, char **argv) {
 	;
 
 	options.add_options("RHE")
-	    ("RHEreg", "Run randomised HE-regression algorithm", cxxopts::value<bool>())
-	    ("RHEreg-groups", "Text file containing group of each SNP for use with multicomponent randomised HE regression", cxxopts::value<std::string>())
+	    ("RHEreg", "Run randomized HE-regression algorithm", cxxopts::value<bool>())
+	    ("RHEreg-groups", "Text file containing group of each SNP for use with multicomponent randomized HE regression", cxxopts::value<std::string>())
 	    ("mRHEreg-groups", "Text file to paths of --RHE-groups files. Each should correspond to the bgen files given in --mStreamBgen", cxxopts::value<std::string>())
 	    ("n-RHEreg-samples", "Number of random vectors used in RHE algorithm (default 40)", cxxopts::value<long>(p.n_pve_samples))
 	    ("n-RHEreg-jacknife", "Number of jacknife samples used in RHE algorithm (default 100)", cxxopts::value<long>(p.n_jacknife))
@@ -333,16 +333,11 @@ void parse_arguments(parameters &p, int argc, char **argv) {
 		}
 		if(opts.count("xtra-verbose")) {
 			p.verbose = true;
-			p.xtra_verbose = true;
-			if(!opts.count("param_dump_interval")) {
-				p.param_dump_interval = 50;
-			}
 		}
 
 		if(opts.count("mode-debug")) {
 			p.debug = true;
 			p.verbose = true;
-			p.xtra_verbose = true;
 			if(!opts.count("param_dump_interval")) {
 				p.param_dump_interval = 50;
 			}

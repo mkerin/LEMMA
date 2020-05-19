@@ -347,7 +347,7 @@ public:
 							n_signif_envs_sq++;
 						}
 					} catch (const std::exception &e) {
-						if (p.xtra_verbose) {
+						if (p.debug) {
 							std::cout << "Error when checking for significant squared envs ";
 							std::cout << "(I believe this is due to attempting linear regression ";
 							std::cout << "with a singular matrix)" << std::endl;

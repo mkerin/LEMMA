@@ -25,11 +25,11 @@ public:
 	int env_update_repeats;
 	unsigned int n_thread, main_chunk_size, gxe_chunk_size;
 	std::uint32_t range_start, range_end;
-	bool range, maf_lim, info_lim, xtra_verbose, joint_covar_update, mode_RHEreg_LM;
+	bool range, maf_lim, info_lim, joint_covar_update, mode_RHEreg_LM;
 	bool mode_vb, use_vb_on_covars;
 	bool select_rsid, interaction_analysis, verbose, low_mem;
 	bool elbo_tol_set_by_user, alpha_tol_set_by_user, mode_empirical_bayes;
-	bool keep_constant_variants, user_requests_round1;
+	bool keep_constant_variants;
 	bool mode_alternating_updates, mode_RHE, mode_RHE_fast;
 	bool mode_no_gxe, debug, force_write_vparams;
 	bool init_weights_with_snpwise_scan, flip_high_maf_variants, min_spike_diff_set;
@@ -126,14 +126,12 @@ public:
 		mode_dump_processed_data = false;
 		// check allele probs sum to 1 by default
 		verbose = false;
-		xtra_verbose = false;
 		use_vb_on_covars = true;
 		alpha_tol_set_by_user = false;
 		elbo_tol_set_by_user = false;
 		elbo_tol = 0.01;
 		alpha_tol = 0.001;
 		keep_constant_variants = false;
-		user_requests_round1 = false;
 	}
 
 	~parameters() = default;
