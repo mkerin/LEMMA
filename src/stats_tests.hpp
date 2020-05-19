@@ -63,9 +63,9 @@ double homo_chi_sq(const long nn,
 
 template <typename GenoMat>
 void compute_LOCO_pvals(const EigenDataVector &resid_pheno,
-						const GenoMat &Xtest,
-						Eigen::MatrixXd &neglogPvals,
-						Eigen::MatrixXd &testStats,
-						const EigenDataVector &eta = Eigen::VectorXd::Zero(0));
+                        const GenoMat &Xtest,
+                        Eigen::MatrixXd &neglogPvals,
+                        Eigen::MatrixXd &testStats,
+                        const EigenDataVector &eta = Eigen::VectorXd::Zero(0));
 
 #endif

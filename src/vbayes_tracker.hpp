@@ -220,7 +220,7 @@ public:
 			header += " Ealpha"; n_cols += 1;
 		}
 		header += " Xbeta"; n_cols += 1;
-		if (n_env > 0){
+		if (n_env > 0) {
 			header += " eta Xgamma"; n_cols += 2;
 		}
 

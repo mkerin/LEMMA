@@ -174,8 +174,8 @@ void RHEreg::initialise_components() {
 		comp.effect_type = "noise";
 		components.push_back(std::move(comp));
 	}
-	if (n_components != components.size()){
-		std::cout << "WARNING: N-RHEreg-components is actually " << components.size() << " rather than " << n_components << std::endl;	
+	if (n_components != components.size()) {
+		std::cout << "WARNING: N-RHEreg-components is actually " << components.size() << " rather than " << n_components << std::endl;
 		n_components = components.size();
 	}
 
@@ -390,7 +390,7 @@ void RHEreg::solve_RHE(std::vector<RHEreg_Component>& components) {
 		}
 	} else {
 		std::cout << "Heritability estimates:" << std::endl;
-		for (long cc = 0; cc < n_components - 1; cc++){
+		for (long cc = 0; cc < n_components - 1; cc++) {
 			printf ("%-10s", components[cc].label.c_str());
 			std::cout << " = " << h2[cc] << std::endl;
 		}
@@ -532,11 +532,11 @@ Eigen::VectorXd RHEreg::run_RHE_levenburgMarquardt() {
 	std::vector<std::string> header = {"env", "mu"};
 	EigenUtils::write_matrix(outf, env_weights, header, env_names);
 
-		if (p.verbose && n_env > 0) {
-			std::string path = fileUtils::filepath_format(p.out_file, "", "_LM_converged_eta");
-			std::cout << "Writing eta to " << path << std::endl;
-			fileUtils::dump_predicted_vec_to_file(eta, path, "eta", sample_location);
-		}
+	if (p.verbose && n_env > 0) {
+		std::string path = fileUtils::filepath_format(p.out_file, "", "_LM_converged_eta");
+		std::cout << "Writing eta to " << path << std::endl;
+		fileUtils::dump_predicted_vec_to_file(eta, path, "eta", sample_location);
+	}
 
 	// Use weights to collapse GxE component and continue with rest of algorithm
 	std::vector<RHEreg_Component> my_components;

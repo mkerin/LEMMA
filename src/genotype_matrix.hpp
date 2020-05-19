@@ -1,18 +1,3 @@
-/* low-mem genotype matrix
-   Useful links:
-   - http://www.learncpp.com/cpp-tutorial/131-function-templates/
-   - https://www.tutorialspoint.com/cplusplus/cpp_overloading.htm
-   - https://eigen.tuxfamily.org/dox/TopicFunctionTakingEigenTypes.html
-   - https://stackoverflow.com/questions/23841723/eigen-library-assigning-matrixs-elements
-
-   Outline
-        Basically a wrapper around an Eigen matrix of unsigned ints.
-
-   To compress dosage entries I split the interval [0,2) into 2^n segments (dosage
-   matrix assumed to be standardised). For each dosage value I store the index of
-   the segment that it falls into, and return the midpoint of the segment when decompressing.
- */
-
 #ifndef GENOTYPE_MATRIX
 #define GENOTYPE_MATRIX
 
@@ -29,8 +14,6 @@
 #include <thread>
 #include <vector>
 #include <map>
-
-long op_pmax(long& ii);
 
 // Memory efficient class for storing dosage data
 // - Use uint instead of double to store dosage probabilities
@@ -71,7 +54,7 @@ public:
 
 	// Constructors
 	GenotypeMatrix(const parameters& my_params, const bool& use_low_mem) : low_mem(use_low_mem),
-																		   params(my_params){
+		params(my_params){
 		scaling_performed = false;
 		nn = 0;
 		pp = 0;
@@ -129,37 +112,6 @@ public:
 
 	// Eigen read column
 	void col(long jj, EigenRefDataVector vec) const;
-//
-//	void col(long jj, Eigen::Ref<Eigen::VectorXf> vec){
-//		assert(jj < pp);
-//		if(!scaling_performed){
-//			calc_scaled_values();
-//		}
-//
-//		if(low_mem){
-//			vec = M.cast<float>().col(jj);
-//			vec *= (intervalWidth * compressed_dosage_inv_sds[jj]);
-//			vec.array() += (0.5 * intervalWidth - compressed_dosage_means[jj]) * compressed_dosage_inv_sds[jj];
-//		} else {
-//			vec = G.col(jj);
-//		}
-//	}
-
-//	// Dot with jth col - this was actually slower. Oh well.
-//	double dot_with_jth_col(const Eigen::Ref<const Eigen::VectorXd>& vec, Index jj){
-//		assert(jj < pp);
-//		double tmp, offset, res;
-//		if(!scaling_performed){
-//			calc_scaled_values();
-//		}
-//
-//		tmp = vec.dot(M.col(jj).cast<double>());
-//		offset = vec.sum();
-//
-//		res = intervalWidth * tmp + offset * (intervalWidth * 0.5 - compressed_dosage_means[jj]);
-//		res *= compressed_dosage_inv_sds[jj];
-//		return res;
-//	}
 
 	// Eigen matrix multiplication
 #ifdef DATA_AS_FLOAT
@@ -191,9 +143,6 @@ public:
 
 	Eigen::MatrixXd transpose_multiply(EigenRefDataMatrix lhs) const;
 
-	EigenDataMatrix col_block(const std::uint32_t& ch_start,
-	                          const int& ch_len);
-
 	// Eigen lhs matrix multiplication
 	Eigen::VectorXd mult_vector_by_chr(const long& chr, const Eigen::Ref<const Eigen::VectorXd>& rhs);
 
@@ -206,28 +155,6 @@ public:
 	              const std::vector<long> &iter_chunk,
 	              Eigen::MatrixBase<Deriv>& D) const;
 
-	// // Eigen lhs matrix multiplication
-	// Eigen::VectorXd transpose_vector_multiply(const Eigen::Ref<const Eigen::VectorXd>& lhs,
-	//                                        bool lhs_centered){
-	//  // G.transpose_vector_multiply(y) <=> (y^t G)^t <=> G^t y
-	//  // NOTE: assumes that lhs is centered!
-	//  if(!scaling_performed){
-	//      calc_scaled_values();
-	//  }
-	//
-	//  Eigen::VectorXd res;
-	//  if(low_mem){
-	//      assert(lhs.rows() == M.rows());
-	//      assert(std::abs(lhs.sum()) < 1e-9);
-	//
-	//      res = lhs.transpose() * M.cast<double>();
-	//
-	//      return res.cwiseProduct(compressed_dosage_inv_sds) * intervalWidth;
-	//  } else {
-	//      return lhs.transpose() * G;
-	//  }
-	// }
-
 	/********** Mean center & unit variance; internal use ************/
 	void calc_scaled_values();
 
@@ -239,7 +166,7 @@ public:
 	void compute_cumulative_pos(){
 		cumulative_pos.resize(pp);
 		cumulative_pos[0] = position[0];
-		for (long ii = 1; ii < pp; ii++){
+		for (long ii = 1; ii < pp; ii++) {
 			long diff = position[ii] - position[ii-1];
 			if(diff < 0) diff = 1;
 			cumulative_pos[ii] = cumulative_pos[ii - 1] + diff;
@@ -280,7 +207,5 @@ public:
 		return (compressed_dosage + 0.5)*intervalWidth;
 	}
 };
-
-
 
 #endif

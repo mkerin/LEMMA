@@ -79,9 +79,9 @@ Hyps operator*(const double &scalar, const Hyps &h1){
 }
 
 void Hyps::init_from_grid(const int& my_n_effects,
-		const int& ii,
-		const long& n_var,
-		const Eigen::Ref<const Eigen::MatrixXd> &hyps_grid) {
+                          const int& ii,
+                          const long& n_var,
+                          const Eigen::Ref<const Eigen::MatrixXd> &hyps_grid) {
 	// Unpack
 	double my_sigma = hyps_grid(ii, sigma_ind);
 	double my_sigma_b = hyps_grid(ii, sigma_b_ind);
@@ -178,7 +178,7 @@ void Hyps::from_file(const std::string &filename){
 	// Read file twice to acertain number of lines
 	std::string line, header, case1 = "hyp value";
 	getline(fg, header);
-	if (header != case1){
+	if (header != case1) {
 		throw std::runtime_error("Unexpected header from "+filename);
 	}
 
@@ -243,18 +243,18 @@ void Hyps::random_init(int n_effects, long n_var) {
 
 	resize(n_effects);
 	if(n_effects == 1) {
-		slab_relative_var  << h_b / (1 - h_b) / n_var / lam_b;
+		slab_relative_var << h_b / (1 - h_b) / n_var / lam_b;
 		spike_relative_var << slab_relative_var / p.beta_spike_diff_factor;
-		lambda             << lam_b;
-		s_x                << n_var;
+		lambda << lam_b;
+		s_x << n_var;
 	} else {
-		slab_relative_var  << h_b / (1-h_b-h_g) / n_var / lam_b, h_b / (1-h_b-h_g) / n_var / lam_g;
+		slab_relative_var << h_b / (1-h_b-h_g) / n_var / lam_b, h_b / (1-h_b-h_g) / n_var / lam_g;
 		spike_relative_var << slab_relative_var[0] / p.beta_spike_diff_factor, slab_relative_var[1] / p.gam_spike_diff_factor;
-		lambda             << lam_b, lam_g;
-		s_x                << n_var, n_var;
+		lambda << lam_b, lam_g;
+		s_x << n_var, n_var;
 	}
 	sigma     = 1;
-	slab_var  << sigma * slab_relative_var;
+	slab_var << sigma * slab_relative_var;
 	spike_var << sigma * spike_relative_var;
 }
 
@@ -264,7 +264,7 @@ Eigen::VectorXd Hyps::get_sigmas(double h_b, double lam_b, double f1_b, long n_v
 
 	double P = n_var;
 	tmp << P * lam_b * (1 - h_b), P * (1 - lam_b) * (1 - h_b),
-			lam_b * (f1_b - 1), f1_b * (1 - lam_b);
+	    lam_b * (f1_b - 1), f1_b * (1 - lam_b);
 	rhs << h_b, 0;
 	Eigen::VectorXd soln = tmp.inverse() * rhs;
 	return soln;
@@ -277,9 +277,9 @@ Hyps::get_sigmas(double h_b, double h_g, double lam_b, double lam_g, double f1_b
 
 	double P = n_var;
 	tmp << P * lam_b * (1 - h_b), P * (1 - lam_b) * (1 - h_b), -P * h_b * lam_g, -P * h_b * (1 - lam_g),
-			lam_b * (f1_b - 1), f1_b * (1 - lam_b), 0, 0,
-			-P * h_g * lam_b, -P * h_g * (1 - lam_b), P * lam_g * (1 - h_g), P * (1 - lam_g) * (1 - h_g),
-			0, 0, lam_g * (f1_g - 1), f1_g * (1 - lam_g);
+	    lam_b * (f1_b - 1), f1_b * (1 - lam_b), 0, 0,
+	    -P * h_g * lam_b, -P * h_g * (1 - lam_b), P * lam_g * (1 - h_g), P * (1 - lam_g) * (1 - h_g),
+	    0, 0, lam_g * (f1_g - 1), f1_g * (1 - lam_g);
 	rhs << h_b, 0, h_g, 0;
 	Eigen::VectorXd soln = tmp.inverse() * rhs;
 	return soln;

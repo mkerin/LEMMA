@@ -1,13 +1,5 @@
-/* re-implementation of variational bayes algorithm for 1D GxE
-
-   How to use Eigen::Ref:
-   https://stackoverflow.com/questions/21132538/correct-usage-of-the-eigenref-class
-
-   Building static executable:
-   https://stackoverflow.com/questions/3283021/compile-a-standalone-static-executable
- */
-#ifndef VBAYES_X2_HPP
-#define VBAYES_X2_HPP
+#ifndef VBAYES_HPP
+#define VBAYES_HPP
 
 #include "parameters.hpp"
 #include "data.hpp"
@@ -47,14 +39,7 @@ inline double sigmoid(double x){
 	return 1.0 / (1.0 + std::exp(-x));
 }
 
-inline double get_corr(Eigen::VectorXd v1, Eigen::VectorXd v2){
-	v1.array() -= v1.mean();
-	v2.array() -= v2.mean();
-	double res = v1.dot(v2) / v1.norm() / v2.norm();
-	return res;
-}
-
-class VBayesX2 {
+class VBayes {
 public:
 // Constants
 	const double PI = 3.1415926535897;
@@ -118,7 +103,7 @@ public:
 
 	std::vector<Eigen::VectorXd> loco_phenos;
 
-	explicit VBayesX2(Data& dat) : X(dat.G),
+	explicit VBayes(Data& dat) : X(dat.G),
 		Y(dat.Y),
 		C(dat.C),
 		E(dat.E),
@@ -1005,40 +990,6 @@ public:
 			// finish max lambda
 			hyps.lambda[ee] /= n_var;
 		}
-
-//		// max spike & slab variances
-//		hyps.slab_var.resize(n_effects);
-//		hyps.spike_var.resize(n_effects);
-//		for (int ee = 0; ee < n_effects; ee++){
-//
-//			// Initial unconstrained max
-//			hyps.slab_var[ee]  = (vp.alpha.col(ee) * (vp.s_sq.col(ee) + vp.mu.col(ee).square())).sum();
-//			hyps.slab_var[ee] /= hyps.lambda[ee];
-//			if(p.mode_mog_prior){
-//				hyps.spike_var[ee]  = ((1.0 - vp.alpha.col(ee)) * (vp.sp_sq.col(ee) + vp.mup.col(ee).square())).sum();
-//				hyps.spike_var[ee] /= ( (double)n_var - hyps.lambda[ee]);
-//			}
-//
-//			// Remaxise while maintaining same diff in MoG variances if getting too close
-//			if(p.mode_mog_prior && hyps.slab_var[ee] < p.min_spike_diff_factor * hyps.spike_var[ee]){
-//				hyps.slab_var[ee]  = (vp.alpha.col(ee) * (vp.s_sq.col(ee) + vp.mu.col(ee).square())).sum();
-//				hyps.slab_var[ee] += p.min_spike_diff_factor * ((1.0 - vp.alpha.col(ee)) * (vp.sp_sq.col(ee) + vp.mup.col(ee).square())).sum();
-//				hyps.slab_var[ee] /= (double) n_var;
-//				hyps.spike_var[ee] = hyps.slab_var[ee] / p.min_spike_diff_factor;
-//			}
-//		}
-//
-//		hyps.slab_relative_var = hyps.slab_var / hyps.sigma;
-//		if(p.mode_mog_prior){
-//			hyps.spike_relative_var = hyps.spike_var / hyps.sigma;
-//		}
-
-		// hyps.lam_b         = hyps.lambda(0);
-		// hyps.lam_g         = hyps.lambda(1);
-		// hyps.sigma_b       = hyps.slab_relative_var(0);
-		// hyps.sigma_g       = hyps.slab_relative_var(1);
-		// hyps.sigma_g_spike = hyps.spike_relative_var(0);
-		// hyps.sigma_g_spike = hyps.spike_relative_var(1);
 	}
 
 	void updateEnvWeights(const std::vector<long>& iter,
@@ -1170,69 +1121,6 @@ public:
 		std::cout << ")" << std::endl;
 #endif
 		time_check = now;
-	}
-
-	void initRandomAlphaMu(VariationalParameters& vp){ // TODO deprecate
-		// vp.alpha a uniform simplex, vp.mu standard gaussian
-		// Also sets predicted effects
-		std::default_random_engine gen_gauss(p.random_seed), gen_unif(p.random_seed);
-		std::normal_distribution<double> gaussian(0.0,1.0);
-		std::uniform_real_distribution<double> uniform(0.0,1.0);
-
-		// Beta
-		vp.mu1_beta.resize(n_var);
-		vp.alpha_beta.resize(n_var);
-		if(p.mode_mog_prior_beta) {
-			vp.mu2_beta = Eigen::ArrayXd::Zero(n_var);
-		}
-
-		for (std::uint32_t kk = 0; kk < n_var; kk++) {
-			vp.alpha_beta(kk) = uniform(gen_unif);
-			vp.mu1_beta(kk)    = gaussian(gen_gauss);
-		}
-		vp.alpha_beta /= vp.alpha_beta.sum();
-
-		// Gamma
-		if(n_effects > 1) {
-			vp.mu1_gam.resize(n_var);
-			vp.alpha_gam.resize(n_var);
-			if (p.mode_mog_prior_gam) {
-				vp.mu2_gam = Eigen::ArrayXd::Zero(n_var);
-			}
-
-			for (std::uint32_t kk = 0; kk < n_var; kk++) {
-				vp.alpha_gam(kk) = uniform(gen_unif);
-				vp.mu1_gam(kk) = gaussian(gen_gauss);
-			}
-			vp.alpha_gam /= vp.alpha_gam.sum();
-		}
-
-		if(n_covar > 0) {
-			vp.muc = Eigen::ArrayXd::Zero(n_covar);
-		}
-
-		// Gen predicted effects.
-		calcPredEffects(vp);
-
-		// Env weights - cast if DATA_AS_FLOAT
-		vp.muw     = 1.0 / (double) n_env;
-		vp.eta     = E * vp.muw.matrix().cast<scalarData>();
-		vp.eta_sq  = vp.eta.array().square().matrix();
-		vp.calcEdZtZ(dXtEEX_lowertri, n_env);
-	}
-
-	void calcPredEffects(VariationalParameters& vp) const {
-		Eigen::VectorXd rr_beta = vp.mean_beta();
-
-		vp.ym = X * rr_beta;
-		if(n_covar > 0) {
-			vp.ym += C * vp.muc.matrix().cast<scalarData>();
-		}
-
-		if(n_effects > 1) {
-			Eigen::VectorXd rr_gam = vp.mean_gam();
-			vp.yx = X * rr_gam;
-		}
 	}
 
 	void calcPredEffects(VariationalParametersLite& vp) const {
@@ -1402,7 +1290,7 @@ public:
 
 	void
 	compute_residuals_per_chr(const VariationalParametersLite &vp,
-			std::vector<Eigen::VectorXd> &loco_phenos) const {
+	                          std::vector<Eigen::VectorXd> &loco_phenos) const {
 		std::vector<Eigen::VectorXd> pred_main, pred_int;
 		pred_main.resize(n_chrs);
 		pred_int.resize(n_chrs);
@@ -1442,8 +1330,8 @@ public:
 
 //	TODO make vp const
 	void compute_LOCO_pvals(VariationalParametersLite &vp,
-			Eigen::MatrixXd &neglogPvals,
-			Eigen::MatrixXd &testStats) {
+	                        Eigen::MatrixXd &neglogPvals,
+	                        Eigen::MatrixXd &testStats) {
 
 		calcPredEffects(vp);
 		std::vector<Eigen::VectorXd> resid_pheno;
@@ -1487,14 +1375,14 @@ public:
 	}
 
 	void compute_LOSO_pvals(GenotypeMatrix &Xtest,
-							const VariationalParametersLite &vp,
-							const long &LOSO_window,
-							Eigen::Ref<Eigen::VectorXd> neglogp_beta,
-							Eigen::Ref<Eigen::VectorXd> neglogp_gam_robust,
-							Eigen::Ref<Eigen::VectorXd> neglogp_joint,
-							Eigen::Ref<Eigen::VectorXd> test_stat_beta,
-							Eigen::Ref<Eigen::VectorXd> test_stat_gam_robust,
-							Eigen::Ref<Eigen::VectorXd> test_stat_joint) const {
+	                        const VariationalParametersLite &vp,
+	                        const long &LOSO_window,
+	                        Eigen::Ref<Eigen::VectorXd> neglogp_beta,
+	                        Eigen::Ref<Eigen::VectorXd> neglogp_gam_robust,
+	                        Eigen::Ref<Eigen::VectorXd> neglogp_joint,
+	                        Eigen::Ref<Eigen::VectorXd> test_stat_beta,
+	                        Eigen::Ref<Eigen::VectorXd> test_stat_gam_robust,
+	                        Eigen::Ref<Eigen::VectorXd> test_stat_joint) const {
 		assert(neglogp_beta.rows()  == n_var);
 		assert(neglogp_joint.rows() == n_var);
 		assert(test_stat_beta.rows()  == n_var);
@@ -1741,8 +1629,8 @@ public:
 			Eigen::VectorXd neglogp_beta(n_var), neglogp_gam(n_var), neglogp_rgam(n_var), neglogp_joint(n_var);
 			Eigen::VectorXd test_stat_beta(n_var), test_stat_gam(n_var), test_stat_rgam(n_var), test_stat_joint(n_var);
 			compute_LOSO_pvals(X, vp, p.LOSO_window,
-							   neglogp_beta, neglogp_rgam, neglogp_joint,
-							   test_stat_beta, test_stat_rgam, test_stat_joint);
+			                   neglogp_beta, neglogp_rgam, neglogp_joint,
+			                   test_stat_beta, test_stat_rgam, test_stat_joint);
 			neglogPvals.resize(neglogp_beta.rows(), 3);
 			neglogPvals.col(0) = neglogp_beta;
 			neglogPvals.col(1) = Eigen::VectorXd::Constant(neglogp_beta.rows(), -1);

@@ -244,20 +244,20 @@ void fileUtils::write_snp_stats_to_file(boost_io::filtering_ostream &ofile,
 	Eigen::VectorXd emptyVec;
 	if (n_effects > 1) {
 		fileUtils::write_snp_stats_to_file(ofile, n_effects, X, append,
-										   neglogPvals.col(0), neglogPvals.col(1), neglogPvals.col(2), emptyVec,
-										   testStats.col(0),   testStats.col(1),   testStats.col(2),   emptyVec);
+		                                   neglogPvals.col(0), neglogPvals.col(1), neglogPvals.col(2), emptyVec,
+		                                   testStats.col(0),   testStats.col(1),   testStats.col(2),   emptyVec);
 	} else {
 		fileUtils::write_snp_stats_to_file(ofile, n_effects, X, append,
-										   neglogPvals.col(0), emptyVec, emptyVec, emptyVec,
-										   testStats.col(0),   emptyVec, emptyVec, emptyVec);
+		                                   neglogPvals.col(0), emptyVec, emptyVec, emptyVec,
+		                                   testStats.col(0),   emptyVec, emptyVec, emptyVec);
 	}
 }
 
 void fileUtils::read_bgen_metadata(const std::string& filename,
-								   std::vector<int>& chr) {
+                                   std::vector<int>& chr) {
 	genfile::bgen::View::UniquePtr bgenView = genfile::bgen::View::create(filename);
 
-	std::string   chr_j, rsid_j, SNPID_j;
+	std::string chr_j, rsid_j, SNPID_j;
 	std::uint32_t pos_j;
 	std::vector< std::string > alleles_j;
 	bool bgen_pass = true;
@@ -266,7 +266,7 @@ void fileUtils::read_bgen_metadata(const std::string& filename,
 
 	while (bgen_pass) {
 		bgen_pass = bgenView->read_variant(&SNPID_j, &rsid_j, &chr_j, &pos_j, &alleles_j);
-		if (bgen_pass){
+		if (bgen_pass) {
 			bgenView->ignore_genotype_data_block();
 		}
 		chr.push_back(std::stoi(chr_j));
@@ -468,18 +468,6 @@ bool fileUtils::read_bgen_chunk(genfile::bgen::View::UniquePtr &bgenView,
 	// need to resize G whilst retaining existing coefficients if while
 	// loop exits early due to EOF.
 	G.conservativeResize(n_samples, jj);
-
-//	chunk_missingness /= jj;
-//	if(chunk_missingness > 0.0) {
-//		std::cout << "Average chunk missingness " << chunk_missingness << "(";
-//		std::cout << n_var_incomplete << "/" << G.cols();
-//		std::cout << " variants contain >=1 imputed entry)" << std::endl;
-//	}
-//
-//	if(n_constant_variance > 0) {
-//		std::cout << n_constant_variance << " variants removed due to ";
-//		std::cout << "constant variance" << std::endl;
-//	}
 
 	if(jj == 0) {
 		// Immediate EOF

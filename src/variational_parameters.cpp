@@ -69,7 +69,7 @@ void VariationalParamsBase::run_default_init(long n_var, long n_covar, long n_en
 }
 
 void VariationalParamsBase::snps_to_file(const std::string& path,
-										 const GenotypeMatrix &X, long n_env) const {
+                                         const GenotypeMatrix &X, long n_env) const {
 
 	boost_io::filtering_ostream outf;
 	fileUtils::fstream_init(outf, path);
@@ -108,7 +108,7 @@ void VariationalParamsBase::snps_to_file(const std::string& path,
 }
 
 void VariationalParamsBase::env_to_file(const std::string& path,
-		const std::vector<std::string>& env_names) const {
+                                        const std::vector<std::string>& env_names) const {
 	boost_io::filtering_ostream outf;
 	fileUtils::fstream_init(outf, path);
 
@@ -125,7 +125,7 @@ void VariationalParamsBase::env_to_file(const std::string& path,
 }
 
 void VariationalParamsBase::covar_to_file(const std::string& path,
-		const std::vector<std::string>& covar_names) const {
+                                          const std::vector<std::string>& covar_names) const {
 	boost_io::filtering_ostream outf;
 	fileUtils::fstream_init(outf, path);
 
@@ -142,9 +142,9 @@ void VariationalParamsBase::covar_to_file(const std::string& path,
 }
 
 void VariationalParamsBase::dump_to_prefix(const std::string& prefix,
-		const GenotypeMatrix &X,
-					const std::vector<std::string>& env_names,
-					const std::vector<std::string>& covar_names) const {
+                                           const GenotypeMatrix &X,
+                                           const std::vector<std::string>& env_names,
+                                           const std::vector<std::string>& covar_names) const {
 	std::string path;
 	long n_env = env_names.size();
 	long n_covar = covar_names.size();
@@ -252,7 +252,7 @@ Eigen::ArrayXd VariationalParamsBase::mean_gam_sq(int u0) const {
 }
 
 void VariationalParameters::init_from_lite(const VariationalParametersLite &init) {
-	// yx and ym set to point to appropriate col of VBayesX2::YM and VBayesX2::YX in constructor
+	// yx and ym set to point to appropriate col of VBayes::YM and VBayes::YX in constructor
 
 	alpha_beta = init.alpha_beta;
 	mu1_beta   = init.mu1_beta;

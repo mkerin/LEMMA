@@ -18,14 +18,6 @@
 #include <vector>
 #include <map>
 
-long op_pmax(long& ii) {
-	if(ii < 0) {
-		return 1;
-	} else {
-		return ii;
-	}
-}
-
 void GenotypeMatrix::assign_index(const long &ii, const long &jj, double x) {
 	if(low_mem) {
 		if(std::isnan(x)) {
@@ -85,27 +77,6 @@ Eigen::MatrixXd GenotypeMatrix::transpose_multiply(EigenRefDataMatrix lhs) const
 	}
 }
 
-EigenDataMatrix GenotypeMatrix::col_block(const std::uint32_t &ch_start, const int &ch_len) {
-	if(!scaling_performed) {
-		calc_scaled_values();
-	}
-
-	if(low_mem) {
-		double ww = intervalWidth;
-
-		EigenDataArrayX E = (0.5 * ww - compressed_dosage_means.segment(ch_start, ch_len).array()).cast<scalarData>();
-		EigenDataArrayX S = compressed_dosage_inv_sds.segment(ch_start, ch_len).cast<scalarData>();
-		EigenDataArrayXX res;
-
-		res = ww * M.block(0, ch_start, nn, ch_len).cast<scalarData>();
-		res.rowwise() += E.transpose();
-		res.rowwise() *= S.transpose();
-		return res.matrix();
-	} else {
-		return G.block(0, ch_start, nn, ch_len);
-	}
-}
-
 Eigen::VectorXd GenotypeMatrix::mult_vector_by_chr(const long& chr, const Eigen::Ref<const Eigen::VectorXd> &rhs) {
 	// (y^t G)^t <=> G^t y
 	assert(rhs.rows() == pp);
@@ -144,30 +115,13 @@ void GenotypeMatrix::col_block3(const std::vector<long> &chunk,
 
 	// Partition jobs amongst threads
 	long ch_len = chunk.size();
-	std::vector<std::vector<long> > indexes(params.n_thread);
+	std::vector<long> index;
 	for (long ii = 0; ii < ch_len; ii++) {
-		// indexes[ii % params.n_thread].push_back(ii);
-		indexes[0].push_back(ii);
+		index.push_back(ii);
 	}
 
 	// Decompress char -> double
-// #ifdef DEBUG
-	get_cols(indexes[0], chunk, D);
-	// for (int nn = 1; nn < params.n_thread; nn++){
-	//  get_cols(indexes[nn], chunk, D);
-	// }
-// #else
-//      std::thread t1[params.n_thread];
-//      for (int nn = 1; nn < params.n_thread; nn++){
-//          t1[nn] = std::thread( [this, &indexes, nn, &chunk, &D] {
-//              get_cols(indexes[nn], chunk, D);
-//          });
-//      }
-//      get_cols(indexes[0], chunk, D);
-//      for (int nn = 1; nn < params.n_thread; nn++){
-//          t1[nn].join();
-//      }
-// #endif
+	get_cols(index, chunk, D);
 }
 
 template<typename Deriv>

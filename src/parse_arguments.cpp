@@ -91,7 +91,7 @@ void parse_arguments(parameters &p, int argc, char **argv) {
 	    ("suppress-squared-env-removal", "QC: Suppress test for significant squared environmental effects (SQE)")
 	    ("incl-squared-envs", "QC: Include significant squared environmental effects (SQE) as covariates")
 	    ("random-seed", "Seed used for random number generation (default: random)",
-			 cxxopts::value<unsigned int>(p.random_seed))
+	    cxxopts::value<unsigned int>(p.random_seed))
 	;
 
 	options.add_options("VB")
@@ -107,8 +107,8 @@ void parse_arguments(parameters &p, int argc, char **argv) {
 	;
 
 	options.add_options("Assoc")
-		("singleSnpStats", "Compute SNP association tests", cxxopts::value<bool>(p.mode_calc_snpstats))
-		("resid-pheno", "Residualised phenotypes to compute association tests on. Inherited from VB algorithm if this is run first", cxxopts::value<std::string>(p.resid_loco_file))
+	    ("singleSnpStats", "Compute SNP association tests", cxxopts::value<bool>(p.mode_calc_snpstats))
+	    ("resid-pheno", "Residualised phenotypes to compute association tests on. Inherited from VB algorithm if this is run first", cxxopts::value<std::string>(p.resid_loco_file))
 	;
 
 	options.add_options("RHE")
@@ -130,9 +130,9 @@ void parse_arguments(parameters &p, int argc, char **argv) {
 	;
 
 	options.add_options("GPLEMMA")
-	("gplemma", "Estimate GxE heritability with the GPLEMMA method", cxxopts::value<bool>(p.mode_RHEreg_LM))
-	("gplemma-max-iter", "Maximum number of Levenburg-Marquardt iterations used by GPLEMMA (default 200)", cxxopts::value<long>(p.levenburgMarquardt_max_iter))
-	("gplemma-random-starts", "Number of random initializations used by GPLEMMA (default 10)", cxxopts::value<long>(p.n_LM_starts))
+	    ("gplemma", "Estimate GxE heritability with the GPLEMMA method", cxxopts::value<bool>(p.mode_RHEreg_LM))
+	    ("gplemma-max-iter", "Maximum number of Levenburg-Marquardt iterations used by GPLEMMA (default 200)", cxxopts::value<long>(p.levenburgMarquardt_max_iter))
+	    ("gplemma-random-starts", "Number of random initializations used by GPLEMMA (default 10)", cxxopts::value<long>(p.n_LM_starts))
 	;
 
 	options.add_options("Internal")
@@ -253,7 +253,7 @@ void parse_arguments(parameters &p, int argc, char **argv) {
 					p.streamBgenFiles.push_back(s);
 				}
 			}
-			if (p.streamBgenFiles.empty()){
+			if (p.streamBgenFiles.empty()) {
 				throw std::runtime_error("No valid bgen files found in " + filename);
 			}
 		}
@@ -477,8 +477,8 @@ void parse_arguments(parameters &p, int argc, char **argv) {
 		bool has_bgen = p.bgen_file != "NULL" || p.streamBgenFiles.size() > 0;
 		bool has_out = p.out_file != "NULL";
 		bool has_pheno = (p.pheno_file != "NULL" && p.mode_vb) ||
-						 (p.resume_prefix != "NULL" && p.bgen_file != "NULL") ||
-						 p.resid_loco_file != "NULL";
+		                 (p.resume_prefix != "NULL" && p.bgen_file != "NULL") ||
+		                 p.resid_loco_file != "NULL";
 		bool has_all = (has_pheno && has_out && has_bgen);
 		if(!has_all) {
 			throw std::runtime_error("bgen, pheno and out filepaths should all be provided in conjunction with --singleSnpStats");

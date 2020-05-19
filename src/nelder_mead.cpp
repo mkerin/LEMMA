@@ -52,7 +52,7 @@ bool optimNelderMead(Eigen::Ref<Eigen::VectorXd> init_out_vals,
 		std::cout << "\nNelder-Mead: beginning search..." << std::endl;
 		std::cout << "  - Initialization Phase:" << std::endl;
 		std::cout << "    Objective function value at each vertex:" << std::endl << simplex_fn_vals.transpose()
-				  << std::endl;
+		          << std::endl;
 		std::cout << "    Simplex matrix:" << std::endl << simplex_points << std::endl;
 	}
 	const double err_tol = 1E-08;
@@ -85,7 +85,7 @@ bool optimNelderMead(Eigen::Ref<Eigen::VectorXd> init_out_vals,
 			std::cout << simplex_points.row(index_min) << std::endl;
 
 			std::cout << "    Objective function value at each vertex:" << std::endl << simplex_fn_vals.transpose()
-					  << std::endl;
+			          << std::endl;
 			std::cout << "    Simplex matrix:" << std::endl << simplex_points << std::endl;
 		}
 	}
@@ -129,10 +129,10 @@ void iterNelderMead(Eigen::Ref<Eigen::MatrixXd> simplex_points,
 	// const double par_beta  = 0.75 - 1.0 / (2.0*n_vals);
 	// const double par_gamma = 1.0 + 2.0 / n_vals;
 	// const double par_delta = 1.0 - 1.0 / n_vals;
-	double par_alpha = 1.0;         // reflection parameter
-	double par_beta  = 0.5;         // contraction parameter
-	double par_gamma = 2.0;         // expansion parameter
-	double par_delta = 0.5;         // shrinkage parameter
+	double par_alpha = 1.0;             // reflection parameter
+	double par_beta  = 0.5;             // contraction parameter
+	double par_gamma = 2.0;             // expansion parameter
+	double par_delta = 0.5;             // shrinkage parameter
 
 
 	if(p.debug) {

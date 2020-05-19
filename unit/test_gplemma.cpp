@@ -11,38 +11,38 @@
 
 // Scenarios
 char* argv_rhe_nm[] = { (char*) "LEMMA",
-						 (char*) "--RHEreg-NM",
-						 (char*) "--NM-max-iter", (char*) "5",
-						 (char*) "--maf", (char*) "0.01",
-					  (char*) "--random-seed", (char*) "1",
-					  (char*) "--n-RHEreg-jacknife", (char*) "1",
-					  (char*) "--n-RHEreg-samples", (char*) "5",
-					  (char*) "--streamBgen", (char*) "unit/data/n50_p100.bgen",
-					  (char*) "--pheno", (char*) "unit/data/pheno.txt",
-					  (char*) "--environment", (char*) "unit/data/n50_p100_env.txt",
-					  (char*) "--out", (char*) "unit/data/test_pve/RHEreg_NM.out.gz"};
+	                    (char*) "--RHEreg-NM",
+	                    (char*) "--NM-max-iter", (char*) "5",
+	                    (char*) "--maf", (char*) "0.01",
+	                    (char*) "--random-seed", (char*) "1",
+	                    (char*) "--n-RHEreg-jacknife", (char*) "1",
+	                    (char*) "--n-RHEreg-samples", (char*) "5",
+	                    (char*) "--streamBgen", (char*) "unit/data/n50_p100.bgen",
+	                    (char*) "--pheno", (char*) "unit/data/pheno.txt",
+	                    (char*) "--environment", (char*) "unit/data/n50_p100_env.txt",
+	                    (char*) "--out", (char*) "unit/data/test_pve/RHEreg_NM.out.gz"};
 
 char* argv_rhe_lm2[] = { (char*) "LEMMA",
-						(char*) "--gplemma",
-						(char*) "--gplemma-max-iter", (char*) "5",
-						(char*) "--gplemma-random-starts", (char*) "1",
-						(char*) "--maf", (char*) "0.01",
-						(char*) "--random-seed", (char*) "1",
-						(char*) "--n-RHEreg-jacknife", (char*) "1",
-						(char*) "--n-RHEreg-samples", (char*) "5",
-						(char*) "--streamBgen", (char*) "unit/data/n50_p100.bgen",
-						(char*) "--pheno", (char*) "unit/data/pheno.txt",
-						(char*) "--environment", (char*) "unit/data/n50_p100_env.txt",
-						(char*) "--out", (char*) "unit/data/test_pve/RHEreg_LM.out.gz"};
+	                     (char*) "--gplemma",
+	                     (char*) "--gplemma-max-iter", (char*) "5",
+	                     (char*) "--gplemma-random-starts", (char*) "1",
+	                     (char*) "--maf", (char*) "0.01",
+	                     (char*) "--random-seed", (char*) "1",
+	                     (char*) "--n-RHEreg-jacknife", (char*) "1",
+	                     (char*) "--n-RHEreg-samples", (char*) "5",
+	                     (char*) "--streamBgen", (char*) "unit/data/n50_p100.bgen",
+	                     (char*) "--pheno", (char*) "unit/data/pheno.txt",
+	                     (char*) "--environment", (char*) "unit/data/n50_p100_env.txt",
+	                     (char*) "--out", (char*) "unit/data/test_pve/RHEreg_LM.out.gz"};
 
 char* argv_multiE[] = { (char*) "--RHEreg", (char*) "--maf", (char*) "0.01",
-						(char*) "--random-seed", (char*) "1",
-						(char*) "--n-RHEreg-jacknife", (char*) "1",
-						(char*) "--n-RHEreg-samples", (char*) "2",
-						(char*) "--streamBgen", (char*) "unit/data/n50_p100.bgen",
-						(char*) "--pheno", (char*) "unit/data/pheno.txt",
-						(char*) "--environment", (char*) "unit/data/n50_p100_env.txt",
-						(char*) "--out", (char*) "unit/data/test_pve/pve_est.out.gz"};
+	                    (char*) "--random-seed", (char*) "1",
+	                    (char*) "--n-RHEreg-jacknife", (char*) "1",
+	                    (char*) "--n-RHEreg-samples", (char*) "2",
+	                    (char*) "--streamBgen", (char*) "unit/data/n50_p100.bgen",
+	                    (char*) "--pheno", (char*) "unit/data/pheno.txt",
+	                    (char*) "--environment", (char*) "unit/data/n50_p100_env.txt",
+	                    (char*) "--out", (char*) "unit/data/test_pve/pve_est.out.gz"};
 
 
 TEST_CASE("RHE-LevenburgMarquardt") {

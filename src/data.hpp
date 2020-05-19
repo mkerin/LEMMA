@@ -116,7 +116,7 @@ public:
 
 	explicit Data(parameters& p) : p(p), G(p), vp_init(p) {
 		Eigen::setNbThreads(p.n_thread);
-		if (p.bgen_file == "NULL" && p.streamBgenFiles.empty()){
+		if (p.bgen_file == "NULL" && p.streamBgenFiles.empty()) {
 			throw std::runtime_error("No bgen files available when initialising Data class");
 		}
 
@@ -214,7 +214,7 @@ public:
 			streamBgenViews[ii]->set_query(query);
 		}
 
-		if (p.bgen_file != "NULL"){
+		if (p.bgen_file != "NULL") {
 			bgenView->summarise(std::cout);
 		}
 
@@ -446,7 +446,7 @@ public:
 				if (p.debug) std::cout << "Initialising hyper-parameters with random draw" << std::endl;
 				Hyps hyps(p);
 				hyps.random_init(n_effects, n_var);
-				if (!hyps.domain_is_valid()){
+				if (!hyps.domain_is_valid()) {
 					throw std::runtime_error("Problem with hyperparameter sampling.");
 				}
 				hyps_inits.push_back(hyps);
@@ -618,7 +618,7 @@ public:
 	void read_pheno( ){
 		Eigen::MatrixXd tmpY;
 		EigenUtils::read_matrix(p.pheno_file, tmpY, pheno_names, missing_phenos);
-		if (tmpY.cols() > 1){
+		if (tmpY.cols() > 1) {
 			if (p.pheno_col_num == -1) {
 				throw std::runtime_error("Multiple phenotypes detected; specify one with --pheno-col-num");
 			} else {
@@ -638,14 +638,14 @@ public:
 		EigenUtils::read_matrix(p.resid_loco_file, resid_loco, resid_loco_names, missing_resid_loco);
 		loco_chrs.clear();
 		std::vector<int> keep_cols;
-		for (long cc = 0; cc < resid_loco_names.size(); cc++){
+		for (long cc = 0; cc < resid_loco_names.size(); cc++) {
 			try {
 				std::string chr = std::regex_replace(resid_loco_names[cc], std::regex("resid_excl_chr([0-9]+).*"), std::string("$1"));
 				loco_chrs.push_back(std::stoi(chr));
 				keep_cols.push_back(cc);
 			} catch (...) {}
 		}
-		for (long cc = 0; cc < keep_cols.size(); cc++){
+		for (long cc = 0; cc < keep_cols.size(); cc++) {
 			resid_loco.col(cc) = resid_loco.col(keep_cols[cc]);
 		}
 		std::cout << " - detected residualised phenotype with " << keep_cols.size() << " LOCO partitions" << std::endl;
@@ -1010,8 +1010,8 @@ public:
 		std::vector< std::string > case1 = {"sigma", "sigma_b", "lambda_b"};
 		std::vector< std::string > case2 = {"sigma", "sigma_b", "sigma_g", "lambda_b", "lambda_g"};
 		std::vector< std::string > case3 = {"hyp", "value"};
-		std::vector< std::string > case4c = {"h_b", "lambda_b", "f1_b"}; // deprecated
-		std::vector< std::string > case4d = {"h_b", "lambda_b", "f1_b", "h_g", "lambda_g", "f1_g"}; // deprecated
+		std::vector< std::string > case4c = {"h_b", "lambda_b", "f1_b"};         // deprecated
+		std::vector< std::string > case4d = {"h_b", "lambda_b", "f1_b", "h_g", "lambda_g", "f1_g"};         // deprecated
 
 		read_file_header(p.hyps_grid_file, hyps_names);
 		int n_hyps_removed = 0;
@@ -1059,8 +1059,8 @@ public:
 			// Reading from hyps dump
 			Hyps hyps(p);
 			hyps.from_file(p.hyps_grid_file);
-			if (hyps.n_effects != n_effects){
-				std::string analysis_type = (n_effects == 1? "main effects" : "gxe");
+			if (hyps.n_effects != n_effects) {
+				std::string analysis_type = (n_effects == 1 ? "main effects" : "gxe");
 				throw std::runtime_error("Expecting hyperparameters for a "+analysis_type+" analysis");
 			}
 			hyps_inits.push_back(hyps);
@@ -1463,7 +1463,7 @@ public:
 			bool placeholder = false;
 			C_extra_pve = reduce_mat_to_complete_cases(C_extra_pve, placeholder, n_cols, incomplete_cases);
 		}
-		if (p.resid_loco_file != "NULL"){
+		if (p.resid_loco_file != "NULL") {
 			long n_cols = resid_loco.cols();
 			bool placeholder = false;
 			resid_loco = reduce_mat_to_complete_cases(resid_loco, placeholder, n_cols, incomplete_cases);

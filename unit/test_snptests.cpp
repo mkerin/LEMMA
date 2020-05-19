@@ -5,35 +5,35 @@
 
 #include "../src/tools/eigen3.3/Dense"
 #include "../src/parse_arguments.hpp"
-#include "../src/vbayes_x2.hpp"
+#include "../src/vbayes.hpp"
 #include "../src/data.hpp"
 
 #include <string>
 
 char* full_run[] = { (char*) "prog",
-	               (char*) "--VB-varEM",
-	               (char*) "--VB-iter-max", (char*) "10",
-	               (char*) "--random-seed", (char*) "1",
-	               (char*) "--pheno", (char*) "unit/data/pheno.txt",
-	               (char*) "--environment", (char*) "unit/data/n50_p100_env.txt",
-	               (char*) "--bgen", (char*) "unit/data/n50_p100.bgen",
-	               (char*) "--out", (char*) "unit/data/test5a.out.gz"};
+	                 (char*) "--VB-varEM",
+	                 (char*) "--VB-iter-max", (char*) "10",
+	                 (char*) "--random-seed", (char*) "1",
+	                 (char*) "--pheno", (char*) "unit/data/pheno.txt",
+	                 (char*) "--environment", (char*) "unit/data/n50_p100_env.txt",
+	                 (char*) "--bgen", (char*) "unit/data/n50_p100.bgen",
+	                 (char*) "--out", (char*) "unit/data/test5a.out.gz"};
 
 char* from_resume[] = { (char*) "prog",
-				   (char*) "--bgen", (char*) "unit/data/n50_p100.bgen",
-	               (char*) "--singleSnpStats",
-	               (char*) "--resume-from-state",
-	               (char*) "unit/data/lemma_interim_files/test5a_dump_it_converged",
-	               (char*) "--pheno", (char*) "unit/data/pheno.txt",
-	               (char*) "--environment", (char*) "unit/data/n50_p100_env.txt",
-	               (char*) "--out", (char*) "unit/data/test5b.out.gz"};
+	                    (char*) "--bgen", (char*) "unit/data/n50_p100.bgen",
+	                    (char*) "--singleSnpStats",
+	                    (char*) "--resume-from-state",
+	                    (char*) "unit/data/lemma_interim_files/test5a_dump_it_converged",
+	                    (char*) "--pheno", (char*) "unit/data/pheno.txt",
+	                    (char*) "--environment", (char*) "unit/data/n50_p100_env.txt",
+	                    (char*) "--out", (char*) "unit/data/test5b.out.gz"};
 
 char* from_file[] = { (char*) "prog",
-				   (char*) "--streamBgen", (char*) "unit/data/n50_p100.bgen",
-				   (char*) "--singleSnpStats",
-				   (char*) "--resid-pheno", (char*) "unit/data/test5a_converged_yhat.out.gz",
-				   (char*) "--environment", (char*) "unit/data/test5a_converged_eta.out.gz",
-				   (char*) "--out", (char*) "unit/data/test5c.out.gz"};
+	                  (char*) "--streamBgen", (char*) "unit/data/n50_p100.bgen",
+	                  (char*) "--singleSnpStats",
+	                  (char*) "--resid-pheno", (char*) "unit/data/test5a_converged_yhat.out.gz",
+	                  (char*) "--environment", (char*) "unit/data/test5a_converged_eta.out.gz",
+	                  (char*) "--out", (char*) "unit/data/test5c.out.gz"};
 
 
 void my_test(const std::string& mode){
@@ -66,7 +66,7 @@ void my_test(const std::string& mode){
 		Xstream.calc_scaled_values();
 		compute_LOCO_pvals(data.resid_loco.col(0), Xstream, neglogPvals, testStats, data.vp_init.eta);
 	} else {
-		VBayesX2 VB(data);
+		VBayes VB(data);
 		if (mode == "after_lemma") {
 			std::vector<VbTracker> trackers(VB.hyps_inits.size(), p);
 			VB.run_inference(VB.hyps_inits, false, 2, trackers);

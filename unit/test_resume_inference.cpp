@@ -7,16 +7,16 @@
 #include <iostream>
 #include "../src/tools/eigen3.3/Dense"
 #include "../src/parse_arguments.hpp"
-#include "../src/vbayes_x2.hpp"
+#include "../src/vbayes.hpp"
 #include "../src/data.hpp"
 #include "../src/hyps.hpp"
 
 
 // Scenarios
 char* case1a[] = { (char*) "prog",
-				   (char*) "--VB-varEM",
+	               (char*) "--VB-varEM",
 	               (char*) "--mode-regress-out-covars",
-				   (char*) "--random-seed", (char*) "1",
+	               (char*) "--random-seed", (char*) "1",
 	               (char*) "--VB-iter-max", (char*) "10",
 	               (char*) "--hyps-grid", (char*) "unit/data/single_hyps_gxage.txt",
 	               (char*) "--pheno", (char*) "unit/data/pheno.txt",
@@ -25,9 +25,9 @@ char* case1a[] = { (char*) "prog",
 	               (char*) "--out", (char*) "unit/data/test1a.out.gz"};
 
 char* case1b[] = { (char*) "prog",
-				   (char*) "--VB-varEM",
+	               (char*) "--VB-varEM",
 	               (char*) "--mode-regress-out-covars",
-				   (char*) "--random-seed", (char*) "1",
+	               (char*) "--random-seed", (char*) "1",
 	               (char*) "--VB-iter-max", (char*) "10",
 	               (char*) "--vb-iter-start", (char*) "3",
 	               (char*) "--resume-from-state",
@@ -38,9 +38,9 @@ char* case1b[] = { (char*) "prog",
 	               (char*) "--out", (char*) "unit/data/test1b.out.gz"};
 
 char* case1c[] = { (char*) "prog",
-				   (char*) "--singleSnpStats",
+	               (char*) "--singleSnpStats",
 	               (char*) "--mode-regress-out-covars",
-				   (char*) "--random-seed", (char*) "1",
+	               (char*) "--random-seed", (char*) "1",
 	               (char*) "--resume-from-state",
 	               (char*) "unit/data/lemma_interim_files/test1a_dump_it_converged",
 	               (char*) "--pheno", (char*) "unit/data/pheno.txt",
@@ -62,7 +62,7 @@ TEST_CASE("Resume from state: varEM w/ multiE + regress out covars"){
 		data.calc_dxteex();
 		data.set_vb_init();
 
-		VBayesX2 VB(data);
+		VBayes VB(data);
 
 		std::vector< VbTracker > trackers(VB.hyps_inits.size(), p);
 		SECTION("Ex4. Explicitly checking hyps") {
@@ -124,7 +124,7 @@ TEST_CASE("Resume from state: varEM w/ multiE + regress out covars"){
 		data.calc_dxteex();
 		data.set_vb_init();
 
-		VBayesX2 VB(data);
+		VBayes VB(data);
 
 		std::vector< VbTracker > trackers(VB.hyps_inits.size(), p);
 		SECTION("Ex4. Explicitly checking hyps") {
@@ -159,7 +159,7 @@ TEST_CASE("Resume from state: varEM w/ multiE + regress out covars"){
 		data.standardise_non_genetic_data();
 		data.read_full_bgen();
 		data.set_vb_init();
-		VBayesX2 VB(data);
+		VBayes VB(data);
 		CHECK(VB.vp_init.ym.array().abs().sum() == Approx(9.3519781087));
 
 		// Compute snp-stats
@@ -169,4 +169,3 @@ TEST_CASE("Resume from state: varEM w/ multiE + regress out covars"){
 		CHECK(neglogPvals(0,1) == Approx(1.4084944606));
 	}
 }
-

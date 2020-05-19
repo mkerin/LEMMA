@@ -80,9 +80,9 @@ public:
 	void covar_to_file(const std::string& path, const std::vector<std::string>& covar_names) const;
 	void snps_to_file(const std::string& path, const GenotypeMatrix &X, long n_env) const;
 	void dump_to_prefix(const std::string& prefix,
-			const GenotypeMatrix &X,
-			const std::vector<std::string>& env_names,
-			const std::vector<std::string>& covar_names) const;
+	                    const GenotypeMatrix &X,
+	                    const std::vector<std::string>& env_names,
+	                    const std::vector<std::string>& covar_names) const;
 };
 
 // Store subset of Variational Parameters to be RAM efficient

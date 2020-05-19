@@ -5,7 +5,7 @@
 #include "parse_arguments.hpp"
 #include "parameters.hpp"
 #include "data.hpp"
-#include "vbayes_x2.hpp"
+#include "vbayes.hpp"
 #include "rhe_reg.hpp"
 #include "genotype_matrix.hpp"
 #include "mpi_utils.hpp"
@@ -37,7 +37,7 @@ int main( int argc, char** argv ) {
 	std::cout << "LEMMA v" << VERSION_MAJOR << "." << VERSION_MINOR << "." << VERSION_PATCH << std::endl;
 	std::cout << "=============" << std::endl << std::endl;
 
-	if (argc == 1){
+	if (argc == 1) {
 		return 0;
 	}
 	auto start = std::chrono::system_clock::now();
@@ -58,7 +58,7 @@ int main( int argc, char** argv ) {
 	data.set_vb_init();
 
 	if (p.mode_vb || (p.mode_calc_snpstats && p.resume_prefix != "NULL")) {
-		VBayesX2 VB(data);
+		VBayes VB(data);
 		if (p.mode_vb) {
 			if (data.n_effects > 1) {
 				data.calc_dxteex();
@@ -78,7 +78,7 @@ int main( int argc, char** argv ) {
 			data.vp_init = VB.vp_init;
 			data.loco_chrs = VB.chrs_present;
 			data.resid_loco.resize(data.n_samples, data.loco_chrs.size());
-			for (long cc = 0; cc < data.loco_chrs.size(); cc++){
+			for (long cc = 0; cc < data.loco_chrs.size(); cc++) {
 				data.resid_loco.col(cc) = VB.loco_phenos[cc];
 			}
 
@@ -155,12 +155,12 @@ int main( int argc, char** argv ) {
 
 				int firstChr = Xstream.chromosome[0];
 				auto cnt = std::count(Xstream.chromosome.begin(),Xstream.chromosome.end(),firstChr);
-				if (cnt != Xstream.cols()){
+				if (cnt != Xstream.cols()) {
 					throw std::logic_error("Expected only one chromosome in this chunk of data");
 				}
 
 				auto it = std::find(data.loco_chrs.begin(),data.loco_chrs.end(),firstChr);
-				if (it == data.loco_chrs.end()){
+				if (it == data.loco_chrs.end()) {
 					throw std::runtime_error("Could not locate residualised LOCO phenotype for chromosome "+std::to_string(firstChr));
 				} else {
 					ixChr = it - data.loco_chrs.begin();

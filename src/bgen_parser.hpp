@@ -51,7 +51,7 @@ struct DosageSetter {
 	// Called once per sample to determine whether we want data for this sample
 	bool set_sample( std::size_t i ) {
 		// Only want data from samples with complete data across pheno/covar/env
-		if (m_sample_is_invalid[i]){
+		if (m_sample_is_invalid[i]) {
 			m_samples_skipped++;
 			return false;
 		} else {

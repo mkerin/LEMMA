@@ -174,10 +174,10 @@ double student_t_test(long nn,
 
 template <typename GenoMat>
 void compute_LOCO_pvals(const EigenDataVector &resid_pheno,
-		const GenoMat &Xtest,
-		Eigen::MatrixXd &neglogPvals,
-						Eigen::MatrixXd &testStats,
-						const EigenDataVector &eta) {
+                        const GenoMat &Xtest,
+                        Eigen::MatrixXd &neglogPvals,
+                        Eigen::MatrixXd &testStats,
+                        const EigenDataVector &eta) {
 	bool isGxE     = eta.rows() > 0;
 	long n_var     = Xtest.cols();
 	long n_samples = Xtest.rows();

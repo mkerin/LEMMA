@@ -67,7 +67,7 @@ public:
 
 	/*** Deprecated ***/
 	Eigen::VectorXd get_sigmas(double h_b, double h_g, double lam_b, double lam_g,
-							   double f1_b, double f1_g, long n_var) const;
+	                           double f1_b, double f1_g, long n_var) const;
 	Eigen::VectorXd get_sigmas(double h_b, double lam_b, double f1_b, long n_var) const;
 };
 

@@ -78,7 +78,7 @@ void write_snp_stats_to_file(boost_io::filtering_ostream &ofile, const int &n_ef
                              const Eigen::Ref<const Eigen::VectorXd> &test_stat_joint);
 
 void read_bgen_metadata(const std::string& filename,
-						std::vector<int>& chr);
+                        std::vector<int>& chr);
 
 bool read_bgen_chunk(genfile::bgen::View::UniquePtr &bgenView,
                      GenotypeMatrix &G,

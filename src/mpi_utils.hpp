@@ -13,28 +13,6 @@
 #include <vector>
 #include <iostream>
 
-// Edits making to VBayes2
-// VBayesX2::() -> Cty
-// VBayesX2::() -> XtE
-// VBayesX2::calcExpLinear -> int_linear
-// VBayesX2::updateCovarEffects -> A
-// VBayesX2::computeGeneResidualCorrelation -> res
-// VBayesX2::adjustParams -> local correlation matrices
-// VBayesX2::updateEnvWeights -> ???
-// Data::calc_dxteex() -> dztz_lmj
-
-// Operations to search for
-// sum()
-// dot()
-// squaredNorm()
-// any uses of N or n_samples
-// n_samples now local
-// use N -> Nglobal
-
-// Not updated
-// Data::calc_snpstats()
-
-
 // #ifdef DATA_AS_FLOAT
 // using MPI_EIGEN_TYPE = MPI_FLOAT;
 // #else

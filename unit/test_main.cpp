@@ -3,7 +3,7 @@
 
 #include "../src/tools/eigen3.3/Dense"
 #include "../src/parse_arguments.hpp"
-#include "../src/vbayes_x2.hpp"
+#include "../src/vbayes.hpp"
 #include "../src/data.hpp"
 #include "../src/hyps.hpp"
 #include "../src/genotype_matrix.hpp"
@@ -15,13 +15,13 @@
 #include <sys/stat.h>
 
 char* case_study_args[] = { (char*) "bin/bgen_prog", (char*) "--VB-varEM",
-				 (char*) "--VB-iter-max", (char*) "10",
-				 (char*) "--environment", (char*) "unit/data/n50_p100_env.txt",
-				 (char*) "--bgen", (char*) "unit/data/n50_p100.bgen",
-				 (char*) "--out", (char*) "unit/data/test_main.out.gz",
-				 (char*) "--pheno", (char*) "unit/data/pheno.txt",
-				 (char*) "--hyps-grid", (char*) "unit/data/single_hyps_gxage.txt",
-				 (char*) "--hyps-probs", (char*) "unit/data/single_hyps_gxage_probs.txt"};
+	                        (char*) "--VB-iter-max", (char*) "10",
+	                        (char*) "--environment", (char*) "unit/data/n50_p100_env.txt",
+	                        (char*) "--bgen", (char*) "unit/data/n50_p100.bgen",
+	                        (char*) "--out", (char*) "unit/data/test_main.out.gz",
+	                        (char*) "--pheno", (char*) "unit/data/pheno.txt",
+	                        (char*) "--hyps-grid", (char*) "unit/data/single_hyps_gxage.txt",
+	                        (char*) "--hyps-probs", (char*) "unit/data/single_hyps_gxage_probs.txt"};
 
 TEST_CASE( "Case study: varEM w/ multi-env + MoG + covars" ){
 	parameters p;
@@ -36,7 +36,7 @@ TEST_CASE( "Case study: varEM w/ multi-env + MoG + covars" ){
 	data.calc_dxteex();
 	data.calc_snpstats();
 	data.set_vb_init();
-	VBayesX2 VB(data);
+	VBayes VB(data);
 	SECTION("Initialised correctly"){
 		CHECK(VB.Nglobal == 50);
 		CHECK(VB.Nglobal == 50.0);
@@ -111,8 +111,8 @@ TEST_CASE( "Case study: varEM w/ multi-env + MoG + covars" ){
 		VbTracker tracker(p);
 		tracker.init_interim_output(0,2, VB.n_effects, VB.n_covar, VB.n_env, VB.env_names, vp);
 		tracker.dump_state("2", VB.n_samples, VB.n_covar, VB.n_var, VB.n_env,
-						   VB.n_effects, vp, hyps, VB.Y, VB.C, VB.X,
-						   VB.covar_names, VB.env_names, VB.sample_is_invalid, VB.sample_location);
+		                   VB.n_effects, vp, hyps, VB.Y, VB.C, VB.X,
+		                   VB.covar_names, VB.env_names, VB.sample_is_invalid, VB.sample_location);
 
 		// variances
 		CHECK(vp.EdZtZ.sum() == Approx(7153.6186444063));
@@ -142,7 +142,7 @@ TEST_CASE("Case Study: var-EM w/ sample subsetting"){
 	std::cout << "calc dxteex" << std::endl;
 	data.calc_snpstats();
 	data.set_vb_init();
-	VBayesX2 VB(data);
+	VBayes VB(data);
 	SECTION("Initialised correctly"){
 		CHECK(VB.Nglobal == 25);
 		CHECK(VB.n_var == 65);
@@ -167,7 +167,7 @@ TEST_CASE("NaN vparam update throws exception" ){
 
 	data.calc_dxteex();
 	data.set_vb_init();
-	VBayesX2 VB(data);
+	VBayes VB(data);
 
 	std::vector< VbTracker > trackers(VB.hyps_inits.size(), p);
 
