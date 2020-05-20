@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    
+    
+    
+    <link rel="shortcut icon" href="../img/favicon.ico">
+
+    
+    <title>LEMMA - LEMMA Documentation</title>
+    
+
+    <link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.12.0/css/all.css">
+    <link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.12.0/css/v4-shims.css">
+    <link rel="stylesheet" href="//cdn.jsdelivr.net/npm/hack-font@3.3.0/build/web/hack.min.css">
+    <link href='//rsms.me/inter/inter.css' rel='stylesheet' type='text/css'>
+    <link href='//fonts.googleapis.com/css?family=Open+Sans:300italic,400italic,700italic,400,300,600,700&subset=latin-ext,latin' rel='stylesheet' type='text/css'>
+    <link href="../css/bootstrap-custom.min.css" rel="stylesheet">
+    <link href="../css/base.min.css" rel="stylesheet">
+    <link href="../css/cinder.min.css" rel="stylesheet">
+
+    
+
+    <!-- HTML5 shim and Respond.js IE8 support of HTML5 elements and media queries -->
+    <!--[if lt IE 9]>
+            <script src="https://cdn.jsdelivr.net/npm/html5shiv@3.7.3/dist/html5shiv.min.js"></script>
+            <script src="https://cdn.jsdelivr.net/npm/respond.js@1.4.2/dest/respond.min.js"></script>
+        <![endif]-->
+
+    
+
+     
+</head>
+
+<body>
+
+    <div class="navbar navbar-default navbar-fixed-top" role="navigation">
+    <div class="container">
+
+        <!-- Collapsed navigation -->
+        <div class="navbar-header">
+            <!-- Expander button -->
+            <button type="button" class="navbar-toggle" data-toggle="collapse" data-target=".navbar-collapse">
+                <span class="sr-only">Toggle navigation</span>
+                <span class="icon-bar"></span>
+                <span class="icon-bar"></span>
+                <span class="icon-bar"></span>
+            </button>
+            
+
+            <!-- Main title -->
+
+            <a class="navbar-brand" href="..">LEMMA Documentation</a>
+        </div>
+
+        <!-- Expanded navigation -->
+        <div class="navbar-collapse collapse">
+                <!-- Main navigation -->
+                <ul class="nav navbar-nav">
+                
+                
+                    <li >
+                        <a href="..">Home</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../install/">Install</a>
+                    </li>
+                
+                
+                
+                    <li class="active">
+                        <a href="./">LEMMA</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../gplemma/">GPLEMMA</a>
+                    </li>
+                
+                
+                </ul>
+
+            <ul class="nav navbar-nav navbar-right">
+                    <li>
+                        <a href="#" data-toggle="modal" data-target="#mkdocs_search_modal">
+                            <i class="fas fa-search"></i> Search
+                        </a>
+                    </li>
+                    <li >
+                        <a rel="prev" href="../install/">
+                            <i class="fas fa-arrow-left"></i> Previous
+                        </a>
+                    </li>
+                    <li >
+                        <a rel="next" href="../gplemma/">
+                            Next <i class="fas fa-arrow-right"></i>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="https://github.com/mkerin/LEMMA/edit/master/docs/lemma.md"><i class="fab fa-github"></i> Edit on GitHub</a>
+                    </li>
+            </ul>
+        </div>
+    </div>
+</div>
+
+    <div class="container">
+        
+        
+        <div class="col-md-3"><div class="bs-sidebar hidden-print affix well" role="complementary">
+    <ul class="nav bs-sidenav">
+        <li class="first-level active"><a href="#lemma">LEMMA</a></li>
+            <li class="second-level"><a href="#example-data">Example data</a></li>
+                
+            <li class="second-level"><a href="#getting-started">Getting started</a></li>
+                
+                <li class="third-level"><a href="#running-the-lemma-variational-inference-algorithm">Running the LEMMA variational inference algorithm</a></li>
+                <li class="third-level"><a href="#association-testing-with-imputed-snps">Association testing with imputed SNPs</a></li>
+                <li class="third-level"><a href="#heritability-estimation">Heritability estimation</a></li>
+            <li class="second-level"><a href="#advanced-usage">Advanced usage</a></li>
+                
+                <li class="third-level"><a href="#precomputing-the-dxteex-array">Precomputing the dXtEEX array</a></li>
+                <li class="third-level"><a href="#heritability-partitioned-by-maf-and-ld">Heritability partitioned by MAF and LD</a></li>
+                <li class="third-level"><a href="#resuming-from-a-previous-parameter-state">Resuming from a previous parameter state</a></li>
+            <li class="second-level"><a href="#complexity">Complexity</a></li>
+                
+                <li class="third-level"><a href="#computational-complexity">Computational Complexity</a></li>
+                <li class="third-level"><a href="#memory-complexity">Memory Complexity</a></li>
+    </ul>
+</div></div>
+        <div class="col-md-9" role="main">
+
+<h1 id="lemma">LEMMA</h1>
+<h2 id="example-data">Example data</h2>
+<p>The <code>example</code> directory contains a simulated dataset with:</p>
+<ul>
+<li>5000 individuals</li>
+<li>20,000 SNPs</li>
+<li>5 environmental variables</li>
+<li>a simulated phenotype</li>
+</ul>
+<p>The phenotype has been simulated to have:</p>
+<ul>
+<li>2000 SNPs with non-zero main effects</li>
+<li>500 SNPs with non-zero GxE effects</li>
+<li>GxE effects with a linear combination of two of the five environments (i.e. two are active).</li>
+<li>SNP-Heritability of 20% (main effects) and 10% (GxE effects)</li>
+</ul>
+<h2 id="getting-started">Getting started</h2>
+<p>The LEMMA approach consists of three distinct steps:</p>
+<ol>
+<li>A variational inference algorithm computes the Environmental Score (ES) and residualised phenotype. This is typically run on genotyped SNPs.</li>
+<li>Single SNP association testing using the ES and residualised phenotypes. This can be run either on the same set of genotyped SNPs, or a larger set of imputed SNPs.</li>
+<li>Heritability estimation partitioned into additive SNP effects and multiplicative GxE effects with the ES. </li>
+</ol>
+<p>All three steps can be run in sequence using the following commands</p>
+<pre><code>rm example/bgen_filenames.txt
+for cc in `seq 1 22`; do
+  bgenix -g example/n5k_p20k_example.bgen -incl-range ${cc}:0-1000000000 &gt; example/n5k_p20k_example_chr${cc}.bgen;
+  bgenix -index -g example/n5k_p20k_example_chr${cc}.bgen;
+  echo &quot;example/n5k_p20k_example_chr${cc}.bgen&quot; &gt;&gt; example/bgen_filenames.txt;
+done
+
+mpirun -n 1 build/lemma_1_0_1 \
+  --pheno example/pheno.txt.gz \
+  --environment example/env.txt.gz \
+  --VB \
+  --bgen example/n5k_p20k_example.bgen \
+  --singleSnpStats \
+  --RHEreg --random-seed 1 \
+  --mStreamBgen example/bgen_filenames.txt \
+  --out example/inference.out.gz
+</code></pre>
+
+<p>For association testing and heritability estimation, LEMMA will use genetic data provided from the <code>--mStreamBgen</code> if it is provided. Otherwise LEMMA will use genetic data from the <code>--bgen</code> flag.</p>
+<p>Files provided to <code>--mStreamBgen</code> should each contain only one chromosome. Separating the chromosomes into different files can be achieved with the <a href="https://bitbucket.org/gavinband/bgen/wiki/bgenix">BGENIX</a> program.</p>
+<p>Output from the variational inference algorithm:</p>
+<ul>
+<li><code>example/inference.out.gz</code> :                                converged hyperparameter values + ELBO</li>
+<li><code>example/inference_converged_eta.out.gz</code> :                  converged Environmental Score</li>
+<li><code>example/inference_converged_resid_pheno_chr*.out.gz</code> : residual phenotype per chromosome</li>
+<li><code>example/inference_converged_vparams_*.out.gz</code> :            posterior variational parameters</li>
+<li><code>example/inference_converged_yhat.out.gz</code> :                 predicted vectors and residualised phenotypes</li>
+</ul>
+<p>Output from association testing:</p>
+<ul>
+<li><code>example/inference_loco_pvals.out.gz</code></li>
+</ul>
+<p>Output from heritability estimation:</p>
+<ul>
+<li><code>example/inference_pve.out.gz</code></li>
+</ul>
+<p>The LEMMA algorithm is modular, and so each step can be performed separately as follows.</p>
+<h3 id="running-the-lemma-variational-inference-algorithm">Running the LEMMA variational inference algorithm</h3>
+<pre><code>mpirun -n 1 build/lemma_1_0_1 \
+  --VB \
+  --pheno example/pheno.txt.gz \
+  --environment example/env.txt.gz \
+  --bgen example/n5k_p20k_example.bgen \
+  --out example/inference.out.gz
+</code></pre>
+
+<p>In this case the algorithm should converge in 59 iterations.</p>
+<h3 id="association-testing-with-imputed-snps">Association testing with imputed SNPs</h3>
+<pre><code>mpirun -n 1 build/lemma_1_0_1 \
+  --singleSnpStats --maf 0.01 \
+  --pheno example/pheno.txt.gz \
+  --resid-pheno example/inference_converged_yhat.out.gz \
+  --mStreamBgen example/bgen_filenames.txt \
+  --environment example/inference_converged_eta.out.gz \
+  --out example/inference_loco_pvals.out.gz;
+</code></pre>
+
+<p>In this example the flag <code>--pheno example/pheno.txt.gz</code> is optional. This is used to see if any environmental variables have significant squared effects, and include them as covariates if so.</p>
+<p>For analyses of large genomic datasets it may be useful to parallelize association testing across chunks of SNPs with the <code>--range</code> flag.</p>
+<h3 id="heritability-estimation">Heritability estimation</h3>
+<pre><code>mpirun -n 1 build/lemma_1_0_1 \
+  --RHEreg --random-seed 1 \
+  --pheno example/pheno.txt.gz \
+  --mStreamBgen example/bgen_filenames.txt \
+  --environment example/inference_converged_eta.out.gz \
+  --out example/inference_pve.out.gz
+</code></pre>
+
+<p>This should return heritability estimates of h2-G = 0.23 (0.032) and h2-GxE = 0.08 (0.016), where the value in brackets is the standard error.</p>
+<h2 id="advanced-usage">Advanced usage</h2>
+<h3 id="precomputing-the-dxteex-array">Precomputing the dXtEEX array</h3>
+<p>Before running the variational algorithm, LEMMA requires the quantities
+<img alt="Test Image 1" src="../img/LEMMA_precomputation.png" /><br />
+LEMMA is able to compute this internally, however for large datasets this imposes substantial costs. As this is easily parallelised over variants and/or environments, we recommend that users precompute this quantity beforehand and provide a file to LEMMA at runtime.</p>
+<p>Install <code>bgen_utils</code> using instructions from <a href="https://github.com/mkerin/bgen_utils">https://github.com/mkerin/bgen_utils</a>.</p>
+<p>Build the <code>example/dxteex.out.gz</code> array using commands</p>
+<pre><code>BGEN_UTILS=&lt;path_to_bgen_utils&gt;
+for cc in `seq 1 22`; do
+  ${BGEN_UTILS} \
+    --compute-env-snp-correlations \
+    --mode_low_mem \
+    --range ${cc}:0-100000000000 \
+    --bgen $(bgen) \
+    --environment $(dir)/env.txt \
+    --out example/dxteex_chr${cc}.out.gz;
+done
+zcat example/dxteex_chr*.out.gz &gt; example/dxteex.out.gz
+</code></pre>
+
+<p>Then provide the file <code>example/dxteex.out.gz</code> to LEMMA with the commandline flag <code>--dxteex</code>.</p>
+<pre><code>mpirun -n 1 build/lemma_1_0_1 \
+  --VB \
+  --pheno example/pheno.txt.gz \
+  --environment example/env.txt.gz \
+  --bgen example/n5k_p20k_example.bgen \
+  --dxteex example/dxteex.out.gz \
+  --out example/inference.out.gz
+</code></pre>
+
+<h3 id="heritability-partitioned-by-maf-and-ld">Heritability partitioned by MAF and LD</h3>
+<p>For this you will need:</p>
+<ul>
+<li>LD-scores (we recommend using GCTA with a window of size <code>--ld-wind 1000</code>)</li>
+<li>MAF of each SNP obtained from the UKBiobank MFI files.</li>
+</ul>
+<p>To convert into the file format expected by LEMMA we have provided a brief Rscript <code>scripts/preprocess_ldms_groups.R</code>.</p>
+<p>Then run the heritability analysis as follows</p>
+<pre><code>mpirun -n 1 build/lemma_1_0_1 \
+  --RHEreg --n-RHEreg-samples 20 --n-RHEreg-jacknife 100 --random-seed 1 \
+  --pheno example/pheno.txt.gz \
+  --bgen example/n5k_p20k_example.bgen \
+  --environment example/inference_converged_eta.out.gz \
+  --RHEreg-groups example/ldms_groups.txt  \
+  --out example/rhe_ldms.out.gz
+</code></pre>
+
+<h3 id="resuming-from-a-previous-parameter-state">Resuming from a previous parameter state</h3>
+<p>In case of runtime crashes, LEMMA can save the parameter state at periodic intervals by providing the commandline flag <code>--resume-from-state</code>. LEMMA can then subsequently resume inference from this saved state. For example</p>
+<pre><code>mpirun -n 1 build/lemma_1_0_1 \
+  --VB \
+  --pheno example/pheno.txt.gz \
+  --environment example/env.txt.gz \
+  --bgen example/n5k_p20k_example.bgen \
+  --param_dump_interval 10 \
+  --out example/inference.out.gz
+
+mpirun -n 1 build/lemma_1_0_1 \
+  --VB \
+  --pheno example/pheno.txt.gz \
+  --environment example/env.txt.gz \
+  --bgen example/n5k_p20k_example.bgen \
+  --resume-from-state example/lemma_interim_files/inference_dump_it30 \
+  --out example/inference_from_it30.out.gz
+
+zdiff example/inference_from_it30.out.gz example/inference.out.gz
+</code></pre>
+
+<p>Outputs from the two should match, up to some small numerical difference in the ELBO. Note that if the iteration number that you start from is not a multiple of 3, then output will not match exactly because the SQUAREM algorithm adapts the trajectory of the hyperparameter updates in multiples of three.</p>
+<h2 id="complexity">Complexity</h2>
+<h3 id="computational-complexity">Computational Complexity</h3>
+<p>LEMMA uses a iterative algorithm to approximate the posterior distribution. The per-iteration complexity is O(NM).</p>
+<h3 id="memory-complexity">Memory Complexity</h3>
+<p>To store the genotype matrix, LEMMA uses approximately MN bytes of RAM where M is the number of genotyped SNPs and N is the number of samples.</p>
+<p>To store an array of SNP-environment correlations, LEMMA uses a further 8ML(L+1)/2 bytes of RAM, where L is the number of environments and M is the number of SNPs. For M = 600k and L &lt; 100 this should not be a dominating requirement.</p></div>
+        
+        
+    </div>
+
+    <footer class="col-md-12 text-center">
+        
+        <hr>
+        <p>
+        <small>Documentation built with <a href="http://www.mkdocs.org/">MkDocs</a>.</small>
+        </p>
+
+        
+        
+    </footer>
+    <script src="//ajax.googleapis.com/ajax/libs/jquery/1.12.4/jquery.min.js"></script>
+    <script src="../js/bootstrap-3.0.3.min.js"></script>
+    
+    <script>var base_url = ".."</script>
+    
+    <script src="../js/base.js"></script>
+    <script src="../search/main.js"></script>
+
+    <div class="modal" id="mkdocs_search_modal" tabindex="-1" role="dialog" aria-labelledby="searchModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <button type="button" class="close" data-dismiss="modal">
+                    <span aria-hidden="true">&times;</span>
+                    <span class="sr-only">Close</span>
+                </button>
+                <h4 class="modal-title" id="searchModalLabel">Search</h4>
+            </div>
+            <div class="modal-body">
+                <p>
+                    From here you can search these documents. Enter
+                    your search terms below.
+                </p>
+                <form>
+                    <div class="form-group">
+                        <input type="text" class="form-control" placeholder="Search..." id="mkdocs-search-query" title="Type search term here">
+                    </div>
+                </form>
+                <div id="mkdocs-search-results"></div>
+            </div>
+            <div class="modal-footer">
+            </div>
+        </div>
+    </div>
+</div><div class="modal" id="mkdocs_keyboard_modal" tabindex="-1" role="dialog" aria-labelledby="keyboardModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h4 class="modal-title" id="keyboardModalLabel">Keyboard Shortcuts</h4>
+                <button type="button" class="close" data-dismiss="modal"><span aria-hidden="true">&times;</span><span class="sr-only">Close</span></button>
+            </div>
+            <div class="modal-body">
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th style="width: 20%;">Keys</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td class="help shortcut"><kbd>?</kbd></td>
+                    <td>Open this help</td>
+                  </tr>
+                  <tr>
+                    <td class="next shortcut"><kbd>n</kbd></td>
+                    <td>Next page</td>
+                  </tr>
+                  <tr>
+                    <td class="prev shortcut"><kbd>p</kbd></td>
+                    <td>Previous page</td>
+                  </tr>
+                  <tr>
+                    <td class="search shortcut"><kbd>s</kbd></td>
+                    <td>Search</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="modal-footer">
+            </div>
+        </div>
+    </div>
+</div>
+    </body>
+
+</html>
