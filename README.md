@@ -11,7 +11,7 @@ For documentation please see the following webpage: [https://mkerin.github.io/LE
 
 If you use **LEMMA** in your research, please cite the following publication:
 
-*Matthew Kerin and Jonathan Marchini (2020) Gene-environment interactions using a Bayesian whole genome regression model* [[bioRxiv](https://www.biorxiv.org/content/10.1101/797829v2)]
+*Matthew Kerin and Jonathan Marchini (2020) Inferring Gene-by-Environment Interactions with a Bayesian Whole-Genome Regression Model* [[AJHG](https://doi.org/10.1016/j.ajhg.2020.08.009)]
 
 If you use **GPLEMMA** in your research, please cite the following publication:
 
