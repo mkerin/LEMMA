@@ -58,3 +58,4 @@ examples/test_updates_constants_out_of_loop
 examples/test_updates_internal_dot
 examples/test_mkl_Xtv
 site/
+cinder/
