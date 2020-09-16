@@ -4,7 +4,7 @@
 #include "catch.hpp"
 
 #include <vector>
-#include "../src/tools/Eigen/Dense"
+#include "../src/tools/eigen3.3/Dense"
 #include "../src/parse_arguments.hpp"
 #include "../src/vbayes.hpp"
 #include "../src/data.hpp"
