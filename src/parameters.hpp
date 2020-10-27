@@ -86,7 +86,7 @@ public:
 		gxe_chunk_size = 8;
 #endif
 		vb_iter_max = 10000;
-		maxBytesPerRank = 14500000000;
+		maxBytesPerRank = std::numeric_limits<double>::infinity();
 		vb_iter_start = 0;
 		n_pve_samples = 40;
 		LOSO_window = 100000;

@@ -167,7 +167,7 @@ void parse_arguments(parameters &p, int argc, char **argv) {
 	    ("mode-alternating-updates", "", cxxopts::value<bool>(p.mode_alternating_updates))
 	    ("threads", "", cxxopts::value<unsigned int>(p.n_thread))
 	    ("hyps-probs", "", cxxopts::value<std::string>(p.hyps_probs_file))
-	    ("maxBytesPerRank", "Maximum number of bytes of RAM available on each core when using openMPI (Default: 16GB)",
+	    ("maxBytesPerRank", "Maximum number of bytes of RAM available on each core when using openMPI (default inf)",
 	    cxxopts::value<long long>(p.maxBytesPerRank))
 	    ("loso-window-size", "", cxxopts::value<long>(p.LOSO_window))
 	    ("drop-loco", "", cxxopts::value<bool>(p.drop_loco))

@@ -35,38 +35,19 @@ mpiUtils::partition_valid_samples_across_ranks(const long &n_samples,
 	// dXtEEX_lowertri can be quite large. If really big, then we store fewer
 	// samples on rank 0 to avoid going over maxBytesPerRank.
 	// WARNING: Need atleast 1 sample on each rank
-	long long dXtEEX_bytes = 8 * n_var * n_env * (n_env + 1) / 2;
-	if(dXtEEX_bytes >= p.maxBytesPerRank) {
-		throw std::runtime_error("Error: will not be able to store dXtEEX on "
-		                         "single rank. Either reduce the number of "
-		                         "environmental variables, allow more RAM to "
-		                         "be used per rank or get in touch to discuss "
-		                         "algo implementation changes.");
-	}
-
-	long n_valid_sids = valid_sids.size();
-	long samplesPerRank = (n_valid_sids + size - 1) / size;
-	long long rankZeroBytes = dXtEEX_bytes + n_var * samplesPerRank;
-	long rankZeroSamples;
-	if(rankZeroBytes > p.maxBytesPerRank) {
-		// Predicted to overflow maxBytesPerRank. Adjust accordingly.
-		if(p.debug) {
-			std::cout << "Reducing the number of samples stored on rank 0 from ";
-			std::cout << samplesPerRank << " to ";
-		}
-		long size1 = size - 1;
-		rankZeroSamples = (p.maxBytesPerRank - dXtEEX_bytes) / (long long) n_var;
-		samplesPerRank = (n_valid_sids - rankZeroSamples + size1 - 1) / size1;
-		if (p.debug) std::cout << rankZeroSamples << " to allow space for dXtEEX" << std::endl;
-		assert(rankZeroSamples > 0);
-	} else {
-		// No overflow; hence have same number of samples on all ranks.
-		rankZeroSamples = samplesPerRank;
-	}
-	long diff = samplesPerRank - rankZeroSamples;
+    long n_valid_sids = valid_sids.size();
+	long long dxteexBytes    = 8 * n_var * n_env * (n_env + 1) / 2;
+    long long bytesPerSample = (n_var + 8 * n_env + 8);
+    long samplesPerRank = (((dxteexBytes+bytesPerSample)/bytesPerSample)+n_valid_sids+size-1)/size;
+    long rankZeroSamples = samplesPerRank - (dxteexBytes+bytesPerSample)/bytesPerSample;
+    if (size > 1){ // rank0 might be dedicated entirely to dxteex
+        samplesPerRank = std::max(samplesPerRank, (n_valid_sids+size-2) / (size-1));
+        rankZeroSamples = 0;
+    }
 
 	// store 'rank' that each sample is located in
 	// samples excluded due to missing data have location -1
+    long diff = samplesPerRank - rankZeroSamples;
 	long iiValid = diff;
 	for (long ii = 0; ii < n_samples; ii++) {
 		if (incomplete_cases.count(ii) == 0) {

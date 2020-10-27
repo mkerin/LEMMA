@@ -246,13 +246,7 @@ public:
 
 			unsigned long memoize_id = ((is_fwd_pass) ? ch : ch + iter_chunks.size());
 			if (XtX_block_cache.count(memoize_id) == 0) {
-				if (p.n_thread == 1) {
-					Eigen::MatrixXd D_corr(ch_len, ch_len);
-					D_corr.triangularView<Eigen::StrictlyUpper>() = (D.transpose() * D).template cast<double>();
-					XtX_block_cache[memoize_id] = D_corr;
-				} else {
-					XtX_block_cache[memoize_id] = (D.transpose() * D).template cast<double>();
-				}
+			    XtX_block_cache[memoize_id] = (D.transpose() * D).template cast<double>();
 				XtX_block_cache[memoize_id] = mpiUtils::mpiReduce_inplace(XtX_block_cache[memoize_id]);
 			}
 		}
