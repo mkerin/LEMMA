@@ -418,7 +418,14 @@ public:
 
 	void read_full_bgen(){
 		if(p.bgen_file != "NULL") {
-			std::cout << "Reading in BGEN data" << std::endl;
+            std::cout << "Reading in BGEN data" << std::endl;
+		    long long genoSnps = bgenView->number_of_variants();
+		    if (genoSnps > 1000000){
+		        std::cout << " - Warning: Over 1,000,000 variants detected in "<<p.bgen_file<< " (before MAF filters"
+                             " applied). Consider pruning the number of SNPs to improve computational cost of the "
+                             "VB algorithm." << std::endl;
+		    }
+
 			if (p.flip_high_maf_variants) {
 				std::cout << " - Flipping variants with MAF > 0.5" << std::endl;
 			}
