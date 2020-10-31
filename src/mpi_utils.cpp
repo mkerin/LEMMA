@@ -34,30 +34,44 @@ mpiUtils::partition_valid_samples_across_ranks(const long &n_samples,
 
 	// dXtEEX_lowertri can be quite large. If really big, then we store fewer
 	// samples on rank 0 to avoid going over maxBytesPerRank.
-	// WARNING: Need atleast 1 sample on each rank
-    long n_valid_sids = valid_sids.size();
-	long long dxteexBytes    = 8 * n_var * n_env * (n_env + 1) / 2;
+    long long n_valid_sids = valid_sids.size();
+    long long dxteexBytes    = 8 * n_var * n_env * (n_env + 1) / 2;
     long long bytesPerSample = (n_var + 8 * n_env + 8);
-    long samplesPerRank = (((dxteexBytes+bytesPerSample)/bytesPerSample)+n_valid_sids+size-1)/size;
-    long rankZeroSamples = samplesPerRank - (dxteexBytes+bytesPerSample)/bytesPerSample;
-    if (size > 1){ // rank0 might be dedicated entirely to dxteex
-        samplesPerRank = std::max(samplesPerRank, (n_valid_sids+size-2) / (size-1));
-        rankZeroSamples = 0;
+    if (p.maxBytesPerRank < (double) (dxteexBytes + bytesPerSample * n_valid_sids) / (double) size){
+        throw std::runtime_error("Not possible to load all data into memory across "+std::to_string(size)+
+                                 " ranks whilst using less than "+std::to_string(p.maxBytesPerRank)+" bytes per rank.");
+    }
+    if (p.maxBytesPerRank < dxteexBytes) {
+        throw std::runtime_error("dXtEEX is predicted to require "+std::to_string(dxteexBytes)+" bytes and is (currently) stored "
+                                 "entirely on 1 rank. This will breach the limit of "+
+                                 std::to_string(p.maxBytesPerRank)+" bytes per rank.");
+    }
+    long samplesPerRank, rankZeroSamples;
+    if (size > 1) { // rank0 might be dedicated entirely to dxteex
+        rankZeroSamples = std::min(std::max((long long) 0,(p.maxBytesPerRank - dxteexBytes)/bytesPerSample), (n_valid_sids+size-1) / size);
+        samplesPerRank = (n_valid_sids-rankZeroSamples+size-2) / (size-1);
+    } else {
+        samplesPerRank  = n_valid_sids;
+        rankZeroSamples = samplesPerRank;
     }
 
 	// store 'rank' that each sample is located in
 	// samples excluded due to missing data have location -1
     long diff = samplesPerRank - rankZeroSamples;
-	long iiValid = diff;
+	long iiValid = 0;
 	for (long ii = 0; ii < n_samples; ii++) {
 		if (incomplete_cases.count(ii) == 0) {
-			sample_location[ii] = (int) (iiValid / samplesPerRank);
+		    if (iiValid < rankZeroSamples){
+                sample_location[ii] = 0;
+		    } else {
+                sample_location[ii] = (int) ((iiValid - rankZeroSamples) / samplesPerRank) + 1;
+		    }
 			iiValid++;
 		} else {
 			sample_location[ii] = -1;
 		}
 	}
-	assert(iiValid == n_valid_sids + diff);
+	assert(iiValid == n_valid_sids);
 
 	if(p.debug) {
 		std::vector<long> allii(size, 0);
@@ -73,14 +87,12 @@ mpiUtils::partition_valid_samples_across_ranks(const long &n_samples,
 		}
 	}
 
-
-	for (long ii = 0; ii < n_valid_sids; ii++) {
-		long ii1 = ii + diff;
-		if (ii1 < rank * samplesPerRank || ii1 >= (rank+1) * samplesPerRank) {
-			incomplete_cases[valid_sids[ii]] = true;
-		} else {
-			rank_cases.push_back(valid_sids[ii]);
-		}
+	for (long ii = 0; ii < n_valid_sids; ii++) { // keep only the samples for this rank
+	    if (sample_location[ii] == rank){
+            rank_cases.push_back(valid_sids[ii]);
+	    } else {
+            incomplete_cases[valid_sids[ii]] = true;
+	    }
 	}
 
 	// Check Nlocal sums to expected number of valid samples
