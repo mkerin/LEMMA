@@ -165,8 +165,6 @@
 <p>All three steps can be run in sequence using the following commands</p>
 <pre><code>rm example/bgen_filenames.txt
 for cc in `seq 1 22`; do
-  bgenix -g example/n5k_p20k_example.bgen -incl-range ${cc}:0-1000000000 &gt; example/n5k_p20k_example_chr${cc}.bgen;
-  bgenix -index -g example/n5k_p20k_example_chr${cc}.bgen;
   echo &quot;example/n5k_p20k_example_chr${cc}.bgen&quot; &gt;&gt; example/bgen_filenames.txt;
 done
 
@@ -180,9 +178,8 @@ mpirun -n 1 build/lemma_1_0_1 \
   --mStreamBgen example/bgen_filenames.txt \
   --out example/inference.out.gz
 </code></pre>
-
 <p>For association testing and heritability estimation, LEMMA will use genetic data provided from the <code>--mStreamBgen</code> if it is provided. Otherwise LEMMA will use genetic data from the <code>--bgen</code> flag.</p>
-<p>Files provided to <code>--mStreamBgen</code> should each contain only one chromosome. Separating the chromosomes into different files can be achieved with the <a href="https://bitbucket.org/gavinband/bgen/wiki/bgenix">BGENIX</a> program.</p>
+<p>Files provided to <code>--mStreamBgen</code> should each contain only one chromosome. Separating the chromosomes into different files can be achieved with the <a href="https://enkre.net/cgi-bin/code/bgen/dir?ci=trunk">BGENIX</a> program.</p>
 <p>Output from the variational inference algorithm:</p>
 <ul>
 <li><code>example/inference.out.gz</code> :                                converged hyperparameter values + ELBO</li>
@@ -208,7 +205,6 @@ mpirun -n 1 build/lemma_1_0_1 \
   --bgen example/n5k_p20k_example.bgen \
   --out example/inference.out.gz
 </code></pre>
-
 <p>In this case the algorithm should converge in 59 iterations.</p>
 <h3 id="association-testing-with-imputed-snps">Association testing with imputed SNPs</h3>
 <pre><code>mpirun -n 1 build/lemma_1_0_1 \
@@ -219,7 +215,6 @@ mpirun -n 1 build/lemma_1_0_1 \
   --environment example/inference_converged_eta.out.gz \
   --out example/inference_loco_pvals.out.gz;
 </code></pre>
-
 <p>In this example the flag <code>--pheno example/pheno.txt.gz</code> is optional. This is used to see if any environmental variables have significant squared effects, and include them as covariates if so.</p>
 <p>For analyses of large genomic datasets it may be useful to parallelize association testing across chunks of SNPs with the <code>--range</code> flag.</p>
 <h3 id="heritability-estimation">Heritability estimation</h3>
@@ -230,7 +225,6 @@ mpirun -n 1 build/lemma_1_0_1 \
   --environment example/inference_converged_eta.out.gz \
   --out example/inference_pve.out.gz
 </code></pre>
-
 <p>This should return heritability estimates of h2-G = 0.23 (0.032) and h2-GxE = 0.08 (0.016), where the value in brackets is the standard error.</p>
 <h2 id="advanced-usage">Advanced usage</h2>
 <h3 id="precomputing-the-dxteex-array">Precomputing the dXtEEX array</h3>
@@ -251,7 +245,6 @@ for cc in `seq 1 22`; do
 done
 zcat example/dxteex_chr*.out.gz &gt; example/dxteex.out.gz
 </code></pre>
-
 <p>Then provide the file <code>example/dxteex.out.gz</code> to LEMMA with the commandline flag <code>--dxteex</code>.</p>
 <pre><code>mpirun -n 1 build/lemma_1_0_1 \
   --VB \
@@ -261,7 +254,6 @@ zcat example/dxteex_chr*.out.gz &gt; example/dxteex.out.gz
   --dxteex example/dxteex.out.gz \
   --out example/inference.out.gz
 </code></pre>
-
 <h3 id="heritability-partitioned-by-maf-and-ld">Heritability partitioned by MAF and LD</h3>
 <p>For this you will need:</p>
 <ul>
@@ -278,7 +270,6 @@ zcat example/dxteex_chr*.out.gz &gt; example/dxteex.out.gz
   --RHEreg-groups example/ldms_groups.txt  \
   --out example/rhe_ldms.out.gz
 </code></pre>
-
 <h3 id="resuming-from-a-previous-parameter-state">Resuming from a previous parameter state</h3>
 <p>In case of runtime crashes, LEMMA can save the parameter state at periodic intervals by providing the commandline flag <code>--resume-from-state</code>. LEMMA can then subsequently resume inference from this saved state. For example</p>
 <pre><code>mpirun -n 1 build/lemma_1_0_1 \
@@ -299,7 +290,6 @@ mpirun -n 1 build/lemma_1_0_1 \
 
 zdiff example/inference_from_it30.out.gz example/inference.out.gz
 </code></pre>
-
 <p>Outputs from the two should match, up to some small numerical difference in the ELBO. Note that if the iteration number that you start from is not a multiple of 3, then output will not match exactly because the SQUAREM algorithm adapts the trajectory of the hyperparameter updates in multiples of three.</p>
 <h2 id="complexity">Complexity</h2>
 <h3 id="computational-complexity">Computational Complexity</h3>

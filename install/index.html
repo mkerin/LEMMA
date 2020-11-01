@@ -129,14 +129,12 @@
 <pre><code>git clone https://github.com/mkerin/LEMMA.git
 cd LEMMA
 </code></pre>
-
 <p>Bare minimum build:</p>
 <pre><code>cmake -S . -B build \
     -DBGEN_ROOT=&lt;absolute/path/to/bgen_lib&gt; \
     -DBOOST_ROOT=&lt;absolute/path/to/boost&gt;
 cmake --build build -- -j4
 </code></pre>
-
 <p>This should create a new directory <code>build</code> which contains some auto-generated files by CMake and the lemma executable.</p>
 <p>If you wish to compile with the Intel MKL Library then instead run the following:</p>
 <pre><code>cmake -S . -B build \
@@ -145,7 +143,6 @@ cmake --build build -- -j4
     -DMKL_ROOT=&lt;absolute/path/to/intel_mkl_root&gt;
 cmake --build build -- -j4
 </code></pre>
-
 <p>Note that current compile flags are compatible with the Intel MKL Library 2019 Update 1.</p></div>
         
         
