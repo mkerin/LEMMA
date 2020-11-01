@@ -26,8 +26,6 @@ All three steps can be run in sequence using the following commands
 ```
 rm example/bgen_filenames.txt
 for cc in `seq 1 22`; do
-  bgenix -g example/n5k_p20k_example.bgen -incl-range ${cc}:0-1000000000 > example/n5k_p20k_example_chr${cc}.bgen;
-  bgenix -index -g example/n5k_p20k_example_chr${cc}.bgen;
   echo "example/n5k_p20k_example_chr${cc}.bgen" >> example/bgen_filenames.txt;
 done
 
@@ -43,7 +41,7 @@ mpirun -n 1 build/lemma_1_0_1 \
 ```
 For association testing and heritability estimation, LEMMA will use genetic data provided from the `--mStreamBgen` if it is provided. Otherwise LEMMA will use genetic data from the `--bgen` flag.
 
-Files provided to `--mStreamBgen` should each contain only one chromosome. Separating the chromosomes into different files can be achieved with the [BGENIX](https://bitbucket.org/gavinband/bgen/wiki/bgenix) program.
+Files provided to `--mStreamBgen` should each contain only one chromosome. Separating the chromosomes into different files can be achieved with the [BGENIX](https://enkre.net/cgi-bin/code/bgen/dir?ci=trunk) program.
 
 Output from the variational inference algorithm:
 
