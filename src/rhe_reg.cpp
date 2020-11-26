@@ -76,6 +76,14 @@ void RHEreg::standardise_non_genetic_data(){
 		EigenUtils::center_matrix(E);
 		EigenUtils::scale_matrix_and_remove_constant_cols(E, n_env, env_names);
 	}
+
+	// Report PVE by covariate main effects
+	double rss, yty;
+    Eigen::MatrixXd HtH(C.cols(), C.cols()), Hty(C.cols(), 1), HtH_inv(C.cols(), C.cols());
+    prep_lm(C, Y, HtH, HtH_inv, Hty, rss);
+    yty = Y.squaredNorm();
+    yty = mpiUtils::mpiReduce_inplace(&yty);
+    std::cout << std::endl << "Proportion of variance explained by covariable main effects = " << (1.0 - rss / yty) << std::endl;
 }
 
 void RHEreg::initialise_components() {
