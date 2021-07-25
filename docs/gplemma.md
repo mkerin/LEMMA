@@ -18,7 +18,7 @@ The phenotype has been simulated to have:
 ## Getting started
 To run the GPLEMMA method on the dataset given above, run the following commands
 ```
-mpirun -n 1 build/lemma_1_0_1 \
+mpirun -n 1 build/lemma_1_0_3 \
   --gplemma --random-seed 1 \
   --pheno example/pheno.txt.gz \
   --streamBgen example/n5k_p20k_example.bgen \
@@ -29,7 +29,7 @@ This should return heritability estimates of h2-G = 0.229 (0.028) and h2-GxE = 0
 
 To run the MEMMA method on the same dataset, run the following commands
 ```
-mpirun -n 1 build/lemma_1_0_1 \
+mpirun -n 1 build/lemma_1_0_3 \
   --RHEreg --random-seed 1 \
   --pheno example/pheno.txt.gz \
   --streamBgen example/n5k_p20k_example.bgen \
