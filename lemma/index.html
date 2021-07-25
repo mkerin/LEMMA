@@ -168,7 +168,7 @@ for cc in `seq 1 22`; do
   echo &quot;example/n5k_p20k_example_chr${cc}.bgen&quot; &gt;&gt; example/bgen_filenames.txt;
 done
 
-mpirun -n 1 build/lemma_1_0_1 \
+mpirun -n 1 build/lemma_1_0_3 \
   --pheno example/pheno.txt.gz \
   --environment example/env.txt.gz \
   --VB \
@@ -198,7 +198,7 @@ mpirun -n 1 build/lemma_1_0_1 \
 </ul>
 <p>The LEMMA algorithm is modular, and so each step can be performed separately as follows.</p>
 <h3 id="running-the-lemma-variational-inference-algorithm">Running the LEMMA variational inference algorithm</h3>
-<pre><code>mpirun -n 1 build/lemma_1_0_1 \
+<pre><code>mpirun -n 1 build/lemma_1_0_3 \
   --VB \
   --pheno example/pheno.txt.gz \
   --environment example/env.txt.gz \
@@ -207,7 +207,7 @@ mpirun -n 1 build/lemma_1_0_1 \
 </code></pre>
 <p>In this case the algorithm should converge in 59 iterations.</p>
 <h3 id="association-testing-with-imputed-snps">Association testing with imputed SNPs</h3>
-<pre><code>mpirun -n 1 build/lemma_1_0_1 \
+<pre><code>mpirun -n 1 build/lemma_1_0_3 \
   --singleSnpStats --maf 0.01 \
   --pheno example/pheno.txt.gz \
   --resid-pheno example/inference_converged_yhat.out.gz \
@@ -218,7 +218,7 @@ mpirun -n 1 build/lemma_1_0_1 \
 <p>In this example the flag <code>--pheno example/pheno.txt.gz</code> is optional. This is used to see if any environmental variables have significant squared effects, and include them as covariates if so.</p>
 <p>For analyses of large genomic datasets it may be useful to parallelize association testing across chunks of SNPs with the <code>--range</code> flag.</p>
 <h3 id="heritability-estimation">Heritability estimation</h3>
-<pre><code>mpirun -n 1 build/lemma_1_0_1 \
+<pre><code>mpirun -n 1 build/lemma_1_0_3 \
   --RHEreg --random-seed 1 \
   --pheno example/pheno.txt.gz \
   --mStreamBgen example/bgen_filenames.txt \
@@ -246,7 +246,7 @@ done
 zcat example/dxteex_chr*.out.gz &gt; example/dxteex.out.gz
 </code></pre>
 <p>Then provide the file <code>example/dxteex.out.gz</code> to LEMMA with the commandline flag <code>--dxteex</code>.</p>
-<pre><code>mpirun -n 1 build/lemma_1_0_1 \
+<pre><code>mpirun -n 1 build/lemma_1_0_3 \
   --VB \
   --pheno example/pheno.txt.gz \
   --environment example/env.txt.gz \
@@ -262,7 +262,7 @@ zcat example/dxteex_chr*.out.gz &gt; example/dxteex.out.gz
 </ul>
 <p>To convert into the file format expected by LEMMA we have provided a brief Rscript <code>scripts/preprocess_ldms_groups.R</code>.</p>
 <p>Then run the heritability analysis as follows</p>
-<pre><code>mpirun -n 1 build/lemma_1_0_1 \
+<pre><code>mpirun -n 1 build/lemma_1_0_3 \
   --RHEreg --n-RHEreg-samples 20 --n-RHEreg-jacknife 100 --random-seed 1 \
   --pheno example/pheno.txt.gz \
   --bgen example/n5k_p20k_example.bgen \
@@ -272,7 +272,7 @@ zcat example/dxteex_chr*.out.gz &gt; example/dxteex.out.gz
 </code></pre>
 <h3 id="resuming-from-a-previous-parameter-state">Resuming from a previous parameter state</h3>
 <p>In case of runtime crashes, LEMMA can save the parameter state at periodic intervals by providing the commandline flag <code>--resume-from-state</code>. LEMMA can then subsequently resume inference from this saved state. For example</p>
-<pre><code>mpirun -n 1 build/lemma_1_0_1 \
+<pre><code>mpirun -n 1 build/lemma_1_0_3 \
   --VB \
   --pheno example/pheno.txt.gz \
   --environment example/env.txt.gz \
@@ -280,7 +280,7 @@ zcat example/dxteex_chr*.out.gz &gt; example/dxteex.out.gz
   --param_dump_interval 10 \
   --out example/inference.out.gz
 
-mpirun -n 1 build/lemma_1_0_1 \
+mpirun -n 1 build/lemma_1_0_3 \
   --VB \
   --pheno example/pheno.txt.gz \
   --environment example/env.txt.gz \
