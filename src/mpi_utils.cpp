@@ -25,16 +25,9 @@ mpiUtils::partition_valid_samples_across_ranks(const long &n_samples,
 	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 	MPI_Comm_size(MPI_COMM_WORLD, &size);
 
-	std::vector<long> valid_sids, rank_cases;
-	for (long ii = 0; ii < n_samples; ii++) {
-		if (incomplete_cases.count(ii) == 0) {
-			valid_sids.push_back(ii);
-		}
-	}
-
 	// dXtEEX_lowertri can be quite large. If really big, then we store fewer
 	// samples on rank 0 to avoid going over maxBytesPerRank.
-    long long n_valid_sids = valid_sids.size();
+    long long n_valid_sids = n_samples - (long) incomplete_cases.size();
     long long dxteexBytes    = 8 * n_var * n_env * (n_env + 1) / 2;
     long long bytesPerSample = (n_var + 8 * n_env + 8);
     if (p.maxBytesPerRank < (double) (dxteexBytes + bytesPerSample * n_valid_sids) / (double) size){
@@ -87,11 +80,12 @@ mpiUtils::partition_valid_samples_across_ranks(const long &n_samples,
 		}
 	}
 
-	for (long ii = 0; ii < n_valid_sids; ii++) { // keep only the samples for this rank
+	std::vector<long> rank_cases;
+	for (long ii = 0; ii < n_samples; ii++) { // keep only the samples for this rank
 	    if (sample_location[ii] == rank){
-            rank_cases.push_back(valid_sids[ii]);
+            rank_cases.push_back(ii);
 	    } else {
-            incomplete_cases[valid_sids[ii]] = true;
+            incomplete_cases[ii] = true;
 	    }
 	}
 
