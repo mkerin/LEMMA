@@ -919,7 +919,9 @@ public:
 		MPI_Comm_rank(MPI_COMM_WORLD, &world_rank);
 		std::cout << "Building dXtEEX array" << std::endl;
 		auto start = std::chrono::system_clock::now();
-		dXtEEX_lowertri.resize(n_var, n_env * (n_env + 1) / 2);
+        if(world_rank == 0) {
+            dXtEEX_lowertri.resize(n_var, n_env * (n_env + 1) / 2);
+        }
 
 		// Unfilled snp indexes;
 		std::unordered_set<long> unfilled_indexes;
@@ -948,7 +950,9 @@ public:
 					long jj = it - G.SNPID.begin();
 					for (int ll = 0; ll < n_env; ll++) {
 						for (int mm = 0; mm <= ll; mm++) {
-							dXtEEX_lowertri(jj, dXtEEX_col_ind(ll, mm, n_env)) = dxteex_row(ll * n_env + mm);
+                            if(world_rank == 0) {
+                                dXtEEX_lowertri(jj, dXtEEX_col_ind(ll, mm, n_env)) = dxteex_row(ll * n_env + mm);
+                            }
 						}
 					}
 					unfilled_indexes.erase(jj);
@@ -961,11 +965,11 @@ public:
 							for (int mm = 0; mm <= ll; mm++) {
 								double dztz_lmj = (cl_j * E.array().col(ll) * E.array().col(mm) * cl_j).sum();
 								dztz_lmj = mpiUtils::mpiReduce_inplace(&dztz_lmj);
-								// if(world_rank == 0) {
-								double x1 = std::abs(dXtEEX_lowertri(jj, dXtEEX_col_ind(ll, mm, n_env)) - dztz_lmj);
-								max_ae = std::max(x1, max_ae);
-								mean_ae += x1;
-								// }
+								if(world_rank == 0) {
+								    double x1 = std::abs(dXtEEX_lowertri(jj, dXtEEX_col_ind(ll, mm, n_env)) - dztz_lmj);
+								    max_ae = std::max(x1, max_ae);
+								    mean_ae += x1;
+								}
 								se_cnt++;
 							}
 						}
@@ -995,9 +999,9 @@ public:
 				for (int mm = 0; mm <= ll; mm++) {
 					double dztz_lmj = (cl_j * E.array().col(ll) * E.array().col(mm) * cl_j).sum();
 					dztz_lmj = mpiUtils::mpiReduce_inplace(&dztz_lmj);
-					// if(world_rank == 0) {
-					dXtEEX_lowertri(jj, dXtEEX_col_ind(ll, mm, n_env)) = dztz_lmj;
-					// }
+					if(world_rank == 0) {
+					    dXtEEX_lowertri(jj, dXtEEX_col_ind(ll, mm, n_env)) = dztz_lmj;
+					}
 				}
 			}
 		}
