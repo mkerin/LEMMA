@@ -192,8 +192,7 @@ void compute_LOCO_pvals(const EigenDataVector &resid_pheno,
 	Eigen::MatrixXd H(n_samples, 2 + 2 * (isGxE ? 1 : 0));
 	H.col(0) = Eigen::VectorXd::Constant(n_samples, 1.0);
 	if (isGxE) H.col(3) = eta.cast<double>();
-	boost_m::students_t t_dist(n_samples - H.cols() - 1);
-	boost_m::fisher_f f_dist(n_effects, n_samples - H.cols() - 1);
+	boost_m::fisher_f f_dist(n_effects, Nglobal - H.cols() - 1);
 	for(std::uint32_t jj = 0; jj < n_var; jj++ ) {
 		H.col(1) = Xtest.col(jj);
 

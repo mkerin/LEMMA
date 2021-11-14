@@ -10,6 +10,7 @@
 #include "../src/vbayes.hpp"
 #include "../src/data.hpp"
 #include "../src/hyps.hpp"
+#include "../src/mpi_utils.hpp"
 
 
 // Scenarios
@@ -103,7 +104,7 @@ TEST_CASE("Resume from state: varEM w/ multiE + regress out covars"){
 		}
 
 		SECTION("Check converged snp-stats"){
-			CHECK(VB.vp_init.ym.array().abs().sum() == Approx(9.3519780272));
+			CHECK(mpiUtils::mpiReduce_inplace(VB.vp_init.ym.array().abs().sum()) == Approx(9.3519780272));
 			// Compute snp-stats
 			Eigen::MatrixXd neglogPvals, testStats;
 			VB.compute_LOCO_pvals(VB.vp_init, neglogPvals, testStats);
@@ -160,7 +161,7 @@ TEST_CASE("Resume from state: varEM w/ multiE + regress out covars"){
 		data.read_full_bgen();
 		data.set_vb_init();
 		VBayes VB(data);
-		CHECK(VB.vp_init.ym.array().abs().sum() == Approx(9.3519781087));
+		CHECK(mpiUtils::mpiReduce_inplace(VB.vp_init.ym.array().abs().sum()) == Approx(9.3519781087));
 
 		// Compute snp-stats
 		Eigen::MatrixXd neglogPvals, testStats;

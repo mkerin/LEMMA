@@ -253,6 +253,10 @@ public:
 			n_effects = 1;
 		}
 
+        if(p.resid_loco_file != "NULL") {
+            read_resid_loco();
+        }
+
 		// Exclude samples with missing values in phenos / covars / filters
 		reduce_to_complete_cases();
 
@@ -263,10 +267,6 @@ public:
 
 		if(p.snpstats_file != "NULL") {
 			read_external_snpstats();
-		}
-
-		if(p.resid_loco_file != "NULL") {
-			read_resid_loco();
 		}
 	}
 
