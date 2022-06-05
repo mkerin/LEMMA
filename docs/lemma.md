@@ -158,7 +158,7 @@ mpirun -n 1 build/lemma_1_0_3 \
   --pheno example/pheno.txt.gz \
   --environment example/env.txt.gz \
   --bgen example/n5k_p20k_example.bgen \
-  --param_dump_interval 10 \
+  --state-dump-interval 10 \
   --out example/inference.out.gz
 
 mpirun -n 1 build/lemma_1_0_3 \
