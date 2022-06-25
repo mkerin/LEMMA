@@ -74,10 +74,10 @@ void my_test(const std::string& mode){
 		}
 		VB.compute_LOCO_pvals(VB.vp_init, neglogPvals, testStats);
 	}
-	CHECK(neglogPvals(0, 0) == Approx(0.2692832123));
-	CHECK(neglogPvals(0, 1) == Approx(1.3696407518));
-	CHECK(neglogPvals(0, 2) == Approx(2.185395935));
-    CHECK(neglogPvals(0, 3) == Approx(0.9992683491));
+	CHECK(neglogPvals(0, 0) == Approx(0.2648242495));
+	CHECK(neglogPvals(0, 1) == Approx(1.3241278402));
+	CHECK(neglogPvals(0, 2) == Approx(2.1142464473));
+    CHECK(neglogPvals(0, 3) == Approx(0.9596434385));
 }
 
 
