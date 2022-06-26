@@ -140,7 +140,7 @@ TEST_CASE("RHE-NelderMead") {
 		parse_arguments(p, argc, argv_rhe_nm);
 		p.mode_RHE = true;
 		p.mode_RHEreg_NM = false;
-		p.env_coeffs_file = "data/io_test/n50_p100_nm_env_weights.txt";
+		p.env_coeffs_file = "unit/data/n50_p100_nm_env_weights.txt";
 		p.use_raw_env = true;
 
 		Data data(p);
