@@ -500,7 +500,8 @@ void parse_arguments(parameters &p, int argc, char **argv) {
 void check_file_exists(const std::string &filename) {
 	// Throw error if given file does not exist.
 	// NB: Doesn't check if file is empty etc.
-	if(!boost::filesystem::exists(filename)) {
-		throw std::runtime_error(filename+" does not exist");
+	if(!(boost::filesystem::exists(filename) && boost::filesystem::is_regular_file(filename))) {
+		std::cout << "Throwing error: File '"+filename+"' does not exist" << std::endl;
+		throw std::invalid_argument("File '"+filename+"' does not exist");
 	}
 }

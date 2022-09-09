@@ -3,18 +3,25 @@
 //
 #include "catch.hpp"
 
-#include "../src/tools/eigen3.3/Dense"
-#include "../src/parse_arguments.hpp"
-#include "../src/vbayes.hpp"
-#include "../src/data.hpp"
-#include "../src/hyps.hpp"
-#include "../src/genotype_matrix.hpp"
+#include <mpi.h>
+#include <string>
+#include <vector>
 
-#include <algorithm>
-#include <cmath>
-#include <limits>
-#include <iostream>
-#include <sys/stat.h>
+#include "../src/data.hpp"
+#include "../src/eigen_utils.hpp"
+#include "../src/parameters.hpp"
+#include "../src/typedefs.hpp"
+
+TEST_CASE("GZIP compression") {
+	std::string file1 = "unit/data/n50_p100_env.txt";
+	std::string file2 = "unit/data/n50_p100_env.txt.gz";
+	EigenDataMatrix M1, M2;
+	std::vector<std::string> names1, names2;
+	EigenUtils::read_matrix(file1, M1, names1);
+	EigenUtils::read_matrix(file2, M2, names2);
+	CHECK(names1 == names2);
+	CHECK(M1 == M2);
+}
 
 TEST_CASE("Data") {
 	int world_rank;
