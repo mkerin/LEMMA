@@ -37,7 +37,7 @@ mpirun -n 1 build/lemma_1_0_3 \
   --singleSnpStats \
   --RHEreg --random-seed 1 \
   --mStreamBgen example/bgen_filenames.txt \
-  --out example/inference.out.gz
+  --out example/inference.out
 ```
 For association testing and heritability estimation, LEMMA will use genetic data provided from the `--mStreamBgen` if it is provided. Otherwise LEMMA will use genetic data from the `--bgen` flag.
 
@@ -68,7 +68,7 @@ mpirun -n 1 build/lemma_1_0_3 \
   --pheno example/pheno.txt.gz \
   --environment example/env.txt.gz \
   --bgen example/n5k_p20k_example.bgen \
-  --out example/inference.out.gz
+  --out example/inference.out
 ```
 In this case the algorithm should converge in 59 iterations.
 
@@ -80,7 +80,7 @@ mpirun -n 1 build/lemma_1_0_3 \
   --resid-pheno example/inference_converged_yhat.out.gz \
   --mStreamBgen example/bgen_filenames.txt \
   --environment example/inference_converged_eta.out.gz \
-  --out example/inference_loco_pvals.out.gz;
+  --out example/inference_loco_pvals.out
 ```
 In this example the flag `--pheno example/pheno.txt.gz` is optional. This is used to see if any environmental variables have significant squared effects, and include them as covariates if so.
 
@@ -93,7 +93,7 @@ mpirun -n 1 build/lemma_1_0_3 \
   --pheno example/pheno.txt.gz \
   --mStreamBgen example/bgen_filenames.txt \
   --environment example/inference_converged_eta.out.gz \
-  --out example/inference_pve.out.gz
+  --out example/inference_pve.out
 ```
 This should return heritability estimates of h2-G = 0.23 (0.032) and h2-GxE = 0.08 (0.016), where the value in brackets is the standard error.
 
@@ -128,7 +128,7 @@ mpirun -n 1 build/lemma_1_0_3 \
   --environment example/env.txt.gz \
   --bgen example/n5k_p20k_example.bgen \
   --dxteex example/dxteex.out.gz \
-  --out example/inference.out.gz
+  --out example/inference.out
 ```
 
 ### Heritability partitioned by MAF and LD
@@ -147,7 +147,7 @@ mpirun -n 1 build/lemma_1_0_3 \
   --bgen example/n5k_p20k_example.bgen \
   --environment example/inference_converged_eta.out.gz \
   --RHEreg-groups example/ldms_groups.txt  \
-  --out example/rhe_ldms.out.gz
+  --out example/rhe_ldms.out
 ```
 
 ### Resuming from a previous parameter state
@@ -159,7 +159,7 @@ mpirun -n 1 build/lemma_1_0_3 \
   --environment example/env.txt.gz \
   --bgen example/n5k_p20k_example.bgen \
   --state-dump-interval 10 \
-  --out example/inference.out.gz
+  --out example/inference.out
 
 mpirun -n 1 build/lemma_1_0_3 \
   --VB \
@@ -167,9 +167,9 @@ mpirun -n 1 build/lemma_1_0_3 \
   --environment example/env.txt.gz \
   --bgen example/n5k_p20k_example.bgen \
   --resume-from-state example/lemma_interim_files/inference_dump_it30 \
-  --out example/inference_from_it30.out.gz
+  --out example/inference_from_it30.out
 
-zdiff example/inference_from_it30.out.gz example/inference.out.gz
+zdiff example/inference_from_it30.out example/inference.out
 ```
 Outputs from the two should match, up to some small numerical difference in the ELBO. Note that if the iteration number that you start from is not a multiple of 3, then output will not match exactly because the SQUAREM algorithm adapts the trajectory of the hyperparameter updates in multiples of three.
 

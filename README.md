@@ -9,6 +9,13 @@ This repository provides software for the following two methods:
 
 For documentation please see the following webpage: [https://mkerin.github.io/LEMMA/](https://mkerin.github.io/LEMMA/)
 
+TODOs before the next release:
+- Look for a CMake module for Intel MKL
+- How does CTest work? Can I link in the bgen library unit tests and call it from the commandline?
+- Make sure users compile cmake with release flags (check these are appropriate)
+- Check I'm happy with the docs
+- bgen_utils is a super weird hidden dependancy; should at least be part of this repo. What are the advantages of a separate executable vs having a new option in the LEMMA executable? I think separate executable... should this have it's own sub folder?
+
 ## Citation
 
 If you use **LEMMA** in your research, please cite the following publication:

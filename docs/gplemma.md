@@ -23,7 +23,7 @@ mpirun -n 1 build/lemma_1_0_3 \
   --pheno example/pheno.txt.gz \
   --streamBgen example/n5k_p20k_example.bgen \
   --environment example/env.txt.gz \
-  --out example/gplemma.out.gz
+  --out example/gplemma.out
 ```
 This should return heritability estimates of h2-G = 0.229 (0.028) and h2-GxE = 0.085 (0.01), where the value in brackets is the standard error.
 
@@ -34,7 +34,7 @@ mpirun -n 1 build/lemma_1_0_3 \
   --pheno example/pheno.txt.gz \
   --streamBgen example/n5k_p20k_example.bgen \
   --environment example/env.txt.gz \
-  --out example/gplemma.out.gz
+  --out example/gplemma.out
 ```
 This should return heritability estimates of h2-G = 0.229 (0.028) and h2-GxE = 0.085 (0.01), where the value in brackets is the standard error.
 
