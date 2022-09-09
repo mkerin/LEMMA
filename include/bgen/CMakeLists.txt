@@ -1,0 +1,10 @@
+find_package(ZLIB REQUIRED)
+add_subdirectory(3rd_party)
+add_subdirectory(db)
+
+add_library(bgen src/bgen.cpp src/IndexQuery.cpp src/MissingValue.cpp src/View.cpp src/bgen.cpp src/zlib.cpp)
+target_include_directories(bgen PUBLIC)
+target_link_libraries(bgen PRIVATE ${ZLIB_LIBRARIES} sqlite3)
+target_link_libraries(bgen PUBLIC ${Boost_LIBRARIES} zstd db)
+target_include_directories(bgen PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/genfile/include")
+add_subdirectory(test)
