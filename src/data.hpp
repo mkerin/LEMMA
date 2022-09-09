@@ -1449,23 +1449,23 @@ public:
 		}
 
 		if(n_pheno > 0) {
-			Y = reduce_mat_to_complete_cases(Y, Y_reduced, n_pheno, incomplete_cases);
+			Y = EigenUtils::remove_rows(Y, Y_reduced, n_pheno, incomplete_cases);
 		}
 		if(n_covar > 0) {
-			C = reduce_mat_to_complete_cases(C, W_reduced, n_covar, incomplete_cases);
+			C = EigenUtils::remove_rows(C, W_reduced, n_covar, incomplete_cases);
 		}
 		if(n_env > 0) {
-			E = reduce_mat_to_complete_cases(E, E_reduced, n_env, incomplete_cases);
+			E = EigenUtils::remove_rows(E, E_reduced, n_env, incomplete_cases);
 		}
 		if(p.extra_pve_covar_file != "NULL" && p.mode_RHE) {
 			long n_cols = C_extra_pve.cols();
 			bool placeholder = false;
-			C_extra_pve = reduce_mat_to_complete_cases(C_extra_pve, placeholder, n_cols, incomplete_cases);
+			C_extra_pve = EigenUtils::remove_rows(C_extra_pve, placeholder, n_cols, incomplete_cases);
 		}
 		if (p.resid_loco_file != "NULL") {
 			long n_cols = resid_loco.cols();
 			bool placeholder = false;
-			resid_loco = reduce_mat_to_complete_cases(resid_loco, placeholder, n_cols, incomplete_cases);
+			resid_loco = EigenUtils::remove_rows(resid_loco, placeholder, n_cols, incomplete_cases);
 		}
 		n_samples -= incomplete_cases.size();
 		missing_phenos.clear();

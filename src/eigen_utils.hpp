@@ -46,6 +46,12 @@ Eigen::MatrixXd solve(const Eigen::MatrixXd &A, const Eigen::MatrixXd &b);
 Eigen::MatrixXd subset_matrix(const Eigen::MatrixXd &orig, const std::vector<int> &valid_points);
 
 template <typename EigenMat>
+EigenMat remove_rows( EigenMat& M,
+                    bool& matrix_reduced,
+                    const long& n_cols,
+                    const std::map<long, bool>& incomplete_cases );
+
+template <typename EigenMat>
 void read_matrix(const std::string& filename,
                  EigenMat& M,
                  std::vector< std::string >& col_names,

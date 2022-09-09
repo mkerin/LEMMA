@@ -4,6 +4,7 @@
 
 #include "eigen_utils.hpp"
 #include "mpi_utils.hpp"
+#include "typedefs.hpp"
 
 #include "tools/eigen3.3/Dense"
 #include <boost/iostreams/filtering_stream.hpp>
@@ -30,6 +31,36 @@ Eigen::MatrixXd EigenUtils::subset_matrix(const Eigen::MatrixXd &orig,
 		}
 	}
 	return subset;
+}
+
+template <typename EigenMat>
+EigenMat EigenUtils::remove_rows( EigenMat& M, bool& matrix_reduced,
+					  const long& n_cols, const std::map<long, bool>& incomplete_cases ) {
+	// Remove rows contained in incomplete_cases
+	EigenMat M_tmp;
+	if (matrix_reduced) {
+		throw std::runtime_error("ERROR: Trying to remove incomplete cases twice...");
+	}
+
+	// Create temporary matrix of complete cases
+	long n_samples = M.rows();
+	unsigned long n_incomplete = incomplete_cases.size();
+	M_tmp.resize(n_samples - n_incomplete, n_cols);
+
+	// Fill M_tmp with non-missing entries of M
+	int ii_tmp = 0;
+	for (std::size_t ii = 0; ii < n_samples; ii++) {
+		if (incomplete_cases.count(ii) == 0) {
+			for (int kk = 0; kk < n_cols; kk++) {
+				M_tmp(ii_tmp, kk) = M(ii, kk);
+			}
+			ii_tmp++;
+		}
+	}
+
+	// Assign new values to reference variables
+	matrix_reduced = true;
+	return M_tmp;
 }
 
 template <typename EigenMat>
@@ -385,3 +416,5 @@ template void EigenUtils::scale_matrix_and_remove_constant_cols(Eigen::MatrixXd&
                                                                 long&, std::vector<std::string>&);
 template void EigenUtils::scale_matrix_and_remove_constant_cols(Eigen::VectorXd&,
                                                                 long&, std::vector<std::string>&);
+template EigenDataMatrix EigenUtils::remove_rows( EigenDataMatrix&, bool&,
+												  const long&, const std::map<long, bool>&);
