@@ -1,0 +1,33 @@
+name: build-and-test
+on:
+  push:
+    branches: [ dev, release ]
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        fetch-depth: "0"
+    # install dependencies
+    - name: boost
+      run: sudo apt-get update && sudo apt-get install -yq libboost-all-dev
+    - uses: ./.github/actions/setup-mpi
+      with:
+        mpi: 'openmpi'
+    # build project
+    - name: mkdir
+      run: mkdir build
+    - name: cmake build
+      run: cmake -S . -B build -DCMAKE_BUILD_TYPE=DEBUG
+    - name: cmake make
+      run: cmake --build build -- -j4
+    # run tests
+    - name: Run BGEN lib unit tests
+      run: ./build/include/bgen/test/unit/test_bgen
+    - name: Test bgenWrapper
+      run: ls -artl; ls -artl unit; ls -artl unit/data; mpirun -n 1 build/tests bgenWrapper -r console
+    - name: All tests (single-core)
+      run: ctest --test-dir build
+    - name: All tests (multi-core)
+      run: mpirun -n 2 build/tests -r console

@@ -1,3 +1,5 @@
+[![build-and-test Actions Status](https://github.com/mkerin/LEMMA/workflows/build-and-test/badge.svg)](https://github.com/mkerin/LEMMA/actions)
+
 # Overview
 
 This repository provides software for the following two methods:
