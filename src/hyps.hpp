@@ -8,13 +8,8 @@
 #include "tools/eigen3.3/Dense"
 #include "parameters.hpp"
 
-#include <boost/iostreams/filtering_stream.hpp>
-
 #include <iostream>
-#include <iomanip>
-#include <random>
-
-namespace boost_io = boost::iostreams;
+#include <string>
 
 class Hyps {
 	int sigma_ind   = 0;

@@ -10,12 +10,15 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdint>
+#include <iomanip>
+#include <random>
 #include <string>
 #include <vector>
 
 namespace boost_io = boost::iostreams;
 
-uint getPos(std::vector<std::string> vars, const std::string& var){
+std::uint32_t getPos(std::vector<std::string> vars, const std::string& var){
 	auto it = std::find(vars.begin(), vars.end(), var);
 	return it - vars.begin();
 }

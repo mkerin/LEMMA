@@ -12,6 +12,13 @@
 #include <iostream>
 #include <limits>
 
+#include <boost/iostreams/filtering_stream.hpp>
+#include <boost/iostreams/device/file.hpp>
+#include <boost/iostreams/filter/gzip.hpp>
+#include <boost/filesystem.hpp>
+namespace boost_io = boost::iostreams;
+
+
 void VariationalParamsBase::resize(std::int32_t n_samples, std::int32_t n_var, long n_covar, long n_env) {
 	s1_beta_sq.resize(n_var);
 	if(p.mode_mog_prior_beta) {

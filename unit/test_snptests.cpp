@@ -3,12 +3,14 @@
 //
 #include "catch.hpp"
 
+#include <string>
+#include <vector>
+
 #include "../src/tools/eigen3.3/Dense"
+#include "../src/parameters.hpp"
 #include "../src/parse_arguments.hpp"
 #include "../src/vbayes.hpp"
 #include "../src/data.hpp"
-
-#include <string>
 
 char* full_run[] = { (char*) "prog",
 	                 (char*) "--VB-varEM",

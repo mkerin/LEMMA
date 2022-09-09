@@ -14,8 +14,8 @@
 #include <cmath>
 #include <map>
 #include <vector>
+#include <stdexcept>
 #include <string>
-#include <set>
 
 namespace boost_io = boost::iostreams;
 

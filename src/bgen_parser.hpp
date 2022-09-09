@@ -2,18 +2,14 @@
 #ifndef BGEN_PARSER_HPP
 #define BGEN_PARSER_HPP
 
+#include <cassert>
 #include <iostream>
+#include <unordered_map>
+#include <unordered_set>
+
 #include "genfile/bgen/bgen.hpp"
 #include "typedefs.hpp"
 #include "mpi_utils.hpp"
-
-#include <fstream>
-#include <cassert>
-#include <stdexcept>
-#include <memory>
-#include <set>
-#include <unordered_map>
-#include <unordered_set>
 
 // DosageSetter is a callback object appropriate for passing to bgen::read_genotype_data_block() or
 // the synonymous method of genfile::bgen::View. See the comment in bgen.hpp above

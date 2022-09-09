@@ -1,18 +1,16 @@
 // tests-main.cpp
 #include "catch.hpp"
 
+#include <cmath>
+#include <iostream>
+#include <vector>
+
 #include "../src/tools/eigen3.3/Dense"
+#include "../src/parameters.hpp"
 #include "../src/parse_arguments.hpp"
 #include "../src/vbayes.hpp"
 #include "../src/data.hpp"
 #include "../src/hyps.hpp"
-#include "../src/genotype_matrix.hpp"
-
-#include <algorithm>
-#include <cmath>
-#include <limits>
-#include <iostream>
-#include <sys/stat.h>
 
 char* case_study_args[] = { (char*) "lemma", (char*) "--VB-varEM",
 	                        (char*) "--VB-iter-max", (char*) "10",
