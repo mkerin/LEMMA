@@ -9,15 +9,8 @@
 #include "tools/eigen3.3/Dense"
 #include "file_utils.hpp"
 
-#include <boost/iostreams/filtering_stream.hpp>
-#include <boost/iostreams/device/file.hpp>
-#include <boost/iostreams/filter/gzip.hpp>
-#include <boost/filesystem.hpp>
-
-#include <iostream>
-#include <limits>
-
-namespace boost_io = boost::iostreams;
+#include <string>
+#include <vector>
 
 long dXtEEX_col_ind(long kk, long jj, long n_env);
 

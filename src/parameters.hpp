@@ -3,11 +3,10 @@
 #define CLASS_H
 
 #include <iostream>
+#include <limits>
 #include <string>
 #include <vector>
 
-#include "genfile/bgen/bgen.hpp"
-#include "genfile/bgen/View.hpp"
 
 class parameters {
 public:

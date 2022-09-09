@@ -5,10 +5,8 @@
 
 #include <vector>
 #include "../src/tools/eigen3.3/Dense"
-#include "../src/parse_arguments.hpp"
-#include "../src/vbayes.hpp"
-#include "../src/data.hpp"
 #include "../src/hyps.hpp"
+#include "../src/parameters.hpp"
 
 TEST_CASE("Hyps"){
 	parameters p;

@@ -13,10 +13,7 @@
 #include <limits>
 #include <cstdint>
 #include <cmath>
-#include <random>
-#include <thread>
 #include <vector>
-#include <map>
 
 void GenotypeMatrix::assign_index(const long &ii, const long &jj, double x) {
 	if(low_mem) {

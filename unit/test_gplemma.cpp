@@ -1,8 +1,8 @@
 // tests-main.cpp
 #include "catch.hpp"
 
-#include <iostream>
 #include "../src/tools/eigen3.3/Dense"
+#include "../src/parameters.hpp"
 #include "../src/parse_arguments.hpp"
 #include "../src/rhe_reg.hpp"
 #include "../src/data.hpp"

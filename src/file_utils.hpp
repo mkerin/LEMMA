@@ -20,6 +20,7 @@
 #include <iomanip>
 #include <string>
 #include <vector>
+#include <map>
 #include <unordered_map>
 
 namespace boost_io = boost::iostreams;

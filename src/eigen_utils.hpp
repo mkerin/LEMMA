@@ -12,7 +12,6 @@
 #include <map>
 #include <vector>
 #include <string>
-#include <set>
 
 #include <boost/iostreams/filtering_stream.hpp>
 #include <boost/iostreams/device/file.hpp>
