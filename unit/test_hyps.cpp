@@ -51,27 +51,27 @@ TEST_CASE("Hyps"){
 		CHECK(soln[3] == Approx(0.0001066218));
 
 		hyps.random_init(2, 1000);
-		CHECK(hyps.slab_relative_var[0] == Approx(0.0075781524));
-		CHECK(hyps.spike_relative_var[0] == Approx(0.0000075782));
-		CHECK(hyps.slab_relative_var[1] == Approx(0.0122428337));
-		CHECK(hyps.spike_relative_var[1] == Approx(0.0000122428));
+		CHECK(hyps.slab_relative_var[0] == Approx(0.0122571006));
+		CHECK(hyps.spike_relative_var[0] == Approx(0.0000122571));
+		CHECK(hyps.slab_relative_var[1] == Approx(0.0353421756));
+		CHECK(hyps.spike_relative_var[1] == Approx(0.0000353422));
 	}
 
 	SECTION("Random initialization"){
 		SECTION("G case") {
 			Hyps hyps(p);
 			hyps.random_init(2, 1000);
-			CHECK(hyps.spike_var(0) == Approx(0.0000075782));
-			CHECK(hyps.slab_var(0) == Approx(0.0075781524));
-			CHECK(hyps.spike_var(1) == Approx(0.0000122428));
-			CHECK(hyps.slab_var(1) == Approx(0.0122428337));
+			CHECK(hyps.spike_var(0) == Approx(0.0000122571));
+			CHECK(hyps.slab_var(0) == Approx(0.0122571006));
+			CHECK(hyps.spike_var(1) == Approx(0.0000353422));
+			CHECK(hyps.slab_var(1) == Approx(0.0353421756));
 		}
 
 		SECTION("GxE case") {
 			Hyps hyps(p);
 			hyps.random_init(1, 1000);
-			CHECK(hyps.spike_var(0) == Approx(0.0000068725));
-			CHECK(hyps.slab_var(0) == Approx(0.0068724729));
+			CHECK(hyps.spike_var(0) == Approx(0.0000116554));
+			CHECK(hyps.slab_var(0) == Approx(0.0116553522));
 		}
 	}
 }

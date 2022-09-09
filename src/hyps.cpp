@@ -231,7 +231,7 @@ void Hyps::from_file(const std::string &filename){
 }
 
 void Hyps::random_init(int n_effects, long n_var) {
-	std::default_random_engine generator(p.random_seed);
+	std::minstd_rand0 generator(p.random_seed);
 	std::uniform_real_distribution<double> unif_hb(0,0.5);
 	std::uniform_real_distribution<double> unif_hg(0,0.1);
 	std::uniform_real_distribution<double> unif_loglambda(2,std::max(3.0,1-std::log10(n_var)));
