@@ -29,7 +29,7 @@ for cc in `seq 1 22`; do
   echo "example/n5k_p20k_example_chr${cc}.bgen" >> example/bgen_filenames.txt;
 done
 
-mpirun -n 1 build/lemma_1_0_3 \
+mpirun build/lemma_1_0_3 \
   --pheno example/pheno.txt.gz \
   --environment example/env.txt.gz \
   --VB \
@@ -37,7 +37,7 @@ mpirun -n 1 build/lemma_1_0_3 \
   --singleSnpStats \
   --RHEreg --random-seed 1 \
   --mStreamBgen example/bgen_filenames.txt \
-  --out example/inference.out.gz
+  --out example/inference.out
 ```
 For association testing and heritability estimation, LEMMA will use genetic data provided from the `--mStreamBgen` if it is provided. Otherwise LEMMA will use genetic data from the `--bgen` flag.
 
@@ -63,24 +63,24 @@ The LEMMA algorithm is modular, and so each step can be performed separately as 
 
 ### Running the LEMMA variational inference algorithm
 ```
-mpirun -n 1 build/lemma_1_0_3 \
+mpirun build/lemma_1_0_3 \
   --VB \
   --pheno example/pheno.txt.gz \
   --environment example/env.txt.gz \
   --bgen example/n5k_p20k_example.bgen \
-  --out example/inference.out.gz
+  --out example/inference.out
 ```
 In this case the algorithm should converge in 59 iterations.
 
 ### Association testing with imputed SNPs
 ```
-mpirun -n 1 build/lemma_1_0_3 \
+mpirun build/lemma_1_0_3 \
   --singleSnpStats --maf 0.01 \
   --pheno example/pheno.txt.gz \
-  --resid-pheno example/inference_converged_yhat.out.gz \
+  --resid-pheno example/inference_converged_yhat.out \
   --mStreamBgen example/bgen_filenames.txt \
-  --environment example/inference_converged_eta.out.gz \
-  --out example/inference_loco_pvals.out.gz;
+  --environment example/inference_converged_eta.out \
+  --out example/inference_loco_pvals.out
 ```
 In this example the flag `--pheno example/pheno.txt.gz` is optional. This is used to see if any environmental variables have significant squared effects, and include them as covariates if so.
 
@@ -88,16 +88,33 @@ For analyses of large genomic datasets it may be useful to parallelize associati
 
 ### Heritability estimation
 ```
-mpirun -n 1 build/lemma_1_0_3 \
+mpirun build/lemma_1_0_3 \
   --RHEreg --random-seed 1 \
   --pheno example/pheno.txt.gz \
   --mStreamBgen example/bgen_filenames.txt \
-  --environment example/inference_converged_eta.out.gz \
-  --out example/inference_pve.out.gz
+  --environment example/inference_converged_eta.out \
+  --out example/inference_pve.out
 ```
 This should return heritability estimates of h2-G = 0.23 (0.032) and h2-GxE = 0.08 (0.016), where the value in brackets is the standard error.
 
 ## Advanced usage
+
+### Parallelism with OpenMPI
+LEMMA performs parallel processing with OpenMPI, and does so using the SPMD (Single Process Multiple Data) paradigm.
+
+More explicitly, samples are partitioned such that blocks of rows of the phenotype `y`, 
+genotypes `X` and environmental variables `E` are assigned to each core. Each core then runs inference only on the locally held block of samples. At relevant points in the algorithm, cores then message summary-level statistics to each other, such that the algorithm is invariant to the number of cores; or rather, we would get the same result by loading all of the data onto only one core.
+
+When running LEMMA on the UK Biobank we found parallelising with OpenMPI to highly efficient
+(ie doubling the number of cores almost doubles computational speed) up to when the number of samples per core is a couple 
+of thousand, after which adding extra cores yielded diminishing returns. Using OpenMPI 
+has the additional advantage of allowing users to utilise cores from across a cluster 
+rather than being restricted to a single node.
+
+To set the number of cores on the commandline explicitly, use
+```
+mpirun -n <cores> build/lemma_1_0_3
+```
 
 ### Precomputing the dXtEEX array
 Before running the variational algorithm, LEMMA requires the quantities
@@ -122,13 +139,13 @@ zcat example/dxteex_chr*.out.gz > example/dxteex.out.gz
 ```
 Then provide the file `example/dxteex.out.gz` to LEMMA with the commandline flag `--dxteex`.
 ```
-mpirun -n 1 build/lemma_1_0_3 \
+mpirun build/lemma_1_0_3 \
   --VB \
   --pheno example/pheno.txt.gz \
   --environment example/env.txt.gz \
   --bgen example/n5k_p20k_example.bgen \
   --dxteex example/dxteex.out.gz \
-  --out example/inference.out.gz
+  --out example/inference.out
 ```
 
 ### Heritability partitioned by MAF and LD
@@ -141,35 +158,35 @@ To convert into the file format expected by LEMMA we have provided a brief Rscri
 
 Then run the heritability analysis as follows
 ```
-mpirun -n 1 build/lemma_1_0_3 \
+mpirun build/lemma_1_0_3 \
   --RHEreg --n-RHEreg-samples 20 --n-RHEreg-jacknife 100 --random-seed 1 \
   --pheno example/pheno.txt.gz \
   --bgen example/n5k_p20k_example.bgen \
-  --environment example/inference_converged_eta.out.gz \
+  --environment example/inference_converged_eta.out \
   --RHEreg-groups example/ldms_groups.txt  \
-  --out example/rhe_ldms.out.gz
+  --out example/rhe_ldms.out
 ```
 
 ### Resuming from a previous parameter state
 In case of runtime crashes, LEMMA can save the parameter state at periodic intervals by providing the commandline flag `--resume-from-state`. LEMMA can then subsequently resume inference from this saved state. For example
 ```
-mpirun -n 1 build/lemma_1_0_3 \
+mpirun build/lemma_1_0_3 \
   --VB \
   --pheno example/pheno.txt.gz \
   --environment example/env.txt.gz \
   --bgen example/n5k_p20k_example.bgen \
   --state-dump-interval 10 \
-  --out example/inference.out.gz
+  --out example/inference.out
 
-mpirun -n 1 build/lemma_1_0_3 \
+mpirun build/lemma_1_0_3 \
   --VB \
   --pheno example/pheno.txt.gz \
   --environment example/env.txt.gz \
   --bgen example/n5k_p20k_example.bgen \
   --resume-from-state example/lemma_interim_files/inference_dump_it30 \
-  --out example/inference_from_it30.out.gz
+  --out example/inference_from_it30.out
 
-zdiff example/inference_from_it30.out.gz example/inference.out.gz
+diff example/inference_from_it30.out example/inference.out
 ```
 Outputs from the two should match, up to some small numerical difference in the ELBO. Note that if the iteration number that you start from is not a multiple of 3, then output will not match exactly because the SQUAREM algorithm adapts the trajectory of the hyperparameter updates in multiples of three.
 
