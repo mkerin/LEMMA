@@ -15,4 +15,4 @@ If you use **LEMMA** in your research, please cite the following publication:
 
 If you use **GPLEMMA** in your research, please cite the following publication:
 
-*Matthew Kerin and Jonathan Marchini (2020) Non-linear randomized Haseman-Elston regression for estimation of gene-environment heritability* [[bioRxiv](https://www.biorxiv.org/content/10.1101/2020.05.18.098459v1)]
+*Matthew Kerin and Jonathan Marchini (2020) Non-linear randomized Haseman-Elston regression for estimation of gene-environment heritability* [[Bioinformatics](https://academic.oup.com/bioinformatics/advance-article-abstract/doi/10.1093/bioinformatics/btaa1079/6050717)][[bioRxiv](https://www.biorxiv.org/content/10.1101/2020.05.18.098459v1)]
