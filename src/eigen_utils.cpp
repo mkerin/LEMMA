@@ -4,6 +4,7 @@
 
 #include "eigen_utils.hpp"
 #include "mpi_utils.hpp"
+#include "typedefs.hpp"
 
 #include "tools/eigen3.3/Dense"
 #include <boost/iostreams/filtering_stream.hpp>
@@ -16,6 +17,7 @@
 #include <vector>
 #include <stdexcept>
 #include <string>
+#include <unordered_map>
 
 namespace boost_io = boost::iostreams;
 
@@ -31,6 +33,31 @@ Eigen::MatrixXd EigenUtils::subset_matrix(const Eigen::MatrixXd &orig,
 	}
 	return subset;
 }
+
+template <typename EigenMat, typename Map>
+EigenMat EigenUtils::remove_rows( EigenMat& M,
+	                              const Map& incomplete_cases ) {
+		// Remove rows contained in incomplete_cases
+		EigenMat M_tmp;
+		long n_cols = M.cols(), n_rows = M.rows();
+		long n_incomplete = 0;
+		for (const auto& kv : incomplete_cases) {
+			n_incomplete += kv.second;
+		}
+		M_tmp.resize(n_rows - n_incomplete, n_cols);
+
+		// Fill M_tmp with non-missing entries of M
+		int ii_tmp = 0;
+		for (std::size_t ii = 0; ii < n_rows; ii++) {
+			if ((incomplete_cases.find(ii) == incomplete_cases.end()) || (!incomplete_cases.at(ii))) {
+				for (int kk = 0; kk < n_cols; kk++) {
+					M_tmp(ii_tmp, kk) = M(ii, kk);
+				}
+				ii_tmp++;
+			}
+		}
+		return M_tmp;
+	}
 
 template <typename EigenMat>
 void EigenUtils::write_matrix(boost_io::filtering_ostream& outf,
@@ -385,3 +412,7 @@ template void EigenUtils::scale_matrix_and_remove_constant_cols(Eigen::MatrixXd&
                                                                 long&, std::vector<std::string>&);
 template void EigenUtils::scale_matrix_and_remove_constant_cols(Eigen::VectorXd&,
                                                                 long&, std::vector<std::string>&);
+template EigenDataMatrix EigenUtils::remove_rows( EigenDataMatrix&,
+	                                       const std::map<long, bool>&);
+template EigenDataMatrix EigenUtils::remove_rows( EigenDataMatrix&,
+	                                       const std::unordered_map<long, bool>&);
