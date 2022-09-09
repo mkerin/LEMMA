@@ -165,11 +165,14 @@ public:
 	/********** Utility functions ************/
 	void compute_cumulative_pos(){
 		cumulative_pos.resize(pp);
-		cumulative_pos[0] = position[0];
-		for (long ii = 1; ii < pp; ii++) {
-			long diff = position[ii] - position[ii-1];
-			if(diff < 0) diff = 1;
-			cumulative_pos[ii] = cumulative_pos[ii - 1] + diff;
+		for (long ii = 0; ii < pp; ii++) {
+			if (ii == 0){
+				cumulative_pos[0] = position[0];
+			} else {
+				long diff = position[ii] - position[ii-1];
+				if(diff < 0) diff = 1;
+				cumulative_pos[ii] = cumulative_pos[ii - 1] + diff;
+			}
 		}
 	}
 

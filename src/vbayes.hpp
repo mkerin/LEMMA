@@ -864,8 +864,6 @@ public:
 		// check for NaNs and spit out diagnostics if so.
 
 		if(std::isnan(alpha)) {
-			// TODO: print diagnostics to cout
-			// TODO: write all snpstats to file
 			std::cout << "NaN detected at SNP index: (";
 			std::cout << ii % n_var << ", " << ii / n_var << ")" << std::endl;
 			std::cout << "alpha_cnst" << std::endl << alpha_cnst << std::endl << std::endl;
@@ -873,7 +871,6 @@ public:
 			std::cout << "hyps" << std::endl << hyps << std::endl << std::endl;
 			std::cout << "rr_k_diff" << std::endl << rr_k_diff << std::endl << std::endl;
 			std::cout << "A" << std::endl << A << std::endl << std::endl;
-			std::cout << "D_corr" << std::endl << D_corr << std::endl << std::endl;
 			throw std::runtime_error("NaN detected");
 		}
 	}

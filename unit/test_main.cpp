@@ -14,11 +14,11 @@
 #include <iostream>
 #include <sys/stat.h>
 
-char* case_study_args[] = { (char*) "bin/bgen_prog", (char*) "--VB-varEM",
+char* case_study_args[] = { (char*) "lemma", (char*) "--VB-varEM",
 	                        (char*) "--VB-iter-max", (char*) "10",
 	                        (char*) "--environment", (char*) "unit/data/n50_p100_env.txt",
 	                        (char*) "--bgen", (char*) "unit/data/n50_p100.bgen",
-	                        (char*) "--out", (char*) "unit/data/test_main.out.gz",
+	                        (char*) "--out", (char*) "unit/data/test_main.out",
 	                        (char*) "--pheno", (char*) "unit/data/pheno.txt",
 	                        (char*) "--hyps-grid", (char*) "unit/data/single_hyps_gxage.txt",
 	                        (char*) "--hyps-probs", (char*) "unit/data/single_hyps_gxage_probs.txt"};
