@@ -62,10 +62,6 @@ public:
 	long n_dxteex_computed;
 	long n_snpstats_computed;
 
-	bool Y_reduced;
-	bool W_reduced;
-	bool E_reduced;
-
 	std::vector< std::string > rsid_list;
 
 	std::map<long, bool> missing_envs;
@@ -147,8 +143,6 @@ public:
 		n_effects = -1;
 		n_covar   = 0;
 		n_env     = 0;
-		Y_reduced = false;
-		W_reduced = false;
 	}
 
 	void apply_filters(){
@@ -625,7 +619,6 @@ public:
 		assert(Y.cols() == 1);
 		assert(Y.rows() == n_samples);
 		n_pheno = Y.cols();
-		Y_reduced = false;
 	}
 
 	void read_resid_loco(){
@@ -651,7 +644,6 @@ public:
 		EigenUtils::read_matrix(p.covar_file, C, covar_names, missing_covars);
 		assert(C.rows() == n_samples);
 		n_covar = C.cols();
-		W_reduced = false;
 	}
 
 	void read_extra_pve_covar( ){
@@ -664,7 +656,6 @@ public:
 		EigenUtils::read_matrix(p.env_file, E, env_names, missing_envs);
 		assert(E.rows() == n_samples);
 		n_env = E.cols();
-		E_reduced = false;
 	}
 
 	void read_external_snpstats( ){
@@ -1356,37 +1347,6 @@ public:
 		assert(tmp.maxCoeff() <= 1);
 	}
 
-	template <typename EigenMat>
-	EigenMat reduce_mat_to_complete_cases( EigenMat& M,
-	                                       bool& matrix_reduced,
-	                                       const long& n_cols,
-	                                       const std::map<long, bool>& incomplete_cases ) {
-		// Remove rows contained in incomplete_cases
-		EigenMat M_tmp;
-		if (matrix_reduced) {
-			throw std::runtime_error("ERROR: Trying to remove incomplete cases twice...");
-		}
-
-		// Create temporary matrix of complete cases
-		unsigned long n_incomplete = incomplete_cases.size();
-		M_tmp.resize(n_samples - n_incomplete, n_cols);
-
-		// Fill M_tmp with non-missing entries of M
-		int ii_tmp = 0;
-		for (std::size_t ii = 0; ii < n_samples; ii++) {
-			if (incomplete_cases.count(ii) == 0) {
-				for (int kk = 0; kk < n_cols; kk++) {
-					M_tmp(ii_tmp, kk) = M(ii, kk);
-				}
-				ii_tmp++;
-			}
-		}
-
-		// Assign new values to reference variables
-		matrix_reduced = true;
-		return M_tmp;
-	}
-
 	void regress_first_mat_from_second(const EigenDataMatrix& A,
 	                                   EigenDataMatrix& yy){
 
@@ -1449,23 +1409,23 @@ public:
 		}
 
 		if(n_pheno > 0) {
-			Y = EigenUtils::remove_rows(Y, Y_reduced, n_pheno, incomplete_cases);
+			Y = EigenUtils::remove_rows(Y, sample_is_invalid);
 		}
 		if(n_covar > 0) {
-			C = EigenUtils::remove_rows(C, W_reduced, n_covar, incomplete_cases);
+			C = EigenUtils::remove_rows(C, sample_is_invalid);
 		}
 		if(n_env > 0) {
-			E = EigenUtils::remove_rows(E, E_reduced, n_env, incomplete_cases);
+			E = EigenUtils::remove_rows(E, sample_is_invalid);
 		}
 		if(p.extra_pve_covar_file != "NULL" && p.mode_RHE) {
 			long n_cols = C_extra_pve.cols();
 			bool placeholder = false;
-			C_extra_pve = EigenUtils::remove_rows(C_extra_pve, placeholder, n_cols, incomplete_cases);
+			C_extra_pve = EigenUtils::remove_rows(C_extra_pve, sample_is_invalid);
 		}
 		if (p.resid_loco_file != "NULL") {
 			long n_cols = resid_loco.cols();
 			bool placeholder = false;
-			resid_loco = EigenUtils::remove_rows(resid_loco, placeholder, n_cols, incomplete_cases);
+			resid_loco = EigenUtils::remove_rows(resid_loco, sample_is_invalid);
 		}
 		n_samples -= incomplete_cases.size();
 		missing_phenos.clear();

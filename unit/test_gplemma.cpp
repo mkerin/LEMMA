@@ -17,6 +17,7 @@ char* argv_rhe_nm[] = { (char*) "LEMMA",
 	                    (char*) "--random-seed", (char*) "1",
 	                    (char*) "--n-RHEreg-jacknife", (char*) "1",
 	                    (char*) "--n-RHEreg-samples", (char*) "5",
+						(char*) "--rhe-random-vectors", (char*) "unit/data/test_pve/gaussian_noise_50_x_5.txt",
 	                    (char*) "--streamBgen", (char*) "unit/data/n50_p100.bgen",
 	                    (char*) "--pheno", (char*) "unit/data/pheno.txt",
 	                    (char*) "--environment", (char*) "unit/data/n50_p100_env.txt",
@@ -30,6 +31,7 @@ char* argv_rhe_lm2[] = { (char*) "LEMMA",
 	                     (char*) "--random-seed", (char*) "1",
 	                     (char*) "--n-RHEreg-jacknife", (char*) "1",
 	                     (char*) "--n-RHEreg-samples", (char*) "5",
+						 (char*) "--rhe-random-vectors", (char*) "unit/data/test_pve/gaussian_noise_50_x_5.txt",
 	                     (char*) "--streamBgen", (char*) "unit/data/n50_p100.bgen",
 	                     (char*) "--pheno", (char*) "unit/data/pheno.txt",
 	                     (char*) "--environment", (char*) "unit/data/n50_p100_env.txt",
@@ -39,6 +41,7 @@ char* argv_multiE[] = { (char*) "--RHEreg", (char*) "--maf", (char*) "0.01",
 	                    (char*) "--random-seed", (char*) "1",
 	                    (char*) "--n-RHEreg-jacknife", (char*) "1",
 	                    (char*) "--n-RHEreg-samples", (char*) "2",
+						(char*) "--rhe-random-vectors", (char*) "unit/data/test_pve/gaussian_noise_50_x_2.txt",
 	                    (char*) "--streamBgen", (char*) "unit/data/n50_p100.bgen",
 	                    (char*) "--pheno", (char*) "unit/data/pheno.txt",
 	                    (char*) "--environment", (char*) "unit/data/n50_p100_env.txt",
@@ -65,7 +68,7 @@ TEST_CASE("RHE-LevenburgMarquardt") {
 		CHECK(pve.nls_env_weights(1) == Approx(-0.3631866642));
 		CHECK(pve.nls_env_weights(2) == Approx(0.0395414866));
 
-		CHECK(pve.sigmas(0) == Approx( 0.0043657676));
+		CHECK(pve.sigmas(0) == Approx( 0.0043657095));
 		CHECK(pve.sigmas(1) == Approx(-0.1222527085));
 		CHECK(pve.sigmas(2) == Approx(1.1372808824));
 	}
@@ -100,7 +103,7 @@ TEST_CASE("RHE-LevenburgMarquardt") {
 		CHECK(LM.count == 1);
 		CHECK(LM.delta(0) == Approx(-0.0005989636));
 		CHECK(LM.delta(1) == Approx(0.1987456184));
-		CHECK(LM.rho == Approx(0.119014003));
+		CHECK(LM.rho == Approx(0.119016));
 		CHECK(LM.u == Approx(2.9555570866));
 		CHECK(LM.v == Approx(2.0));
 	}
