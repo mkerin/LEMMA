@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.7.2)
+cmake_minimum_required(VERSION 3.16.9) # "CMake should be at least as new as your compiler"
 project(LEMMA VERSION 1.0.3)
 cmake_policy(SET CMP0110 OLD)
 
