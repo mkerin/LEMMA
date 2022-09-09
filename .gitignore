@@ -14,6 +14,9 @@ cmake-build*
 CMakeFiles/*
 examples/*
 .idea/*
+include/archive/*
+
+CMakeLists.txt
 
 # Data 
 example/*out.gz
