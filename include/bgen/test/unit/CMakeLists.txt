@@ -5,3 +5,5 @@ target_include_directories(test_bgen PRIVATE
                           "${CMAKE_CURRENT_SOURCE_DIR}"
                           ${ZLIB_INCLUDE_DIRS}
                           )
+
+add_test(NAME test_bgen COMMAND $<TARGET_FILE:test_bgen> WORKING_DIRECTORY ${CMAKE_BINARY_DIR})

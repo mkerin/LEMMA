@@ -1,21 +1,12 @@
 # Ignore the build and lib dirs
 build*/*
-lib/*
-3rd_party/*
 archive/*
-src/tools/*
-data/*
 local_scripts/*
 tests/data/*
 example/inference*
 cmake_commands.txt
 R/*
-cmake-build*
-CMakeFiles/*
-examples/*
 .idea/*
-include/archive/*
-
 
 # Data 
 example/*out.gz
