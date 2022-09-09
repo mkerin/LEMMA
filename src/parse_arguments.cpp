@@ -58,10 +58,6 @@ void print_compilation_details(){
 #ifdef MPI_VERSION
 	std::cout << "- compiled with openMPI" << std::endl;
 #endif
-
-#ifdef NDEBUG
-	std::cout << "- WARNING: NDEBUG is defined which means assert statements won't work!" << std::endl;
-#endif
 }
 
 void parse_arguments(parameters &p, int argc, char **argv) {
