@@ -114,7 +114,6 @@ public:
 			throw std::runtime_error("No bgen files available when initialising Data class");
 		}
 
-		// Create vector of bgen views for mutlithreading
 		n_var = 0;
 		if(p.bgen_file != "NULL") {
 			bgenView = bgenWrapper::View(p.bgen_file);
