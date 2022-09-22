@@ -65,6 +65,10 @@ else()
     message(STATUS "Optional dependancy Intel MKL Library not provided")
 endif()
 
+### Wrapper library around the bgen-lib
+add_library(bgen_wrapper src/bgen_wrapper.cpp)
+target_link_libraries(bgen_wrapper PRIVATE bgen MPI::MPI_CXX)
+
 ### Compile LEMMA
 set(TARGET lemma_${PROJECT_VERSION_MAJOR}_${PROJECT_VERSION_MINOR}_${PROJECT_VERSION_PATCH})
 
@@ -82,15 +86,15 @@ add_executable(${TARGET} src/main.cpp ${SOURCES})
 target_compile_options(${TARGET} PRIVATE -msse2 ${LOC_COMPILE_OPTS})
 target_include_directories(${TARGET} PRIVATE ${INCL_DIRS})
 set_target_properties(${TARGET} PROPERTIES LINK_FLAGS "${LIB_DIRS}")
-target_link_libraries(${TARGET} Boost::boost Boost::iostreams Boost::filesystem ${LIBRARIES} ${LINKER_OPTS})
+target_link_libraries(${TARGET} Boost::boost Boost::iostreams Boost::filesystem bgen_wrapper ${LIBRARIES} ${LINKER_OPTS})
 
 ### Compile Catch Unit Tests
 set(TSOURCES unit/test_main.cpp unit/test_hyps.cpp unit/test_gplemma.cpp)
 list(APPEND TSOURCES unit/test_resume_inference.cpp unit/test_eigen.cpp)
-list(APPEND TSOURCES unit/test_data.cpp unit/test_snptests.cpp)
+list(APPEND TSOURCES unit/test_data.cpp unit/test_snptests.cpp unit/test_bgen_wrapper.cpp)
 
 add_executable(tests unit/main.cpp ${TSOURCES} ${SOURCES})
-target_link_libraries(tests Boost::boost Boost::iostreams Boost::filesystem ${LIBRARIES} ${LINKER_OPTS})
+target_link_libraries(tests Boost::boost Boost::iostreams Boost::filesystem bgen_wrapper ${LIBRARIES} ${LINKER_OPTS})
 target_compile_options(tests PRIVATE -msse2 ${LOC_COMPILE_OPTS})
 target_include_directories(tests PRIVATE ${INCL_DIRS})
 set_target_properties(tests PROPERTIES LINK_FLAGS "${LIB_DIRS}")

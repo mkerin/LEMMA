@@ -257,7 +257,7 @@ void RHEreg::compute_RHE_trace_operators() {
 		std::vector<std::string> SNPIDS;
 		long long n_vars_tot = 0;
 		for (int ii = 0; ii < p.streamBgenFiles.size(); ii++) {
-			n_vars_tot += data.streamBgenViews[ii]->number_of_variants();
+			n_vars_tot += data.streamBgenViews[ii].number_of_variants();
 		}
 		long jack_block_size = (n_vars_tot + p.n_jacknife) / p.n_jacknife;
 		if (p.debug) std::cout << "jacknife block size = " << jack_block_size << std::endl;

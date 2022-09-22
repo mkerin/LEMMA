@@ -4,12 +4,15 @@
 
 #include <cassert>
 #include <iostream>
+#include <mpi.h>
 #include <unordered_map>
 #include <unordered_set>
 
 #include "genfile/bgen/bgen.hpp"
 #include "typedefs.hpp"
-#include "mpi_utils.hpp"
+
+double mpiReduce_inplace(double* local);
+double mpiReduce_inplace(double local);
 
 // DosageSetter is a callback object appropriate for passing to bgen::read_genotype_data_block() or
 // the synonymous method of genfile::bgen::View. See the comment in bgen.hpp above
@@ -97,11 +100,11 @@ struct DosageSetter {
 		double Ngeno = m_dosage.rows();
 		double Nmissing = m_missing_entries.size();
 
-		Ngeno = mpiUtils::mpiReduce_inplace(&Ngeno);
-		Nmissing = mpiUtils::mpiReduce_inplace(&Nmissing);
-		m_sum_eij = mpiUtils::mpiReduce_inplace(&m_sum_eij);
-		m_sum_eij2 = mpiUtils::mpiReduce_inplace(&m_sum_eij2);
-		m_sum_fij_minus_eij2 = mpiUtils::mpiReduce_inplace(&m_sum_fij_minus_eij2);
+		Ngeno = mpiReduce_inplace(&Ngeno);
+		Nmissing = mpiReduce_inplace(&Nmissing);
+		m_sum_eij = mpiReduce_inplace(&m_sum_eij);
+		m_sum_eij2 = mpiReduce_inplace(&m_sum_eij2);
+		m_sum_fij_minus_eij2 = mpiReduce_inplace(&m_sum_fij_minus_eij2);
 
 		double Nvalid = Ngeno - Nmissing;
 		m_missingness = Nmissing / Ngeno;
@@ -143,5 +146,17 @@ private:
 	double m_eij;
 	double m_fij;
 };
+
+double mpiReduce_inplace(double *local) {
+	double global;
+	MPI_Allreduce(local, &global, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+	return global;
+}
+
+double mpiReduce_inplace(double local) {
+	double global;
+	MPI_Allreduce(&local, &global, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+	return global;
+}
 
 #endif

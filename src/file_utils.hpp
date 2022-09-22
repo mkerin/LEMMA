@@ -7,9 +7,8 @@
 
 #include "parameters.hpp"
 #include "genotype_matrix.hpp"
+#include "bgen_wrapper.hpp"
 
-#include "genfile/bgen/bgen.hpp"
-#include "genfile/bgen/View.hpp"
 #include "tools/eigen3.3/Dense"
 
 #include <boost/iostreams/filtering_stream.hpp>
@@ -81,7 +80,7 @@ void write_snp_stats_to_file(boost_io::filtering_ostream &ofile, const int &n_ef
 void read_bgen_metadata(const std::string& filename,
                         std::vector<int>& chr);
 
-bool read_bgen_chunk(genfile::bgen::View::UniquePtr &bgenView,
+bool read_bgen_chunk(const bgenWrapper::View &bgenView,
                      GenotypeMatrix &G,
                      const std::unordered_map<long, bool> &sample_is_invalid,
                      const long &n_samples,
@@ -90,7 +89,7 @@ bool read_bgen_chunk(genfile::bgen::View::UniquePtr &bgenView,
                      bool &bgen_pass,
                      long &n_var_parsed);
 
-bool read_bgen_chunk(genfile::bgen::View::UniquePtr &bgenView,
+bool read_bgen_chunk(const bgenWrapper::View &bgenView,
                      Eigen::MatrixXd &G,
                      const std::unordered_map<long, bool> &sample_is_invalid,
                      const long &n_samples,
