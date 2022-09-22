@@ -5,16 +5,14 @@
 #include "file_utils.hpp"
 #include "parameters.hpp"
 #include "genotype_matrix.hpp"
-
-#include "genfile/bgen/bgen.hpp"
-#include "genfile/bgen/View.hpp"
-#include "bgen_parser.hpp"
+#include "bgen_wrapper.hpp"
 
 #include <boost/iostreams/filtering_stream.hpp>
 #include <boost/iostreams/device/file.hpp>
 #include <boost/iostreams/filter/gzip.hpp>
 #include <boost/filesystem.hpp>
 
+#include <mpi.h>
 #include <iomanip>
 #include <string>
 #include <vector>
@@ -255,7 +253,7 @@ void fileUtils::write_snp_stats_to_file(boost_io::filtering_ostream &ofile,
 
 void fileUtils::read_bgen_metadata(const std::string& filename,
                                    std::vector<int>& chr) {
-	genfile::bgen::View::UniquePtr bgenView = genfile::bgen::View::create(filename);
+	bgenWrapper::View bgenView(filename);
 
 	std::string chr_j, rsid_j, SNPID_j;
 	std::uint32_t pos_j;
@@ -265,15 +263,15 @@ void fileUtils::read_bgen_metadata(const std::string& filename,
 	chr.clear();
 
 	while (bgen_pass) {
-		bgen_pass = bgenView->read_variant(&SNPID_j, &rsid_j, &chr_j, &pos_j, &alleles_j);
+		bgen_pass = bgenView.read_variant(&SNPID_j, &rsid_j, &chr_j, &pos_j, &alleles_j);
 		if (bgen_pass) {
-			bgenView->ignore_genotype_data_block();
+			bgenView.ignore_genotype_data_block();
 		}
 		chr.push_back(std::stoi(chr_j));
 	}
 }
 
-bool fileUtils::read_bgen_chunk(genfile::bgen::View::UniquePtr &bgenView,
+bool fileUtils::read_bgen_chunk(const bgenWrapper::View &bgenView,
                                 GenotypeMatrix &G,
                                 const std::unordered_map<long, bool> &sample_is_invalid,
                                 const long &n_samples,
@@ -293,9 +291,7 @@ bool fileUtils::read_bgen_chunk(genfile::bgen::View::UniquePtr &bgenView,
 	std::string rsid_j;
 	std::vector< std::string > alleles_j;
 	std::string SNPID_j;
-
-	long nInvalid = sample_is_invalid.size() - n_samples;
-	DosageSetter setter_v2(sample_is_invalid, nInvalid);
+	EigenDataVector dosage_j(n_samples);
 
 	double chunk_missingness = 0;
 	long n_var_incomplete = 0;
@@ -306,19 +302,19 @@ bool fileUtils::read_bgen_chunk(genfile::bgen::View::UniquePtr &bgenView,
 	long int n_constant_variance = 0;
 	std::uint32_t jj = 0;
 	while ( jj < chunk_size && bgen_pass) {
-		bgen_pass = bgenView->read_variant( &SNPID_j, &rsid_j, &chr_j, &pos_j, &alleles_j );
+		bgen_pass = bgenView.read_variant( &SNPID_j, &rsid_j, &chr_j, &pos_j, &alleles_j );
 		if (!bgen_pass) break;
 		n_var_parsed++;
 
 		// Read dosage
-		bgenView->read_genotype_data_block( setter_v2 );
+		auto stats = bgenView.read_genotype_data_block( sample_is_invalid, n_samples, dosage_j );
 
-		double d1     = setter_v2.m_sum_eij;
-		double maf_j  = setter_v2.m_maf;
-		double info_j = setter_v2.m_info;
-		double mu     = setter_v2.m_mean;
-		double missingness_j    = setter_v2.m_missingness;
-		double sigma = std::sqrt(setter_v2.m_sigma2);
+		double d1     = stats.d1;
+		double maf_j  = stats.maf;
+		double info_j = stats.info;
+		double mu     = stats.mu;
+		double missingness_j    = stats.missingness;
+		double sigma = stats.sigma;
 
 		// Filters
 		if (p.maf_lim && (maf_j < p.min_maf || maf_j > 1 - p.min_maf)) {
@@ -355,7 +351,7 @@ bool fileUtils::read_bgen_chunk(genfile::bgen::View::UniquePtr &bgenView,
 		G.SNPID[jj] = SNPID_j;
 
 		for (std::uint32_t ii = 0; ii < n_samples; ii++) {
-			G.assign_index(ii, jj, setter_v2.m_dosage[ii]);
+			G.assign_index(ii, jj, dosage_j[ii]);
 		}
 		// G.compressed_dosage_sds[jj] = sigma;
 		// G.compressed_dosage_means[jj] = mu;
@@ -388,7 +384,7 @@ bool fileUtils::read_bgen_chunk(genfile::bgen::View::UniquePtr &bgenView,
 	}
 }
 
-bool fileUtils::read_bgen_chunk(genfile::bgen::View::UniquePtr &bgenView,
+bool fileUtils::read_bgen_chunk(const bgenWrapper::View &bgenView,
                                 Eigen::MatrixXd &G,
                                 const std::unordered_map<long, bool> &sample_is_invalid,
                                 const long &n_samples,
@@ -409,9 +405,7 @@ bool fileUtils::read_bgen_chunk(genfile::bgen::View::UniquePtr &bgenView,
 	std::string rsid_j;
 	std::vector< std::string > alleles_j;
 	std::string SNPID_j;
-
-	long nInvalid = sample_is_invalid.size() - n_samples;
-	DosageSetter setter_v2(sample_is_invalid, nInvalid);
+	EigenDataVector dosage_j(n_samples);
 
 	double chunk_missingness = 0;
 	long n_var_incomplete = 0;
@@ -423,19 +417,19 @@ bool fileUtils::read_bgen_chunk(genfile::bgen::View::UniquePtr &bgenView,
 	long int n_constant_variance = 0;
 	std::uint32_t jj = 0;
 	while ( jj < chunk_size && bgen_pass) {
-		bgen_pass = bgenView->read_variant( &SNPID_j, &rsid_j, &chr_j, &pos_j, &alleles_j );
+		bgen_pass = bgenView.read_variant( &SNPID_j, &rsid_j, &chr_j, &pos_j, &alleles_j );
 		if (!bgen_pass) break;
 		n_var_parsed++;
 
 		// Read probs + check maf filter
-		bgenView->read_genotype_data_block( setter_v2 );
+		auto stats = bgenView.read_genotype_data_block( sample_is_invalid, n_samples, dosage_j );
 
-		double d1     = setter_v2.m_sum_eij;
-		double maf_j  = setter_v2.m_maf;
-		double info_j = setter_v2.m_info;
-		double mu     = setter_v2.m_mean;
-		double missingness_j    = setter_v2.m_missingness;
-		double sigma = std::sqrt(setter_v2.m_sigma2);
+		double d1     = stats.d1;
+		double maf_j  = stats.maf;
+		double info_j = stats.info;
+		double mu     = stats.mu;
+		double missingness_j    = stats.missingness;
+		double sigma = stats.sigma;
 
 		// Filters
 		if (p.maf_lim && (maf_j < p.min_maf || maf_j > 1 - p.min_maf)) {
@@ -460,7 +454,7 @@ bool fileUtils::read_bgen_chunk(genfile::bgen::View::UniquePtr &bgenView,
 		if(missingness_j > 0) n_var_incomplete++;
 
 		for (std::uint32_t ii = 0; ii < n_samples; ii++) {
-			G(ii, jj) = setter_v2.m_dosage[ii];
+			G(ii, jj) = dosage_j[ii];
 		}
 		jj++;
 	}

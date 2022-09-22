@@ -10,11 +10,10 @@
 #include "variational_parameters.hpp"
 #include "file_utils.hpp"
 #include "mpi_utils.hpp"
+#include "bgen_wrapper.hpp"
 
 #include "tools/eigen3.3/Dense"
 #include "tools/eigen3.3/Eigenvalues"
-#include "genfile/bgen/bgen.hpp"
-#include "genfile/bgen/View.hpp"
 
 #include <iostream>
 #include <algorithm>
@@ -31,6 +30,7 @@
 #include <stdexcept>
 #include <unordered_map>
 #include <unordered_set>
+#include <utility>
 
 #include <boost/math/distributions/chi_squared.hpp>
 #include <boost/math/distributions/fisher_f.hpp>
@@ -101,8 +101,8 @@ public:
 	bool bgen_pass;
 
 	boost_io::filtering_ostream outf_scan;
-	genfile::bgen::View::UniquePtr bgenView;
-	std::vector<genfile::bgen::View::UniquePtr> streamBgenViews;
+	bgenWrapper::View bgenView;
+	std::vector<bgenWrapper::View> streamBgenViews;
 
 	bool filters_applied;
 	std::unordered_map<long, bool> sample_is_invalid;
@@ -121,20 +121,20 @@ public:
 		// Create vector of bgen views for mutlithreading
 		n_var = 0;
 		if(p.bgen_file != "NULL") {
-			bgenView = genfile::bgen::View::create(p.bgen_file);
-			n_samples = (long) bgenView->number_of_samples();
-			n_var     = bgenView->number_of_variants();
+			bgenView = bgenWrapper::View(p.bgen_file);
+			n_samples = (long) bgenView.number_of_samples();
+			n_var     = bgenView.number_of_variants();
 		}
 		for (auto streamBgenFile : p.streamBgenFiles) {
-			genfile::bgen::View::UniquePtr view = genfile::bgen::View::create(streamBgenFile);
-			n_samples = (long) view->number_of_samples();
-			streamBgenViews.push_back(move(view));
+			bgenWrapper::View view(streamBgenFile);
+			n_samples = (long) view.number_of_samples();
+			streamBgenViews.push_back(std::move(view));
 		}
 		// Check all bgen files have the same number of samples
 		if(p.bgen_file != "NULL" && !p.streamBgenFiles.empty()) {
-			assert(n_samples == bgenView->number_of_samples());
+			assert(n_samples == bgenView.number_of_samples());
 			for (int ii = 0; ii < p.streamBgenFiles.size(); ii++) {
-				assert(n_samples == streamBgenViews[ii]->number_of_samples());
+				assert(n_samples == streamBgenViews[ii].number_of_samples());
 			}
 		}
 
@@ -179,41 +179,39 @@ public:
 		}
 
 		if(p.bgen_file != "NULL") {
-			genfile::bgen::IndexQuery::UniquePtr query = genfile::bgen::IndexQuery::create(p.bgi_file);
+			bgenWrapper::IndexQuery query(p.bgi_file);
 			if (p.range) {
-				genfile::bgen::IndexQuery::GenomicRange rr1(p.range_chr, p.range_start, p.range_end);
-				query->include_range( rr1 );
+				query.include_range(p.range_chr, p.range_start, p.range_end);
 			}
 			if(p.incl_rsids_file != "NULL") {
-				query->include_rsids( rsid_list );
+				query.include_rsids( rsid_list );
 			}
 			if(p.select_rsid) {
-				query->include_rsids( p.rsid );
+				query.include_rsids( p.rsid );
 			}
 
 			// filter - apply queries
-			query->initialise();
-			bgenView->set_query(query);
+			query.initialise();
+			bgenView.set_query(query);
 		}
 
 		for (int ii = 0; ii < p.streamBgenFiles.size(); ii++) {
-			genfile::bgen::IndexQuery::UniquePtr query = genfile::bgen::IndexQuery::create(p.streamBgiFiles[ii]);
+			bgenWrapper::IndexQuery query(p.streamBgiFiles[ii]);
 			if (p.range) {
-				genfile::bgen::IndexQuery::GenomicRange rr1(p.range_chr, p.range_start, p.range_end);
-				query->include_range( rr1 );
+				query.include_range(p.range_chr, p.range_start, p.range_end);
 			}
 			if(p.incl_rsids_file != "NULL") {
-				query->include_rsids( rsid_list );
+				query.include_rsids( rsid_list );
 			}
 			if(p.select_rsid) {
-				query->include_rsids( p.rsid );
+				query.include_rsids( p.rsid );
 			}
-			query->initialise();
-			streamBgenViews[ii]->set_query(query);
+			query.initialise();
+			streamBgenViews[ii].set_query(query);
 		}
 
 		if (p.bgen_file != "NULL") {
-			bgenView->summarise(std::cout);
+			bgenView.summarise(std::cout);
 		}
 
 		filters_applied = true;
@@ -417,7 +415,7 @@ public:
 	void read_full_bgen(){
 		if(p.bgen_file != "NULL") {
             std::cout << "Reading in BGEN data" << std::endl;
-		    long long genoSnps = bgenView->number_of_variants();
+		    long long genoSnps = bgenView.number_of_variants();
 		    if (genoSnps > 1000000){
 		        std::cout << " - Warning: Over 1,000,000 variants detected in "<<p.bgen_file<< " (before MAF filters"
                              " applied). Consider pruning the number of SNPs to improve computational cost of the "
@@ -429,7 +427,7 @@ public:
 			}
 
 			auto start = std::chrono::system_clock::now();
-			p.chunk_size = bgenView->number_of_variants();
+			p.chunk_size = bgenView.number_of_variants();
 			fileUtils::read_bgen_chunk(bgenView, G, sample_is_invalid, n_samples, p.chunk_size, p, bgen_pass,
 			                           n_var_parsed);
 			auto end = std::chrono::system_clock::now();
@@ -498,17 +496,9 @@ public:
 
 		std::vector<std::string> bgen_ids;
 		if(p.bgen_file != "NULL") {
-			bgenView->get_sample_ids(
-				[&]( std::string const& id ) {
-				bgen_ids.push_back(id);
-			}
-				);
+			bgen_ids = bgenView.get_sample_ids();
 		} else if (!p.streamBgenFiles.empty()) {
-			streamBgenViews[0]->get_sample_ids(
-				[&]( std::string const& id ) {
-				bgen_ids.push_back(id);
-			}
-				);
+			bgen_ids = streamBgenViews[0].get_sample_ids();
 		} else {
 			std::runtime_error("No valid bgen file found.");
 		}

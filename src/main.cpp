@@ -120,7 +120,7 @@ int main( int argc, char** argv ) {
 
 		long long n_vars_tot = 0;
 		for (int ii = 0; ii < p.streamBgenFiles.size(); ii++) {
-			n_vars_tot += data.streamBgenViews[ii]->number_of_variants();
+			n_vars_tot += data.streamBgenViews[ii].number_of_variants();
 		}
 
 		long ixChr, maxChunkSize = 256;
