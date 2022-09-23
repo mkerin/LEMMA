@@ -1,6 +1,7 @@
 //
 // Created by kerin on 2019-02-26.
 //
+#include "eigen_utils.hpp"
 #include "rhe_reg.hpp"
 #include "genotype_matrix.hpp"
 #include "typedefs.hpp"
@@ -91,6 +92,7 @@ void RHEreg::initialise_components() {
 	zz.resize(n_samples, n_draws);
 	if(p.rhe_random_vectors_file != "NULL") {
 		EigenUtils::read_matrix(p.rhe_random_vectors_file, zz);
+		zz = EigenUtils::remove_rows(zz, sample_is_invalid);
 	} else {
 		fill_gaussian_noise(p.random_seed, zz, n_samples, n_draws);
 	}
