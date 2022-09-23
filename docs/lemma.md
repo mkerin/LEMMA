@@ -29,7 +29,7 @@ for cc in `seq 1 22`; do
   echo "example/n5k_p20k_example_chr${cc}.bgen" >> example/bgen_filenames.txt;
 done
 
-mpirun build/lemma_1_0_3 \
+mpirun build/lemma_1_0_4 \
   --pheno example/pheno.txt.gz \
   --environment example/env.txt.gz \
   --VB \
@@ -63,7 +63,7 @@ The LEMMA algorithm is modular, and so each step can be performed separately as 
 
 ### Running the LEMMA variational inference algorithm
 ```
-mpirun build/lemma_1_0_3 \
+mpirun build/lemma_1_0_4 \
   --VB \
   --pheno example/pheno.txt.gz \
   --environment example/env.txt.gz \
@@ -74,7 +74,7 @@ In this case the algorithm should converge in 59 iterations.
 
 ### Association testing with imputed SNPs
 ```
-mpirun build/lemma_1_0_3 \
+mpirun build/lemma_1_0_4 \
   --singleSnpStats --maf 0.01 \
   --pheno example/pheno.txt.gz \
   --resid-pheno example/inference_converged_yhat.out \
@@ -88,7 +88,7 @@ For analyses of large genomic datasets it may be useful to parallelize associati
 
 ### Heritability estimation
 ```
-mpirun build/lemma_1_0_3 \
+mpirun build/lemma_1_0_4 \
   --RHEreg --random-seed 1 \
   --pheno example/pheno.txt.gz \
   --mStreamBgen example/bgen_filenames.txt \
@@ -113,7 +113,7 @@ rather than being restricted to a single node.
 
 To set the number of cores on the commandline explicitly, use
 ```
-mpirun -n <cores> build/lemma_1_0_3
+mpirun -n <cores> build/lemma_1_0_4
 ```
 
 ### Precomputing the dXtEEX array
@@ -139,7 +139,7 @@ zcat example/dxteex_chr*.out.gz > example/dxteex.out.gz
 ```
 Then provide the file `example/dxteex.out.gz` to LEMMA with the commandline flag `--dxteex`.
 ```
-mpirun build/lemma_1_0_3 \
+mpirun build/lemma_1_0_4 \
   --VB \
   --pheno example/pheno.txt.gz \
   --environment example/env.txt.gz \
@@ -158,7 +158,7 @@ To convert into the file format expected by LEMMA we have provided a brief Rscri
 
 Then run the heritability analysis as follows
 ```
-mpirun build/lemma_1_0_3 \
+mpirun build/lemma_1_0_4 \
   --RHEreg --n-RHEreg-samples 20 --n-RHEreg-jacknife 100 --random-seed 1 \
   --pheno example/pheno.txt.gz \
   --bgen example/n5k_p20k_example.bgen \
@@ -170,7 +170,7 @@ mpirun build/lemma_1_0_3 \
 ### Resuming from a previous parameter state
 In case of runtime crashes, LEMMA can save the parameter state at periodic intervals by providing the commandline flag `--resume-from-state`. LEMMA can then subsequently resume inference from this saved state. For example
 ```
-mpirun build/lemma_1_0_3 \
+mpirun build/lemma_1_0_4 \
   --VB \
   --pheno example/pheno.txt.gz \
   --environment example/env.txt.gz \
@@ -178,7 +178,7 @@ mpirun build/lemma_1_0_3 \
   --state-dump-interval 10 \
   --out example/inference.out
 
-mpirun build/lemma_1_0_3 \
+mpirun build/lemma_1_0_4 \
   --VB \
   --pheno example/pheno.txt.gz \
   --environment example/env.txt.gz \

@@ -34,7 +34,7 @@ ctest --test-dir build
 
 View the commandline options supported by LEMMA
 ```
-./build/lemma_1_0_3 -h
+./build/lemma_1_0_4 -h
 ```
 
 
