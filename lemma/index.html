@@ -128,6 +128,7 @@
                 <li class="third-level"><a href="#heritability-estimation">Heritability estimation</a></li>
             <li class="second-level"><a href="#advanced-usage">Advanced usage</a></li>
                 
+                <li class="third-level"><a href="#parallelism-with-openmpi">Parallelism with OpenMPI</a></li>
                 <li class="third-level"><a href="#precomputing-the-dxteex-array">Precomputing the dXtEEX array</a></li>
                 <li class="third-level"><a href="#heritability-partitioned-by-maf-and-ld">Heritability partitioned by MAF and LD</a></li>
                 <li class="third-level"><a href="#resuming-from-a-previous-parameter-state">Resuming from a previous parameter state</a></li>
@@ -168,7 +169,7 @@ for cc in `seq 1 22`; do
   echo &quot;example/n5k_p20k_example_chr${cc}.bgen&quot; &gt;&gt; example/bgen_filenames.txt;
 done
 
-mpirun -n 1 build/lemma_1_0_3 \
+mpirun build/lemma_1_0_4 \
   --pheno example/pheno.txt.gz \
   --environment example/env.txt.gz \
   --VB \
@@ -176,7 +177,7 @@ mpirun -n 1 build/lemma_1_0_3 \
   --singleSnpStats \
   --RHEreg --random-seed 1 \
   --mStreamBgen example/bgen_filenames.txt \
-  --out example/inference.out.gz
+  --out example/inference.out
 </code></pre>
 <p>For association testing and heritability estimation, LEMMA will use genetic data provided from the <code>--mStreamBgen</code> if it is provided. Otherwise LEMMA will use genetic data from the <code>--bgen</code> flag.</p>
 <p>Files provided to <code>--mStreamBgen</code> should each contain only one chromosome. Separating the chromosomes into different files can be achieved with the <a href="https://enkre.net/cgi-bin/code/bgen/dir?ci=trunk">BGENIX</a> program.</p>
@@ -198,35 +199,47 @@ mpirun -n 1 build/lemma_1_0_3 \
 </ul>
 <p>The LEMMA algorithm is modular, and so each step can be performed separately as follows.</p>
 <h3 id="running-the-lemma-variational-inference-algorithm">Running the LEMMA variational inference algorithm</h3>
-<pre><code>mpirun -n 1 build/lemma_1_0_3 \
+<pre><code>mpirun build/lemma_1_0_4 \
   --VB \
   --pheno example/pheno.txt.gz \
   --environment example/env.txt.gz \
   --bgen example/n5k_p20k_example.bgen \
-  --out example/inference.out.gz
+  --out example/inference.out
 </code></pre>
 <p>In this case the algorithm should converge in 59 iterations.</p>
 <h3 id="association-testing-with-imputed-snps">Association testing with imputed SNPs</h3>
-<pre><code>mpirun -n 1 build/lemma_1_0_3 \
+<pre><code>mpirun build/lemma_1_0_4 \
   --singleSnpStats --maf 0.01 \
   --pheno example/pheno.txt.gz \
-  --resid-pheno example/inference_converged_yhat.out.gz \
+  --resid-pheno example/inference_converged_yhat.out \
   --mStreamBgen example/bgen_filenames.txt \
-  --environment example/inference_converged_eta.out.gz \
-  --out example/inference_loco_pvals.out.gz;
+  --environment example/inference_converged_eta.out \
+  --out example/inference_loco_pvals.out
 </code></pre>
 <p>In this example the flag <code>--pheno example/pheno.txt.gz</code> is optional. This is used to see if any environmental variables have significant squared effects, and include them as covariates if so.</p>
 <p>For analyses of large genomic datasets it may be useful to parallelize association testing across chunks of SNPs with the <code>--range</code> flag.</p>
 <h3 id="heritability-estimation">Heritability estimation</h3>
-<pre><code>mpirun -n 1 build/lemma_1_0_3 \
+<pre><code>mpirun build/lemma_1_0_4 \
   --RHEreg --random-seed 1 \
   --pheno example/pheno.txt.gz \
   --mStreamBgen example/bgen_filenames.txt \
-  --environment example/inference_converged_eta.out.gz \
-  --out example/inference_pve.out.gz
+  --environment example/inference_converged_eta.out \
+  --out example/inference_pve.out
 </code></pre>
 <p>This should return heritability estimates of h2-G = 0.23 (0.032) and h2-GxE = 0.08 (0.016), where the value in brackets is the standard error.</p>
 <h2 id="advanced-usage">Advanced usage</h2>
+<h3 id="parallelism-with-openmpi">Parallelism with OpenMPI</h3>
+<p>LEMMA performs parallel processing with OpenMPI, and does so using the SPMD (Single Process Multiple Data) paradigm.</p>
+<p>More explicitly, samples are partitioned such that blocks of rows of the phenotype <code>y</code>, 
+genotypes <code>X</code> and environmental variables <code>E</code> are assigned to each core. Each core then runs inference only on the locally held block of samples. At relevant points in the algorithm, cores then message summary-level statistics to each other, such that the algorithm is invariant to the number of cores; or rather, we would get the same result by loading all of the data onto only one core.</p>
+<p>When running LEMMA on the UK Biobank we found parallelising with OpenMPI to highly efficient
+(ie doubling the number of cores almost doubles computational speed) up to when the number of samples per core is a couple 
+of thousand, after which adding extra cores yielded diminishing returns. Using OpenMPI 
+has the additional advantage of allowing users to utilise cores from across a cluster 
+rather than being restricted to a single node.</p>
+<p>To set the number of cores on the commandline explicitly, use</p>
+<pre><code>mpirun -n &lt;cores&gt; build/lemma_1_0_4
+</code></pre>
 <h3 id="precomputing-the-dxteex-array">Precomputing the dXtEEX array</h3>
 <p>Before running the variational algorithm, LEMMA requires the quantities
 <img alt="Test Image 1" src="../img/LEMMA_precomputation.png" /><br />
@@ -246,13 +259,13 @@ done
 zcat example/dxteex_chr*.out.gz &gt; example/dxteex.out.gz
 </code></pre>
 <p>Then provide the file <code>example/dxteex.out.gz</code> to LEMMA with the commandline flag <code>--dxteex</code>.</p>
-<pre><code>mpirun -n 1 build/lemma_1_0_3 \
+<pre><code>mpirun build/lemma_1_0_4 \
   --VB \
   --pheno example/pheno.txt.gz \
   --environment example/env.txt.gz \
   --bgen example/n5k_p20k_example.bgen \
   --dxteex example/dxteex.out.gz \
-  --out example/inference.out.gz
+  --out example/inference.out
 </code></pre>
 <h3 id="heritability-partitioned-by-maf-and-ld">Heritability partitioned by MAF and LD</h3>
 <p>For this you will need:</p>
@@ -262,33 +275,33 @@ zcat example/dxteex_chr*.out.gz &gt; example/dxteex.out.gz
 </ul>
 <p>To convert into the file format expected by LEMMA we have provided a brief Rscript <code>scripts/preprocess_ldms_groups.R</code>.</p>
 <p>Then run the heritability analysis as follows</p>
-<pre><code>mpirun -n 1 build/lemma_1_0_3 \
+<pre><code>mpirun build/lemma_1_0_4 \
   --RHEreg --n-RHEreg-samples 20 --n-RHEreg-jacknife 100 --random-seed 1 \
   --pheno example/pheno.txt.gz \
   --bgen example/n5k_p20k_example.bgen \
-  --environment example/inference_converged_eta.out.gz \
+  --environment example/inference_converged_eta.out \
   --RHEreg-groups example/ldms_groups.txt  \
-  --out example/rhe_ldms.out.gz
+  --out example/rhe_ldms.out
 </code></pre>
 <h3 id="resuming-from-a-previous-parameter-state">Resuming from a previous parameter state</h3>
 <p>In case of runtime crashes, LEMMA can save the parameter state at periodic intervals by providing the commandline flag <code>--resume-from-state</code>. LEMMA can then subsequently resume inference from this saved state. For example</p>
-<pre><code>mpirun -n 1 build/lemma_1_0_3 \
+<pre><code>mpirun build/lemma_1_0_4 \
   --VB \
   --pheno example/pheno.txt.gz \
   --environment example/env.txt.gz \
   --bgen example/n5k_p20k_example.bgen \
-  --param_dump_interval 10 \
-  --out example/inference.out.gz
+  --state-dump-interval 10 \
+  --out example/inference.out
 
-mpirun -n 1 build/lemma_1_0_3 \
+mpirun build/lemma_1_0_4 \
   --VB \
   --pheno example/pheno.txt.gz \
   --environment example/env.txt.gz \
   --bgen example/n5k_p20k_example.bgen \
   --resume-from-state example/lemma_interim_files/inference_dump_it30 \
-  --out example/inference_from_it30.out.gz
+  --out example/inference_from_it30.out
 
-zdiff example/inference_from_it30.out.gz example/inference.out.gz
+diff example/inference_from_it30.out example/inference.out
 </code></pre>
 <p>Outputs from the two should match, up to some small numerical difference in the ELBO. Note that if the iteration number that you start from is not a multiple of 3, then output will not match exactly because the SQUAREM algorithm adapts the trajectory of the hyperparameter updates in multiples of three.</p>
 <h2 id="complexity">Complexity</h2>
