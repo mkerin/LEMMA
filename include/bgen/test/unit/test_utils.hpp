@@ -6,6 +6,8 @@
 
 #include <string>
 #include <memory>
+#include <iomanip>
+#include <sstream>
 
 std::string to_hex( std::string const& str ) ;
 template< typename Iterator, typename End >
